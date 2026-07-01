@@ -1,0 +1,16 @@
+# border: red
+
+╭──────────────────────── Skroutz Service Status ─────────────────────────╮
+│   ✅    Execution Interval    1h                                        │
+│   🟡    Log Retention         7 days [1]                                │
+│   ✅    Notify On Errors      true                                      │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ❗    Systemd Timer Active        No                                  │
+│   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
+│   ❗    Last Execution Status       Failed [2]                          │
+│   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC [3]     │
+│                                                                         │
+│   [1] log_retention_days must be 1-30. Using default 7.                 │
+│   [2] Issue with the config/skroutz.json file.                          │
+│   [3] Timer differs from config. Run ./scripts/schedule.sh.             │
+╰─────────────────────────────────────────────────────────────────────────╯

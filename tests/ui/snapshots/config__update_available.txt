@@ -1,0 +1,9 @@
+# border: yellow
+
+╭────────────────────────── Configuration Check ──────────────────────────╮
+│   🟡    Software Version    Update available! [1]                       │
+│   ✅    Skroutz Config      5 items loaded                              │
+│   ✅    .env File           2 valid URL(s)                              │
+│                                                                         │
+│   [1] Run ./update.sh to install the latest version.                    │
+╰─────────────────────────────────────────────────────────────────────────╯

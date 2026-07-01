@@ -1,0 +1,5 @@
+# border: red
+
+╭────────────────────── Notification Check Results ───────────────────────╮
+│   🛑    Not Configured    No .env file found or unreadable              │
+╰─────────────────────────────────────────────────────────────────────────╯

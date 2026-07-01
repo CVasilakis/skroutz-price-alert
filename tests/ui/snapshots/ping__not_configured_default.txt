@@ -1,0 +1,5 @@
+# border: red
+
+╭────────────────────── Notification Check Results ───────────────────────╮
+│   🛑    Not Configured    No notification URLs found.                   │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,14 @@
+# border: red
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ❗    Sony WH-1000XM5    ConnectionError [1] [2] [3] [4]              │
+│                                                                         │
+│   [1] Attempt 1: ConnectionError.                                       │
+│   [2] Attempt 2: ConnectionError.                                       │
+│   [3] Attempt 3: ConnectionError.                                       │
+│   [4] See logs/skroutz/errors.txt for details.                          │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,9 @@
+# border: blue
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ⠋    Apple AirPods Pro 2    Scraping (2/3)...                         │
+╰─────────────────────────────────────────────────────────────────────────╯

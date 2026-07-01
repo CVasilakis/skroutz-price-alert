@@ -1,0 +1,7 @@
+# border: red
+
+╭────────────────── Oldstore Service Status (Orphaned) ───────────────────╮
+│   ❗    This scraper was removed but is still scheduled. [1]            │
+│                                                                         │
+│   [1] Run ./scripts/uninstall.sh --oldstore to remove it.               │
+╰─────────────────────────────────────────────────────────────────────────╯

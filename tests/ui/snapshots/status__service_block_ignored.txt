@@ -1,0 +1,15 @@
+# border: yellow
+
+╭──────────────────────── Skroutz Service Status ─────────────────────────╮
+│   🟡    Settings              Block ignored [1]                         │
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ✅    Systemd Timer Active        Yes                                 │
+│   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
+│   ✅    Last Execution Status       OK                                  │
+│   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
+│                                                                         │
+│   [1] settings block is not an object; using defaults.                  │
+╰─────────────────────────────────────────────────────────────────────────╯

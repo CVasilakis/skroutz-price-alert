@@ -1,0 +1,15 @@
+# border: red
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ❗    Blocked Product    RateLimitError [1] [2] [3] [4] [5]           │
+│                                                                         │
+│   [1] Attempt 1: ScraperParseError.                                     │
+│   [2] Attempt 2: ServerError.                                           │
+│   [3] Attempt 3: RateLimitError.                                        │
+│   [4] Rate limit reached; scraping aborted.                             │
+│   [5] See logs/skroutz/errors.txt for details.                          │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,17 @@
+# border: green
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   🎉    Sony WH-1000XM5    248.0 € (Target: 300.0 €) [1] [2] [3] [4]    │
+│                            [5] [6]                                      │
+│                                                                         │
+│   [1] Attempt 1: ScraperParseError.                                     │
+│   [2] Attempt 2: ServerError.                                           │
+│   [3] Succeeded on attempt 3/3.                                         │
+│   [4] Notification delivered to all valid apprise URL(s).               │
+│   [5] Corrupted timestamp! Updated to current time.                     │
+│   [6] Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago).       │
+╰─────────────────────────────────────────────────────────────────────────╯

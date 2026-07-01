@@ -1,0 +1,8 @@
+# border: yellow
+
+╭────────────────────── Notification Check Results ───────────────────────╮
+│   ✅    Notification sent    Apprise URL 1: tgram://1...n/...           │
+│   🛑    Delivery Failed      Apprise URL 2: discord://9...d/... [1]     │
+│                                                                         │
+│   [1] Failed to deliver the test message.                               │
+╰─────────────────────────────────────────────────────────────────────────╯

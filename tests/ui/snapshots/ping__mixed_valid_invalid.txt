@@ -1,0 +1,8 @@
+# border: yellow
+
+╭────────────────────── Notification Check Results ───────────────────────╮
+│   ✅    Notification sent    Apprise URL 1: tgram://1...n/...           │
+│   ❗    Invalid URL          Apprise URL 2: discord://b...n [1]         │
+│                                                                         │
+│   [1] Apprise flagged this endpoint as invalid.                         │
+╰─────────────────────────────────────────────────────────────────────────╯

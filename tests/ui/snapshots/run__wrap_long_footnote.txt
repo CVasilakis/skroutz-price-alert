@@ -1,0 +1,14 @@
+# border: red
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ❗    Samsung Odyssey G9 49-inch ...    ScraperParseError [1] [2]     │
+│                                                                         │
+│   [1] Attempt 1: ScraperParseError.                                     │
+│   [2] The server returned an unexpected page structure and the price    │
+│ element could not be located after exhausting every configured selector │
+│ fallback; inspect the saved response for details.                       │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,9 @@
+# border: yellow
+
+╭────────────────────────── Configuration Check ──────────────────────────╮
+│   🟡    Software Version    Could not check for updates [1]             │
+│   ✅    Skroutz Config      5 items loaded                              │
+│   ✅    .env File           2 valid URL(s)                              │
+│                                                                         │
+│   [1] Check your internet connection and retry shortly.                 │
+╰─────────────────────────────────────────────────────────────────────────╯

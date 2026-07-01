@@ -1,0 +1,11 @@
+# border: red
+
+╭────────────────────────── Configuration Check ──────────────────────────╮
+│   🟡    Software Version    Could not check for updates [1]             │
+│   ❗    Skroutz Config      Failed [2]                                  │
+│   ❗    .env File           Not configured [3]                          │
+│                                                                         │
+│   [1] Check your internet connection and retry shortly.                 │
+│   [2] The config/skroutz.json file contains invalid JSON format.        │
+│   [3] No .env file found or unreadable.                                 │
+╰─────────────────────────────────────────────────────────────────────────╯

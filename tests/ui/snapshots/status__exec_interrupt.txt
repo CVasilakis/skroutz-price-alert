@@ -1,0 +1,14 @@
+# border: yellow
+
+╭──────────────────────── Skroutz Service Status ─────────────────────────╮
+│   ✅    Execution Interval    1h                                        │
+│   ✅    Log Retention         7 days                                    │
+│   ✅    Notify On Errors      true                                      │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ✅    Systemd Timer Active        Yes                                 │
+│   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
+│   🟡    Last Execution Status       Interrupted [1]                     │
+│   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
+│                                                                         │
+│   [1] Process was terminated by the user or system.                     │
+╰─────────────────────────────────────────────────────────────────────────╯

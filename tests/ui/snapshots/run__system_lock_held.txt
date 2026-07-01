@@ -1,0 +1,9 @@
+# border: red
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ❗    System    Another instance is currently running. Aborting...    │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,71 @@
+"""Semantic border-color assertions.
+
+The plain-text snapshots lock layout and (via the header) record the border color, but
+this module asserts the color *decision* directly: every scenario resolves to a valid
+border color, and a curated, representative set resolves to a specific expected color —
+covering each color-decision branch across all four surfaces. Inner styled spans (a green
+drop price, a red error row) are verified visually via ``gallery.py`` and structurally via
+the snapshot text.
+"""
+
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "core")))
+
+from ui.catalog import ALL_SCENARIOS  # noqa: E402
+
+VALID_COLORS = {"green", "yellow", "red", "blue"}
+
+# Representative scenarios, each pinned to the color its decision branch must produce.
+EXPECTED_COLORS = {
+    # RUN: drop celebration wins; OK-completed settles green; warning -> yellow;
+    # error -> red; in-progress -> blue.
+    "run__success_drop_notified": "green",
+    "run__success_ok": "green",
+    "run__no_target_missing": "yellow",
+    "run__settings_each_invalid": "yellow",
+    "run__failure_all_parse": "red",
+    "run__system_lock_held": "red",
+    "run__interrupt_during_scraping": "red",
+    "run__scraping_spinner": "blue",
+    "run__sleeping_pacing": "blue",
+    # STATUS
+    "status__service_healthy": "green",
+    "status__service_invalid_retention": "yellow",
+    "status__schedule_drift": "green",      # drift is a footnote on a ✅ row, not a warning
+    "status__timer_inactive": "red",
+    "status__not_installed": "red",
+    "status__orphan": "red",
+    # PING (custom mixed/green/red logic)
+    "ping__all_delivered": "green",
+    "ping__mixed_valid_invalid": "yellow",
+    "ping__delivered_and_failed": "yellow",
+    "ping__invalid_only": "red",
+    "ping__not_configured_default": "red",
+    # CONFIG
+    "config__all_good": "green",
+    "config__update_available": "yellow",
+    "config__env_mixed": "yellow",
+    "config__load_missing": "red",
+    "config__worst_case": "red",
+}
+
+
+class TestBorderColors(unittest.TestCase):
+    def test_every_scenario_has_a_valid_color(self):
+        for sc in ALL_SCENARIOS:
+            with self.subTest(scenario=sc.snapshot_key):
+                self.assertIn(sc.build().border_color, VALID_COLORS)
+
+    def test_representative_colors(self):
+        by_key = {s.snapshot_key: s for s in ALL_SCENARIOS}
+        for key, expected in EXPECTED_COLORS.items():
+            with self.subTest(scenario=key):
+                self.assertIn(key, by_key, f"Unknown scenario '{key}' in EXPECTED_COLORS.")
+                self.assertEqual(by_key[key].build().border_color, expected)
+
+
+if __name__ == "__main__":
+    unittest.main()

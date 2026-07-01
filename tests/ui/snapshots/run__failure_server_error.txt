@@ -1,0 +1,13 @@
+# border: red
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ❗    Down Backend Item    ServerError [1] [2] [3]                    │
+│                                                                         │
+│   [1] Attempt 1: ServerError.                                           │
+│   [2] Attempt 2: ServerError.                                           │
+│   [3] Attempt 3: ServerError.                                           │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -212,9 +212,10 @@ __marimo__/
 *.json
 *.pyc
 *.txt
+!requirements*.txt
+!tests/ui/snapshots/*.txt
 *.bak
 *.log.*
-!requirements*.txt
 GEMINI.md
 CLAUDE.md
 WARP.md
