@@ -1,10 +1,11 @@
 # border: yellow
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   🟡    Config                8 items loaded, 2 misconfigured [1]       │
-│   ✅    Execution Interval    1h                                        │
-│   ✅    Log Retention         7 days                                    │
-│   ✅    Notify On Errors      true                                      │
+│   🟡    Config                      8 items loaded, 2 misconfigured     │
+│                                     [1]                                 │
+│   ✅    Execution Interval          1h                                  │
+│   ✅    Log Retention               7 days                              │
+│   ✅    Notify On Errors            true                                │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Systemd Timer Active        Yes                                 │
 │   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │

@@ -6,7 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Blocked Product    RateLimitError [1] [2] [3] [4] [5]           │
+│   ❗    Blocked Product       RateLimitError [1] [2] [3] [4] [5]        │
 │                                                                         │
 │   [1] Attempt 1: ScraperParseError.                                     │
 │   [2] Attempt 2: ServerError.                                           │

@@ -1,10 +1,10 @@
 # border: green
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   ✅    Config                5 items loaded                            │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
+│   ✅    Config                      5 items loaded                      │
+│   ✅    Execution Interval          1h (default)                        │
+│   ✅    Log Retention               7 days (default)                    │
+│   ✅    Notify On Errors            true (default)                      │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Systemd Timer Active        Yes                                 │
 │   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │

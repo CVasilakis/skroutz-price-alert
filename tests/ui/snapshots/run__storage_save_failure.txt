@@ -6,9 +6,9 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🎉    Sony WH-1000XM5    248.0 € (Target: 300.0 €) [1]                │
-│   ❗    Storage            Failed to update config/skroutz.json file!   │
-│                            [2]                                          │
+│   🎉    Sony WH-1000XM5       248.0 € (Target: 300.0 €) [1]             │
+│   ❗    Storage               Failed to update config/skroutz.json      │
+│                               file! [2]                                 │
 │                                                                         │
 │   [1] Notification delivered to all valid apprise URL(s).               │
 │   [2] Permission denied: 'config/skroutz.json'.                         │

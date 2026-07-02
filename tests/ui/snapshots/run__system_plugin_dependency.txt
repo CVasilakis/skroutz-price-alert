@@ -6,6 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    System    Scraper 'skroutz' is missing its dependencies. Run    │
-│                   './install.sh --skroutz' to install them.             │
+│   ❗    System                Scraper 'skroutz' is missing its          │
+│                               dependencies. Run './install.sh           │
+│                               --skroutz' to install them.               │
 ╰─────────────────────────────────────────────────────────────────────────╯

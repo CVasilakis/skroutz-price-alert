@@ -6,7 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🟡    Weird URL Product    Skipping (InvalidURLError) [1]             │
+│   🟡    Weird URL Product     Skipping (InvalidURLError) [1]            │
 │                                                                         │
 │   [1] Could not parse a product ID from the URL.                        │
 ╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,11 +1,35 @@
 import re
-from typing import Optional, List, Tuple
+from typing import Dict, Iterable, Optional, List, Sequence, Tuple
 from rich.console import Console, Group
 from rich.table import Table
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.text import Text
 from rich.markup import escape
+
+
+def uniform_column_widths(rows: Iterable[Sequence], columns: Tuple[int, ...] = (0, 1)) -> Dict[int, int]:
+    """Max rendered cell width per column index across all rows (non-str cells ignored).
+
+    Used to give every section table in a panel identical icon/label column widths so the
+    value column lines up across the sections divided by a rule. The rendered width is measured
+    via ``Text.from_markup(...).cell_len`` so Rich markup and ``escape()``d brackets are resolved
+    to their true display width; non-string cells (e.g. a ``Spinner`` or ``ProgressBar``) are
+    skipped, since the emoji icons dominate the icon column's width.
+
+    Args:
+        rows (Iterable[Sequence]): The row tuples to measure (``(icon, label, value)``).
+        columns (Tuple[int, ...]): The column indices to size. Defaults to icon and label.
+
+    Returns:
+        Dict[int, int]: Column index -> fixed width, for columns that had a string cell.
+    """
+    widths: Dict[int, int] = {}
+    for row in rows:
+        for c in columns:
+            if c < len(row) and isinstance(row[c], str):
+                widths[c] = max(widths.get(c, 0), Text.from_markup(row[c]).cell_len)
+    return widths
 
 
 class StatusPanelBuilder:
@@ -45,11 +69,18 @@ class StatusPanelBuilder:
         self.icons: List[str] = []
 
     @staticmethod
-    def _new_table() -> Table:
-        """Builds an empty 3-column (icon, label, value) section table."""
+    def _new_table(col_widths: Optional[Dict[int, int]] = None) -> Table:
+        """Builds an empty 3-column (icon, label, value) section table.
+
+        Args:
+            col_widths (Optional[Dict[int, int]]): Fixed widths per column index, shared across
+                a panel's sections so every section's value column starts at the same position.
+                A ``None`` width leaves the column auto-sized.
+        """
+        col_widths = col_widths or {}
         table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Icon", justify="center")
-        table.add_column("Label", style="bold")
+        table.add_column("Icon", justify="center", width=col_widths.get(0))
+        table.add_column("Label", style="bold", width=col_widths.get(1))
         table.add_column("Value")
         return table
 
@@ -111,8 +142,12 @@ class StatusPanelBuilder:
             List: An ordered list of renderables (section ``Table``s separated by
                 ``Rule``s) suitable for a ``Group``. Always contains at least one table.
         """
+        # Size the icon/label columns once across every section's rows so the value column
+        # starts at the same position above and below each divider.
+        widths = uniform_column_widths((e[1], e[2], e[3]) for e in self._rows if e[0] == "row")
+
         sections: List = []
-        current = self._new_table()
+        current = self._new_table(widths)
         current_has_rows = False
         pending_sep = False
 
@@ -127,7 +162,7 @@ class StatusPanelBuilder:
             if pending_sep:
                 sections.append(current)
                 sections.append(Rule(style="dim"))
-                current = self._new_table()
+                current = self._new_table(widths)
                 current_has_rows = False
                 pending_sep = False
 

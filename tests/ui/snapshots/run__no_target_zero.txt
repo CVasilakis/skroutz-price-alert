@@ -6,5 +6,5 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🟡    Generic Monitor    55.0 € (Target: 0.0 €)                       │
+│   🟡    Generic Monitor       55.0 € (Target: 0.0 €)                    │
 ╰─────────────────────────────────────────────────────────────────────────╯

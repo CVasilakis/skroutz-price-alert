@@ -6,7 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🟡    Removed Product    Skipping (ProductNotFoundError) [1]          │
+│   🟡    Removed Product       Skipping (ProductNotFoundError) [1]       │
 │                                                                         │
 │   [1] Product not found or removed (HTTP 404).                          │
 ╰─────────────────────────────────────────────────────────────────────────╯

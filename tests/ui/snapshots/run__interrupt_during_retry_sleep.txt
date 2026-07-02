@@ -6,5 +6,5 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🛑    Interrupted    Received signal SIGTERM                          │
+│   🛑    Interrupted           Received signal SIGTERM                   │
 ╰─────────────────────────────────────────────────────────────────────────╯

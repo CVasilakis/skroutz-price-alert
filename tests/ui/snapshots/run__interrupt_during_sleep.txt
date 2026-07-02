@@ -1,10 +1,10 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Config                5 items loaded                            │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
+│   ✅    Config                   5 items loaded                         │
+│   ✅    Execution Interval       1h (default)                           │
+│   ✅    Log Retention            7 days (default)                       │
+│   ✅    Notify On Errors         true (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Logitech MX Master 3S    79.0 € (Target: 70.0 €)                │
 │   🛑    Interrupted              Received signal SIGINT                 │

@@ -6,7 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🎉    Sony WH-1000XM5    248.0 € (Target: 300.0 €) [1]                │
+│   🎉    Sony WH-1000XM5       248.0 € (Target: 300.0 €) [1]             │
 │                                                                         │
 │   [1] Notification delivered to all valid apprise URL(s).               │
 ╰─────────────────────────────────────────────────────────────────────────╯

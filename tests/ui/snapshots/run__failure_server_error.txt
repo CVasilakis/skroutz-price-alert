@@ -6,7 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Down Backend Item    ServerError [1] [2] [3]                    │
+│   ❗    Down Backend Item     ServerError [1] [2] [3]                   │
 │                                                                         │
 │   [1] Attempt 1: ServerError.                                           │
 │   [2] Attempt 2: ServerError.                                           │

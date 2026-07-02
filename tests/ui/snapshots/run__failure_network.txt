@@ -6,7 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Sony WH-1000XM5    ConnectionError [1] [2] [3] [4]              │
+│   ❗    Sony WH-1000XM5       ConnectionError [1] [2] [3] [4]           │
 │                                                                         │
 │   [1] Attempt 1: ConnectionError.                                       │
 │   [2] Attempt 2: ConnectionError.                                       │

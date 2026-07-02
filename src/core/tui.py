@@ -14,6 +14,7 @@ from rich.progress_bar import ProgressBar
 
 from scrapers.base.settings import SettingView
 from config_check import ConfigView
+from panel import uniform_column_widths
 
 # Accepts a single note string, a list of note strings, or None.
 Notes = Union[str, List[str], None]
@@ -278,11 +279,18 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         return rows
 
     @staticmethod
-    def _new_display_table() -> Table:
-        """Builds an empty 3-column (icon, name, value) display table."""
+    def _new_display_table(col_widths: Optional[dict] = None) -> Table:
+        """Builds an empty 3-column (icon, name, value) display table.
+
+        Args:
+            col_widths (Optional[dict]): Fixed widths per column index, shared between the
+                settings and scraping tables so their value columns line up across the divider.
+                A ``None`` width leaves the column auto-sized.
+        """
+        col_widths = col_widths or {}
         table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Icon", justify="center")
-        table.add_column("Name", style="bold")
+        table.add_column("Icon", justify="center", width=col_widths.get(0))
+        table.add_column("Name", style="bold", width=col_widths.get(1))
         table.add_column("Value")
         return table
 
@@ -337,29 +345,36 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
 
     def _generate_panel(self) -> Panel:
         """Generates the rich panel to be rendered on the live display."""
-        display_table = self._new_display_table()
-
-        for row in self.rows:
-            display_table.add_row(*row)
-
+        # Assemble the live scraping rows (results, then the transient sleep/scraping row)
+        # before building the table, so their labels feed the shared column sizing below.
+        display_rows: List[tuple] = list(self.rows)
         if self.is_sleeping:
             grid = Table.grid(padding=(0, 1))
             grid.add_row(
                 ProgressBar(total=self.sleep_total, completed=self.sleep_remaining, width=30, style="grey37", complete_style="cyan", finished_style="cyan"),
                 f"[cyan]{self.sleep_remaining:.1f}s[/cyan]"
             )
-            display_table.add_row("⏳", self.sleep_label, grid)
+            display_rows.append(("⏳", self.sleep_label, grid))
         elif self.scraping_name:
             if self.scraping_attempt > 1:
                 scrape_text = f"[cyan]Scraping ({self.scraping_attempt}/{self.scraping_max})...[/cyan]"
             else:
                 scrape_text = "[cyan]Scraping...[/cyan]"
-            display_table.add_row(Spinner("dots", style="cyan"), escape(self.scraping_name), scrape_text)
+            display_rows.append((Spinner("dots", style="cyan"), escape(self.scraping_name), scrape_text))
+
+        # Size the icon/label columns once across both sections so the value column starts at
+        # the same position above and below the divider. The transient sleep/scraping row is
+        # included so the columns don't jump as it appears and disappears.
+        widths = uniform_column_widths(self.settings_rows + display_rows)
+
+        display_table = self._new_display_table(widths)
+        for row in display_rows:
+            display_table.add_row(*row)
 
         # The static settings section (set at start_target) renders above a divider,
         # then the live scraping rows below it.
         if self.settings_rows:
-            settings_table = self._new_display_table()
+            settings_table = self._new_display_table(widths)
             for row in self.settings_rows:
                 settings_table.add_row(*row)
             body = Group(settings_table, Rule(style="dim"), display_table)
