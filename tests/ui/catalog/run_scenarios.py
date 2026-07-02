@@ -14,11 +14,15 @@ from ui.catalog.inputs import (
     stub_logger, CURRENCY,
     views_all_default, views_all_ok, views_one_invalid_each,
     interval_view, retention_view, notify_view,
+    config_ok, config_faulty, config_failed, STORAGE_BAD_JSON,
 )
 from ui.harness.drivers import drive_run
 from scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, STATUS_INVALID
 
 LOGGER = stub_logger()
+
+# The healthy 'Config' row every real Scraping panel leads with (overridden per scenario).
+_CONFIG_OK = config_ok()
 
 # Common note strings as the orchestrator phrases them (kept here so the fixtures read
 # like real output; they represent inputs to the UI, not assertions on the orchestrator).
@@ -31,9 +35,10 @@ CORRUPTED_TS = "Corrupted timestamp! Updated to current time."
 STALE = "Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago)."
 
 
-def _start(s, settings=None, block_warning=None, target="skroutz"):
-    """Opens a target with a realistic settings section (defaults unless overridden)."""
-    s.start_target(target, LOGGER, views_all_default() if settings is None else settings, block_warning)
+def _start(s, settings=None, block_warning=None, target="skroutz", config=_CONFIG_OK):
+    """Opens a target with a realistic 'Config' row + settings section (defaults unless overridden)."""
+    s.start_target(target, LOGGER, views_all_default() if settings is None else settings,
+                   block_warning, config)
 
 
 # --- Single-attempt price outcomes --------------------------------------------------
@@ -481,7 +486,7 @@ def _():
 @scenario(Surface.RUN, "settings_all_default", "All settings unset (showing active defaults)", tags=("settings",))
 def _():
     def script(s):
-        s.start_target("skroutz", LOGGER, views_all_default(), None)
+        _start(s)
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
     return drive_run(script)
@@ -490,7 +495,7 @@ def _():
 @scenario(Surface.RUN, "settings_all_ok", "All settings explicitly configured (valid)", tags=("settings",))
 def _():
     def script(s):
-        s.start_target("skroutz", LOGGER, views_all_ok(), None)
+        _start(s, views_all_ok())
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
     return drive_run(script)
@@ -499,7 +504,7 @@ def _():
 @scenario(Surface.RUN, "settings_each_invalid", "Every setting invalid (each row footnoted)", tags=("settings",))
 def _():
     def script(s):
-        s.start_target("skroutz", LOGGER, views_one_invalid_each(), None)
+        _start(s, views_one_invalid_each())
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
     return drive_run(script)
@@ -513,7 +518,7 @@ def _():
             retention_view(7, STATUS_INVALID, 99),
             notify_view(True, STATUS_DEFAULT, None),
         ]
-        s.start_target("skroutz", LOGGER, settings, None)
+        _start(s, settings)
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
     return drive_run(script)
@@ -522,8 +527,31 @@ def _():
 @scenario(Surface.RUN, "settings_malformed_block", "The settings block is not an object (ignored)", tags=("settings",))
 def _():
     def script(s):
-        s.start_target("skroutz", LOGGER, views_all_default(), "settings block is not an object; using defaults")
+        _start(s, block_warning="settings block is not an object; using defaults")
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
+        s.complete_target()
+    return drive_run(script)
+
+
+# --- Products-config ('Config' row) variants -----------------------------------------
+# The healthy 'Config' row leads every scenario above (_start defaults to a clean load);
+# these cover the faulty row and the per-target broken-config skip.
+
+@scenario(Surface.RUN, "config_faulty", "Some products misconfigured (Config row leads)", tags=("config",))
+def _():
+    def script(s):
+        _start(s, config=config_faulty())
+        s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
+        s.complete_target()
+    return drive_run(script)
+
+
+@scenario(Surface.RUN, "config_failed_skip", "Products config failed to load; scraper skipped", tags=("config", "error"))
+def _():
+    # Mirrors the orchestrator's per-target skip: open the panel with a failed 'Config' row
+    # and finish immediately — no products are scraped for this target.
+    def script(s):
+        _start(s, config=config_failed(STORAGE_BAD_JSON))
         s.complete_target()
     return drive_run(script)
 
@@ -568,7 +596,7 @@ def _():
 @scenario(Surface.RUN, "full_run_mixed", "A whole target: drop, ok, skip, no-target, and a failure", tags=("layout", "combined"))
 def _():
     def script(s):
-        s.start_target("skroutz", LOGGER, views_all_default(), None)
+        _start(s)
         s.start_scraping("Sony WH-1000XM5", 1, 3)
         s.complete_scraping()
         s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP, notes=[NOTIFIED_OK])

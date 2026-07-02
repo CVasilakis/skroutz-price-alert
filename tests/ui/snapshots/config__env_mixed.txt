@@ -2,7 +2,6 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version    Up to date                                  │
-│   ✅    Skroutz Config      5 items loaded                              │
 │   🟡    .env File           1 valid URL(s), 2 invalid [1]               │
 │                                                                         │
 │   [1] Run ./scripts/run.sh --ping for more details.                     │

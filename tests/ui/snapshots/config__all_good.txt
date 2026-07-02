@@ -2,6 +2,5 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version    Up to date                                  │
-│   ✅    Skroutz Config      5 items loaded                              │
 │   ✅    .env File           2 valid URL(s)                              │
 ╰─────────────────────────────────────────────────────────────────────────╯

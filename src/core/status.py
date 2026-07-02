@@ -7,13 +7,15 @@ import subprocess
 # Ensure the script directory is in the python path to allow imports when running as a module
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from typing import Optional
+
 from constants import CONFIG_DIR
 from exit_status import classify_service_state
 from scrapers.registry import ScraperRegistry
 from scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, KEY_INTERVAL
 from logger import setup_global_logging
 from panel import StatusPanelBuilder
-from config_check import render_config_panel, load_targets
+from config_check import render_config_panel, load_targets, config_view, add_config_row, ConfigView
 from utils import install_interrupt_handler
 
 from rich.console import Console
@@ -155,14 +157,14 @@ def build_orphan_panel(name: str) -> StatusPanelBuilder:
 
 def build_service_panel(target: str, timer_props: dict, service_props: dict, resolved,
                         config_filename: str, expected_oncalendar: str,
-                        active_oncalendar: str) -> StatusPanelBuilder:
+                        active_oncalendar: str,
+                        config: Optional[ConfigView] = None) -> StatusPanelBuilder:
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
-    Pure presentation given the systemd property dicts, the resolved settings, and the
-    schedule-drift inputs (the caller queries systemd, the registry and the on-disk timer;
-    this only renders). Mirrors how ``config_check.render_config_panel`` is fed by the
-    ``load_targets`` I/O, and lets the UI test harness drive every settings/timer/exit-code
-    variant with synthetic inputs.
+    Pure presentation given the systemd property dicts, the resolved settings, the
+    products-config health, and the schedule-drift inputs (the caller queries systemd, the
+    registry, the ``load_targets`` I/O and the on-disk timer; this only renders). Lets the
+    UI test harness drive every config/settings/timer/exit-code variant with synthetic inputs.
 
     Args:
         target (str): The scraper target name.
@@ -177,14 +179,18 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
             (``""`` when not applicable); compared against ``active_oncalendar`` for drift.
         active_oncalendar (str): The ``OnCalendar`` currently written in the installed
             timer unit (``""`` when none/not applicable).
+        config (Optional[ConfigView]): The target's products-config health, rendered as the
+            leading 'Config' row; ``None`` when unavailable (e.g. missing dependencies).
 
     Returns:
         StatusPanelBuilder: The populated Service Status panel.
     """
     service_panel = StatusPanelBuilder(f"{target.capitalize()} Service Status")
 
-    # Settings section: report each scraper's settings (or its active default) on top,
-    # then a separator, then the systemd status rows.
+    # Settings section: the products-config health ('Config' row) leads, then each scraper's
+    # settings (or its active default), then a separator, then the systemd status rows.
+    if config is not None:
+        add_config_row(service_panel, config)
     if resolved.block_warning:
         ref = service_panel.add_note_ref(resolved.block_warning)
         service_panel.add_row("🟡", "Settings", f"[yellow]Block ignored{ref}[/yellow]")
@@ -263,9 +269,12 @@ def main():
     # registered_targets() triggers idempotent plugin discovery on first use.
     registered_scrapers = ScraperRegistry.registered_targets()
 
-    # --- Configuration Checks Panel ---
+    # --- Configuration Checks Panel (global checks only: version + .env) ---
+    # load_targets is still the single config-file read; its per-target outcomes now feed
+    # the 'Config' row atop each Service Status panel below, not this shared panel.
     load_results = load_targets(registry, registered_scrapers)
-    render_config_panel(console, load_results, gate=False)
+    loads_by_target = {tl.target: tl for tl in load_results}
+    render_config_panel(console)
 
     # Disable custom signal handling after the update/test phase is complete
     signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -299,9 +308,11 @@ def main():
             active_oncalendar = read_timer_oncalendar(target)
 
         config_filename = ScraperRegistry.get_plugin(target).get_config_filename()
+        load = loads_by_target.get(target)
         service_panel = build_service_panel(
             target, timer_props, service_props, resolved,
             config_filename, expected_oncalendar, active_oncalendar,
+            config_view(load.count, load.faulty_indices, load.error) if load else None,
         )
 
         console.print()

@@ -1,9 +1,0 @@
-# border: yellow
-
-╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version    Up to date                                  │
-│   🟡    Skroutz Config      8 items loaded, 2 misconfigured [1]         │
-│   ✅    .env File           2 valid URL(s)                              │
-│                                                                         │
-│   [1] Problematic items found at JSON index: 2, 5.                      │
-╰─────────────────────────────────────────────────────────────────────────╯

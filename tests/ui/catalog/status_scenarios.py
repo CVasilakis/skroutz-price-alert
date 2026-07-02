@@ -7,7 +7,10 @@ schedule-drift footnote.
 """
 
 from ui.catalog._base import scenario, Surface
-from ui.catalog.inputs import resolved_settings, timer_props, service_props
+from ui.catalog.inputs import (
+    resolved_settings, timer_props, service_props,
+    config_faulty, config_failed, STORAGE_BAD_JSON,
+)
 from ui.harness.drivers import drive_service, drive_not_installed, drive_orphan
 from scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG
 
@@ -76,6 +79,28 @@ def _():
         block_warning="settings block is not an object; using defaults",
     )
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
+
+
+# --- Products-config ('Config' row) variants -----------------------------------------
+# The healthy 'Config' row is exercised by every scenario above (drive_service defaults to
+# a clean load); these cover the faulty / failed / unavailable variants.
+
+@scenario(Surface.STATUS, "config_faulty", "Some products are misconfigured (Config row)", tags=("service", "config"))
+def _():
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
+                         CFG, "hourly", "hourly", config=config_faulty())
+
+
+@scenario(Surface.STATUS, "config_failed", "Products config failed to load (Config row)", tags=("service", "config", "error"))
+def _():
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
+                         CFG, "hourly", "hourly", config=config_failed(STORAGE_BAD_JSON))
+
+
+@scenario(Surface.STATUS, "config_unavailable", "Dependencies missing (no Config row)", tags=("service", "config"))
+def _():
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
+                         CFG, "hourly", "hourly", config=None)
 
 
 # --- Timer / last-execution / next-execution variants --------------------------------

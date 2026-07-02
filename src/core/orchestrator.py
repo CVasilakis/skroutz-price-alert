@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from locks import acquire_lock
-from constants import MIN_DELAY_SECONDS, RANDOM_DELAY_MIN, RANDOM_DELAY_MAX, RETRY_DELAY_MULTIPLIER, MAX_RETRIES, OLD_ENTRY_HOURS, EXIT_CODE_RATE_LIMIT_ERROR, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED, EXIT_CODE_SUCCESS, TIMESTAMP_FORMAT
+from constants import MIN_DELAY_SECONDS, RANDOM_DELAY_MIN, RANDOM_DELAY_MAX, RETRY_DELAY_MULTIPLIER, MAX_RETRIES, OLD_ENTRY_HOURS, EXIT_CODE_RATE_LIMIT_ERROR, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED, EXIT_CODE_SUCCESS, EXIT_CODE_PRODUCTS_ERROR, TIMESTAMP_FORMAT
 from exceptions import RateLimitError, ServerError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
+from config_check import config_view
 from scrapers.base.model import BaseTrackedItem
 from scrapers.base.storage import BaseDataManager
 from scrapers.base.settings import KEY_RETENTION, KEY_NOTIFY
@@ -89,7 +90,7 @@ def _policy_for(exc: Exception) -> ErrorPolicy:
 
 class ScrapingOrchestrator:
     """Orchestrates the scraping process across multiple targets and manages execution flow."""
-    def __init__(self, targets_to_run: list, registry: ScraperRegistry, notifier: Notifier, config_dir: str, quiet: bool = False, ui_strategy: Optional[ExecutionStrategy] = None):
+    def __init__(self, targets_to_run: list, registry: ScraperRegistry, notifier: Notifier, config_dir: str, quiet: bool = False, ui_strategy: Optional[ExecutionStrategy] = None, loads_by_target: Optional[dict] = None):
         """Initializes the ScrapingOrchestrator.
 
         Args:
@@ -99,6 +100,10 @@ class ScrapingOrchestrator:
             config_dir (str): The directory for saving user data and configuration.
             quiet (bool): Whether to log to file silently.
             ui_strategy (Optional[ExecutionStrategy]): The strategy for the UI console output.
+            loads_by_target (Optional[dict]): The preflight ``load_targets`` outcomes keyed by
+                target (``{target: TargetLoad}``). Drives the per-scraper 'Config' row and the
+                per-target skip of a scraper whose products config failed to load. Targets
+                absent from the map (e.g. missing dependencies) simply get no 'Config' row.
         """
         self.targets_to_run = targets_to_run
         self.registry = registry
@@ -111,6 +116,7 @@ class ScrapingOrchestrator:
         self._current_logger = None
         self._stale_items: list[BaseTrackedItem] = []
         self.ui_strategy = ui_strategy or SilentExecutionStrategy()
+        self.loads_by_target: dict = loads_by_target or {}
 
     def signal_handler(self, signum, _frame):
         """Handles termination signals gracefully.
@@ -426,6 +432,7 @@ class ScrapingOrchestrator:
         signal.signal(signal.SIGTERM, self.signal_handler)
 
         any_rate_limited = False
+        products_error = False
         skipped_count = 0
 
         for target in self.targets_to_run:
@@ -449,6 +456,20 @@ class ScrapingOrchestrator:
             self._current_logger = get_target_logger(target, self.quiet, settings.value(KEY_RETENTION))
             settings_view = settings.views()
 
+            # A target whose products config failed to load (missing / bad permissions /
+            # invalid JSON) is skipped individually — the healthy scrapers still run — with
+            # the failure surfaced in this scraper's own panel/log as its 'Config' row.
+            # Mirrors the missing-dependency skip below; the whole run no longer aborts.
+            load = self.loads_by_target.get(target)
+            if load is not None and load.error is not None:
+                self.ui_strategy.start_target(
+                    target, self._current_logger, settings_view, settings.block_warning,
+                    config_view(0, (), load.error),
+                )
+                self.ui_strategy.complete_target()
+                products_error = True
+                continue
+
             try:
                 data_manager = self.registry.get_manager(target)
             except ValueError:
@@ -468,7 +489,12 @@ class ScrapingOrchestrator:
             if data_manager.get_item_count() == 0:
                 continue
 
-            self.ui_strategy.start_target(target, self._current_logger, settings_view, settings.block_warning)
+            # The 'Config' row (products-config health) leads this scraper's panel, above
+            # its settings section — built from the same loaded snapshot the run iterates.
+            self.ui_strategy.start_target(
+                target, self._current_logger, settings_view, settings.block_warning,
+                config_view(data_manager.get_item_count(), data_manager.get_faulty_indices()),
+            )
 
             try:
                 with acquire_lock(target):
@@ -530,6 +556,12 @@ class ScrapingOrchestrator:
 
         if self.interrupted:
             return EXIT_CODE_INTERRUPT
+
+        # A products-config failure is a persistent setup problem (a scraper couldn't even
+        # start), so it outranks a transient rate-limit; the run still tried every healthy
+        # target. In single-plugin service runs this reproduces the previous exit 15.
+        if products_error:
+            return EXIT_CODE_PRODUCTS_ERROR
 
         if any_rate_limited:
             return EXIT_CODE_RATE_LIMIT_ERROR

@@ -1,9 +1,0 @@
-# border: red
-
-╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version    Up to date                                  │
-│   ❗    Skroutz Config      Failed [1]                                  │
-│   ✅    .env File           2 valid URL(s)                              │
-│                                                                         │
-│   [1] The config/skroutz.json file has wrong permissions.               │
-╰─────────────────────────────────────────────────────────────────────────╯

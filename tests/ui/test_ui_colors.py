@@ -29,11 +29,15 @@ EXPECTED_COLORS = {
     "run__failure_all_parse": "red",
     "run__system_lock_held": "red",
     "run__interrupt_during_scraping": "red",
+    "run__config_faulty": "yellow",         # a faulty 'Config' row tints the panel yellow
+    "run__config_failed_skip": "red",       # a failed 'Config' row (skipped target) -> red
     "run__scraping_spinner": "blue",
     "run__sleeping_pacing": "blue",
     # STATUS
     "status__service_healthy": "green",
     "status__service_invalid_retention": "yellow",
+    "status__config_faulty": "yellow",      # a faulty 'Config' row tints the panel yellow
+    "status__config_failed": "red",         # a failed 'Config' row -> red
     "status__schedule_drift": "green",      # drift is a footnote on a ✅ row, not a warning
     "status__timer_inactive": "red",
     "status__not_installed": "red",
@@ -48,7 +52,7 @@ EXPECTED_COLORS = {
     "config__all_good": "green",
     "config__update_available": "yellow",
     "config__env_mixed": "yellow",
-    "config__load_missing": "red",
+    "config__env_not_configured": "red",
     "config__worst_case": "red",
 }
 

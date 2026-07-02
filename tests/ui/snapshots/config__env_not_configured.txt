@@ -2,7 +2,6 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version    Up to date                                  │
-│   ✅    Skroutz Config      5 items loaded                              │
 │   ❗    .env File           Not configured [1]                          │
 │                                                                         │
 │   [1] No .env file found or unreadable.                                 │

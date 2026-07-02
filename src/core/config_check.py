@@ -1,11 +1,11 @@
 import os
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from rich.console import Console
 
-from constants import EXIT_CODE_PRODUCTS_ERROR, EXIT_CODE_ENV_ERROR
+from constants import EXIT_CODE_ENV_ERROR
 from exceptions import StorageFileError, EnvFileError, UpdateCheckError, PluginDependencyError
 from utils import check_env_file, check_for_updates, classify_notification_urls
 from logger import get_target_logger
@@ -24,15 +24,70 @@ class TargetLoad:
         error (Optional[str]): The failure message if the storage could not be loaded.
 
     Note:
-        The ``settings`` block is intentionally not reported here. Settings health is
-        surfaced per-scraper in the settings section of the Service Status panel
-        (``--status``) and the interactive Scraping panel (a run), not on this
-        config-file panel.
+        This outcome is no longer rendered on the shared 'Configuration Check' panel.
+        Both it and the ``settings`` block are surfaced per-scraper: the products-config
+        health as a 'Config' row (built via :func:`config_view`) and the settings section
+        atop each Service Status panel (``--status``) and Scraping panel (a run).
     """
     target: str
     count: int = 0
     faulty_indices: List[int] = field(default_factory=list)
     error: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ConfigView:
+    """Presentation summary of a target's products-config health (the 'Config' row).
+
+    The single rendering-agnostic model behind the 'Config' row shown atop each Service
+    Status panel (``--status``) and Scraping panel (a run). Built by :func:`config_view`
+    so the icon/value/footnote decision lives in one place, and consumed by
+    :func:`add_config_row` (StatusPanelBuilder panels) and the interactive strategy.
+
+    Attributes:
+        icon (str): The status icon (``✅`` / ``🟡`` / ``❗``).
+        value (str): The row value as Rich markup, without any footnote reference.
+        footnote (Optional[str]): The explanatory note, or ``None`` when healthy.
+        has_warning (bool): True for a faulty or failed load (drives the silent-log level).
+    """
+    icon: str
+    value: str
+    footnote: Optional[str] = None
+    has_warning: bool = False
+
+
+def config_view(count: int, faulty_indices: Sequence[int] = (), error: Optional[str] = None) -> ConfigView:
+    """Builds the :class:`ConfigView` for a target from its load outcome.
+
+    Args:
+        count (int): The number of loaded items (ignored when ``error`` is set).
+        faulty_indices (Sequence[int]): 1-based indices of items failing validation.
+        error (Optional[str]): The storage failure message, if the load failed.
+
+    Returns:
+        ConfigView: The icon/value/footnote for the 'Config' row.
+    """
+    if error is not None:
+        return ConfigView("❗", "[red]Failed[/red]", error, has_warning=True)
+    if faulty_indices:
+        note = f"Problematic items found at JSON index: {', '.join(map(str, faulty_indices))}."
+        value = f"{count} items loaded, [yellow]{len(faulty_indices)} misconfigured[/yellow]"
+        return ConfigView("🟡", value, note, has_warning=True)
+    return ConfigView("✅", f"{count} items loaded", None, has_warning=False)
+
+
+def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
+    """Renders a :class:`ConfigView` as the 'Config' row on a StatusPanelBuilder panel.
+
+    Used atop the ``--status`` Service Status panel; the interactive Scraping panel
+    renders the same view through the strategy's own footnote mechanism.
+
+    Args:
+        panel (StatusPanelBuilder): The panel being built.
+        view (ConfigView): The resolved products-config health.
+    """
+    ref = panel.add_note_ref(view.footnote) if view.footnote else ""
+    panel.add_row(view.icon, "Config", f"{view.value}{ref}")
 
 
 def load_targets(registry: ScraperRegistry, targets: list) -> List[TargetLoad]:
@@ -86,40 +141,6 @@ def _append_version_row(panel: StatusPanelBuilder) -> None:
         panel.add_row("🟡", "Software Version", f"Could not check for updates{ref}")
 
 
-def _append_config_rows(panel: StatusPanelBuilder, load_results: List[TargetLoad], gate: bool) -> Optional[int]:
-    """Appends one config row per target from the preflight load outcomes.
-
-    Args:
-        panel (StatusPanelBuilder): The panel to populate.
-        load_results (List[TargetLoad]): The outcomes from load_targets.
-        gate (bool): When True, the first storage error stops further checks and
-            yields a fatal exit code (pre-flight gating). When False, all targets
-            are reported regardless (health-report mode).
-
-    Returns:
-        Optional[int]: A fatal exit code if gating tripped, otherwise None.
-    """
-    for result in load_results:
-        label = f"{result.target.capitalize()} Config"
-        if result.error is not None:
-            ref = panel.add_note_ref(result.error)
-            panel.add_row("❗", label, f"[red]Failed{ref}[/red]")
-            if gate:
-                return EXIT_CODE_PRODUCTS_ERROR
-            continue
-
-        if result.faulty_indices:
-            ref = panel.add_note_ref(f"Problematic items found at JSON index: {', '.join(map(str, result.faulty_indices))}.")
-            icon = "🟡"
-            value = f"{result.count} items loaded, [yellow]{len(result.faulty_indices)} misconfigured{ref}[/yellow]"
-        else:
-            icon = "✅"
-            value = f"{result.count} items loaded"
-
-        panel.add_row(icon, label, value)
-    return None
-
-
 def _append_env_row(panel: StatusPanelBuilder) -> None:
     """Appends the .env row summarizing configured Apprise notification URLs."""
     env_error_msg = ""
@@ -141,56 +162,41 @@ def _append_env_row(panel: StatusPanelBuilder) -> None:
         panel.add_row("❗", ".env File", f"[red]Not configured{ref}[/red]")
 
 
-def render_config_panel(console: Console, load_results: List[TargetLoad], gate: bool = False) -> Optional[int]:
-    """Builds and renders the shared 'Configuration Check' panel.
+def render_config_panel(console: Console) -> None:
+    """Builds and renders the shared 'Configuration Check' panel (global checks only).
 
-    Runs the update and .env checks behind a single spinner and reports the
-    already-completed per-target load outcomes, then renders the panel. This is
-    the single presentation path shared by the interactive scraper run (main.py)
-    and the health check (status.py); it performs no config-file I/O itself.
+    Runs the update and .env checks behind a single spinner, then renders the panel.
+    Per-scraper products-config health is intentionally not shown here — it is surfaced
+    as a 'Config' row atop each Service Status panel (``--status``) and Scraping panel
+    (a run). This is the single presentation path shared by the interactive scraper run
+    (main.py) and the health check (status.py); it performs no config-file I/O itself.
 
     Args:
         console (Console): The Rich console to render to.
-        load_results (List[TargetLoad]): The outcomes from load_targets.
-        gate (bool): When True (pre-flight), a storage error stops further checks
-            and the returned exit code is non-None so the caller can abort.
-
-    Returns:
-        Optional[int]: A fatal exit code when gating tripped, otherwise None.
     """
     panel = StatusPanelBuilder("Configuration Check")
-    fatal_exit_code = None
 
     with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
         _append_version_row(panel)
-        fatal_exit_code = _append_config_rows(panel, load_results, gate)
-        if not (gate and fatal_exit_code):
-            _append_env_row(panel)
+        _append_env_row(panel)
 
     panel.render(console)
-    return fatal_exit_code
 
 
-def _silent_preflight(load_results: List[TargetLoad], targets_to_run: list) -> Optional[int]:
-    """Validates config and .env for a background (``--quiet``) run, logging to file.
+def _silent_preflight(targets_to_run: list) -> Optional[int]:
+    """Validates the .env for a background (``--quiet``) run, logging to file.
 
-    Mirrors the gating of the interactive panel but emits to each target's file
-    logger instead of rendering, and additionally gates on the .env (a service with
-    no usable notification URL cannot do its job).
+    A missing/invalid ``.env`` is fatal for a service (it cannot notify), so it gates
+    here. Per-target products-config failures are handled by the orchestrator — it skips
+    just the broken target and surfaces the error in that scraper's log/panel, matching
+    the interactive run — so they are not gated globally here.
 
     Args:
-        load_results (List[TargetLoad]): The outcomes from load_targets.
         targets_to_run (list): The targets being run (for per-target logging).
 
     Returns:
         Optional[int]: A fatal exit code to abort on, or None to proceed.
     """
-    for result in load_results:
-        if result.error is not None:
-            get_target_logger(result.target, True).error(f"❗ Config check failed: {result.error}")
-            logging.critical(f"Config check failed for {result.target}: {result.error}")
-            return EXIT_CODE_PRODUCTS_ERROR
-
     try:
         check_env_file()
     except EnvFileError as e:
@@ -209,15 +215,15 @@ def _silent_preflight(load_results: List[TargetLoad], targets_to_run: list) -> O
     return None
 
 
-def preflight(console: Optional[Console], load_results: List[TargetLoad], targets_to_run: list, quiet: bool) -> Optional[int]:
+def preflight(console: Optional[Console], targets_to_run: list, quiet: bool) -> Optional[int]:
     """Single preflight-validation entry point shared by both run modes.
 
-    This is the one place all pre-scrape validation policy lives, so a new check
-    is added once and both modes honor it. Storage was already read by
-    ``load_targets``; this only renders/logs the verdict and decides whether to abort.
+    Renders/logs the global configuration verdict and decides whether to abort. Storage
+    was already read by ``load_targets``; per-target products-config failures are handled
+    per-target by the orchestrator (skip just that scraper), so the only fatal gate here
+    is a missing/invalid ``.env`` in quiet/service mode.
 
     Gating policy (intentionally mode-specific):
-        * A storage/config failure is always fatal (``EXIT_CODE_PRODUCTS_ERROR``).
         * A missing/invalid ``.env`` is fatal only in quiet/service mode
           (``EXIT_CODE_ENV_ERROR``); interactively it is surfaced as a panel row so
           the user can see it and still proceed.
@@ -225,7 +231,6 @@ def preflight(console: Optional[Console], load_results: List[TargetLoad], target
     Args:
         console (Optional[Console]): The console for interactive rendering; unused
             (may be None) in quiet mode.
-        load_results (List[TargetLoad]): The outcomes from load_targets.
         targets_to_run (list): The targets being run.
         quiet (bool): Whether this is a silent/background run.
 
@@ -233,6 +238,7 @@ def preflight(console: Optional[Console], load_results: List[TargetLoad], target
         Optional[int]: A fatal exit code to abort on, or None to proceed.
     """
     if quiet:
-        return _silent_preflight(load_results, targets_to_run)
+        return _silent_preflight(targets_to_run)
     assert console is not None, "console is required for interactive (non-quiet) preflight"
-    return render_config_panel(console, load_results, gate=True)
+    render_config_panel(console)
+    return None

@@ -1,97 +1,441 @@
 # Terminal-UI test suite
 
-Automated coverage for everything the app renders to the terminal: the interactive
-scraping panel (a standard run), and the `--status`, `--ping`, and Configuration Check
-panels. One **scenario catalog** is the single source of truth, consumed by two things:
+This suite automatically verifies **everything Scrooge Alert draws in the terminal** — the
+live scraping panel of a normal run, and the `--status`, `--ping`, and Configuration Check
+panels. It exists so that changes to the UI (a new footnote, a reworded message, a
+border-color rule, a layout tweak) are caught the moment they alter what a user would see,
+without anyone having to run the app and manually reproduce failure states.
 
-- **Snapshot gate** (`test_ui_snapshots.py`) — renders each scenario to plain text and
-  compares it against a committed golden file in `snapshots/`. Catches layout/wrapping
-  changes; the golden file's first line (`# border: <color>`) catches border-color
-  changes as a one-line diff.
-- **Color asserts** (`test_ui_colors.py`) — assert the border-color *decision* per
-  surface (valid for all scenarios; a specific expected color for a representative set).
-- **Gallery** (`gallery.py`) — renders the same scenarios in full color for eyeballing.
+If you've never touched this folder, read the next two sections and you'll understand the
+whole idea. If you're here to add a case, jump to
+[Add / modify / remove a scenario](#add--modify--remove-a-scenario). Either way, please
+read [Safety: never commit private data](#-safety-never-commit-private-data) before you
+write a scenario.
 
-The panels are rendered by driving the *real* production code with synthetic inputs (no
-network, no systemd, no Wi-Fi toggling), so a snapshot reflects exactly what ships.
+---
 
-## Layout
+## Why this exists (the problem it solves)
+
+The UI is rendered with the [Rich](https://rich.readthedocs.io/) library into bordered
+panels. Getting it right means caring about things that only show up *when rendered*:
+
+- Does a long footnote **wrap** cleanly inside the 75-character panel, or spill/overflow?
+- Is the panel **border color** right (green = good, yellow = warning, red = error,
+  blue = in-progress)?
+- Do product names **truncate** correctly? Are the **icons** (✅ 🟡 ❗ 🛑 🎉 ⏳) the ones
+  you expect? Are footnote reference numbers (`[1] [2] …`) aligned to the right notes?
+
+Historically the only way to check these was to **run the app and induce each state by
+hand** — turn off Wi-Fi to see a network error, corrupt a config to see a parse failure,
+hit Ctrl+C at just the right moment to see an interrupt. That doesn't scale: there are
+~85 distinct UI states, many of which are annoying or slow to reproduce on demand.
+
+This suite reproduces every one of those states **deterministically, in milliseconds**,
+and fails loudly if the rendered output ever changes unexpectedly.
+
+---
+
+## The core idea
+
+Three things make this tractable:
+
+1. **One catalog is the single source of truth.** Every UI state is described once, as a
+   *scenario*, in `catalog/`. Nothing else duplicates that list.
+2. **Scenarios drive the *real* production rendering code** with synthetic inputs — no
+   network, no `systemctl`, no real config. So what you snapshot is exactly what ships,
+   not a look-alike reimplementation.
+3. **The same catalog feeds two consumers:**
+   - a **snapshot gate** (machine check — did the output change?),
+   - a **gallery** (human check — does it *look* right?).
+
+```
+                    ┌─────────────────────────┐
+                    │   catalog/  (scenarios)  │   ← the single source of truth
+                    │  run / status / ping /   │
+                    │        config            │
+                    └────────────┬────────────┘
+                                 │ each scenario.build() → BuildResult(renderable, color)
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  harness/  (drivers +    │   ← runs the real production builders,
+                    │   deterministic render)  │     captures the panel as text
+                    └───────┬─────────────┬────┘
+                            ▼             ▼
+                 ┌────────────────┐  ┌────────────────┐
+                 │ snapshot gate  │  │    gallery     │
+                 │ (plain-text    │  │ (full color,   │
+                 │  golden files) │  │  for eyeballs) │
+                 └────────────────┘  └────────────────┘
+```
+
+**Why snapshot testing?** Asserting "the panel contains the string X" by hand for 85
+states would be enormous and would still miss layout/wrapping. A snapshot captures the
+*entire* rendered panel in one shot; the test just asks "is it byte-for-byte what we
+approved last time?" You approve the output once (by generating the golden file and
+reviewing it), and from then on any drift is flagged automatically.
+
+**Why drive the real code instead of mocking the panels?** Fidelity. The drivers call the
+actual functions the app uses at runtime (`ping.build_ping_panel`,
+`status.build_service_panel`, the real `InteractiveExecutionStrategy`, the real
+`config_check` row helpers). A reimplementation could pass its own tests while the real UI
+is broken. (These builder functions were deliberately extracted from the `main()` bodies
+of `ping.py`/`status.py` so they could be called in isolation — same pattern
+`config_check.py` already used.)
+
+---
+
+## Directory layout
 
 ```
 tests/ui/
-  catalog/                 # the single source of truth
-    _base.py               # Scenario, Surface, BuildResult, the @scenario registrar
-    inputs.py              # shared input builders (SettingViews, ResolvedSettings, systemd dicts, TargetLoad)
-    run_scenarios.py       # interactive scraping-panel cases
-    status_scenarios.py    # --status: service / not-installed / orphan
-    ping_scenarios.py      # --ping
-    config_scenarios.py    # Configuration Check
-  harness/
-    drivers.py             # drive_run / drive_service / drive_ping / drive_config ...
-    rendering.py           # recording console + capture (deterministic)
-  snapshots/               # golden files: <surface>__<name>.txt
-  test_ui_snapshots.py
-  test_ui_colors.py
-  gallery.py
+  catalog/                 # ── WHAT to render: the scenarios (edit these to add cases)
+    _base.py               #    Scenario, Surface, BuildResult, the @scenario registrar
+    inputs.py              #    shared input builders (SettingViews, ResolvedSettings,
+                           #      ConfigView, systemd property dicts) — reused by scenarios
+    run_scenarios.py       #    interactive scraping panel (a normal run)
+    status_scenarios.py    #    --status: service / not-installed / orphan panels
+    ping_scenarios.py      #    --ping: Notification Check Results
+    config_scenarios.py    #    Configuration Check panel
+    __init__.py            #    imports the four modules and exposes ALL_SCENARIOS
+  harness/                 # ── HOW to render: turn a scenario into captured text
+    drivers.py             #    drive_run / drive_service / drive_ping / drive_config, ...
+    rendering.py           #    the deterministic recording console + capture helpers
+  snapshots/               # ── the approved output: golden files <surface>__<name>.txt
+  test_ui_snapshots.py     #    the gate: compare each scenario to its golden file
+  test_ui_colors.py        #    border-color assertions
+  gallery.py               #    render everything in color for human review
+  README.md                #    you are here
 ```
 
-## Running
+A useful way to hold it in your head: **`catalog/` says *what*, `harness/` says *how*,
+`snapshots/` is the *approved result*, and the two `test_*.py` files plus `gallery.py` are
+the *consumers*.**
+
+---
+
+## Running it
+
+Everything runs through the project's venv. The tests are plain `unittest` (no pytest),
+discovered alongside the project's other tests.
+
+### Run the whole suite
 
 ```sh
-# Run the whole test suite (existing tests + UI snapshots + colors)
 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
-
-# (Re)generate the golden snapshots after an intended UI change — review the diff first
-UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
-
-# Eyeball every panel in color
-./venv/bin/python3 tests/ui/gallery.py
-./venv/bin/python3 tests/ui/gallery.py --surface status     # one surface
-./venv/bin/python3 tests/ui/gallery.py --tag interrupt      # one tag
-./venv/bin/python3 tests/ui/gallery.py --html /tmp/ui.html  # shareable page
-./venv/bin/python3 tests/ui/gallery.py --list               # list scenario keys
 ```
 
-## Add / modify / remove a scenario
+`PYTHONPATH=src/core` lets the scenarios import the production modules (`tui`, `status`,
+`ping`, …) the same way the app does. This command runs the existing project tests **and**
+the UI snapshot + color tests together.
 
-**Add** — drop one decorated function into the matching `catalog/*_scenarios.py`:
+### Read a failure
+
+When output changes, you get a per-scenario failure naming the exact case, e.g.:
+
+```
+FAIL: test_matches_snapshot (... scenario='status__exec_products_error')
+AssertionError: ... != ...  : UI output changed for 'status__exec_products_error'. ...
+```
+
+Two outcomes are possible:
+
+- **You didn't mean to change it** → a real regression. Fix the code.
+- **You did mean to change it** → regenerate the golden file (below) and review the diff.
+
+The clearest way to *see* what changed is to regenerate and let git show you:
+
+```sh
+UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+git diff -- tests/ui/snapshots/          # review every changed panel, line by line
+```
+
+If the diff is what you intended, commit it. If not, `git checkout -- tests/ui/snapshots/`
+to throw the regeneration away and go fix the code instead. **Regenerating is "I approve
+this new output" — always review the diff before committing it.**
+
+### Regenerate the golden files
+
+```sh
+UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+```
+
+Setting `UPDATE_SNAPSHOTS=1` makes the snapshot test *write* each golden file instead of
+comparing. Use it when you add a scenario, or after an intended UI change.
+
+### Eyeball the panels (the gallery)
+
+The gallery renders scenarios in **full color** to your terminal — the "does it look
+right?" check that snapshots (plain text) can't give you.
+
+```sh
+./venv/bin/python3 tests/ui/gallery.py                 # every scenario, grouped by surface
+./venv/bin/python3 tests/ui/gallery.py --surface run   # only one surface: run|status|ping|config
+./venv/bin/python3 tests/ui/gallery.py --tag interrupt # only scenarios carrying a tag
+./venv/bin/python3 tests/ui/gallery.py --html /tmp/ui.html   # write a shareable HTML page
+./venv/bin/python3 tests/ui/gallery.py --list          # list scenario keys + descriptions (renders nothing)
+```
+
+| Option        | What it does                                                                 |
+|---------------|------------------------------------------------------------------------------|
+| *(none)*      | Prints every scenario to the terminal with real ANSI color, grouped by surface. |
+| `--surface S` | Limits to one surface: `run`, `status`, `ping`, or `config`.                 |
+| `--tag T`     | Limits to scenarios tagged `T` (e.g. `retry`, `interrupt`, `layout`, `settings`). |
+| `--html PATH` | Renders the same output into one self-contained HTML file (colors preserved) for sharing or archiving, instead of printing. |
+| `--list`      | Prints each (optionally filtered) scenario's key and one-line description, then a count, and exits without rendering. Great for discovering what exists. |
+
+`--surface` and `--tag` combine, and both work with `--list` and `--html`. The gallery
+needs no environment setup — it adds `src/core` and `tests/` to the path itself, so
+`./venv/bin/python3 tests/ui/gallery.py …` just works.
+
+---
+
+## How a scenario works
+
+A **scenario** is a small record (`catalog/_base.py`):
 
 ```python
-@scenario(Surface.RUN, "my_case", "One-line description", tags=("price",))
+@dataclass(frozen=True)
+class Scenario:
+    name: str            # unique within its surface, snake_case
+    surface: Surface     # RUN | STATUS | PING | CONFIG
+    description: str      # one line, shown as the gallery header
+    build: Callable[[], BuildResult]   # produces the renderable + its border color
+    tags: tuple[str, ...] = ()          # optional filter labels
+```
+
+You never construct one by hand — the `@scenario(...)` decorator registers the function it
+wraps. `build()` returns a `BuildResult(renderable, border_color)`:
+
+- `renderable` is the actual Rich object to draw (a `Panel`, or a `StatusPanelBuilder`),
+- `border_color` is the color the panel border resolves to. It's recorded as the first
+  line of the golden file (`# border: red`) so a **color change shows up as a one-line
+  diff** even though the snapshot body is plain (uncolored) text.
+
+The `snapshot_key` is `"<surface>__<name>"` — that's the golden filename stem and the id
+you see in test output and `--list`.
+
+### The four surfaces, and what each drives
+
+Each surface has a **driver** in `harness/drivers.py` that feeds synthetic inputs to the
+real production builder:
+
+| Surface  | Driver(s)                                                   | Drives (production code)                              |
+|----------|-------------------------------------------------------------|------------------------------------------------------|
+| `RUN`    | `drive_run(script)`                                         | the real `tui.InteractiveExecutionStrategy` panel    |
+| `STATUS` | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
+| `PING`   | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
+| `CONFIG` | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers (version + .env) |
+
+The per-scraper **products-config health** (the `Config` row) is no longer a `CONFIG`-surface
+concern: it leads each `STATUS` Service Status panel (`drive_service`'s `config`) and each
+`RUN` Scraping panel (the `config` passed to `_start`/`start_target`), built by the shared
+`config_check.config_view` / `add_config_row`.
+
+**RUN is special.** The scraping panel is *live* — it evolves as products are checked. So a
+RUN scenario is a **script**: a sequence of the exact method calls the orchestrator makes
+on the strategy, in order, ending at the moment you want to capture. The driver runs the
+script against a real strategy (with the live-refresh loop stubbed out so nothing animates)
+and captures the resulting panel:
+
+```python
+@scenario(Surface.RUN, "retry_then_drop", "Attempt 1 failed, attempt 2 dropped below target", tags=("retry", "drop"))
 def _():
     def script(s):
-        _start(s)
-        s.start_scraping("Widget", 1, 3); s.complete_scraping()
-        s.log_price_result("Widget", 9.99, CURRENCY, 12.0, PriceOutcome.DROP, notes=[NOTIFIED_OK])
-        s.complete_target()   # end a finished panel here; omit for a mid-flight capture
+        _start(s)                                   # opens the target with a Config row + settings section
+        s.start_scraping("Widget", 1, 3)
+        s.complete_scraping()
+        s.log_attempt("Widget", 1, 3, "ScraperParseError: ...")   # attempt 1 failed
+        s.start_scraping("Widget", 2, 3)
+        s.complete_scraping()
+        s.log_price_result("Widget", 9.99, CURRENCY, 12.0, PriceOutcome.DROP,
+                           notes=["Succeeded on attempt 2/3", NOTIFIED_OK],
+                           attempt_notes=["Attempt 1: ScraperParseError"])
+        s.complete_target()      # end a FINISHED panel here (settles the final border color)
     return drive_run(script)
 ```
 
-Then mint its golden file and review the gallery:
+The **capture point is wherever the script ends**:
 
-```sh
-UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
-./venv/bin/python3 tests/ui/gallery.py --surface run
+- End with `s.complete_target()` to capture a *finished* target (this settles the border to
+  its final green/red/yellow).
+- **Omit** `complete_target()` to capture a *mid-flight* state — e.g. stop right after
+  `s.start_scraping(...)` to snapshot the spinner, or after `s.start_sleep(...)` +
+  `s.update_sleep(...)` to snapshot the progress bar (these render blue, "in progress").
+
+Because a RUN script mirrors the orchestrator's real call sequence, it doubles as
+executable documentation of the orchestrator→strategy contract. If the orchestrator ever
+changes *which* calls it emits for a situation, update the matching scenario and
+regenerate.
+
+The other three surfaces are *static* panels, so their scenarios just hand the driver the
+inputs and return its result directly — no script:
+
+```python
+@scenario(Surface.STATUS, "invalid_retention", "log_retention_days out of range", tags=("service", "settings"))
+def _():
+    resolved = resolved_settings(retention=(7, STATUS_INVALID, 99))   # from inputs.py
+    return drive_service("skroutz", timer_props(True), service_props(), resolved,
+                         "skroutz.json", "hourly", "hourly")
 ```
 
-For `--status` / `--ping` / config cases, use the matching driver
-(`drive_service` / `drive_not_installed` / `drive_orphan`, `drive_ping`, `drive_config`)
-with the input builders in `catalog/inputs.py`.
+### Shared input builders (`catalog/inputs.py`)
 
-**Modify** — edit the scenario, regenerate (`UPDATE_SNAPSHOTS=1 …`), review the one-file diff.
+So scenarios stay short and use the *real* production types (with their real display
+formatting and warning text), `inputs.py` offers small factories:
 
-**Remove** — delete the function *and* its `snapshots/<surface>__<name>.txt`. The
-`test_no_orphan_snapshots` check fails if a golden file is left behind.
+- `interval_view / retention_view / notify_view(value, status, raw)` — a single
+  `SettingView` row; `views_all_ok() / views_all_default() / views_one_invalid_each()` —
+  ready-made sets for the settings section.
+- `resolved_settings(interval=…, retention=…, notify=…, block_warning=…)` — a full
+  `ResolvedSettings` for `--status`.
+- `timer_props(...)` / `service_props(...)` — the systemd property dicts `--status` reads.
+- `target_load(...)` — a Configuration Check row outcome.
+- `stub_logger()`, `CURRENCY` — misc helpers.
 
-## How it stays deterministic
+`run_scenarios.py` also defines a `_start(s, …)` helper and note constants (`NOTIFIED_OK`,
+`ERRORS_LOG`, `STALE`, …) that mirror the exact strings the orchestrator emits.
 
-- The recording console has a fixed width (≥ the 75-char panel width), so footnote
-  wrapping inside the panel is reproduced exactly.
-- The console clock is pinned so the scraping `Spinner` renders a stable frame.
-- Snapshots store plain text (`styles=False`) with per-line trailing whitespace stripped,
-  so diffs are clean and color/ANSI never leaks into the golden files.
-- Scenarios use fixed literals (prices, timestamps, exit codes), never `now()`.
+---
 
-A **RUN** scenario replays the exact sequence of `InteractiveExecutionStrategy` calls the
-orchestrator makes; this encodes the orchestrator→strategy contract. If the orchestrator
-changes which calls it emits, update the affected scenario and regenerate its snapshot.
+## Add / modify / remove a scenario
+
+### Add
+
+1. Pick the right `catalog/*_scenarios.py` file for the surface.
+2. Write one `@scenario(...)`-decorated function that returns a driver call (use the
+   examples above and the existing scenarios as templates). Give it a **unique**
+   snake_case `name` and a clear one-line `description`; add `tags` if useful for gallery
+   filtering.
+3. Mint its golden file and review it:
+   ```sh
+   UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+   ./venv/bin/python3 tests/ui/gallery.py --surface <surface>   # look at it in color
+   git diff -- tests/ui/snapshots/                              # review the new golden file
+   ```
+
+No harness or test file needs editing — the tests and gallery iterate `ALL_SCENARIOS`
+automatically.
+
+### Modify
+
+Edit the scenario, regenerate (`UPDATE_SNAPSHOTS=1 …`), and review the one-file diff before
+committing. If the diff surprises you, it's telling you the change had a side effect you
+didn't expect — investigate before approving.
+
+### Remove
+
+Delete the function **and** its `snapshots/<surface>__<name>.txt`. The
+`test_no_orphan_snapshots` check fails on a golden file with no owning scenario, so you
+can't leave one behind by accident.
+
+---
+
+## The golden files
+
+Each `snapshots/<surface>__<name>.txt` looks like:
+
+```
+# border: green
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   🎉    Widget                9.99 € (Target: 12.0 €) [1]               │
+│                                                                         │
+│   [1] Notification delivered to all valid apprise URL(s).               │
+╰─────────────────────────────────────────────────────────────────────────╯
+```
+
+- The **`# border:` header** records the resolved border color, so color regressions are a
+  one-line diff.
+- The **body is plain text** (no ANSI escape codes). That's a deliberate choice: colored
+  golden files would be an unreadable mess of escape sequences, and every layout change
+  would move the codes around and bury the real diff. Layout/wrapping/text live in the
+  body; color lives in the header; the gallery covers "the actual colors look right."
+
+**These files are committed on purpose.** They are the approved reference the gate compares
+against — without them, a fresh clone or CI run has nothing to check against and every test
+errors with "missing snapshot." (They're `.txt`, which this repo's `.gitignore` blanket-
+ignores, so there's an explicit `!tests/ui/snapshots/*.txt` un-ignore rule keeping them
+tracked. Don't remove it.)
+
+---
+
+## ⚠️ Safety: never commit private data
+
+**Golden files and scenario source are committed to git.** Whatever you put in a scenario
+becomes part of the repository history. So:
+
+- **Never use a real notification URL, API token, webhook, or secret** as a fixture. Use
+  obvious fakes: `tgram://1...n/...`, `slack://***@workspace/channel/...`. Even a *fake*
+  string that merely *looks* like a token can trip GitHub's push protection — a Slack
+  `xoxb-…` shape, a real-looking Telegram bot token (`digits:35-char-string`), a
+  `discord.com/api/webhooks/...` URL, an AWS key, etc. Keep placeholders clearly synthetic.
+- **Don't paste your real tracked products.** Use invented names (`Sony WH-1000XM5`,
+  `Widget`), not the items from your own `config/skroutz.json`.
+- **Don't bake in personal paths, usernames, or emails** (`/home/you/...`,
+  `you@example.com`). None are needed — scenarios take literal inputs you control.
+
+Quick self-check before committing new scenarios/snapshots:
+
+```sh
+grep -rIn -e 'xoxb-' -e 'https://' -e '@gmail' -e '/home/' tests/ui/snapshots tests/ui/catalog
+```
+
+This is safe *by construction* today: no driver ever reads your real `.env`, config,
+environment, or `systemctl` — `drive_config` patches those seams, and the others take
+literal fixtures. Keep it that way: don't introduce a scenario that reads live data.
+
+---
+
+## How determinism is guaranteed
+
+A snapshot is only useful if the same input always renders the same bytes. The harness
+enforces that:
+
+- **Fixed width.** The recording console is a fixed width (≥ the 75-char panel), so the
+  panel and its footnote wrapping are reproduced identically regardless of your real
+  terminal size.
+- **Pinned clock.** The scraping `Spinner` picks its frame from the clock; the capture
+  console's clock is pinned so it always renders the same frame.
+- **No live animation.** For RUN, Rich's live-refresh loop is stubbed out, so the strategy
+  just accumulates state and we capture the final `Panel` — no timing races, no partial
+  frames.
+- **Plain text, trimmed.** Output is captured with styles off and per-line trailing spaces
+  stripped, so console padding and color never leak into the golden file.
+- **Literal inputs only.** Scenarios use fixed prices, timestamps, and exit codes — never
+  `now()`, `random`, or anything environment-dependent. (If you add a scenario that pulls a
+  live value, its snapshot will flap. Don't.)
+
+---
+
+## The two test files (what actually asserts)
+
+- **`test_ui_snapshots.py`** — for every scenario: render it, compare to its golden file
+  (or write it under `UPDATE_SNAPSHOTS=1`). Also checks that scenario keys are unique and
+  that no orphan golden files exist.
+- **`test_ui_colors.py`** — asserts every scenario resolves to a *valid* border color, and
+  pins a curated, representative set to a *specific* expected color (one per color-decision
+  branch, per surface). This guards the color logic directly, independent of the snapshot
+  header.
+
+---
+
+## FAQ / rationale
+
+**Why not just assert on substrings?** You'd need dozens of asserts per state and still
+miss wrapping, alignment, truncation, and border color. A snapshot captures all of it at
+once.
+
+**Why is a "green" border sometimes shown on a panel that also has an error row?** Because
+that's the real rule: a 🎉 price-drop celebration outranks an ❗ error in the border-color
+priority. The snapshot faithfully captures production behavior — including behavior you
+might want to reconsider. That's a feature: the test shows you what users actually see.
+
+**A snapshot changed and I don't understand why.** Render it in the gallery
+(`gallery.py --surface … --tag …`) to see it in color, and `git diff tests/ui/snapshots/`
+to see the exact textual change. The change is real production output — trace back from the
+diff to the code that produced it.
+
+**Do I need to touch `harness/` or the test files to add a case?** No. They're generic over
+`ALL_SCENARIOS`. Adding, editing, or removing a case is a one-file edit in `catalog/`
+(plus its golden file).

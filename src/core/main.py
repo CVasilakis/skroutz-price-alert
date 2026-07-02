@@ -44,8 +44,10 @@ def main() -> None:
         targets_to_run = registered_scrapers
 
     # Single load/validation phase: read each config once into its cached manager.
-    # The orchestrator later reuses these same in-memory snapshots.
+    # The orchestrator later reuses these same in-memory snapshots, and the per-target
+    # outcomes drive each scraper's 'Config' row and its per-target broken-config skip.
     load_results = load_targets(registry, targets_to_run)
+    loads_by_target = {tl.target: tl for tl in load_results}
 
     if not args.quiet:
         install_interrupt_handler()
@@ -53,7 +55,7 @@ def main() -> None:
         console = Console()
         console.print()
 
-        init_fatal_error = preflight(console, load_results, targets_to_run, quiet=False)
+        init_fatal_error = preflight(console, targets_to_run, quiet=False)
 
         # Restore default handlers immediately after the spinner vanishes
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -63,7 +65,7 @@ def main() -> None:
 
         ui_strategy = InteractiveExecutionStrategy()
     else:
-        init_fatal_error = preflight(None, load_results, targets_to_run, quiet=True)
+        init_fatal_error = preflight(None, targets_to_run, quiet=True)
         ui_strategy = SilentExecutionStrategy()
 
     if init_fatal_error:
@@ -74,7 +76,7 @@ def main() -> None:
 
     try:
         try:
-            orchestrator = ScrapingOrchestrator(targets_to_run, registry, notifier, CONFIG_DIR, args.quiet, ui_strategy)
+            orchestrator = ScrapingOrchestrator(targets_to_run, registry, notifier, CONFIG_DIR, args.quiet, ui_strategy, loads_by_target)
             exit_code = orchestrator.run()
         finally:
             registry.close_all()

@@ -1,6 +1,7 @@
 # border: green
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
+│   ✅    Config                5 items loaded                            │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │

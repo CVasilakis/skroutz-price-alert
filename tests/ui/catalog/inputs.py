@@ -9,7 +9,7 @@ separate from the scenario-registry machinery in :mod:`_base` for readability.
 import logging
 from typing import Any, List, Optional, Sequence, Tuple
 
-from config_check import TargetLoad
+from config_check import TargetLoad, config_view, ConfigView
 from scrapers.base.settings import (
     ResolvedSetting, ResolvedSettings, SettingView, setting_view,
     SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY,
@@ -18,6 +18,13 @@ from scrapers.base.settings import (
 
 # A throwaway currency symbol used across price scenarios (matches the scraper default).
 CURRENCY = "€"
+
+# Faithful storage/env error messages (see scrapers/base/storage.py and utils.py), shared
+# by the CONFIG (.env), STATUS and RUN (products-config) scenarios.
+STORAGE_MISSING = "The config/skroutz.json file is missing or not a file"
+STORAGE_PERMS = "The config/skroutz.json file has wrong permissions"
+STORAGE_BAD_JSON = "The config/skroutz.json file contains invalid JSON format"
+ENV_NONE = "No .env file found or unreadable"
 
 
 def stub_logger() -> logging.Logger:
@@ -126,6 +133,23 @@ def service_props(running: bool = False, result: str = "success", exec_status: s
 
 def target_load(target: str = "skroutz", count: int = 5,
                 faulty_indices: Sequence[int] = (), error: Optional[str] = None) -> TargetLoad:
-    """A ``config_check.TargetLoad`` outcome for the Configuration Check panel."""
+    """A ``config_check.TargetLoad`` outcome (the preflight load phase)."""
     return TargetLoad(target=target, count=count,
                       faulty_indices=list(faulty_indices), error=error)
+
+
+# --- ConfigView (the CONFIG row atop Service Status / Scraping panels) --------------
+
+def config_ok(count: int = 5) -> ConfigView:
+    """A healthy products-config summary (``✅ N items loaded``)."""
+    return config_view(count)
+
+
+def config_faulty(count: int = 8, faulty_indices: Sequence[int] = (2, 5)) -> ConfigView:
+    """A products-config summary with some misconfigured items (``🟡``)."""
+    return config_view(count, list(faulty_indices))
+
+
+def config_failed(error: str) -> ConfigView:
+    """A failed products-config load (``❗ Failed`` + the storage error footnote)."""
+    return config_view(0, (), error)

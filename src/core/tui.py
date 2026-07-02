@@ -13,6 +13,7 @@ from rich.spinner import Spinner
 from rich.progress_bar import ProgressBar
 
 from scrapers.base.settings import SettingView
+from config_check import ConfigView
 
 # Accepts a single note string, a list of note strings, or None.
 Notes = Union[str, List[str], None]
@@ -66,7 +67,8 @@ class ExecutionStrategy(ABC):
     @abstractmethod
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
-                     block_warning: Optional[str] = None) -> None:
+                     block_warning: Optional[str] = None,
+                     config_view: Optional[ConfigView] = None) -> None:
         """Called when a new scraping target begins.
 
         Args:
@@ -79,6 +81,9 @@ class ExecutionStrategy(ABC):
             block_warning (Optional[str]): A one-line message when the config's
                 ``settings`` block was malformed (present but not an object) and ignored,
                 surfaced once above the per-setting rows; ``None`` when well-formed.
+            config_view (Optional[ConfigView]): The target's products-config health,
+                rendered as the leading 'Config' row of the section (and logged once by the
+                silent strategy); ``None`` when unavailable (e.g. missing dependencies).
         """
         pass
 
@@ -221,7 +226,8 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
 
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
-                     block_warning: Optional[str] = None) -> None:
+                     block_warning: Optional[str] = None,
+                     config_view: Optional[ConfigView] = None) -> None:
         """Starts a new live display session for the given target."""
         if self.live:
             self.live.stop()
@@ -238,22 +244,27 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
 
         # Build the static settings section after resetting notes, so its invalid-value
         # footnotes take the first reference numbers, ahead of the scraping rows.
-        self.settings_rows = self._build_settings_rows(settings_view, block_warning)
+        self.settings_rows = self._build_settings_rows(settings_view, block_warning, config_view)
 
         self.live = Live(self._generate_panel(), refresh_per_second=10)
         self.live.start()
 
     def _build_settings_rows(self, settings_view: Sequence[SettingView],
-                             block_warning: Optional[str] = None) -> List[tuple]:
-        """Renders the resolved settings into ``(icon, label, value)`` rows.
+                             block_warning: Optional[str] = None,
+                             config_view: Optional[ConfigView] = None) -> List[tuple]:
+        """Renders the products-config health + resolved settings into ``(icon, label, value)`` rows.
 
-        A valid value shows as ``✅``; an unset value (or missing config) shows its
+        The 'Config' row (products-config health) leads the section when ``config_view`` is
+        set. A valid setting shows as ``✅``; an unset value (or missing config) shows its
         active default as ``✅`` with a dim ``(default)`` marker; an invalid value shows
         the default it fell back to as ``🟡`` plus a footnote naming the problem. A
         malformed ``settings`` block (when ``block_warning`` is set) is surfaced once as a
         leading ``🟡`` row, since every per-setting row below it then shows its default.
         """
         rows: List[tuple] = []
+        if config_view is not None:
+            refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
+            rows.append((config_view.icon, "Config", f"{config_view.value}{refs}"))
         if block_warning:
             rows.append(("🟡", "Settings", f"[yellow]Block ignored[/yellow]{self._build_note_refs(block_warning)}"))
         for view in settings_view:
@@ -509,15 +520,24 @@ class SilentExecutionStrategy(ExecutionStrategy):
 
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
-                     block_warning: Optional[str] = None) -> None:
-        """Sets the logger context and records the effective settings to the file log.
+                     block_warning: Optional[str] = None,
+                     config_view: Optional[ConfigView] = None) -> None:
+        """Sets the logger context and records the effective config + settings to the file log.
 
-        Logging the resolved settings once at target start gives background (service)
-        runs a record of what was in effect, and surfaces an invalid setting as a
-        warning (replacing the ad-hoc retention warning the logger used to emit). A
-        malformed ``settings`` block is logged once as a warning ahead of the rows.
+        Logging the products-config health and the resolved settings once at target start
+        gives background (service) runs a record of what was in effect, and surfaces a
+        faulty/failed config or an invalid setting as a warning (replacing the ad-hoc
+        retention warning the logger used to emit). A malformed ``settings`` block is
+        logged once as a warning ahead of the rows.
         """
         self.target_logger = target_logger
+        if config_view is not None:
+            value = Text.from_markup(config_view.value).plain
+            if config_view.has_warning:
+                note = f" ({config_view.footnote})" if config_view.footnote else ""
+                target_logger.warning(f"❗ Config: {value}{note}")
+            else:
+                target_logger.info(f"🗄️  Config: {value}")
         if block_warning:
             target_logger.warning(f"❗ Settings: {block_warning}")
         for view in settings_view:

@@ -1,13 +1,15 @@
 # border: red
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   ✅    Config                5 items loaded                            │
+│   ❗    Config                Failed [1]                                │
 │   ✅    Execution Interval    1h                                        │
 │   ✅    Log Retention         7 days                                    │
 │   ✅    Notify On Errors      true                                      │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Systemd Timer Active        No                                  │
+│   ✅    Systemd Timer Active        Yes                                 │
 │   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
 │   ✅    Last Execution Status       OK                                  │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
+│                                                                         │
+│   [1] The config/skroutz.json file contains invalid JSON format.        │
 ╰─────────────────────────────────────────────────────────────────────────╯

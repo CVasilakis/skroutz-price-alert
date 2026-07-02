@@ -30,6 +30,11 @@ from scrapers.base.settings import ResolvedSettings
 from ui.catalog._base import BuildResult
 
 
+# The healthy 'Config' row every real Service Status panel leads with; overridden per
+# scenario (faulty / failed) or set to None (no row, e.g. missing dependencies).
+_DEFAULT_CONFIG = config_check.config_view(5)
+
+
 # --- RUN: interactive scraping panel ------------------------------------------------
 
 class _FakeLive:
@@ -75,11 +80,17 @@ def drive_run(script: Callable[[tui.InteractiveExecutionStrategy], None]) -> Bui
 
 def drive_service(target: str, timer: dict, service: dict, resolved: ResolvedSettings,
                   config_filename: str = "skroutz.json",
-                  expected_oncalendar: str = "", active_oncalendar: str = "") -> BuildResult:
-    """Builds a per-plugin Service Status panel via ``status.build_service_panel``."""
+                  expected_oncalendar: str = "", active_oncalendar: str = "",
+                  config=_DEFAULT_CONFIG) -> BuildResult:
+    """Builds a per-plugin Service Status panel via ``status.build_service_panel``.
+
+    ``config`` is the leading 'Config' row (products-config health); it defaults to a
+    healthy load so the common case is exercised, and is overridden with a faulty/failed
+    :class:`ConfigView` — or ``None`` (no row, e.g. missing dependencies) — per scenario.
+    """
     panel = status.build_service_panel(
         target, timer, service, resolved,
-        config_filename, expected_oncalendar, active_oncalendar,
+        config_filename, expected_oncalendar, active_oncalendar, config,
     )
     return BuildResult(panel, panel.get_panel_color())
 
@@ -108,15 +119,17 @@ def drive_ping(url_entries: Sequence[Tuple[str, bool]],
 # --- CONFIG: configuration check panel ----------------------------------------------
 
 def drive_config(version_state: str = "uptodate",
-                 load_results: Sequence = (),
                  valid_count: int = 0, invalid_count: int = 0,
                  env_error: str = "") -> BuildResult:
-    """Builds the Configuration Check panel, patching its three external seams.
+    """Builds the Configuration Check panel (global checks only), patching its seams.
+
+    Per-scraper products-config health is no longer on this panel — it now leads each
+    Service Status (STATUS surface) and Scraping (RUN surface) panel — so this drives only
+    the version row and the ``.env`` row.
 
     Args:
         version_state (str): ``"uptodate"`` / ``"available"`` / ``"error"`` — controls the
             patched ``check_for_updates`` (return False / return True / raise).
-        load_results (Sequence[TargetLoad]): per-target load outcomes (the config rows).
         valid_count (int): number of valid notification URLs the .env row reports.
         invalid_count (int): number of invalid notification URLs.
         env_error (str): a ``.env`` error message; when set (and no URLs), the .env row
@@ -140,7 +153,6 @@ def drive_config(version_state: str = "uptodate",
          mock.patch.object(config_check, "check_env_file", check_env_file), \
          mock.patch.object(config_check, "classify_notification_urls", classify):
         config_check._append_version_row(panel)
-        config_check._append_config_rows(panel, list(load_results), gate=False)
         config_check._append_env_row(panel)
 
     return BuildResult(panel, panel.get_panel_color())
