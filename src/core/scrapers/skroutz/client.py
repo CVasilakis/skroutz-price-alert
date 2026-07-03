@@ -1,12 +1,11 @@
 import re
 import json
 from urllib.parse import urlparse
-from typing import Dict
 
-from scrapers.base.http_client import HttpScraperClient
-from scrapers.base.model import ScrapeResult
-from exceptions import ScraperParseError, ProductUnavailableError, InvalidURLError
-from utils import parse_price
+from core.scrapers.base.http_client import HttpScraperClient
+from core.scrapers.base.model import ScrapeResult
+from core.exceptions import ScraperParseError, ProductUnavailableError, InvalidURLError
+from core.utils import parse_price
 
 # Headers impersonating a real browser to avoid being blocked by anti-bot measures.
 # The scraper rotates through these profiles randomly on retries.
@@ -55,11 +54,11 @@ _HEADER_VARIANTS = [
     }
 ]
 
-_HEADERS_POOL: list[Dict[str, str]] = [{**_BASE_HEADERS, **v} for v in _HEADER_VARIANTS]
+_HEADERS_POOL: list[dict[str, str]] = [{**_BASE_HEADERS, **v} for v in _HEADER_VARIANTS]
 
 # Per-TLD currency overrides; every other Skroutz domain prices in euro. Centralized
 # here so a new country domain is a one-line entry rather than another inline ternary.
-_CURRENCY_BY_TLD: Dict[str, str] = {".ro": "Lei"}
+_CURRENCY_BY_TLD: dict[str, str] = {".ro": "Lei"}
 _DEFAULT_CURRENCY = "€"
 
 

@@ -4,7 +4,7 @@ Kept in one place (and short, to fit a panel footnote) so wording and bounds nev
 drift between the resolver, the settings panel and the silent log.
 """
 
-from scrapers.base.settings.normalizers import (
+from core.scrapers.base.settings.normalizers import (
     MIN_LOG_RETENTION_DAYS, MAX_LOG_RETENTION_DAYS, DEFAULT_LOG_RETENTION_DAYS,
 )
 

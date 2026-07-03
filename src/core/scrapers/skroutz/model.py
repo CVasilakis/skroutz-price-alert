@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from scrapers.base.model import BaseTrackedItem
+from core.scrapers.base.model import BaseTrackedItem
 
 
 @dataclass

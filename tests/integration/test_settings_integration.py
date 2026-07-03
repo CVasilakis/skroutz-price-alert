@@ -11,16 +11,16 @@ import tempfile
 import unittest
 from unittest import mock
 
-from scrapers.base.settings import (
+from core.scrapers.base.settings import (
     SettingSpec, ResolvedSettings, BASE_SETTING_SPECS,
     resolve_all, oncalendar_for,
     KEY_INTERVAL, KEY_RETENTION, KEY_NOTIFY,
     STATUS_OK, DEFAULT_LOG_RETENTION_DAYS,
 )
-from scrapers.base.plugin import BasePlugin
-from scrapers.base.client import BaseScraperClient
-from scrapers.registry import ScraperRegistry
-from exceptions import PluginDiscoveryError
+from core.scrapers.base.plugin import BasePlugin
+from core.scrapers.base.client import BaseScraperClient
+from core.scrapers.registry import ScraperRegistry
+from core.exceptions import PluginDiscoveryError
 
 
 class _FakePlugin:
@@ -135,7 +135,7 @@ class _SpecPlugin(BasePlugin):
 
     @staticmethod
     def get_storage_class():  # never called during validation
-        from scrapers.base.storage import BaseDataManager
+        from core.scrapers.base.storage import BaseDataManager
         return BaseDataManager
 
     def get_setting_specs(self):
@@ -219,8 +219,9 @@ class TestSettingsInjection(unittest.TestCase):
         cfg_dir = _write_skroutz_config({"log_retention_days": 9})
         registry = ScraperRegistry(cfg_dir)
         manager = registry.get_manager("skroutz")
-        self.assertIsInstance(manager.settings, ResolvedSettings)
-        self.assertEqual(manager.settings.value(KEY_RETENTION), 9)
+        settings = manager.settings
+        assert isinstance(settings, ResolvedSettings)  # narrows the Optional
+        self.assertEqual(settings.value(KEY_RETENTION), 9)
 
     def test_client_receives_resolved_settings(self):
         try:
@@ -231,8 +232,9 @@ class TestSettingsInjection(unittest.TestCase):
         registry = ScraperRegistry(cfg_dir)
         try:
             client = registry.get_scraper("https://www.skroutz.gr/s/123/product.html")
-            self.assertIsInstance(client.settings, ResolvedSettings)
-            self.assertEqual(client.settings.value(KEY_INTERVAL), "2h")
+            settings = client.settings
+            assert isinstance(settings, ResolvedSettings)  # narrows the Optional
+            self.assertEqual(settings.value(KEY_INTERVAL), "2h")
         finally:
             registry.close_all()
 
@@ -248,7 +250,7 @@ class TestSettingsInjection(unittest.TestCase):
     def test_base_client_settings_available_during_init(self):
         # The constructor stores settings before a subclass's own __init__ body runs,
         # so a client can shape its session/transport from a setting at construction.
-        sentinel = object()
+        sentinel = ResolvedSettings([])
         seen_during_init = []
 
         class _InitReadingClient(BaseScraperClient):

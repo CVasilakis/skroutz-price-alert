@@ -4,16 +4,16 @@ import os
 import shutil
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Dict, Any, List, Optional, Type, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
 
-from scrapers.base.model import BaseTrackedItem
-from exceptions import StorageFileError
-from utils import parse_price
+from core.scrapers.base.model import BaseTrackedItem
+from core.exceptions import StorageFileError
+from core.utils import parse_price
 
 if TYPE_CHECKING:
-    from scrapers.base.plugin import BasePlugin
-    from scrapers.base.settings import ResolvedSettings
+    from core.scrapers.base.plugin import BasePlugin
+    from core.scrapers.base.settings import ResolvedSettings
 
 
 class BaseDataManager(ABC):
@@ -44,15 +44,15 @@ class BaseDataManager(ABC):
         a non-file backend (a database or remote API) — and even then you are still
         implementing the same product-over-URL contract, just against a different store.
     """
-    def __init__(self, filepath: str, plugin: Optional['BasePlugin'] = None,
-                 settings: "Optional[ResolvedSettings]" = None) -> None:
+    def __init__(self, filepath: str, plugin: "BasePlugin | None" = None,
+                 settings: "ResolvedSettings | None" = None) -> None:
         """Initializes the data manager.
 
         Args:
             filepath (str): The path to the storage file.
-            plugin (Optional[BasePlugin]): The owning plugin, used to resolve the
+            plugin (BasePlugin | None): The owning plugin, used to resolve the
                 supported domains for URL matching. Injected by the registry.
-            settings (Optional[ResolvedSettings]): The target's resolved settings,
+            settings (ResolvedSettings | None): The target's resolved settings,
                 injected by the registry so a subclass can read a store-specific
                 setting at scrape time (e.g. ``self.settings.get("region")``). ``None``
                 when constructed outside the registry (e.g. a unit test).
@@ -66,7 +66,7 @@ class BaseDataManager(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Loads and validates data from the storage into memory.
 
         This is the single read/validation entry point for a target. Implementations
@@ -75,7 +75,7 @@ class BaseDataManager(ABC):
         ``get_items``, ``get_item_count`` and ``get_faulty_indices`` reflect the data.
 
         Returns:
-            Dict[str, Any]: The parsed data representing tracked items.
+            dict[str, Any]: The parsed data representing tracked items.
 
         Raises:
             StorageFileError: If the source is missing, unreadable, or malformed.
@@ -113,11 +113,11 @@ class BaseDataManager(ABC):
         pass
 
     @abstractmethod
-    def get_items(self) -> List[Dict[str, Any]]:
+    def get_items(self) -> list[dict[str, Any]]:
         """Returns the list of items as dictionaries from the loaded data.
 
         Returns:
-            List[Dict[str, Any]]: The list of item data dictionaries.
+            list[dict[str, Any]]: The list of item data dictionaries.
         """
         pass
 
@@ -138,11 +138,11 @@ class BaseDataManager(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def parse_item(self, data: Dict[str, Any]) -> BaseTrackedItem:
+    def parse_item(self, data: dict[str, Any]) -> BaseTrackedItem:
         """Parses a dictionary into a BaseTrackedItem.
 
         Args:
-            data (Dict[str, Any]): The item data.
+            data (dict[str, Any]): The item data.
 
         Returns:
             BaseTrackedItem: The parsed item.
@@ -162,11 +162,11 @@ class BaseDataManager(ABC):
         return [i + 1 for i, item in enumerate(self.get_items()) if not self.is_valid_item(item)]
 
     @abstractmethod
-    def is_valid_item(self, item: Dict[str, Any]) -> bool:
+    def is_valid_item(self, item: dict[str, Any]) -> bool:
         """Validates an individual item's data structure and content.
 
         Args:
-            item (Dict[str, Any]): The item data dictionary to validate.
+            item (dict[str, Any]): The item data dictionary to validate.
 
         Returns:
             bool: True if the item is valid, False otherwise.
@@ -174,11 +174,11 @@ class BaseDataManager(ABC):
         pass
 
     @abstractmethod
-    def is_scrapable_item(self, item: Dict[str, Any]) -> bool:
+    def is_scrapable_item(self, item: dict[str, Any]) -> bool:
         """Checks if the item has a valid, properly formatted URL.
 
         Args:
-            item (Dict[str, Any]): The item dictionary to check.
+            item (dict[str, Any]): The item dictionary to check.
 
         Returns:
             bool: True if the item can be scraped, False otherwise.
@@ -194,11 +194,11 @@ class BaseDataManager(ABC):
     # Shared concrete helpers
     # ------------------------------------------------------------------
 
-    def has_valid_target_price(self, item: Dict[str, Any]) -> bool:
+    def has_valid_target_price(self, item: dict[str, Any]) -> bool:
         """Checks if an item has a valid, non-negative ``target_price``.
 
         Args:
-            item (Dict[str, Any]): The item dictionary to check.
+            item (dict[str, Any]): The item dictionary to check.
 
         Returns:
             bool: True if ``target_price`` exists and is a valid non-negative number.
@@ -253,30 +253,30 @@ class JsonProductDataManager(BaseDataManager):
     """
 
     #: The :class:`BaseTrackedItem` subclass that ``parse_item`` instantiates.
-    MODEL: Type[BaseTrackedItem] = BaseTrackedItem
+    MODEL: type[BaseTrackedItem] = BaseTrackedItem
     #: The top-level JSON key whose value is the list of item dictionaries.
     ROOT_KEY: str = "products"
 
-    def __init__(self, filepath: str, plugin: Optional['BasePlugin'] = None,
-                 settings: "Optional[ResolvedSettings]" = None) -> None:
+    def __init__(self, filepath: str, plugin: "BasePlugin | None" = None,
+                 settings: "ResolvedSettings | None" = None) -> None:
         """Initializes the manager with the JSON file path.
 
         Args:
             filepath (str): The path to the JSON storage/config file.
-            plugin (Optional[BasePlugin]): The owning plugin (see BaseDataManager).
-            settings (Optional[ResolvedSettings]): The target's resolved settings
+            plugin (BasePlugin | None): The owning plugin (see BaseDataManager).
+            settings (ResolvedSettings | None): The target's resolved settings
                 (see BaseDataManager); injected by the registry.
         """
         super().__init__(filepath, plugin, settings)
-        self._data: Dict[str, Any] = {}
-        self._updates: Dict[str, Dict[str, Any]] = {}
+        self._data: dict[str, Any] = {}
+        self._updates: dict[str, dict[str, Any]] = {}
 
     @property
     def _config_label(self) -> str:
         """Returns a human-readable ``config/<file>`` label for error messages."""
         return f"config/{os.path.basename(self.filepath)}"
 
-    def _save_json_atomically(self, data: Dict[str, Any]) -> None:
+    def _save_json_atomically(self, data: dict[str, Any]) -> None:
         """Writes data to the JSON file atomically using a temp-file swap.
 
         Writes to a temporary file first, then atomically replaces the target
@@ -284,7 +284,7 @@ class JsonProductDataManager(BaseDataManager):
         writer for the JSON backend.
 
         Args:
-            data (Dict[str, Any]): The data to serialize as JSON.
+            data (dict[str, Any]): The data to serialize as JSON.
 
         Raises:
             StorageFileError: If the write operation fails.
@@ -297,14 +297,14 @@ class JsonProductDataManager(BaseDataManager):
         except OSError as e:
             raise StorageFileError(str(e))
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Loads and validates the items data from the JSON file.
 
         Performs the full pre-scrape validation (directory, existence, permissions
         and JSON structure) and populates the in-memory state in one pass.
 
         Returns:
-            Dict[str, Any]: The parsed JSON data.
+            dict[str, Any]: The parsed JSON data.
 
         Raises:
             StorageFileError: If the file is missing, has wrong permissions, or
@@ -376,20 +376,20 @@ class JsonProductDataManager(BaseDataManager):
         else:
             self._updates[clean_url] = dict(updates)
 
-    def get_items(self) -> List[Dict[str, Any]]:
+    def get_items(self) -> list[dict[str, Any]]:
         """Returns the list of items as dictionaries.
 
         Note:
             The config's top-level ``settings`` block is **not** read here. Settings are
             a config-file concept resolved import-light through
-            :meth:`scrapers.registry.ScraperRegistry.resolve_settings` (and the
+            :meth:`core.scrapers.registry.ScraperRegistry.resolve_settings` (and the
             per-setting ``resolve_*`` helpers), so they are read uniformly for any
             backend rather than through this JSON-only manager. This manager owns only
             the *item* lifecycle; it never reads or writes ``settings``.
         """
         return self._data.get(self.ROOT_KEY, [])
 
-    def _clean_products(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _clean_products(self, products: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Removes duplicates based on URL rules and cleans URLs."""
         groups = defaultdict(list)
 
@@ -470,7 +470,7 @@ class JsonProductDataManager(BaseDataManager):
         Raises:
             StorageFileError: If the file cannot be read, or the atomic write fails.
         """
-        fresh_data: Dict[str, Any] = {}
+        fresh_data: dict[str, Any] = {}
         if os.path.exists(self.filepath):
             try:
                 with open(self.filepath, 'r') as file:
@@ -505,15 +505,15 @@ class JsonProductDataManager(BaseDataManager):
         self._data = fresh_data
         self._save_json_atomically(self._data)
 
-    def parse_item(self, data: Dict[str, Any]) -> BaseTrackedItem:
+    def parse_item(self, data: dict[str, Any]) -> BaseTrackedItem:
         """Parses a dictionary into a ``MODEL`` instance."""
         return self.MODEL.from_dict(data)
 
-    def is_valid_item(self, item: Dict[str, Any]) -> bool:
+    def is_valid_item(self, item: dict[str, Any]) -> bool:
         """Validates an item dictionary.
 
         Args:
-            item (Dict[str, Any]): The item dictionary to validate.
+            item (dict[str, Any]): The item dictionary to validate.
 
         Returns:
             bool: True if the item has a name, a scrapable URL, and a valid target price.
@@ -529,7 +529,7 @@ class JsonProductDataManager(BaseDataManager):
 
         return True
 
-    def is_scrapable_item(self, item: Dict[str, Any]) -> bool:
+    def is_scrapable_item(self, item: dict[str, Any]) -> bool:
         """Checks whether the item has a scrapable product URL.
 
         Composes the shared supported-domain check (inherited, driven by the
@@ -539,7 +539,7 @@ class JsonProductDataManager(BaseDataManager):
         "supported domain + path shape".
 
         Args:
-            item (Dict[str, Any]): The item dictionary to check.
+            item (dict[str, Any]): The item dictionary to check.
 
         Returns:
             bool: True if the URL is on a supported domain and its path matches.

@@ -1,7 +1,6 @@
 from dataclasses import dataclass, replace
-from typing import Optional
 
-from constants import (
+from core.constants import (
     EXIT_CODE_SUCCESS,
     EXIT_CODE_SKIPPED,
     EXIT_CODE_PRODUCTS_ERROR,
@@ -25,7 +24,7 @@ class ServiceVerdict:
     icon: str
     label: str
     color: str
-    note: Optional[str] = None
+    note: str | None = None
 
 
 # Process exit code -> how the status report renders it. This is the single source of

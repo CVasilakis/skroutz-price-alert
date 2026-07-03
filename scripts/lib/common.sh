@@ -73,8 +73,8 @@ plugin_in_list() {
 # list_installed_plugins.
 list_plugins() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from scrapers.registry import ScraperRegistry
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
+from core.scrapers.registry import ScraperRegistry
 for target in ScraperRegistry.registered_targets():
     print(target)
 PY
@@ -85,8 +85,8 @@ PY
 # requirement as list_plugins.
 list_plugin_configs() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from scrapers.registry import ScraperRegistry
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
+from core.scrapers.registry import ScraperRegistry
 for target in ScraperRegistry.registered_targets():
     print(target, ScraperRegistry.get_plugin(target).get_config_filename())
 PY
@@ -99,8 +99,8 @@ PY
 # requirement as list_plugins.
 list_plugin_requirements() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from scrapers.registry import ScraperRegistry
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
+from core.scrapers.registry import ScraperRegistry
 for target in ScraperRegistry.registered_targets():
     path = ScraperRegistry.get_plugin(target).get_requirements_path()
     if path:
@@ -119,9 +119,9 @@ PY
 # requirement as list_plugins.
 list_plugin_timer_directives() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from constants import CONFIG_DIR
-from scrapers.registry import ScraperRegistry
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
+from core.constants import CONFIG_DIR
+from core.scrapers.registry import ScraperRegistry
 for target in ScraperRegistry.registered_targets():
     for key, value in ScraperRegistry.resolve_timer_directives(target, CONFIG_DIR).items():
         print(f"{target}\t{key}={value}")
@@ -138,10 +138,10 @@ PY
 # Same venv requirement as list_plugins.
 list_interval_status() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from constants import CONFIG_DIR
-from scrapers.registry import ScraperRegistry
-from scrapers.base.settings import KEY_INTERVAL
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
+from core.constants import CONFIG_DIR
+from core.scrapers.registry import ScraperRegistry
+from core.scrapers.base.settings import KEY_INTERVAL
 for target in ScraperRegistry.registered_targets():
     print(f"{target}\t{ScraperRegistry.resolve_value(target, KEY_INTERVAL, CONFIG_DIR).status}")
 PY
@@ -153,8 +153,8 @@ PY
 # code. Same venv requirement as list_plugins.
 list_supported_intervals() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from scrapers.base.settings import SUPPORTED_INTERVALS
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
+from core.scrapers.base.settings import SUPPORTED_INTERVALS
 print(", ".join(SUPPORTED_INTERVALS))
 PY
 }
@@ -174,9 +174,9 @@ registry_diagnose() {
         return 1
     fi
     printf "%b\n" "${RED}Error: Scraper plugin discovery failed:${NC}" >&2
-    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - >&2 <<'PY'
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - >&2 <<'PY'
 try:
-    from scrapers.registry import ScraperRegistry
+    from core.scrapers.registry import ScraperRegistry
     targets = ScraperRegistry.registered_targets()
 except Exception as e:
     print(f"  {type(e).__name__}: {e}")

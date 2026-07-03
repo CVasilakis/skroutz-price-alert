@@ -117,7 +117,7 @@ the *consumers*.**
 
 Everything runs through the project's venv. Tests are written with the stdlib `unittest`
 `TestCase` API but run under **pytest**, which is configured in the repo-root
-`pyproject.toml` (`pythonpath = ["src/core", "tests"]`, `testpaths = ["tests"]`). Install
+`pyproject.toml` (`pythonpath = ["src", "tests"]`, `testpaths = ["tests"]`). Install
 the test toolchain once with `./venv/bin/python3 -m pip install -r requirements-dev.txt`.
 
 ### Run the whole suite
@@ -126,8 +126,8 @@ the test toolchain once with `./venv/bin/python3 -m pip install -r requirements-
 ./venv/bin/python3 -m pytest
 ```
 
-The `pythonpath` setting lets the scenarios import the production modules (`tui`, `status`,
-`ping`, …) and the `ui.*` test packages the same way the app does — no `PYTHONPATH=` prefix
+The `pythonpath` setting lets the scenarios import the production modules (`core.tui`, `core.status`,
+`core.ping`, …) and the `ui.*` test packages the same way the app does — no `PYTHONPATH=` prefix
 needed. This runs the existing project tests **and** the UI snapshot + color tests together
 (`pytest tests/ui` runs just this suite).
 
@@ -187,7 +187,7 @@ right?" check that snapshots (plain text) can't give you.
 | `--list`      | Prints each (optionally filtered) scenario's key and one-line description, then a count, and exits without rendering. Great for discovering what exists. |
 
 `--surface` and `--tag` combine, and both work with `--list` and `--html`. The gallery
-needs no environment setup — it adds `src/core` and `tests/` to the path itself, so
+needs no environment setup — it adds `src/` (the `core` package root) and `tests/` to the path itself, so
 `./venv/bin/python3 tests/ui/gallery.py …` just works.
 
 ---

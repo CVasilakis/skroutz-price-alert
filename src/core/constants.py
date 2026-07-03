@@ -1,5 +1,4 @@
 import os
-from typing import List
 
 # --- Exit Codes ---
 # Used to indicate failure states when running as a background service.
@@ -19,7 +18,7 @@ LOGS_DIR: str = os.path.join(BASE_DIR, "logs")
 # --- Scraping Configuration ---
 
 # Unconfigured Apprise placeholders to ignore during URL validation
-APPRISE_PLACEHOLDERS: List[str] = ['<token>', '<bot_token>', '<chat_id>', '<webhook_id>', '<webhook_token>']
+APPRISE_PLACEHOLDERS: list[str] = ['<token>', '<bot_token>', '<chat_id>', '<webhook_id>', '<webhook_token>']
 
 # Maximum number of times to retry scraping a product if the request fails
 MAX_RETRIES: int = 3

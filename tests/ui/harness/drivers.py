@@ -14,18 +14,18 @@ the captured snapshot reflects exactly what the application renders:
 """
 
 import io
-from typing import Callable, Sequence, Tuple
+from collections.abc import Callable, Sequence
 from unittest import mock
 
 from rich.console import Console
 
-import tui
-import status
-import ping
-import config_check
-from exceptions import UpdateCheckError, EnvFileError
-from panel import StatusPanelBuilder
-from scrapers.base.settings import ResolvedSettings
+from core import tui
+from core import status
+from core import ping
+from core import config_check
+from core.exceptions import UpdateCheckError, EnvFileError
+from core.panel import StatusPanelBuilder
+from core.scrapers.base.settings import ResolvedSettings
 
 from ui.catalog._base import BuildResult
 
@@ -81,7 +81,7 @@ def drive_run(script: Callable[[tui.InteractiveExecutionStrategy], None]) -> Bui
 def drive_service(target: str, timer: dict, service: dict, resolved: ResolvedSettings,
                   config_filename: str = "skroutz.json",
                   expected_oncalendar: str = "", active_oncalendar: str = "",
-                  config=_DEFAULT_CONFIG) -> BuildResult:
+                  config: config_check.ConfigView | None = _DEFAULT_CONFIG) -> BuildResult:
     """Builds a per-plugin Service Status panel via ``status.build_service_panel``.
 
     ``config`` is the leading 'Config' row (products-config health); it defaults to a
@@ -108,8 +108,8 @@ def drive_orphan(name: str) -> BuildResult:
 
 # --- PING: notification check panel -------------------------------------------------
 
-def drive_ping(url_entries: Sequence[Tuple[str, bool]],
-               test_results: Sequence[Tuple[str, bool]] = (),
+def drive_ping(url_entries: Sequence[tuple[str, bool]],
+               test_results: Sequence[tuple[str, bool]] = (),
                env_error_msg: str = "") -> BuildResult:
     """Builds the Notification Check Results panel via ``ping.build_ping_panel``."""
     panel, color = ping.build_ping_panel(list(url_entries), list(test_results), env_error_msg)

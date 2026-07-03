@@ -64,13 +64,16 @@ cd scrooge-alert
 
 - **All code runs in the venv** (`./venv/bin/python3`). The wrapper scripts handle
   this for you; for direct runs use `./venv/bin/python3 src/core/main.py`.
-- **Imports are relative to `src/core/`** — `main.py` inserts that directory onto
-  `sys.path`, so you write `from scrapers.acme.client import AcmeClient`, **not**
-  `from src.core.scrapers...`.
-- **There is no automated test suite or linter.** Validate your scraper by running
-  it (see [Test & validate](#test--validate-your-scraper)). Discovery itself
-  performs strict validation and fails loudly if a plugin is malformed.
-- **Requires:** Linux with `systemd` (user services), Python 3.7+.
+- **Imports are absolute from the `core` package** — the import root is `src/`
+  (the entry scripts put it on `sys.path`), so you write
+  `from core.scrapers.acme.client import AcmeClient`, **not** `from scrapers...`
+  or `from src.core...`.
+- **Run the test suite** with `./venv/bin/python3 -m pytest` (pytest is installed
+  via `pip install -r requirements-dev.txt`); CI also runs `shellcheck` over the
+  shell scripts. Then validate your scraper by running it (see
+  [Test & validate](#test--validate-your-scraper)) — discovery itself performs
+  strict validation and fails loudly if a plugin is malformed.
+- **Requires:** Linux with `systemd` (user services), Python 3.10+.
 
 ---
 
@@ -156,7 +159,7 @@ so you can add store-specific fields later without touching the base class.
 # src/core/scrapers/acme/model.py
 from dataclasses import dataclass
 
-from scrapers.base.model import BaseTrackedItem
+from core.scrapers.base.model import BaseTrackedItem
 
 
 @dataclass
@@ -182,10 +185,10 @@ modeled exception** (see [the error contract](#the-scraping-error-contract-impor
 import json
 from urllib.parse import urlparse
 
-from scrapers.base.http_client import HttpScraperClient
-from scrapers.base.model import ScrapeResult
-from exceptions import InvalidURLError, ProductUnavailableError, ScraperParseError
-from utils import parse_price  # the shared price normalizer — always use it
+from core.scrapers.base.http_client import HttpScraperClient
+from core.scrapers.base.model import ScrapeResult
+from core.exceptions import InvalidURLError, ProductUnavailableError, ScraperParseError
+from core.utils import parse_price  # the shared price normalizer — always use it
 
 # A pool of header profiles. One is chosen at random per identity; refresh_identity
 # (called between retries by the orchestrator) rotates to another.
@@ -264,8 +267,8 @@ is handled for you via the plugin's `get_supported_domains()`.
 # src/core/scrapers/acme/storage.py
 from urllib.parse import urlparse
 
-from scrapers.base.storage import JsonProductDataManager
-from scrapers.acme.model import AcmeProduct
+from core.scrapers.base.storage import JsonProductDataManager
+from core.scrapers.acme.model import AcmeProduct
 
 
 class AcmeDataManager(JsonProductDataManager):
@@ -287,9 +290,9 @@ The single source of truth. Note the **deferred imports** inside
 # src/core/scrapers/acme/plugin.py
 from typing import List, Type
 
-from scrapers.base.plugin import BasePlugin
-from scrapers.base.client import BaseScraperClient
-from scrapers.base.storage import BaseDataManager
+from core.scrapers.base.plugin import BasePlugin
+from core.scrapers.base.client import BaseScraperClient
+from core.scrapers.base.storage import BaseDataManager
 
 
 class AcmePlugin(BasePlugin):
@@ -316,12 +319,12 @@ class AcmePlugin(BasePlugin):
 
     @staticmethod
     def get_client_class() -> Type[BaseScraperClient]:
-        from scrapers.acme.client import AcmeClient        # deferred (import-light)
+        from core.scrapers.acme.client import AcmeClient        # deferred (import-light)
         return AcmeClient
 
     @staticmethod
     def get_storage_class() -> Type[BaseDataManager]:
-        from scrapers.acme.storage import AcmeDataManager  # deferred (import-light)
+        from core.scrapers.acme.storage import AcmeDataManager  # deferred (import-light)
         return AcmeDataManager
 ```
 
@@ -403,7 +406,7 @@ as an unexpected fault.
 Practical rules:
 
 - **Always `return ScrapeResult(price=…, currency=…)` on success.**
-- **Use `parse_price()`** (`from utils import parse_price`) for any price string — it
+- **Use `parse_price()`** (`from core.utils import parse_price`) for any price string — it
   handles currency symbols and EU/US digit grouping and returns `None` on failure
   (map that `None` to `ScraperParseError`).
 - If you extend `HttpScraperClient`, call `self.raise_for_status(response.status_code)`
@@ -440,7 +443,7 @@ write:
 
 ```python
 # in plugin.py (import-light — stdlib only, like the rest of the descriptor)
-from scrapers.base.settings import BASE_SETTING_SPECS, SettingSpec
+from core.scrapers.base.settings import BASE_SETTING_SPECS, SettingSpec
 
 SPEC_REGION = SettingSpec(
     key="region",

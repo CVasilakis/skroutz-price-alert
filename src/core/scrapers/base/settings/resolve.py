@@ -1,7 +1,7 @@
 """The generic resolve machinery, the :class:`SettingSpec`, and the built-in specs.
 
 This is the heart of the settings layer: a single resolver (:func:`resolve_spec`) and a
-single result type (:class:`scrapers.base.settings.model.ResolvedSetting`) serve every
+single result type (:class:`core.scrapers.base.settings.model.ResolvedSetting`) serve every
 setting, declared as :class:`SettingSpec` objects in :data:`BASE_SETTING_SPECS`.
 
 A setting is exactly **one** ``SettingSpec``: it owns its JSON ``key``, normalizer,
@@ -18,19 +18,20 @@ stack, so it is safe to call from the shell one-liners and ``--status``.
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
-from scrapers.base.settings.model import (
+from core.scrapers.base.settings.model import (
     ResolvedSetting, ResolvedSettings, SettingView,
     STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG,
 )
-from scrapers.base.settings.normalizers import (
+from core.scrapers.base.settings.normalizers import (
     normalize_retention_days, normalize_bool, DEFAULT_LOG_RETENTION_DAYS,
 )
-from scrapers.base.settings.intervals import (
+from core.scrapers.base.settings.intervals import (
     normalize_interval, canonical_for_oncalendar,
 )
-from scrapers.base.settings.messages import (
+from core.scrapers.base.settings.messages import (
     interval_warning_message, retention_warning_message, notify_errors_warning_message,
 )
 
@@ -64,7 +65,7 @@ class SettingSpec:
         display (Callable): Formats an effective value into a display string.
         warning (str): The footnote shown when the value is invalid.
         default (Any): The effective fallback when the value is unset/invalid/missing.
-        default_factory (Optional[Callable]): A plugin-aware default, used instead of
+        default_factory (Callable | None): A plugin-aware default, used instead of
             ``default`` when set (e.g. ``execution_interval`` defaults to the plugin's
             own cadence). Receives the owning ``BasePlugin``.
         is_unset (Callable): Predicate for "the user did not set this" (default:
@@ -73,11 +74,11 @@ class SettingSpec:
     """
     key: str
     label: str
-    normalize: Callable[[Any], Optional[Any]]
+    normalize: Callable[[Any], Any | None]
     display: Callable[[Any], str]
     warning: str
     default: Any = None
-    default_factory: Optional[Callable[[Any], Any]] = None
+    default_factory: Callable[[Any], Any] | None = None
     is_unset: Callable[[Any], bool] = lambda value: value is None
 
     def default_for(self, plugin: Any = None) -> Any:
@@ -87,7 +88,7 @@ class SettingSpec:
         return self.default
 
 
-def load_settings_block(config_path: str) -> Tuple[Optional[Any], Optional[str]]:
+def load_settings_block(config_path: str) -> tuple[Any | None, str | None]:
     """Reads a scraper config file and returns its raw ``settings`` block, once.
 
     The shared file stage of resolution, factored out so a target's whole settings set
@@ -99,7 +100,7 @@ def load_settings_block(config_path: str) -> Tuple[Optional[Any], Optional[str]]
         config_path (str): Absolute path to the scraper's JSON config file.
 
     Returns:
-        Tuple[Optional[Any], Optional[str]]: ``(settings_block, None)`` on a clean read
+        tuple[Any | None, str | None]: ``(settings_block, None)`` on a clean read
             (``settings_block`` is the raw value of the ``settings`` key, which may be a
             dict, ``None``, or any other type the user wrote); ``(None, STATUS_NOCFG)``
             when the file is missing; ``(None, "readerror")`` when it is unreadable or
@@ -116,7 +117,7 @@ def load_settings_block(config_path: str) -> Tuple[Optional[Any], Optional[str]]
     return (data.get("settings") if isinstance(data, dict) else None), None
 
 
-def resolve_spec(spec: SettingSpec, block: Any, load_status: Optional[str], plugin: Any = None) -> ResolvedSetting:
+def resolve_spec(spec: SettingSpec, block: Any, load_status: str | None, plugin: Any = None) -> ResolvedSetting:
     """Resolves one spec against an already-loaded ``settings`` block.
 
     The single home for the resolve state machine shared by every setting: missing
@@ -129,7 +130,7 @@ def resolve_spec(spec: SettingSpec, block: Any, load_status: Optional[str], plug
         spec (SettingSpec): The setting to resolve.
         block (Any): The raw ``settings`` block from :func:`load_settings_block` (a dict,
             ``None``, or any other type). Coerced to ``{}`` when not a dict.
-        load_status (Optional[str]): The load status from :func:`load_settings_block`
+        load_status (str | None): The load status from :func:`load_settings_block`
             (``None`` on a clean read, ``STATUS_NOCFG``, or ``"readerror"``).
         plugin (Any): The owning plugin, for a spec whose default is plugin-aware.
 
@@ -176,7 +177,7 @@ def resolve_one(spec: SettingSpec, config_path: str, plugin: Any = None) -> Reso
     return resolve_spec(spec, block, load_status, plugin)
 
 
-def resolve_all(specs: List[SettingSpec], config_path: str, plugin: Any = None) -> ResolvedSettings:
+def resolve_all(specs: list[SettingSpec], config_path: str, plugin: Any = None) -> ResolvedSettings:
     """Resolves every spec against a scraper's config file in a single read.
 
     The single entry point for a target's whole settings set: it reads the config file
@@ -186,7 +187,7 @@ def resolve_all(specs: List[SettingSpec], config_path: str, plugin: Any = None) 
     and a plugin's injected ``self.settings`` all share one resolution.
 
     Args:
-        specs (List[SettingSpec]): The settings to resolve, in display order.
+        specs (list[SettingSpec]): The settings to resolve, in display order.
         config_path (str): Absolute path to the scraper's JSON config file.
         plugin (Any): The owning plugin, for plugin-aware defaults.
 
@@ -198,7 +199,7 @@ def resolve_all(specs: List[SettingSpec], config_path: str, plugin: Any = None) 
     return ResolvedSettings(pairs, block_warning=_block_warning(block, load_status))
 
 
-def _block_warning(block: Any, load_status: Optional[str]) -> Optional[str]:
+def _block_warning(block: Any, load_status: str | None) -> str | None:
     """A one-line warning when the ``settings`` block is present but not an object.
 
     On a clean read (``load_status`` is ``None``) the block may still be the wrong
@@ -286,4 +287,4 @@ SPEC_NOTIFY = SettingSpec(
     default=True,  # default ON: notifications enabled unless explicitly disabled
 )
 
-BASE_SETTING_SPECS: List[SettingSpec] = [SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY]
+BASE_SETTING_SPECS: list[SettingSpec] = [SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY]

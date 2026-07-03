@@ -1,7 +1,6 @@
-from typing import List, Type
-from scrapers.base.plugin import BasePlugin
-from scrapers.base.client import BaseScraperClient
-from scrapers.base.storage import BaseDataManager
+from core.scrapers.base.plugin import BasePlugin
+from core.scrapers.base.client import BaseScraperClient
+from core.scrapers.base.storage import BaseDataManager
 
 
 class SkroutzPlugin(BasePlugin):
@@ -23,7 +22,7 @@ class SkroutzPlugin(BasePlugin):
         return "Skroutz"
 
     @staticmethod
-    def get_supported_domains() -> List[str]:
+    def get_supported_domains() -> list[str]:
         return SkroutzPlugin._SUPPORTED_DOMAINS
 
     @staticmethod
@@ -31,11 +30,11 @@ class SkroutzPlugin(BasePlugin):
         return "skroutz.json"
 
     @staticmethod
-    def get_client_class() -> Type[BaseScraperClient]:
-        from scrapers.skroutz.client import SkroutzClient
+    def get_client_class() -> type[BaseScraperClient]:
+        from core.scrapers.skroutz.client import SkroutzClient
         return SkroutzClient
 
     @staticmethod
-    def get_storage_class() -> Type[BaseDataManager]:
-        from scrapers.skroutz.storage import SkroutzDataManager
+    def get_storage_class() -> type[BaseDataManager]:
+        from core.scrapers.skroutz.storage import SkroutzDataManager
         return SkroutzDataManager

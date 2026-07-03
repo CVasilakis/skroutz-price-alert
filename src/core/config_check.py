@@ -1,16 +1,16 @@
 import os
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
 
 from rich.console import Console
 
-from constants import EXIT_CODE_ENV_ERROR
-from exceptions import StorageFileError, EnvFileError, UpdateCheckError, PluginDependencyError
-from utils import check_env_file, check_for_updates, classify_notification_urls
-from logger import get_target_logger
-from panel import StatusPanelBuilder
-from scrapers.registry import ScraperRegistry
+from core.constants import EXIT_CODE_ENV_ERROR
+from core.exceptions import StorageFileError, EnvFileError, UpdateCheckError, PluginDependencyError
+from core.utils import check_env_file, check_for_updates, classify_notification_urls
+from core.logger import get_target_logger
+from core.panel import StatusPanelBuilder
+from core.scrapers.registry import ScraperRegistry
 
 
 @dataclass
@@ -20,8 +20,8 @@ class TargetLoad:
     Attributes:
         target (str): The target name.
         count (int): The number of loaded items (0 when the load failed).
-        faulty_indices (List[int]): 1-based indices of items failing validation.
-        error (Optional[str]): The failure message if the storage could not be loaded.
+        faulty_indices (list[int]): 1-based indices of items failing validation.
+        error (str | None): The failure message if the storage could not be loaded.
 
     Note:
         This outcome is no longer rendered on the shared 'Configuration Check' panel.
@@ -31,8 +31,8 @@ class TargetLoad:
     """
     target: str
     count: int = 0
-    faulty_indices: List[int] = field(default_factory=list)
-    error: Optional[str] = None
+    faulty_indices: list[int] = field(default_factory=list)
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -47,22 +47,22 @@ class ConfigView:
     Attributes:
         icon (str): The status icon (``✅`` / ``🟡`` / ``❗``).
         value (str): The row value as Rich markup, without any footnote reference.
-        footnote (Optional[str]): The explanatory note, or ``None`` when healthy.
+        footnote (str | None): The explanatory note, or ``None`` when healthy.
         has_warning (bool): True for a faulty or failed load (drives the silent-log level).
     """
     icon: str
     value: str
-    footnote: Optional[str] = None
+    footnote: str | None = None
     has_warning: bool = False
 
 
-def config_view(count: int, faulty_indices: Sequence[int] = (), error: Optional[str] = None) -> ConfigView:
+def config_view(count: int, faulty_indices: Sequence[int] = (), error: str | None = None) -> ConfigView:
     """Builds the :class:`ConfigView` for a target from its load outcome.
 
     Args:
         count (int): The number of loaded items (ignored when ``error`` is set).
         faulty_indices (Sequence[int]): 1-based indices of items failing validation.
-        error (Optional[str]): The storage failure message, if the load failed.
+        error (str | None): The storage failure message, if the load failed.
 
     Returns:
         ConfigView: The icon/value/footnote for the 'Config' row.
@@ -90,7 +90,7 @@ def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
     panel.add_row(view.icon, "Config", f"{view.value}{ref}")
 
 
-def load_targets(registry: ScraperRegistry, targets: list) -> List[TargetLoad]:
+def load_targets(registry: ScraperRegistry, targets: list) -> list[TargetLoad]:
     """Loads every target's storage exactly once — the single read/validation point.
 
     The managers are cached in the registry, so the orchestrator later reuses the
@@ -102,10 +102,10 @@ def load_targets(registry: ScraperRegistry, targets: list) -> List[TargetLoad]:
         targets (list): The targets to load.
 
     Returns:
-        List[TargetLoad]: One outcome per resolvable target, in the given order
+        list[TargetLoad]: One outcome per resolvable target, in the given order
             (targets without a registered plugin are skipped).
     """
-    results: List[TargetLoad] = []
+    results: list[TargetLoad] = []
     for target in targets:
         try:
             manager = registry.get_manager(target)
@@ -183,7 +183,7 @@ def render_config_panel(console: Console) -> None:
     panel.render(console)
 
 
-def _silent_preflight(targets_to_run: list) -> Optional[int]:
+def _silent_preflight(targets_to_run: list) -> int | None:
     """Validates the .env for a background (``--quiet``) run, logging to file.
 
     A missing/invalid ``.env`` is fatal for a service (it cannot notify), so it gates
@@ -195,7 +195,7 @@ def _silent_preflight(targets_to_run: list) -> Optional[int]:
         targets_to_run (list): The targets being run (for per-target logging).
 
     Returns:
-        Optional[int]: A fatal exit code to abort on, or None to proceed.
+        int | None: A fatal exit code to abort on, or None to proceed.
     """
     try:
         check_env_file()
@@ -215,7 +215,7 @@ def _silent_preflight(targets_to_run: list) -> Optional[int]:
     return None
 
 
-def preflight(console: Optional[Console], targets_to_run: list, quiet: bool) -> Optional[int]:
+def preflight(console: Console | None, targets_to_run: list, quiet: bool) -> int | None:
     """Single preflight-validation entry point shared by both run modes.
 
     Renders/logs the global configuration verdict and decides whether to abort. Storage
@@ -229,13 +229,13 @@ def preflight(console: Optional[Console], targets_to_run: list, quiet: bool) -> 
           the user can see it and still proceed.
 
     Args:
-        console (Optional[Console]): The console for interactive rendering; unused
+        console (Console | None): The console for interactive rendering; unused
             (may be None) in quiet mode.
         targets_to_run (list): The targets being run.
         quiet (bool): Whether this is a silent/background run.
 
     Returns:
-        Optional[int]: A fatal exit code to abort on, or None to proceed.
+        int | None: A fatal exit code to abort on, or None to proceed.
     """
     if quiet:
         return _silent_preflight(targets_to_run)

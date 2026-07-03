@@ -1,11 +1,12 @@
 import apprise
 from urllib.parse import urlparse
-from typing import TYPE_CHECKING, Any, Callable
-from utils import is_valid_apprise_url
-from scrapers.registry import ScraperRegistry
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
+from core.utils import is_valid_apprise_url
+from core.scrapers.registry import ScraperRegistry
 
 if TYPE_CHECKING:
-    from scrapers.base.model import BaseTrackedItem
+    from core.scrapers.base.model import BaseTrackedItem
 
 class Notifier:
     """Handles sending notifications via configured Apprise URLs."""
@@ -79,7 +80,7 @@ class Notifier:
             body=f'{product_name} is now available for {current_price}{currency} in {site}, which is below your target of {target_price}{currency}.\nView it here: {url}'
         )
 
-    def _build_summary(self, title: str, header: str, items: list, format_item: Callable[[Any], str], footer: str, more_noun: str = "", max_show: int = 3) -> bool:
+    def _build_summary(self, title: str, header: str, items: Sequence[Any], format_item: Callable[[Any], str], footer: str, more_noun: str = "", max_show: int = 3) -> bool:
         """Builds and sends one aggregated summary notification.
 
         Shared shape for the aggregated notifications: a header line, up to
@@ -89,7 +90,7 @@ class Notifier:
         Args:
             title (str): The notification title.
             header (str): The opening line (typically embeds the count and site).
-            items (list): The items to summarize (already filtered to a single site).
+            items (Sequence[Any]): The items to summarize (already filtered to a single site).
             format_item (Callable[[Any], str]): Maps one item to its bullet text
                 (without the leading "- ").
             footer (str): The closing line.
@@ -113,7 +114,7 @@ class Notifier:
 
         return self.notify(title=title, body="\n".join(body_lines))
 
-    def notify_old_entries(self, stale_items: list['BaseTrackedItem'], hours: int) -> bool:
+    def notify_old_entries(self, stale_items: Sequence['BaseTrackedItem'], hours: int) -> bool:
         """Sends a single notification summarizing products that have gone stale.
 
         Aggregates every product that hasn't been successfully scraped within the
@@ -121,7 +122,7 @@ class Notifier:
         truncated to prevent notification bloat.
 
         Args:
-            stale_items (list[BaseTrackedItem]): The products whose last successful
+            stale_items (Sequence[BaseTrackedItem]): The products whose last successful
                 scrape is older than the threshold.
             hours (int): The staleness threshold in hours.
 
@@ -141,14 +142,14 @@ class Notifier:
             footer="\nPlease check the error logs or verify the URLs are still valid.",
         )
 
-    def notify_errors(self, failed_items: list[tuple['BaseTrackedItem', Exception]]) -> bool:
+    def notify_errors(self, failed_items: Sequence[tuple['BaseTrackedItem', Exception]]) -> bool:
         """Sends a notification indicating that specific errors occurred during scraping.
 
         Formats a summary of the failed products and their corresponding errors.
         If many errors occurred, the list is truncated to prevent notification bloat.
 
         Args:
-            failed_items (list[tuple[Product, Exception]]): A list of tuples containing
+            failed_items (Sequence[tuple[Product, Exception]]): A list of tuples containing
                 the product that failed and the exception that caused the failure.
 
         Returns:

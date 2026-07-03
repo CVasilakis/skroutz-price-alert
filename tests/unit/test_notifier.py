@@ -8,14 +8,14 @@ delegation to apprise, site-name resolution, and summary truncation.
 import unittest
 from unittest import mock
 
-from notifier import Notifier
-from scrapers.base.model import BaseTrackedItem
+from core.notifier import Notifier
+from core.scrapers.base.model import BaseTrackedItem
 
 
 def _make_notifier(urls, add_return=True, valid=True):
     """Builds a Notifier whose apprise instance is a mock. Returns (notifier, app)."""
-    with mock.patch("notifier.apprise.Apprise") as app_cls, \
-         mock.patch("notifier.is_valid_apprise_url", return_value=valid):
+    with mock.patch("core.notifier.apprise.Apprise") as app_cls, \
+         mock.patch("core.notifier.is_valid_apprise_url", return_value=valid):
         app = app_cls.return_value
         app.add.return_value = add_return
         notifier = Notifier(urls)
@@ -71,12 +71,12 @@ class TestExtractSite(unittest.TestCase):
         notifier, _ = _make_notifier("tgram://token/chat")
         plugin = mock.Mock()
         plugin.get_display_name.return_value = "Skroutz"
-        with mock.patch("notifier.ScraperRegistry.plugin_for_url", return_value=plugin):
+        with mock.patch("core.notifier.ScraperRegistry.plugin_for_url", return_value=plugin):
             self.assertEqual(notifier._extract_site("https://www.skroutz.gr/s/1/p"), "Skroutz")
 
     def test_domain_fallback_strips_www_and_capitalizes(self):
         notifier, _ = _make_notifier("tgram://token/chat")
-        with mock.patch("notifier.ScraperRegistry.plugin_for_url", return_value=None):
+        with mock.patch("core.notifier.ScraperRegistry.plugin_for_url", return_value=None):
             self.assertEqual(notifier._extract_site("https://www.example.gr/x"), "Example")
 
     def test_empty_url_is_unknown_site(self):
@@ -85,7 +85,7 @@ class TestExtractSite(unittest.TestCase):
 
     def test_unparseable_url_is_unknown_site(self):
         notifier, _ = _make_notifier("tgram://token/chat")
-        with mock.patch("notifier.ScraperRegistry.plugin_for_url", return_value=None):
+        with mock.patch("core.notifier.ScraperRegistry.plugin_for_url", return_value=None):
             self.assertEqual(notifier._extract_site("garbage-no-netloc"), "Unknown Site")
 
 

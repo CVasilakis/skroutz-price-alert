@@ -1,16 +1,16 @@
 import os
 import sys
 import signal
-from typing import List, Tuple
 
-# Ensure the script directory is in the python path to allow imports when running as a module
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Put src/ (the parent of the `core` package) on the path so the absolute
+# `core.*` imports below work when this file is invoked directly as a script.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import check_env_file, is_valid_apprise_url, install_interrupt_handler
-from notifier import Notifier
-from logger import setup_global_logging
-from exceptions import EnvFileError
-from panel import StatusPanelBuilder
+from core.utils import check_env_file, is_valid_apprise_url, install_interrupt_handler
+from core.notifier import Notifier
+from core.logger import setup_global_logging
+from core.exceptions import EnvFileError
+from core.panel import StatusPanelBuilder
 
 from rich.console import Console
 from rich.markup import escape
@@ -45,10 +45,10 @@ def obfuscate_invalid_url(url: str) -> str:
     return f"{scheme}{obfuscated_token}{path}"
 
 def build_ping_panel(
-    url_entries: List[Tuple[str, bool]],
-    test_results: List[Tuple[str, bool]],
+    url_entries: list[tuple[str, bool]],
+    test_results: list[tuple[str, bool]],
     env_error_msg: str,
-) -> Tuple[StatusPanelBuilder, str]:
+) -> tuple[StatusPanelBuilder, str]:
     """Builds the 'Notification Check Results' panel from already-collected inputs.
 
     Pure presentation: it performs no env reading, URL validation or network I/O — the
@@ -58,15 +58,15 @@ def build_ping_panel(
     the exact row/footnote/color logic with synthetic inputs.
 
     Args:
-        url_entries (List[Tuple[str, bool]]): ``(url, is_valid)`` per configured URL, in
+        url_entries (list[tuple[str, bool]]): ``(url, is_valid)`` per configured URL, in
             .env order.
-        test_results (List[Tuple[str, bool]]): ``(identifier, success)`` for each *valid*
+        test_results (list[tuple[str, bool]]): ``(identifier, success)`` for each *valid*
             URL, in the same relative order (as returned by ``Notifier.notify_test``).
         env_error_msg (str): The ``.env`` error message shown when nothing is configured,
             or ``""``.
 
     Returns:
-        Tuple[StatusPanelBuilder, str]: The populated panel and its border color
+        tuple[StatusPanelBuilder, str]: The populated panel and its border color
             (``"yellow"`` when results are mixed, ``"green"`` when all succeeded,
             ``"red"`` otherwise).
     """

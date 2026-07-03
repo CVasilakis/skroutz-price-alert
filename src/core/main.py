@@ -4,17 +4,18 @@ import os
 import logging
 import signal
 
-# Ensure the script directory is in the python path to allow imports when running as a module
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Put src/ (the parent of the `core` package) on the path so the absolute
+# `core.*` imports below work when this file is invoked directly as a script.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from constants import CONFIG_DIR, EXIT_CODE_ERROR
-from utils import install_interrupt_handler
-from scrapers.registry import ScraperRegistry
-from notifier import Notifier
-from logger import setup_global_logging, save_traceback
-from orchestrator import ScrapingOrchestrator
-from tui import InteractiveExecutionStrategy, SilentExecutionStrategy
-from config_check import preflight, load_targets
+from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
+from core.utils import install_interrupt_handler
+from core.scrapers.registry import ScraperRegistry
+from core.notifier import Notifier
+from core.logger import setup_global_logging, save_traceback
+from core.orchestrator import ScrapingOrchestrator
+from core.tui import InteractiveExecutionStrategy, SilentExecutionStrategy
+from core.config_check import preflight, load_targets
 
 from rich.console import Console
 

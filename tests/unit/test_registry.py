@@ -9,10 +9,11 @@ fires. No client/storage class is ever resolved, so no transport library loads.
 """
 
 import unittest
+from typing import cast
 
-from exceptions import PluginDiscoveryError
-from scrapers.base.plugin import BasePlugin
-from scrapers.registry import ScraperRegistry
+from core.exceptions import PluginDiscoveryError
+from core.scrapers.base.plugin import BasePlugin
+from core.scrapers.registry import ScraperRegistry
 
 
 def _fake_plugin(name="fakestore", domains=("fake-store.example",),
@@ -65,12 +66,13 @@ class TestRegisterValidationGate(unittest.TestCase):
     def test_valid_plugin_registers_and_routes_its_domain(self):
         ScraperRegistry.register(_fake_plugin())
         plugin = ScraperRegistry.plugin_for_url("https://www.fake-store.example/item/1")
-        self.assertIsNotNone(plugin)
+        assert plugin is not None, "expected the fake plugin to route its domain"
         self.assertEqual(plugin.get_name(), "fakestore")
 
     def test_non_plugin_instance_is_rejected(self):
+        # cast() forges the wrong type on purpose: the gate must reject it at runtime.
         with self.assertRaises(PluginDiscoveryError):
-            ScraperRegistry.register(object())
+            ScraperRegistry.register(cast(BasePlugin, object()))
 
     def test_duplicate_name_is_rejected(self):
         ScraperRegistry.register(_fake_plugin(domains=("fake-store.example",)))

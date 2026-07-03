@@ -5,12 +5,11 @@ import signal
 import subprocess
 from dotenv import load_dotenv
 
-from typing import Optional
 
-from constants import BASE_DIR, APPRISE_PLACEHOLDERS, EXIT_CODE_INTERRUPT
-from exceptions import EnvFileError, UpdateCheckError
+from core.constants import BASE_DIR, APPRISE_PLACEHOLDERS, EXIT_CODE_INTERRUPT
+from core.exceptions import EnvFileError, UpdateCheckError
 
-def parse_price(raw_value) -> Optional[float]:
+def parse_price(raw_value) -> float | None:
     """Parses a raw price value into a float.
 
     This is the single price-normalization routine shared by config validation
@@ -29,7 +28,7 @@ def parse_price(raw_value) -> Optional[float]:
         raw_value: The raw price value (str, int, float, or None).
 
     Returns:
-        Optional[float]: The parsed price, or None if parsing fails.
+        float | None: The parsed price, or None if parsing fails.
     """
     if raw_value is None or isinstance(raw_value, bool):
         return None

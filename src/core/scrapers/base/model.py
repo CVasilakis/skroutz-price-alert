@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Type, TypeVar
+from typing import Any, TypeVar
 
-from utils import parse_price
+from core.utils import parse_price
 
 T = TypeVar('T', bound='BaseTrackedItem')
 
@@ -19,7 +19,7 @@ class ScrapeResult:
     """
     price: float
     currency: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -52,7 +52,7 @@ class BaseTrackedItem:
         Item rows are the *only* place the application writes machine-owned state.
         The config's top-level ``settings`` block is read-only user input — never
         written back — so runtime state belongs here (on the item, via
-        ``update_item``), not in ``settings`` (see :mod:`scrapers.base.settings`).
+        ``update_item``), not in ``settings`` (see :mod:`core.scrapers.base.settings`).
     """
     name: str = "Unknown"
     url: str = ""
@@ -62,7 +62,7 @@ class BaseTrackedItem:
     last_checked: str = ""
 
     @classmethod
-    def _base_field_kwargs(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _base_field_kwargs(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Parses the shared base fields out of a stored row, as constructor kwargs.
 
         The compositional half of ``from_dict``: a subclass adding store-specific
@@ -71,10 +71,10 @@ class BaseTrackedItem:
         ``target_price`` sentinel rule, which must never drift between stores.
 
         Args:
-            data (Dict[str, Any]): The item data dictionary.
+            data (dict[str, Any]): The item data dictionary.
 
         Returns:
-            Dict[str, Any]: One kwarg per base field, ready to pass to ``cls(...)``.
+            dict[str, Any]: One kwarg per base field, ready to pass to ``cls(...)``.
         """
         target_price = parse_price(data.get('target_price', 0.0))
         if target_price is None:
@@ -90,7 +90,7 @@ class BaseTrackedItem:
         }
 
     @classmethod
-    def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
+    def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """Creates an instance from a dictionary.
 
         Error-handling contract:
@@ -101,7 +101,7 @@ class BaseTrackedItem:
               sentinel and deciding how to proceed.
 
         Args:
-            data (Dict[str, Any]): The item data dictionary.
+            data (dict[str, Any]): The item data dictionary.
 
         Returns:
             BaseTrackedItem: A new instance populated with data from the

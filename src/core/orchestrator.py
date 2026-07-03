@@ -1,22 +1,24 @@
+import logging
 import signal
 import datetime
 import random
 import time
 from dataclasses import dataclass
-from typing import Optional
+from types import FrameType
+from typing import Any
 
-from locks import acquire_lock
-from constants import MIN_DELAY_SECONDS, RANDOM_DELAY_MIN, RANDOM_DELAY_MAX, RETRY_DELAY_MULTIPLIER, MAX_RETRIES, OLD_ENTRY_HOURS, EXIT_CODE_RATE_LIMIT_ERROR, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED, EXIT_CODE_SUCCESS, EXIT_CODE_PRODUCTS_ERROR, TIMESTAMP_FORMAT
-from exceptions import RateLimitError, ServerError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
-from config_check import config_view
-from scrapers.base.model import BaseTrackedItem
-from scrapers.base.storage import BaseDataManager
-from scrapers.base.settings import KEY_RETENTION, KEY_NOTIFY
-from scrapers.registry import ScraperRegistry
-from notifier import Notifier
-from logger import save_traceback, get_target_logger
-from tui import ExecutionStrategy, SilentExecutionStrategy, Notes, PriceOutcome
-from utils import describe_signal
+from core.locks import acquire_lock
+from core.constants import MIN_DELAY_SECONDS, RANDOM_DELAY_MIN, RANDOM_DELAY_MAX, RETRY_DELAY_MULTIPLIER, MAX_RETRIES, OLD_ENTRY_HOURS, EXIT_CODE_RATE_LIMIT_ERROR, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED, EXIT_CODE_SUCCESS, EXIT_CODE_PRODUCTS_ERROR, TIMESTAMP_FORMAT
+from core.exceptions import RateLimitError, ServerError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
+from core.config_check import TargetLoad, config_view
+from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
+from core.scrapers.base.storage import BaseDataManager
+from core.scrapers.base.settings import KEY_RETENTION, KEY_NOTIFY
+from core.scrapers.registry import ScraperRegistry
+from core.notifier import Notifier
+from core.logger import save_traceback, get_target_logger
+from core.tui import ExecutionStrategy, SilentExecutionStrategy, Notes, PriceOutcome
+from core.utils import describe_signal
 
 
 def _utc_now() -> datetime.datetime:
@@ -60,13 +62,13 @@ class ErrorPolicy:
     abort: bool = False
     counts_as_failure: bool = True
     save_traceback: bool = False
-    extra_notes: tuple = ()
+    extra_notes: tuple[str, ...] = ()
 
 
 _DEFAULT_POLICY = ErrorPolicy(save_traceback=True, extra_notes=(ERRORS_LOG_TOKEN,))
 
 # Matched by isinstance in insertion order; first hit wins, else _DEFAULT_POLICY.
-_RETRY_POLICIES: dict = {
+_RETRY_POLICIES: dict[type[Exception], ErrorPolicy] = {
     RateLimitError: ErrorPolicy(
         abort=True,
         save_traceback=True,
@@ -90,35 +92,35 @@ def _policy_for(exc: Exception) -> ErrorPolicy:
 
 class ScrapingOrchestrator:
     """Orchestrates the scraping process across multiple targets and manages execution flow."""
-    def __init__(self, targets_to_run: list, registry: ScraperRegistry, notifier: Notifier, config_dir: str, quiet: bool = False, ui_strategy: Optional[ExecutionStrategy] = None, loads_by_target: Optional[dict] = None):
+    def __init__(self, targets_to_run: list[str], registry: ScraperRegistry, notifier: Notifier, config_dir: str, quiet: bool = False, ui_strategy: ExecutionStrategy | None = None, loads_by_target: dict[str, TargetLoad] | None = None):
         """Initializes the ScrapingOrchestrator.
 
         Args:
-            targets_to_run (list): A list of scraper types to run.
+            targets_to_run (list[str]): A list of scraper target names to run.
             registry (ScraperRegistry): The unified registry for scraper clients and data managers.
             notifier (Notifier): The service used to send notifications.
             config_dir (str): The directory for saving user data and configuration.
             quiet (bool): Whether to log to file silently.
-            ui_strategy (Optional[ExecutionStrategy]): The strategy for the UI console output.
-            loads_by_target (Optional[dict]): The preflight ``load_targets`` outcomes keyed by
+            ui_strategy (ExecutionStrategy | None): The strategy for the UI console output.
+            loads_by_target (dict[str, TargetLoad] | None): The preflight ``load_targets`` outcomes keyed by
                 target (``{target: TargetLoad}``). Drives the per-scraper 'Config' row and the
                 per-target skip of a scraper whose products config failed to load. Targets
                 absent from the map (e.g. missing dependencies) simply get no 'Config' row.
         """
-        self.targets_to_run = targets_to_run
-        self.registry = registry
-        self.notifier = notifier
-        self.config_dir = config_dir
-        self.quiet = quiet
-        self.interrupted = False
-        self._interrupt_message = ""
-        self._current_target = ""
-        self._current_logger = None
+        self.targets_to_run: list[str] = targets_to_run
+        self.registry: ScraperRegistry = registry
+        self.notifier: Notifier = notifier
+        self.config_dir: str = config_dir
+        self.quiet: bool = quiet
+        self.interrupted: bool = False
+        self._interrupt_message: str = ""
+        self._current_target: str = ""
+        self._current_logger: logging.Logger | None = None
         self._stale_items: list[BaseTrackedItem] = []
-        self.ui_strategy = ui_strategy or SilentExecutionStrategy()
-        self.loads_by_target: dict = loads_by_target or {}
+        self.ui_strategy: ExecutionStrategy = ui_strategy or SilentExecutionStrategy()
+        self.loads_by_target: dict[str, TargetLoad] = loads_by_target or {}
 
-    def signal_handler(self, signum, _frame):
+    def signal_handler(self, signum: int, _frame: FrameType | None) -> None:
         """Handles termination signals gracefully.
 
         Only sets the interrupted flag and stores the message. All UI cleanup
@@ -159,7 +161,7 @@ class ScrapingOrchestrator:
             actual_delay = time.monotonic() - start_time
             self.ui_strategy.complete_sleep(actual_delay)
 
-    def _check_and_repair_timestamp(self, item: BaseTrackedItem, data_manager: BaseDataManager) -> Optional[str]:
+    def _check_and_repair_timestamp(self, item: BaseTrackedItem, data_manager: BaseDataManager) -> str | None:
         """Evaluates — and may repair — the stored timestamp of an unscraped product.
 
         This method writes: a corrupted (unparseable) timestamp is repaired in place
@@ -177,7 +179,7 @@ class ScrapingOrchestrator:
                 corrupted timestamp via the atomic update mechanism.
 
         Returns:
-            Optional[str]: A footnote to attach to the product's row, or None when
+            str | None: A footnote to attach to the product's row, or None when
                 the product has no usable timestamp or is still fresh.
         """
         if not item.last_checked:
@@ -200,11 +202,11 @@ class ScrapingOrchestrator:
         return None
 
     @staticmethod
-    def _combine_notes(*notes) -> Optional[list]:
+    def _combine_notes(*notes: Notes) -> list[str] | None:
         """Flattens the given note values (strings, lists, or None) into one list.
 
         Returns:
-            Optional[list]: A flat list of note strings, or None when empty.
+            list | None: A flat list of note strings, or None when empty.
         """
         flat = []
         for note in notes:
@@ -216,7 +218,7 @@ class ScrapingOrchestrator:
                 flat.extend(note)
         return flat or None
 
-    def _record_attempt(self, item_name: str, attempt: int, error_type: str, detail: str, attempt_notes: list) -> None:
+    def _record_attempt(self, item_name: str, attempt: int, error_type: str, detail: str, attempt_notes: list[str]) -> None:
         """Records a single failed scrape attempt.
 
         Streams the full detail to the silent strategy (one log line per attempt) and
@@ -232,7 +234,7 @@ class ScrapingOrchestrator:
         self.ui_strategy.log_attempt(item_name, attempt + 1, MAX_RETRIES, detail)
         attempt_notes.append(f"Attempt {attempt + 1}: {error_type}")
 
-    def _emit_failure(self, item: BaseTrackedItem, data_manager: BaseDataManager, error_type: str, attempt_notes: list, extra_notes: Notes = None) -> None:
+    def _emit_failure(self, item: BaseTrackedItem, data_manager: BaseDataManager, error_type: str, attempt_notes: list[str], extra_notes: Notes = None) -> None:
         """Emits the terminal failure row for a product after all retries are exhausted.
 
         Args:
@@ -250,13 +252,13 @@ class ScrapingOrchestrator:
         """Returns the footnote pointing at the current target's error log."""
         return f"See logs/{self._current_target}/errors.txt for details."
 
-    def _resolve_policy_notes(self, policy: ErrorPolicy) -> Optional[list]:
+    def _resolve_policy_notes(self, policy: ErrorPolicy) -> list[str] | None:
         """Expands a policy's extra_notes, substituting the runtime error-log pointer."""
         if not policy.extra_notes:
             return None
         return [self._errors_log_pointer() if n == ERRORS_LOG_TOKEN else n for n in policy.extra_notes]
 
-    def _handle_successful_scrape(self, item: BaseTrackedItem, result, data_manager: BaseDataManager, original_invalid_price=None, missing_target_price: bool = False, retries_used: int = 0, attempt_notes: Optional[list] = None) -> None:
+    def _handle_successful_scrape(self, item: BaseTrackedItem, result: ScrapeResult, data_manager: BaseDataManager, original_invalid_price: object | None = None, missing_target_price: bool = False, retries_used: int = 0, attempt_notes: list[str] | None = None) -> None:
         """Processes a successful product scrape, sending notifications if necessary.
 
         Args:
@@ -267,10 +269,10 @@ class ScrapingOrchestrator:
                 unparseable, or None if it was valid.
             missing_target_price (bool): True if the config entry had no target_price field.
             retries_used (int): The number of failed attempts preceding this success.
-            attempt_notes (Optional[list]): Per-attempt footnotes for preceding failed
+            attempt_notes (list | None): Per-attempt footnotes for preceding failed
                 retries, surfaced on the interactive row ahead of the success notes.
         """
-        notes = []
+        notes: list[str] = []
         if retries_used > 0:
             notes.append(f"Succeeded on attempt {retries_used + 1}/{MAX_RETRIES}")
         if original_invalid_price is not None:
@@ -302,7 +304,7 @@ class ScrapingOrchestrator:
         )
 
     @staticmethod
-    def _normalize_target_price(item: BaseTrackedItem, row: dict) -> tuple[object | None, bool]:
+    def _normalize_target_price(item: BaseTrackedItem, row: dict[str, Any]) -> tuple[object | None, bool]:
         """Detects and neutralizes a missing or invalid target price.
 
         A negative sentinel target price (set by ``from_dict`` for unparseable input)
@@ -327,7 +329,7 @@ class ScrapingOrchestrator:
             item.target_price = 0.0
         return original_invalid_price, missing_target_price
 
-    def _process_product(self, row: dict, data_manager: BaseDataManager) -> tuple[BaseTrackedItem, Exception | None, bool]:
+    def _process_product(self, row: dict[str, Any], data_manager: BaseDataManager) -> tuple[BaseTrackedItem, Exception | None, bool]:
         """Processes a single product from the configuration, attempting to scrape it.
 
         Args:
@@ -360,7 +362,7 @@ class ScrapingOrchestrator:
         error, abort = self._run_attempts(item, data_manager, original_invalid_price, missing_target_price)
         return item, error, abort
 
-    def _run_attempts(self, item: BaseTrackedItem, data_manager: BaseDataManager, original_invalid_price, missing_target_price: bool) -> tuple[Exception | None, bool]:
+    def _run_attempts(self, item: BaseTrackedItem, data_manager: BaseDataManager, original_invalid_price: object | None, missing_target_price: bool) -> tuple[Exception | None, bool]:
         """Runs the retry loop for one product, mapping each error through its policy.
 
         On success it delegates to ``_handle_successful_scrape`` and returns no error.
@@ -378,7 +380,7 @@ class ScrapingOrchestrator:
                 count (or None), and whether the whole target run should abort.
         """
         scraper = self.registry.get_scraper(item.url)
-        attempt_notes: list = []
+        attempt_notes: list[str] = []
 
         for attempt in range(MAX_RETRIES):
             if self.interrupted:
@@ -436,7 +438,7 @@ class ScrapingOrchestrator:
         skipped_count = 0
 
         for target in self.targets_to_run:
-            failed_items = []
+            failed_items: list[tuple[BaseTrackedItem, Exception]] = []
             self._stale_items = []
             needs_save = False
             abort_target = False

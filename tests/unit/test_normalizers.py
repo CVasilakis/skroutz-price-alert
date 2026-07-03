@@ -10,7 +10,7 @@ Run from the repo root with the project interpreter::
 
 import unittest
 
-from scrapers.base.settings import (
+from core.scrapers.base.settings import (
     normalize_interval, normalize_retention_days, normalize_bool,
 )
 

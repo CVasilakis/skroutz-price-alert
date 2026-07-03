@@ -12,7 +12,7 @@ import os
 import tempfile
 import unittest
 
-from scrapers.base.settings import (
+from core.scrapers.base.settings import (
     SettingSpec, BASE_SETTING_SPECS,
     resolve_one, setting_view,
     SPEC_RETENTION, STATUS_OK, STATUS_INVALID, STATUS_DEFAULT,
@@ -116,7 +116,7 @@ class TestRegistryResolveSettings(unittest.TestCase):
     """resolve_settings against the real registry/skroutz plugin (needs discovery)."""
 
     def test_one_view_per_builtin_setting(self):
-        from scrapers.registry import ScraperRegistry
+        from core.scrapers.registry import ScraperRegistry
         # The registry joins <config_dir>/<plugin config filename>, so the file must be
         # named for the plugin (skroutz.json), not the generic helper's x.json.
         cfg_dir = tempfile.mkdtemp()

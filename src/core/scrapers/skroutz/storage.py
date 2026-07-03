@@ -1,8 +1,8 @@
 import re
 from urllib.parse import urlparse
 
-from scrapers.base.storage import JsonProductDataManager
-from scrapers.skroutz.model import Product
+from core.scrapers.base.storage import JsonProductDataManager
+from core.scrapers.skroutz.model import Product
 
 
 class SkroutzDataManager(JsonProductDataManager):

@@ -7,7 +7,7 @@ orchestrator makes for a given situation, ending at the visual state to capture.
 ``orchestrator.py`` produces at runtime.
 """
 
-from tui import PriceOutcome
+from core.tui import PriceOutcome
 
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import (
@@ -17,7 +17,7 @@ from ui.catalog.inputs import (
     config_ok, config_faulty, config_failed, STORAGE_BAD_JSON,
 )
 from ui.harness.drivers import drive_run
-from scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, STATUS_INVALID
+from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, STATUS_INVALID
 
 LOGGER = stub_logger()
 

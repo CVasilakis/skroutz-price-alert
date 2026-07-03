@@ -3,13 +3,12 @@ import datetime
 import time
 import traceback
 import os
-from typing import Optional, Dict
 from logging.handlers import TimedRotatingFileHandler
 from rich.console import Console
 from rich.padding import Padding
 from rich.text import Text
-from constants import LOGS_DIR
-from scrapers.base.settings import DEFAULT_LOG_RETENTION_DAYS
+from core.constants import LOGS_DIR
+from core.scrapers.base.settings import DEFAULT_LOG_RETENTION_DAYS
 
 console = Console()
 
@@ -128,14 +127,14 @@ def get_target_logger(
 
     return logger
 
-def save_traceback(logger: logging.Logger, target_name: Optional[str] = None, url: Optional[str] = None, headers: Optional[Dict[str, str]] = None, log_to_console: bool = True) -> None:
+def save_traceback(logger: logging.Logger, target_name: str | None = None, url: str | None = None, headers: dict[str, str] | None = None, log_to_console: bool = True) -> None:
     """Saves the current exception traceback to a target-specific error log file.
 
     Args:
         logger (logging.Logger): The logger instance to log the error summary to.
-        target_name (Optional[str]): The identifier for the scraper. If None, saves to root logs dir.
-        url (Optional[str]): The URL associated with the error, if any.
-        headers (Optional[Dict[str, str]]): HTTP headers associated with the error, if any.
+        target_name (str | None): The identifier for the scraper. If None, saves to root logs dir.
+        url (str | None): The URL associated with the error, if any.
+        headers (dict[str, str] | None): HTTP headers associated with the error, if any.
         log_to_console (bool): If True, logs the critical error message to the logger.
     """
     if target_name:

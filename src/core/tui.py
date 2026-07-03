@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Optional, Sequence, Union
+from collections.abc import Sequence
 from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
@@ -12,12 +12,12 @@ from rich.markup import escape
 from rich.spinner import Spinner
 from rich.progress_bar import ProgressBar
 
-from scrapers.base.settings import SettingView
-from config_check import ConfigView
-from panel import uniform_column_widths
+from core.scrapers.base.settings import SettingView
+from core.config_check import ConfigView
+from core.panel import uniform_column_widths
 
 # Accepts a single note string, a list of note strings, or None.
-Notes = Union[str, List[str], None]
+Notes = str | list[str] | None
 
 
 class PriceOutcome(Enum):
@@ -40,7 +40,7 @@ class ExecutionStrategy(ABC):
         return {PriceOutcome.DROP: "🎉", PriceOutcome.NO_TARGET: "🟡"}.get(outcome, "✅")
 
     @staticmethod
-    def _normalize_notes(notes: Notes) -> List[str]:
+    def _normalize_notes(notes: Notes) -> list[str]:
         """Normalizes the notes parameter into a flat list of strings.
 
         Accepts None, a single string, or a list and always returns a
@@ -50,7 +50,7 @@ class ExecutionStrategy(ABC):
             notes (Notes): The raw notes value.
 
         Returns:
-            List[str]: A list of note strings (empty when notes is None).
+            list[str]: A list of note strings (empty when notes is None).
         """
         if notes is None:
             return []
@@ -68,8 +68,8 @@ class ExecutionStrategy(ABC):
     @abstractmethod
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
-                     block_warning: Optional[str] = None,
-                     config_view: Optional[ConfigView] = None) -> None:
+                     block_warning: str | None = None,
+                     config_view: ConfigView | None = None) -> None:
         """Called when a new scraping target begins.
 
         Args:
@@ -79,10 +79,10 @@ class ExecutionStrategy(ABC):
                 rendered as a section atop the interactive panel (and logged once by the
                 silent strategy). The orchestrator resolves these so the strategies stay
                 presentation-only.
-            block_warning (Optional[str]): A one-line message when the config's
+            block_warning (str | None): A one-line message when the config's
                 ``settings`` block was malformed (present but not an object) and ignored,
                 surfaced once above the per-setting rows; ``None`` when well-formed.
-            config_view (Optional[ConfigView]): The target's products-config health,
+            config_view (ConfigView | None): The target's products-config health,
                 rendered as the leading 'Config' row of the section (and logged once by the
                 silent strategy); ``None`` when unavailable (e.g. missing dependencies).
         """
@@ -227,8 +227,8 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
 
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
-                     block_warning: Optional[str] = None,
-                     config_view: Optional[ConfigView] = None) -> None:
+                     block_warning: str | None = None,
+                     config_view: ConfigView | None = None) -> None:
         """Starts a new live display session for the given target."""
         if self.live:
             self.live.stop()
@@ -251,8 +251,8 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         self.live.start()
 
     def _build_settings_rows(self, settings_view: Sequence[SettingView],
-                             block_warning: Optional[str] = None,
-                             config_view: Optional[ConfigView] = None) -> List[tuple]:
+                             block_warning: str | None = None,
+                             config_view: ConfigView | None = None) -> list[tuple]:
         """Renders the products-config health + resolved settings into ``(icon, label, value)`` rows.
 
         The 'Config' row (products-config health) leads the section when ``config_view`` is
@@ -262,7 +262,7 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         malformed ``settings`` block (when ``block_warning`` is set) is surfaced once as a
         leading ``🟡`` row, since every per-setting row below it then shows its default.
         """
-        rows: List[tuple] = []
+        rows: list[tuple] = []
         if config_view is not None:
             refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
             rows.append((config_view.icon, "Config", f"{config_view.value}{refs}"))
@@ -279,11 +279,11 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         return rows
 
     @staticmethod
-    def _new_display_table(col_widths: Optional[dict] = None) -> Table:
+    def _new_display_table(col_widths: dict | None = None) -> Table:
         """Builds an empty 3-column (icon, name, value) display table.
 
         Args:
-            col_widths (Optional[dict]): Fixed widths per column index, shared between the
+            col_widths (dict | None): Fixed widths per column index, shared between the
                 settings and scraping tables so their value columns line up across the divider.
                 A ``None`` width leaves the column auto-sized.
         """
@@ -347,7 +347,7 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         """Generates the rich panel to be rendered on the live display."""
         # Assemble the live scraping rows (results, then the transient sleep/scraping row)
         # before building the table, so their labels feed the shared column sizing below.
-        display_rows: List[tuple] = list(self.rows)
+        display_rows: list[tuple] = list(self.rows)
         if self.is_sleeping:
             grid = Table.grid(padding=(0, 1))
             grid.add_row(
@@ -535,8 +535,8 @@ class SilentExecutionStrategy(ExecutionStrategy):
 
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
-                     block_warning: Optional[str] = None,
-                     config_view: Optional[ConfigView] = None) -> None:
+                     block_warning: str | None = None,
+                     config_view: ConfigView | None = None) -> None:
         """Sets the logger context and records the effective config + settings to the file log.
 
         Logging the products-config health and the resolved settings once at target start

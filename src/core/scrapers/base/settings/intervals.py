@@ -1,13 +1,12 @@
 """Execution-interval vocabulary and the systemd ``OnCalendar`` mapping (stdlib only)."""
 
 import re
-from typing import Dict, Optional
 
 
 # Canonical execution intervals, in first-seen order, each mapped to the systemd
 # OnCalendar expression it generates. This is the authoritative set of supported
 # cadences: a normalized user value must resolve to one of these keys.
-SUPPORTED_INTERVALS: Dict[str, str] = {
+SUPPORTED_INTERVALS: dict[str, str] = {
     "15m": "*:0/15",
     "30m": "*:0/30",
     "1h": "hourly",
@@ -20,19 +19,19 @@ SUPPORTED_INTERVALS: Dict[str, str] = {
 
 # Reverse of SUPPORTED_INTERVALS: a systemd OnCalendar expression back to its
 # canonical key, for displaying an effective interval the user can recognize.
-_ONCALENDAR_TO_CANONICAL: Dict[str, str] = {v: k for k, v in SUPPORTED_INTERVALS.items()}
+_ONCALENDAR_TO_CANONICAL: dict[str, str] = {v: k for k, v in SUPPORTED_INTERVALS.items()}
 
 # Canonical key -> total minutes. Any broad user spelling that resolves to a
 # supported number of minutes maps back to its canonical key through this table.
-_CANONICAL_MINUTES: Dict[str, int] = {
+_CANONICAL_MINUTES: dict[str, int] = {
     "15m": 15, "30m": 30, "1h": 60, "2h": 120,
     "4h": 240, "8h": 480, "12h": 720, "24h": 1440,
 }
-_MINUTES_TO_CANONICAL: Dict[int, str] = {m: k for k, m in _CANONICAL_MINUTES.items()}
+_MINUTES_TO_CANONICAL: dict[int, str] = {m: k for k, m in _CANONICAL_MINUTES.items()}
 
 # Named cadences the user may type instead of a number+unit (whitespace, case,
 # hyphens and underscores are stripped before this lookup).
-_NAMED_ALIASES: Dict[str, int] = {
+_NAMED_ALIASES: dict[str, int] = {
     "hourly": 60,
     "daily": 1440,
     "halfhourly": 30,
@@ -47,7 +46,7 @@ _UNIT_MINUTES = (
 )
 
 
-def normalize_interval(raw: object) -> Optional[str]:
+def normalize_interval(raw: object) -> str | None:
     """Normalizes a broad user interval string to a canonical key, or ``None``.
 
     Folds the many ways a user might write a cadence onto one of the
@@ -59,7 +58,7 @@ def normalize_interval(raw: object) -> Optional[str]:
         raw: The user-supplied interval value (any type; a non-string is rejected).
 
     Returns:
-        Optional[str]: The canonical key (e.g. ``"1h"``), or ``None`` if the value
+        str | None: The canonical key (e.g. ``"1h"``), or ``None`` if the value
             is unrecognized or resolves to an unsupported cadence.
     """
     if not isinstance(raw, str):
@@ -93,7 +92,7 @@ def oncalendar_for(canonical: str) -> str:
     return SUPPORTED_INTERVALS[canonical]
 
 
-def canonical_for_oncalendar(oncalendar: str) -> Optional[str]:
+def canonical_for_oncalendar(oncalendar: str) -> str | None:
     """Returns the canonical interval key for a systemd ``OnCalendar`` expression.
 
     The inverse of :func:`oncalendar_for`, used to display an effective schedule as a
@@ -105,6 +104,6 @@ def canonical_for_oncalendar(oncalendar: str) -> Optional[str]:
         oncalendar (str): A systemd ``OnCalendar`` expression.
 
     Returns:
-        Optional[str]: The canonical key, or ``None`` if not a supported cadence.
+        str | None: The canonical key, or ``None`` if not a supported cadence.
     """
     return _ONCALENDAR_TO_CANONICAL.get(oncalendar)

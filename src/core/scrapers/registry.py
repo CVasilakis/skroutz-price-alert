@@ -4,19 +4,19 @@ import importlib
 import pkgutil
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from exceptions import PluginDiscoveryError, PluginDependencyError
-from scrapers.base.settings import (
+from core.exceptions import PluginDiscoveryError, PluginDependencyError
+from core.scrapers.base.settings import (
     SettingSpec, ResolvedSetting, ResolvedSettings, SettingView,
     resolve_one, resolve_all, oncalendar_for, canonical_for_oncalendar,
     SUPPORTED_INTERVALS, BASE_SETTING_SPECS, KEY_INTERVAL, STATUS_OK,
 )
 
 if TYPE_CHECKING:
-    from scrapers.base.plugin import BasePlugin
-    from scrapers.base.client import BaseScraperClient
-    from scrapers.base.storage import BaseDataManager
+    from core.scrapers.base.plugin import BasePlugin
+    from core.scrapers.base.client import BaseScraperClient
+    from core.scrapers.base.storage import BaseDataManager
 
 
 class ScraperRegistry:
@@ -28,11 +28,11 @@ class ScraperRegistry:
     - Create client instances (lazy, cached)
     - Create storage/data-manager instances (lazy, cached)
     """
-    _plugins: Dict[str, 'BasePlugin'] = {}
+    _plugins: dict[str, 'BasePlugin'] = {}
     _discovered: bool = False
 
     @classmethod
-    def register(cls, plugin: 'BasePlugin', where: Optional[str] = None) -> None:
+    def register(cls, plugin: 'BasePlugin', where: str | None = None) -> None:
         """Registers a plugin descriptor after validating its contract.
 
         The single validation gate: every registration — via :meth:`discover` or a
@@ -43,14 +43,14 @@ class ScraperRegistry:
 
         Args:
             plugin (BasePlugin): The plugin descriptor instance to register.
-            where (Optional[str]): A source label for error messages (e.g.
-                ``'scrapers.skroutz'``). Defaults to the descriptor's module path.
+            where (str | None): A source label for error messages (e.g.
+                ``'core.scrapers.skroutz'``). Defaults to the descriptor's module path.
 
         Raises:
             PluginDiscoveryError: If the descriptor contract is unmet or the plugin
                 claims a domain overlapping one already registered.
         """
-        from scrapers.base.plugin import BasePlugin
+        from core.scrapers.base.plugin import BasePlugin
         if not isinstance(plugin, BasePlugin):
             raise PluginDiscoveryError(
                 f"register() requires a BasePlugin instance, got {type(plugin).__name__}."
@@ -111,7 +111,7 @@ class ScraperRegistry:
         if cls._discovered:
             return
 
-        from scrapers.base.plugin import BasePlugin
+        from core.scrapers.base.plugin import BasePlugin
 
         package_dir = Path(__file__).parent
         for _importer, modname, ispkg in pkgutil.iter_modules([str(package_dir)]):
@@ -119,25 +119,25 @@ class ScraperRegistry:
                 continue
 
             try:
-                module = importlib.import_module(f"scrapers.{modname}")
+                module = importlib.import_module(f"core.scrapers.{modname}")
             except Exception as e:
                 raise PluginDiscoveryError(
-                    f"Failed to import scraper plugin package 'scrapers.{modname}': {e}"
+                    f"Failed to import scraper plugin package 'core.scrapers.{modname}': {e}"
                 ) from e
 
             plugin = getattr(module, "plugin", None)
             if plugin is None:
                 raise PluginDiscoveryError(
-                    f"Scraper plugin package 'scrapers.{modname}' does not expose a "
+                    f"Scraper plugin package 'core.scrapers.{modname}' does not expose a "
                     f"module-level 'plugin' attribute. Add `plugin = {modname.capitalize()}Plugin()` "
                     f"to scrapers/{modname}/__init__.py."
                 )
             if not isinstance(plugin, BasePlugin):
                 raise PluginDiscoveryError(
-                    f"The 'plugin' attribute of scraper package 'scrapers.{modname}' is "
+                    f"The 'plugin' attribute of scraper package 'core.scrapers.{modname}' is "
                     f"a {type(plugin).__name__}, not a BasePlugin instance."
                 )
-            cls.register(plugin, where=f"scrapers.{modname}")
+            cls.register(plugin, where=f"core.scrapers.{modname}")
 
         cls._discovered = True
 
@@ -158,7 +158,7 @@ class ScraperRegistry:
         lazily in :meth:`_resolve_bound_class` at first instantiation.
 
         Args:
-            where (str): A source label for error messages (e.g. ``'scrapers.skroutz'``).
+            where (str): A source label for error messages (e.g. ``'core.scrapers.skroutz'``).
             plugin (BasePlugin): The plugin descriptor to validate.
 
         Raises:
@@ -340,11 +340,11 @@ class ScraperRegistry:
                         )
 
     @classmethod
-    def registered_targets(cls) -> List[str]:
+    def registered_targets(cls) -> list[str]:
         """Returns a list of all registered plugin target identifiers.
 
         Returns:
-            List[str]: The registered target names.
+            list[str]: The registered target names.
         """
         cls.discover()
         return list(cls._plugins.keys())
@@ -409,7 +409,7 @@ class ScraperRegistry:
         return resolve_all(plugin.get_setting_specs(), cls._config_path(plugin, config_dir), plugin)
 
     @classmethod
-    def resolve_settings(cls, target: str, config_dir: str) -> List[SettingView]:
+    def resolve_settings(cls, target: str, config_dir: str) -> list[SettingView]:
         """One presentation-ready :class:`SettingView` per setting, in declared order.
 
         The single source for the settings section rendered atop the ``--status`` Service
@@ -422,7 +422,7 @@ class ScraperRegistry:
             config_dir (str): The directory holding the scrapers' config files.
 
         Returns:
-            List[SettingView]: One view per setting, in the plugin's declared order.
+            list[SettingView]: One view per setting, in the plugin's declared order.
         """
         return cls.resolve_all_settings(target, config_dir).views()
 
@@ -452,7 +452,7 @@ class ScraperRegistry:
         return resolve_one(spec, cls._config_path(plugin, config_dir), plugin)
 
     @staticmethod
-    def timer_directives_for(plugin: 'BasePlugin', interval: ResolvedSetting) -> Dict[str, str]:
+    def timer_directives_for(plugin: 'BasePlugin', interval: ResolvedSetting) -> dict[str, str]:
         """Applies an already-resolved ``execution_interval`` to a plugin's directives.
 
         The single boundary where the settings layer's user-facing vocabulary becomes a
@@ -469,7 +469,7 @@ class ScraperRegistry:
         return directives
 
     @classmethod
-    def resolve_timer_directives(cls, target: str, config_dir: str) -> Dict[str, str]:
+    def resolve_timer_directives(cls, target: str, config_dir: str) -> dict[str, str]:
         """The plugin's ``[Timer]`` directives with ``OnCalendar`` resolved from config.
 
         Reads the target's ``execution_interval`` and folds it through
@@ -482,13 +482,13 @@ class ScraperRegistry:
             config_dir (str): The directory holding the scrapers' config files.
 
         Returns:
-            Dict[str, str]: The effective ``[Timer]`` trigger directives.
+            dict[str, str]: The effective ``[Timer]`` trigger directives.
         """
         interval = cls.resolve_value(target, KEY_INTERVAL, config_dir)
         return cls.timer_directives_for(cls.get_plugin(target), interval)
 
     @classmethod
-    def plugin_for_url(cls, url: str) -> Optional['BasePlugin']:
+    def plugin_for_url(cls, url: str) -> "BasePlugin | None":
         """Resolves a URL to its registered plugin, or None if no plugin matches.
 
         A class-level lookup that needs no registry instance (and no config dir):
@@ -500,7 +500,7 @@ class ScraperRegistry:
             url (str): The product URL.
 
         Returns:
-            Optional[BasePlugin]: The matching plugin, or None when unsupported.
+            BasePlugin | None: The matching plugin, or None when unsupported.
         """
         cls.discover()
         for plugin in cls._plugins.values():
@@ -514,9 +514,9 @@ class ScraperRegistry:
         Args:
             config_dir (str): The directory containing configuration files.
         """
-        self._scrapers: Dict[str, 'BaseScraperClient'] = {}
-        self._managers: Dict[str, 'BaseDataManager'] = {}
-        self._settings: Dict[str, ResolvedSettings] = {}
+        self._scrapers: dict[str, 'BaseScraperClient'] = {}
+        self._managers: dict[str, 'BaseDataManager'] = {}
+        self._settings: dict[str, ResolvedSettings] = {}
         self.config_dir = config_dir
 
     def settings_for(self, target: str) -> ResolvedSettings:
@@ -565,7 +565,7 @@ class ScraperRegistry:
         target = self.resolve_target(url)
 
         if target not in self._scrapers:
-            from scrapers.base.client import BaseScraperClient
+            from core.scrapers.base.client import BaseScraperClient
             plugin = self._plugins[target]
             client_cls = self._resolve_bound_class(plugin, "get_client_class", BaseScraperClient)
             # Pass the target's resolved settings at construction (mirroring the data
@@ -592,7 +592,7 @@ class ScraperRegistry:
             if target not in self._plugins:
                 raise ValueError(f"Unsupported storage plugin: {target}")
 
-            from scrapers.base.storage import BaseDataManager
+            from core.scrapers.base.storage import BaseDataManager
             plugin = self._plugins[target]
             storage_cls = self._resolve_bound_class(plugin, "get_storage_class", BaseDataManager)
             path = self._config_path(plugin, self.config_dir)

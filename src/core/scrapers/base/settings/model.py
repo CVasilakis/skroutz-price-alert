@@ -5,16 +5,16 @@ Pure stdlib dataclasses with no dependency on the rest of the settings package, 
 stays the leaf of the import graph (import-light).
 
 There is deliberately **no** parsed ``settings`` dataclass here: a setting is fully
-described by a single :class:`~scrapers.base.settings.resolve.SettingSpec` (its JSON
+described by a single :class:`~core.scrapers.base.settings.resolve.SettingSpec` (its JSON
 ``key``, normalizer, default, display and warning), and resolution reads the raw
 ``settings`` block by key. The objects below are the *outputs* of resolution.
 """
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from scrapers.base.settings.resolve import SettingSpec
+    from core.scrapers.base.settings.resolve import SettingSpec
 
 
 # Resolution status codes for a scraper's effective setting value.
@@ -61,13 +61,13 @@ class SettingView:
         display_value (str): The effective value, formatted for display (e.g. ``"1h"``,
             ``"7 days"``, ``"true"``).
         status (str): The ``STATUS_*`` code (drives the row icon: invalid -> warn).
-        footnote (Optional[str]): The invalid-value message when the status is
+        footnote (str | None): The invalid-value message when the status is
             :data:`STATUS_INVALID`, otherwise ``None``.
     """
     label: str
     display_value: str
     status: str
-    footnote: Optional[str] = None
+    footnote: str | None = None
 
     @property
     def icon(self) -> str:
@@ -98,7 +98,7 @@ class SettingView:
 class ResolvedSettings:
     """A target's fully-resolved settings, read once and queried by key.
 
-    Built by :func:`scrapers.base.settings.resolve.resolve_all` from a single config-file
+    Built by :func:`core.scrapers.base.settings.resolve.resolve_all` from a single config-file
     read, so every consumer (the panel views, the orchestrator's retention/notify gates,
     and a plugin's own client/storage via the injected ``self.settings``) shares one
     resolution rather than re-reading the file per setting.
@@ -110,8 +110,8 @@ class ResolvedSettings:
     a per-setting invalid *value*, which each :class:`SettingView` flags itself.
     """
 
-    def __init__(self, pairs: List[Tuple["SettingSpec", ResolvedSetting]],
-                 block_warning: Optional[str] = None) -> None:
+    def __init__(self, pairs: list[tuple["SettingSpec", ResolvedSetting]],
+                 block_warning: str | None = None) -> None:
         """Stores the resolved pairs and indexes them by spec key.
 
         Args:
@@ -152,9 +152,9 @@ class ResolvedSettings:
         """Returns the full :class:`ResolvedSetting` for ``key``."""
         return self._by_key[key]
 
-    def views(self) -> List["SettingView"]:
+    def views(self) -> list["SettingView"]:
         """Returns one :class:`SettingView` per setting, in the plugin's declared order."""
         # Imported here (not at module top) to keep this model module the import leaf;
         # setting_view lives with the spec/resolve machinery.
-        from scrapers.base.settings.resolve import setting_view
+        from core.scrapers.base.settings.resolve import setting_view
         return [setting_view(spec, resolved) for spec, resolved in self._pairs]

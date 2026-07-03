@@ -12,7 +12,7 @@ from ui.catalog.inputs import (
     config_faulty, config_failed, STORAGE_BAD_JSON,
 )
 from ui.harness.drivers import drive_service, drive_not_installed, drive_orphan
-from scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG
+from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG
 
 TARGET = "skroutz"
 CFG = "skroutz.json"

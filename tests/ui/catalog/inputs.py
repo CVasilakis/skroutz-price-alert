@@ -7,10 +7,11 @@ separate from the scenario-registry machinery in :mod:`_base` for readability.
 """
 
 import logging
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
-from config_check import TargetLoad, config_view, ConfigView
-from scrapers.base.settings import (
+from core.config_check import TargetLoad, config_view, ConfigView
+from core.scrapers.base.settings import (
     ResolvedSetting, ResolvedSettings, SettingView, setting_view,
     SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY,
     STATUS_OK, STATUS_DEFAULT, STATUS_INVALID,
@@ -57,7 +58,7 @@ def notify_view(value: bool = True, status: str = STATUS_OK, raw: Any = True) ->
     return _view(SPEC_NOTIFY, value, status, raw)
 
 
-def views_all_ok() -> List[SettingView]:
+def views_all_ok() -> list[SettingView]:
     """Every built-in setting explicitly set to a valid value."""
     return [
         interval_view("2h", STATUS_OK, "2h"),
@@ -66,7 +67,7 @@ def views_all_ok() -> List[SettingView]:
     ]
 
 
-def views_all_default() -> List[SettingView]:
+def views_all_default() -> list[SettingView]:
     """Every built-in setting unset (showing its active default)."""
     return [
         interval_view("1h", STATUS_DEFAULT, None),
@@ -75,7 +76,7 @@ def views_all_default() -> List[SettingView]:
     ]
 
 
-def views_one_invalid_each() -> List[SettingView]:
+def views_one_invalid_each() -> list[SettingView]:
     """Each built-in setting invalid at once (every row carries its warning footnote)."""
     return [
         interval_view("1h", STATUS_INVALID, "3h"),
@@ -86,14 +87,14 @@ def views_one_invalid_each() -> List[SettingView]:
 
 # --- ResolvedSettings (the STATUS settings section) ---------------------------------
 
-_Triple = Tuple[object, str, object]
+_Triple = tuple[object, str, object]
 
 
 def resolved_settings(
     interval: _Triple = ("1h", STATUS_OK, "1h"),
     retention: _Triple = (7, STATUS_OK, 7),
     notify: _Triple = (True, STATUS_OK, True),
-    block_warning: Optional[str] = None,
+    block_warning: str | None = None,
 ) -> ResolvedSettings:
     """A ``ResolvedSettings`` for ``--status``, built from synthetic ``(value, status, raw)``."""
     pairs = [
@@ -132,7 +133,7 @@ def service_props(running: bool = False, result: str = "success", exec_status: s
 # --- TargetLoad (the CONFIG per-target rows) ----------------------------------------
 
 def target_load(target: str = "skroutz", count: int = 5,
-                faulty_indices: Sequence[int] = (), error: Optional[str] = None) -> TargetLoad:
+                faulty_indices: Sequence[int] = (), error: str | None = None) -> TargetLoad:
     """A ``config_check.TargetLoad`` outcome (the preflight load phase)."""
     return TargetLoad(target=target, count=count,
                       faulty_indices=list(faulty_indices), error=error)

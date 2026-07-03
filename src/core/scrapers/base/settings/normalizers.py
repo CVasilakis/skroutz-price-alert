@@ -1,7 +1,6 @@
 """Tolerant normalizers for the retention and boolean settings (stdlib only)."""
 
 import re
-from typing import Optional
 
 
 # Log retention: how many daily log files each scraper keeps (the rotating file
@@ -12,7 +11,7 @@ MIN_LOG_RETENTION_DAYS = 1
 MAX_LOG_RETENTION_DAYS = 30
 
 
-def normalize_retention_days(raw: object) -> Optional[int]:
+def normalize_retention_days(raw: object) -> int | None:
     """Validates a log-retention value to a day-count in 1-30, or ``None``.
 
     Accepts a JSON integer (``7``) or a day-duration string - ``"4"``, ``"4d"``,
@@ -25,7 +24,7 @@ def normalize_retention_days(raw: object) -> Optional[int]:
         raw: The user's raw ``log_retention_days`` value (any type).
 
     Returns:
-        Optional[int]: The day count in 1-30, or ``None`` if unsupported.
+        int | None: The day count in 1-30, or ``None`` if unsupported.
     """
     # bool is a subclass of int; reject it explicitly (True/False are not day counts).
     if isinstance(raw, bool):
@@ -51,7 +50,7 @@ _TRUE_TOKENS = frozenset({"true", "yes", "on", "1"})
 _FALSE_TOKENS = frozenset({"false", "no", "off", "0"})
 
 
-def normalize_bool(raw: object) -> Optional[bool]:
+def normalize_bool(raw: object) -> bool | None:
     """Normalizes a boolean setting value to ``True``/``False``, or ``None``.
 
     Tolerant like the other normalizers, and deliberately *not* a bare ``bool(...)``
@@ -64,7 +63,7 @@ def normalize_bool(raw: object) -> Optional[bool]:
         raw: The user's raw flag value (any type).
 
     Returns:
-        Optional[bool]: ``True``/``False`` for a recognized value, or ``None``.
+        bool | None: ``True``/``False`` for a recognized value, or ``None``.
     """
     # bool is a subclass of int, so handle it before the int branch.
     if isinstance(raw, bool):

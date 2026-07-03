@@ -9,7 +9,7 @@ sentinel rule can never drift between stores.
 import unittest
 from dataclasses import dataclass
 
-from scrapers.base.model import BaseTrackedItem
+from core.scrapers.base.model import BaseTrackedItem
 
 
 @dataclass

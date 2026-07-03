@@ -4,19 +4,19 @@ import glob
 import signal
 import subprocess
 
-# Ensure the script directory is in the python path to allow imports when running as a module
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Put src/ (the parent of the `core` package) on the path so the absolute
+# `core.*` imports below work when this file is invoked directly as a script.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from typing import Optional
 
-from constants import CONFIG_DIR
-from exit_status import classify_service_state
-from scrapers.registry import ScraperRegistry
-from scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, KEY_INTERVAL
-from logger import setup_global_logging
-from panel import StatusPanelBuilder
-from config_check import render_config_panel, load_targets, config_view, add_config_row, ConfigView
-from utils import install_interrupt_handler
+from core.constants import CONFIG_DIR
+from core.exit_status import classify_service_state
+from core.scrapers.registry import ScraperRegistry
+from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, KEY_INTERVAL
+from core.logger import setup_global_logging
+from core.panel import StatusPanelBuilder
+from core.config_check import render_config_panel, load_targets, config_view, add_config_row, ConfigView
+from core.utils import install_interrupt_handler
 
 from rich.console import Console
 from rich.table import Table
@@ -158,7 +158,7 @@ def build_orphan_panel(name: str) -> StatusPanelBuilder:
 def build_service_panel(target: str, timer_props: dict, service_props: dict, resolved,
                         config_filename: str, expected_oncalendar: str,
                         active_oncalendar: str,
-                        config: Optional[ConfigView] = None) -> StatusPanelBuilder:
+                        config: ConfigView | None = None) -> StatusPanelBuilder:
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
     Pure presentation given the systemd property dicts, the resolved settings, the
@@ -179,7 +179,7 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
             (``""`` when not applicable); compared against ``active_oncalendar`` for drift.
         active_oncalendar (str): The ``OnCalendar`` currently written in the installed
             timer unit (``""`` when none/not applicable).
-        config (Optional[ConfigView]): The target's products-config health, rendered as the
+        config (ConfigView | None): The target's products-config health, rendered as the
             leading 'Config' row; ``None`` when unavailable (e.g. missing dependencies).
 
     Returns:

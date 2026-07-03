@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Iterable, Optional, List, Sequence, Tuple
+from collections.abc import Iterable, Sequence
 from rich.console import Console, Group
 from rich.table import Table
 from rich.panel import Panel
@@ -8,7 +8,7 @@ from rich.text import Text
 from rich.markup import escape
 
 
-def uniform_column_widths(rows: Iterable[Sequence], columns: Tuple[int, ...] = (0, 1)) -> Dict[int, int]:
+def uniform_column_widths(rows: Iterable[Sequence], columns: tuple[int, ...] = (0, 1)) -> dict[int, int]:
     """Max rendered cell width per column index across all rows (non-str cells ignored).
 
     Used to give every section table in a panel identical icon/label column widths so the
@@ -19,12 +19,12 @@ def uniform_column_widths(rows: Iterable[Sequence], columns: Tuple[int, ...] = (
 
     Args:
         rows (Iterable[Sequence]): The row tuples to measure (``(icon, label, value)``).
-        columns (Tuple[int, ...]): The column indices to size. Defaults to icon and label.
+        columns (tuple[int, ...]): The column indices to size. Defaults to icon and label.
 
     Returns:
-        Dict[int, int]: Column index -> fixed width, for columns that had a string cell.
+        dict[int, int]: Column index -> fixed width, for columns that had a string cell.
     """
-    widths: Dict[int, int] = {}
+    widths: dict[int, int] = {}
     for row in rows:
         for c in columns:
             if c < len(row) and isinstance(row[c], str):
@@ -53,7 +53,7 @@ class StatusPanelBuilder:
     """
 
     # Internal row entries are tagged tuples: ("row", icon, label, value) or ("sep",).
-    _SEP: Tuple[str] = ("sep",)
+    _SEP: tuple[str] = ("sep",)
 
     def __init__(self, title: str, width: int = 75):
         """Initializes the panel builder.
@@ -64,16 +64,16 @@ class StatusPanelBuilder:
         """
         self.title = title
         self.width = width
-        self._rows: List[tuple] = []
-        self.notes: List[str] = []
-        self.icons: List[str] = []
+        self._rows: list[tuple] = []
+        self.notes: list[str] = []
+        self.icons: list[str] = []
 
     @staticmethod
-    def _new_table(col_widths: Optional[Dict[int, int]] = None) -> Table:
+    def _new_table(col_widths: dict[int, int] | None = None) -> Table:
         """Builds an empty 3-column (icon, label, value) section table.
 
         Args:
-            col_widths (Optional[Dict[int, int]]): Fixed widths per column index, shared across
+            col_widths (dict[int, int] | None): Fixed widths per column index, shared across
                 a panel's sections so every section's value column starts at the same position.
                 A ``None`` width leaves the column auto-sized.
         """
@@ -135,18 +135,18 @@ class StatusPanelBuilder:
             return "yellow"
         return "green"
 
-    def _build_sections(self) -> List:
+    def _build_sections(self) -> list:
         """Splits the rows into section tables joined by dim rules.
 
         Returns:
-            List: An ordered list of renderables (section ``Table``s separated by
+            list: An ordered list of renderables (section ``Table``s separated by
                 ``Rule``s) suitable for a ``Group``. Always contains at least one table.
         """
         # Size the icon/label columns once across every section's rows so the value column
         # starts at the same position above and below each divider.
         widths = uniform_column_widths((e[1], e[2], e[3]) for e in self._rows if e[0] == "row")
 
-        sections: List = []
+        sections: list = []
         current = self._new_table(widths)
         current_has_rows = False
         pending_sep = False
@@ -173,17 +173,17 @@ class StatusPanelBuilder:
         sections.append(current)
         return sections
 
-    def render(self, console: Console, panel_color: Optional[str] = None) -> None:
+    def render(self, console: Console, panel_color: str | None = None) -> None:
         """Renders the panel to the given console.
 
         Args:
             console (Console): The Rich console to print to.
-            panel_color (Optional[str]): Override for the border color.
+            panel_color (str | None): Override for the border color.
                 If None, the color is determined automatically by get_panel_color().
         """
         color = panel_color or self.get_panel_color()
 
-        blocks: List = self._build_sections()
+        blocks: list = self._build_sections()
 
         if self.notes:
             notes_lines = [""]

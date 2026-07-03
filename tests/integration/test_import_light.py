@@ -13,12 +13,12 @@ import sys
 import subprocess
 import unittest
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "core"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 # Run discovery in a clean interpreter, then report any heavy module that leaked in.
 _SNIPPET = r"""
 import sys
-from scrapers.registry import ScraperRegistry
+from core.scrapers.registry import ScraperRegistry
 ScraperRegistry.registered_targets()  # triggers full plugin discovery
 heavy = [m for m in ("tls_client", "selenium", "lxml") if m in sys.modules]
 if heavy:

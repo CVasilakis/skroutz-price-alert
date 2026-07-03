@@ -1,9 +1,24 @@
 # Test tooling configuration. The project ships no installable package (the app
-# runs from src/core via PYTHONPATH), so this file is intentionally limited to
-# pytest settings — it is not a packaging manifest.
+# runs from the `core` package under src/ via PYTHONPATH), so this file is
+# intentionally limited to pytest settings — it is not a packaging manifest.
 [tool.pytest.ini_options]
-# Put the app's import root (src/core) and the tests root on sys.path so tests
-# import production modules (`import tui`, `from scrapers...`) and the UI suite's
-# `ui.*` package without any per-file sys.path juggling.
-pythonpath = ["src/core", "tests"]
+# Put the app's import root (src/, home of the `core` package) and the tests
+# root on sys.path so tests import production modules (`from core import tui`,
+# `from core.scrapers...`) and the UI suite's `ui.*` package without any
+# per-file sys.path juggling.
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
+
+# Static-analysis configuration for Pyright / Pylance / basedpyright (basedpyright
+# reads [tool.pyright] as a fallback). extraPaths mirrors pytest's `pythonpath`
+# above so `core.*` (src/) and `ui.*` (tests/) resolve in the editor exactly as
+# they do at runtime; pythonVersion pins diagnostics to the project's 3.10 floor.
+[tool.pyright]
+pythonVersion = "3.10"
+extraPaths = ["src", "tests"]
+venvPath = "."
+venv = "venv"
+# "standard" is the project baseline: full type-error checking without the
+# opinionated extras (unused-call-result, Any-flow audits) that fight the Rich
+# and apprise APIs. Raise locally if you want the stricter audit.
+typeCheckingMode = "standard"

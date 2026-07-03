@@ -9,7 +9,7 @@ constructed directly here.
 
 import unittest
 
-from scrapers.skroutz.storage import SkroutzDataManager
+from core.scrapers.skroutz.storage import SkroutzDataManager
 
 
 class TestSkroutzProductPath(unittest.TestCase):

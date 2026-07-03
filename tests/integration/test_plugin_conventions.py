@@ -11,8 +11,8 @@ shipping a dangling instruction.
 import os
 import unittest
 
-from constants import CONFIG_DIR
-from scrapers.registry import ScraperRegistry
+from core.constants import CONFIG_DIR
+from core.scrapers.registry import ScraperRegistry
 
 
 class TestExampleConfigConvention(unittest.TestCase):

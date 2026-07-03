@@ -12,15 +12,15 @@ import unittest
 from unittest import mock
 from unittest.mock import Mock
 
-import orchestrator
-from orchestrator import ScrapingOrchestrator
-from scrapers.base.model import BaseTrackedItem, ScrapeResult
-from tui import PriceOutcome
-from exceptions import (
+from core import orchestrator
+from core.orchestrator import ScrapingOrchestrator
+from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
+from core.tui import PriceOutcome
+from core.exceptions import (
     ProductNotFoundError, ServerError, ScraperParseError, RateLimitError,
     StorageFileError,
 )
-from constants import MAX_RETRIES
+from core.constants import MAX_RETRIES
 
 
 def _make_orch(notifier=None, ui=None, registry=None):
@@ -51,7 +51,8 @@ class TestPriceOutcome(unittest.TestCase):
         return dm, ui.log_price_result.call_args
 
     def test_drop_notifies_when_services_configured(self):
-        notifier = Mock(); notifier.has_services = True
+        notifier = Mock()
+        notifier.has_services = True
         notifier.notify_low_price.return_value = True
         ui = Mock()
         dm, called = self._call(_item(target_price=10.0), 8.0, notifier, ui)
@@ -64,7 +65,8 @@ class TestPriceOutcome(unittest.TestCase):
         self.assertEqual(dm.update_item.call_args.kwargs["last_price"], 8.0)
 
     def test_drop_reports_failed_delivery(self):
-        notifier = Mock(); notifier.has_services = True
+        notifier = Mock()
+        notifier.has_services = True
         notifier.notify_low_price.return_value = False
         ui = Mock()
         _, called = self._call(_item(target_price=10.0), 8.0, notifier, ui)
@@ -72,7 +74,8 @@ class TestPriceOutcome(unittest.TestCase):
         self.assertTrue(any("failed" in n for n in called.args[5]))
 
     def test_drop_without_services_does_not_notify(self):
-        notifier = Mock(); notifier.has_services = False
+        notifier = Mock()
+        notifier.has_services = False
         ui = Mock()
         _, called = self._call(_item(target_price=10.0), 8.0, notifier, ui)
         notifier.notify_low_price.assert_not_called()
@@ -80,14 +83,16 @@ class TestPriceOutcome(unittest.TestCase):
         self.assertTrue(any("not configured" in n for n in called.args[5]))
 
     def test_no_target_price_is_no_target_outcome(self):
-        notifier = Mock(); notifier.has_services = True
+        notifier = Mock()
+        notifier.has_services = True
         ui = Mock()
         _, called = self._call(_item(target_price=0.0), 5.0, notifier, ui)
         self.assertEqual(called.args[4], PriceOutcome.NO_TARGET)
         notifier.notify_low_price.assert_not_called()
 
     def test_at_or_above_target_is_ok_outcome(self):
-        notifier = Mock(); notifier.has_services = True
+        notifier = Mock()
+        notifier.has_services = True
         ui = Mock()
         _, called = self._call(_item(target_price=10.0), 12.0, notifier, ui)
         self.assertEqual(called.args[4], PriceOutcome.OK)
@@ -101,20 +106,23 @@ class TestRunAttempts(unittest.TestCase):
 
     def _run(self, scraper, item=None, notifier=None, logger=None):
         item = item or _item(target_price=5.0)
-        orch = _make_orch(notifier=notifier or Mock())
-        orch.registry.get_scraper.return_value = scraper
+        registry = Mock()
+        registry.get_scraper.return_value = scraper
+        ui = Mock()
+        orch = _make_orch(notifier=notifier or Mock(), ui=ui, registry=registry)
         orch._current_logger = logger
         dm = Mock()
         with mock.patch.object(orch, "_sleep_with_jitter") as sleep, \
              mock.patch.object(orchestrator, "save_traceback") as save_tb:
             err, abort = orch._run_attempts(item, dm, None, False)
-        return orch, err, abort, sleep, save_tb
+        return ui, err, abort, sleep, save_tb
 
     def test_success_first_try_no_retry_no_sleep(self):
         scraper = Mock()
         scraper.scrape_product.return_value = ScrapeResult(price=8.0, currency="€")
-        notifier = Mock(); notifier.has_services = False
-        orch, err, abort, sleep, _ = self._run(scraper, notifier=notifier)
+        notifier = Mock()
+        notifier.has_services = False
+        ui, err, abort, sleep, _ = self._run(scraper, notifier=notifier)
 
         self.assertEqual((err, abort), (None, False))
         sleep.assert_not_called()
@@ -124,19 +132,19 @@ class TestRunAttempts(unittest.TestCase):
     def test_skip_error_is_warning_not_failure(self):
         scraper = Mock()
         scraper.scrape_product.side_effect = ProductNotFoundError("gone")
-        orch, err, abort, sleep, _ = self._run(scraper)
+        ui, err, abort, sleep, _ = self._run(scraper)
 
         self.assertEqual((err, abort), (None, False))
         # Terminal for the item: one attempt, no retry, no back-off.
         scraper.scrape_product.assert_called_once()
         sleep.assert_not_called()
-        orch.ui_strategy.log_warning.assert_called_once()
+        ui.log_warning.assert_called_once()
 
     def test_parse_error_exhausts_retries_and_counts_as_failure(self):
         scraper = Mock()
         scraper.scrape_product.side_effect = ScraperParseError("bad html")
         logger = Mock()
-        orch, err, abort, sleep, save_tb = self._run(scraper, logger=logger)
+        ui, err, abort, sleep, save_tb = self._run(scraper, logger=logger)
 
         # Default policy: counts_as_failure -> the exception is returned.
         self.assertIsInstance(err, ScraperParseError)
@@ -145,7 +153,7 @@ class TestRunAttempts(unittest.TestCase):
         # Refresh + sleep happen between attempts, not after the last one.
         self.assertEqual(sleep.call_count, MAX_RETRIES - 1)
         self.assertEqual(scraper.refresh_identity.call_count, MAX_RETRIES - 1)
-        orch.ui_strategy.log_failure.assert_called_once()
+        ui.log_failure.assert_called_once()
         # ScraperParseError's policy does not save a traceback.
         save_tb.assert_not_called()
 
@@ -155,7 +163,7 @@ class TestRunAttempts(unittest.TestCase):
         scraper = Mock()
         scraper.scrape_product.side_effect = RuntimeError("boom")
         logger = Mock()
-        orch, err, abort, sleep, save_tb = self._run(scraper, logger=logger)
+        ui, err, abort, sleep, save_tb = self._run(scraper, logger=logger)
 
         self.assertIsInstance(err, RuntimeError)
         self.assertFalse(abort)
@@ -165,24 +173,24 @@ class TestRunAttempts(unittest.TestCase):
         # Same default policy, but no logger -> the save_traceback branch is guarded.
         scraper = Mock()
         scraper.scrape_product.side_effect = RuntimeError("boom")
-        orch, err, abort, sleep, save_tb = self._run(scraper, logger=None)
+        ui, err, abort, sleep, save_tb = self._run(scraper, logger=None)
         save_tb.assert_not_called()
 
     def test_server_error_retries_without_refresh_and_not_counted(self):
         scraper = Mock()
         scraper.scrape_product.side_effect = ServerError("503")
-        orch, err, abort, sleep, save_tb = self._run(scraper)
+        ui, err, abort, sleep, save_tb = self._run(scraper)
 
         # ServerError policy: not counted as failure -> None; identity not rotated.
         self.assertEqual((err, abort), (None, False))
         self.assertEqual(sleep.call_count, MAX_RETRIES - 1)
         scraper.refresh_identity.assert_not_called()
-        orch.ui_strategy.log_failure.assert_called_once()
+        ui.log_failure.assert_called_once()
 
     def test_rate_limit_aborts_the_run(self):
         scraper = Mock()
         scraper.scrape_product.side_effect = RateLimitError("429")
-        orch, err, abort, sleep, _ = self._run(scraper)
+        ui, err, abort, sleep, _ = self._run(scraper)
 
         self.assertIsInstance(err, RateLimitError)
         self.assertTrue(abort)  # RateLimit policy aborts the whole target.
@@ -193,15 +201,16 @@ class TestRunAttempts(unittest.TestCase):
             ScraperParseError("transient"),
             ScrapeResult(price=8.0, currency="€"),
         ]
-        notifier = Mock(); notifier.has_services = False
-        orch, err, abort, sleep, _ = self._run(scraper, notifier=notifier)
+        notifier = Mock()
+        notifier.has_services = False
+        ui, err, abort, sleep, _ = self._run(scraper, notifier=notifier)
 
         self.assertEqual((err, abort), (None, False))
         self.assertEqual(scraper.scrape_product.call_count, 2)
         self.assertEqual(sleep.call_count, 1)
         self.assertEqual(scraper.refresh_identity.call_count, 1)
         # The success row surfaces that it recovered on attempt 2.
-        notes = orch.ui_strategy.log_price_result.call_args.args[5]
+        notes = ui.log_price_result.call_args.args[5]
         self.assertTrue(any("attempt 2" in n for n in notes))
 
 

@@ -14,12 +14,11 @@ so they render exactly like the terminal print, dodging any HTML reflow of the b
 """
 
 import html as _html
-from typing import List
 
 from rich.cells import cell_len
 from rich.terminal_theme import TerminalTheme
 
-from ui.catalog._base import Scenario
+from ui.catalog._base import BuildResult, Scenario, Surface
 from ui.harness.rendering import make_recording_console, paint
 
 # The eight ANSI slots the panels actually use, in Rich order:
@@ -265,7 +264,7 @@ def _pin_wide_glyphs(frag: str) -> str:
     return frag
 
 
-def _fragment(result, theme: TerminalTheme) -> str:
+def _fragment(result: BuildResult, theme: TerminalTheme) -> str:
     """One scenario panel as inline-styled HTML spans (no wrapper, padding stripped)."""
     console = make_recording_console()
     paint(console, result)
@@ -278,7 +277,7 @@ def _dot(color: str) -> str:
     return f'<span class="dot" style="background:{_DOT.get(color, "#8c9aab")}"></span>'
 
 
-def _scenario(sc: Scenario, result) -> str:
+def _scenario(sc: Scenario, result: BuildResult) -> str:
     key = sc.snapshot_key
     text = " ".join([key, sc.name, sc.description, " ".join(sc.tags), sc.surface.value]).lower()
     tags = "".join(f'<span class="pill">{_html.escape(t)}</span>' for t in sc.tags)
@@ -293,15 +292,15 @@ def _scenario(sc: Scenario, result) -> str:
     )
 
 
-def _group(scenarios: List[Scenario]):
+def _group(scenarios: list[Scenario]) -> dict[Surface, list[Scenario]]:
     """Scenarios grouped by surface, preserving first-seen order."""
-    groups: "dict[object, List[Scenario]]" = {}
+    groups: dict[Surface, list[Scenario]] = {}
     for sc in scenarios:
         groups.setdefault(sc.surface, []).append(sc)
     return groups
 
 
-def render_report(scenarios: List[Scenario]) -> str:
+def render_report(scenarios: list[Scenario]) -> str:
     """Return the complete self-contained HTML page for ``scenarios``."""
     groups = _group(scenarios)
 
@@ -356,7 +355,7 @@ def render_report(scenarios: List[Scenario]) -> str:
     )
 
 
-def write_report(scenarios: List[Scenario], path: str) -> None:
+def write_report(scenarios: list[Scenario], path: str) -> None:
     """Render ``scenarios`` to a styled, navigable HTML report at ``path``."""
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(render_report(scenarios))

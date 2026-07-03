@@ -1,13 +1,13 @@
 import random
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import tls_client
 
-from scrapers.base.client import BaseScraperClient
-from exceptions import ScraperError, RateLimitError, ServerError, ProductNotFoundError
+from core.scrapers.base.client import BaseScraperClient
+from core.exceptions import ScraperError, RateLimitError, ServerError, ProductNotFoundError
 
 if TYPE_CHECKING:
-    from scrapers.base.settings import ResolvedSettings
+    from core.scrapers.base.settings import ResolvedSettings
 
 
 class HttpScraperClient(BaseScraperClient):
@@ -32,7 +32,7 @@ class HttpScraperClient(BaseScraperClient):
     """
 
     #: Per-subclass pool of header profiles; one is chosen at random per identity.
-    HEADERS_POOL: List[Dict[str, str]] = [{}]
+    HEADERS_POOL: list[dict[str, str]] = [{}]
     #: tls_client browser fingerprint identifier.
     TLS_CLIENT_IDENTIFIER: str = "chrome120"
 
@@ -40,17 +40,17 @@ class HttpScraperClient(BaseScraperClient):
     NOT_FOUND_CODES: tuple = (404, 410)
     RATE_LIMIT_CODES: tuple = (401, 403, 429)
 
-    def __init__(self, settings: "Optional[ResolvedSettings]" = None) -> None:
+    def __init__(self, settings: "ResolvedSettings | None" = None) -> None:
         """Picks a random header profile and opens the initial TLS session.
 
         Args:
-            settings (Optional[ResolvedSettings]): The target's resolved settings
+            settings (ResolvedSettings | None): The target's resolved settings
                 (see BaseScraperClient); available to subclasses from here onward.
         """
         super().__init__(settings)
         # Copy the chosen profile so a subclass mutating self.current_headers in
         # place can never corrupt the shared class-level pool.
-        self.current_headers: Dict[str, str] = dict(random.choice(self.HEADERS_POOL))
+        self.current_headers: dict[str, str] = dict(random.choice(self.HEADERS_POOL))
         self.session = self._new_session()
 
     def _new_session(self) -> tls_client.Session:
@@ -60,7 +60,7 @@ class HttpScraperClient(BaseScraperClient):
             random_tls_extension_order=True,
         )
 
-    def get_current_headers(self) -> Dict[str, str]:
+    def get_current_headers(self) -> dict[str, str]:
         """Returns the header profile currently in use (annotates saved tracebacks)."""
         return self.current_headers
 
@@ -74,7 +74,7 @@ class HttpScraperClient(BaseScraperClient):
         """Closes the underlying TLS session."""
         self.session.close()
 
-    def raise_for_status(self, status_code: Optional[int]) -> None:
+    def raise_for_status(self, status_code: int | None) -> None:
         """Maps an HTTP status code to a modeled scraper exception.
 
         Returns normally for a 200 response; for anything else it raises the
@@ -82,7 +82,7 @@ class HttpScraperClient(BaseScraperClient):
         :class:`BaseScraperClient` for how each exception drives that behavior.
 
         Args:
-            status_code (Optional[int]): The response status code (``None`` when the
+            status_code (int | None): The response status code (``None`` when the
                 request yielded no response).
 
         Raises:

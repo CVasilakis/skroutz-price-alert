@@ -1,11 +1,10 @@
 import inspect
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Type
 from urllib.parse import urlparse
-from scrapers.base.client import BaseScraperClient
-from scrapers.base.storage import BaseDataManager
-from scrapers.base.settings import SettingSpec, BASE_SETTING_SPECS
+from core.scrapers.base.client import BaseScraperClient
+from core.scrapers.base.storage import BaseDataManager
+from core.scrapers.base.settings import SettingSpec, BASE_SETTING_SPECS
 
 
 class BasePlugin(ABC):
@@ -45,7 +44,7 @@ class BasePlugin(ABC):
 
     @staticmethod
     @abstractmethod
-    def get_supported_domains() -> List[str]:
+    def get_supported_domains() -> list[str]:
         """Returns the canonical list of domains this scraper handles.
 
         This is the SINGLE SOURCE OF TRUTH for domain matching. Both the
@@ -61,17 +60,17 @@ class BasePlugin(ABC):
 
     @staticmethod
     @abstractmethod
-    def get_client_class() -> Type[BaseScraperClient]:
+    def get_client_class() -> type[BaseScraperClient]:
         """Returns the client class for this scraper."""
         ...
 
     @staticmethod
     @abstractmethod
-    def get_storage_class() -> Type[BaseDataManager]:
+    def get_storage_class() -> type[BaseDataManager]:
         """Returns the data manager class for this scraper."""
         ...
 
-    def get_requirements_path(self) -> Optional[str]:
+    def get_requirements_path(self) -> str | None:
         """Absolute path to this plugin's own ``requirements.txt``, or None.
 
         Resolved next to the plugin's descriptor module, so a new plugin gets
@@ -81,12 +80,12 @@ class BasePlugin(ABC):
         needs nothing beyond the core framework simply ships no such file.
 
         Returns:
-            Optional[str]: The absolute path if the file exists, otherwise None.
+            str | None: The absolute path if the file exists, otherwise None.
         """
         req = Path(inspect.getfile(type(self))).with_name("requirements.txt")
         return str(req) if req.is_file() else None
 
-    def get_timer_directives(self) -> Dict[str, str]:
+    def get_timer_directives(self) -> dict[str, str]:
         """systemd ``[Timer]`` *trigger* directives for this plugin's generated unit.
 
         ``install.sh`` builds each plugin's ``<plugin>-scraper.timer`` from this
@@ -103,25 +102,25 @@ class BasePlugin(ABC):
 
         Canonical cadence required: the ``OnCalendar`` must be one of the supported
         cadences (the ``OnCalendar`` values in
-        ``scrapers.base.settings.SUPPORTED_INTERVALS``, e.g. ``"hourly"``, ``"daily"``,
+        ``core.scrapers.base.settings.SUPPORTED_INTERVALS``, e.g. ``"hourly"``, ``"daily"``,
         ``"*-*-* 00/2:00:00"``). Discovery rejects a non-canonical value
         (``registry._validate_plugin_contract``) so the settings panel can always render
         the effective cadence as a friendly key and a user's ``execution_interval``
         override stays within one vocabulary.
 
         Returns:
-            Dict[str, str]: ``[Timer]`` trigger ``key -> value`` directives. Must
+            dict[str, str]: ``[Timer]`` trigger ``key -> value`` directives. Must
                 contain an ``OnCalendar`` set to one of the canonical cadences.
         """
         return {
             "OnCalendar": "hourly",
         }
 
-    def get_setting_specs(self) -> List[SettingSpec]:
+    def get_setting_specs(self) -> list[SettingSpec]:
         """The ordered :class:`SettingSpec` list describing this plugin's settings.
 
         Each spec fully declares one ``settings`` field - its JSON key, normalizer,
-        default, display and warning (see :mod:`scrapers.base.settings`). The registry
+        default, display and warning (see :mod:`core.scrapers.base.settings`). The registry
         and the settings panel iterate exactly this list, so a scraper adds a
         store-specific setting by returning ``BASE_SETTING_SPECS + [its specs]`` here -
         the single extension point for per-scraper settings, with no change to base
@@ -133,7 +132,7 @@ class BasePlugin(ABC):
         dataclasses, so this never pulls in a transport stack.
 
         Returns:
-            List[SettingSpec]: The settings this plugin exposes, in display order.
+            list[SettingSpec]: The settings this plugin exposes, in display order.
         """
         return BASE_SETTING_SPECS
 

@@ -13,18 +13,18 @@ covered by test_orchestrator.py.
 import unittest
 from unittest import mock
 
-from exceptions import (
+from core.exceptions import (
     ScraperError, RateLimitError, ServerError, ProductNotFoundError,
 )
 
 try:
-    from scrapers.base.http_client import HttpScraperClient
+    from core.scrapers.base.http_client import HttpScraperClient
 
     class _ConcreteClient(HttpScraperClient):
         """Minimal concrete client (HttpScraperClient.scrape_product is abstract)."""
         HEADERS_POOL = [{"User-Agent": "test"}]
 
-        def scrape_product(self, url):  # never called in these tests
+        def scrape_product(self, product_url):  # never called in these tests
             raise NotImplementedError
 
     _HAS_TLS = True
@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover - tls_client not installed (core-only inst
 
 def _make_client():
     """Builds a concrete client with tls_client.Session patched inert."""
-    with mock.patch("scrapers.base.http_client.tls_client.Session"):
+    with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
         return _ConcreteClient()
 
 
@@ -74,7 +74,7 @@ class TestRaiseForStatus(unittest.TestCase):
         class OddClient(_ConcreteClient):
             NOT_FOUND_CODES = (418,)  # this API signals "gone" with 418
 
-        with mock.patch("scrapers.base.http_client.tls_client.Session"):
+        with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
             client = OddClient()
         with self.assertRaises(ProductNotFoundError):
             client.raise_for_status(418)
@@ -87,9 +87,9 @@ class TestRaiseForStatus(unittest.TestCase):
 class TestRefreshIdentity(unittest.TestCase):
     def test_rotates_headers_and_replaces_session(self):
         s1, s2 = mock.Mock(name="session1"), mock.Mock(name="session2")
-        with mock.patch("scrapers.base.http_client.tls_client.Session",
+        with mock.patch("core.scrapers.base.http_client.tls_client.Session",
                         side_effect=[s1, s2]), \
-             mock.patch("scrapers.base.http_client.random.choice",
+             mock.patch("core.scrapers.base.http_client.random.choice",
                         return_value={"User-Agent": "probe"}):
             client = _ConcreteClient()
             self.assertIs(client.session, s1)
@@ -109,7 +109,7 @@ class TestRefreshIdentity(unittest.TestCase):
         class OneProfileClient(_ConcreteClient):
             HEADERS_POOL = [profile]
 
-        with mock.patch("scrapers.base.http_client.tls_client.Session"):
+        with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
             client = OneProfileClient()
             client.current_headers["authority"] = "mutated.example"
 

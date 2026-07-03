@@ -17,11 +17,12 @@ import argparse
 import os
 import sys
 
-# Make src/core and the tests dir importable when run as a standalone script.
+# Make src/ (the `core` package root) and the tests dir importable when run
+# as a standalone script.
 _HERE = os.path.dirname(os.path.abspath(__file__))      # tests/ui
 _TESTS = os.path.dirname(_HERE)                          # tests
 _REPO = os.path.dirname(_TESTS)                          # repo root
-sys.path.insert(0, os.path.join(_REPO, "src", "core"))
+sys.path.insert(0, os.path.join(_REPO, "src"))
 sys.path.insert(0, _TESTS)
 
 from rich.console import Console                          # noqa: E402

@@ -12,7 +12,8 @@ and rendering layers can import :class:`BuildResult` from here without a cycle.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, List, Tuple
+from collections.abc import Callable
+from typing import Any
 
 
 class Surface(Enum):
@@ -48,13 +49,13 @@ class Scenario:
         description (str): One-line human summary (shown as the gallery header).
         build (Callable[[], BuildResult]): Produces the renderable + border color. Called
             fresh each time (snapshot run and gallery run), so it must be deterministic.
-        tags (Tuple[str, ...]): Optional filter tags (e.g. ``"retry"``, ``"interrupt"``).
+        tags (tuple[str, ...]): Optional filter tags (e.g. ``"retry"``, ``"interrupt"``).
     """
     name: str
     surface: Surface
     description: str
     build: Callable[[], BuildResult]
-    tags: Tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
 
     @property
     def snapshot_key(self) -> str:
@@ -62,10 +63,10 @@ class Scenario:
         return f"{self.surface.value}__{self.name}"
 
 
-_REGISTRY: List[Scenario] = []
+_REGISTRY: list[Scenario] = []
 
 
-def scenario(surface: Surface, name: str, description: str, tags: Tuple[str, ...] = ()):
+def scenario(surface: Surface, name: str, description: str, tags: tuple[str, ...] = ()):
     """Registers the decorated zero-arg ``build`` function as a :class:`Scenario`.
 
     Usage::
@@ -85,6 +86,6 @@ def scenario(surface: Surface, name: str, description: str, tags: Tuple[str, ...
     return decorator
 
 
-def all_scenarios() -> List[Scenario]:
+def all_scenarios() -> list[Scenario]:
     """Returns every registered scenario, in registration order."""
     return list(_REGISTRY)

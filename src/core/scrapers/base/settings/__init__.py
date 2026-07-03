@@ -14,15 +14,15 @@ and ``--status``), so it must stay **import-light** - stdlib only, never a
 transport/parsing library - in line with the BasePlugin import-light contract.
 
 Layout (all submodules stdlib-only):
-    * :mod:`~scrapers.base.settings.model` - ``ResolvedSetting``, ``ResolvedSettings``,
+    * :mod:`~core.scrapers.base.settings.model` - ``ResolvedSetting``, ``ResolvedSettings``,
       ``SettingView`` and the ``STATUS_*`` codes;
-    * :mod:`~scrapers.base.settings.normalizers` - retention/bool normalizers;
-    * :mod:`~scrapers.base.settings.intervals` - interval vocabulary + OnCalendar map;
-    * :mod:`~scrapers.base.settings.messages` - invalid-value messages;
-    * :mod:`~scrapers.base.settings.resolve` - the ``SettingSpec``, the resolver, the
+    * :mod:`~core.scrapers.base.settings.normalizers` - retention/bool normalizers;
+    * :mod:`~core.scrapers.base.settings.intervals` - interval vocabulary + OnCalendar map;
+    * :mod:`~core.scrapers.base.settings.messages` - invalid-value messages;
+    * :mod:`~core.scrapers.base.settings.resolve` - the ``SettingSpec``, the resolver, the
       built-in ``BASE_SETTING_SPECS`` and the ``KEY_*`` constants.
 
-    The public names below are re-exported here, so ``from scrapers.base.settings import
+    The public names below are re-exported here, so ``from core.scrapers.base.settings import
     X`` keeps working unchanged.
 
 A setting is one ``SettingSpec``:
@@ -41,11 +41,11 @@ Read-only by design:
     at scrape/status time through the registry's ``resolve_all_settings`` - but there is
     deliberately no ``update_setting``/settings write path. Machine-owned runtime state
     (the latest price, a check timestamp) is persisted on *item rows* via ``update_item``,
-    not in ``settings`` (see :class:`scrapers.base.model.BaseTrackedItem`). Keep new
+    not in ``settings`` (see :class:`core.scrapers.base.model.BaseTrackedItem`). Keep new
     settings plain user inputs; do not introduce stateful settings.
 """
 
-from scrapers.base.settings.model import (
+from core.scrapers.base.settings.model import (
     ResolvedSetting,
     ResolvedSettings,
     SettingView,
@@ -54,25 +54,25 @@ from scrapers.base.settings.model import (
     STATUS_INVALID,
     STATUS_NOCFG,
 )
-from scrapers.base.settings.normalizers import (
+from core.scrapers.base.settings.normalizers import (
     normalize_retention_days,
     normalize_bool,
     DEFAULT_LOG_RETENTION_DAYS,
     MIN_LOG_RETENTION_DAYS,
     MAX_LOG_RETENTION_DAYS,
 )
-from scrapers.base.settings.intervals import (
+from core.scrapers.base.settings.intervals import (
     SUPPORTED_INTERVALS,
     normalize_interval,
     oncalendar_for,
     canonical_for_oncalendar,
 )
-from scrapers.base.settings.messages import (
+from core.scrapers.base.settings.messages import (
     interval_warning_message,
     retention_warning_message,
     notify_errors_warning_message,
 )
-from scrapers.base.settings.resolve import (
+from core.scrapers.base.settings.resolve import (
     SettingSpec,
     load_settings_block,
     resolve_spec,

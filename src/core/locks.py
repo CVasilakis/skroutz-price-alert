@@ -1,8 +1,8 @@
 import os
 from contextlib import contextmanager
 from filelock import FileLock, Timeout
-from constants import LOGS_DIR, LOCK_TIMEOUT
-from exceptions import LockAcquisitionError
+from core.constants import LOGS_DIR, LOCK_TIMEOUT
+from core.exceptions import LockAcquisitionError
 
 @contextmanager
 def acquire_lock(target_name: str):

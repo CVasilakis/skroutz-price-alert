@@ -11,7 +11,7 @@ import os
 import tempfile
 import unittest
 
-from scrapers.base.settings import (
+from core.scrapers.base.settings import (
     resolve_one,
     SPEC_RETENTION, SPEC_NOTIFY, SPEC_INTERVAL,
     STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG,

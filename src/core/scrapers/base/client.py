@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, TYPE_CHECKING
-from scrapers.base.model import ScrapeResult
+from typing import TYPE_CHECKING
+from core.scrapers.base.model import ScrapeResult
 
 if TYPE_CHECKING:
-    from scrapers.base.settings import ResolvedSettings
+    from core.scrapers.base.settings import ResolvedSettings
 
 class BaseScraperClient(ABC):
     """Abstract base class for scraping clients.
@@ -38,7 +38,7 @@ class BaseScraperClient(ABC):
 
     Settings access:
         The registry passes this client's target settings to the constructor (a
-        :class:`~scrapers.base.settings.ResolvedSettings`), so a store-specific knob
+        :class:`~core.scrapers.base.settings.ResolvedSettings`), so a store-specific knob
         declared in the plugin's ``get_setting_specs`` is readable from ``__init__``
         onward — including during session/transport setup — e.g.
         ``self.settings.get("region")``. A subclass that overrides ``__init__`` must
@@ -48,11 +48,11 @@ class BaseScraperClient(ABC):
         ``ResolvedSettings.get``'s default.
     """
 
-    def __init__(self, settings: "Optional[ResolvedSettings]" = None) -> None:
+    def __init__(self, settings: "ResolvedSettings | None" = None) -> None:
         """Stores the target's resolved settings.
 
         Args:
-            settings (Optional[ResolvedSettings]): The owning target's resolved
+            settings (ResolvedSettings | None): The owning target's resolved
                 settings, passed by the registry at instantiation. ``None`` when
                 constructed outside the registry (e.g. a unit test).
         """
@@ -98,13 +98,13 @@ class BaseScraperClient(ABC):
         """
         pass
 
-    def get_current_headers(self) -> Dict[str, str]:
+    def get_current_headers(self) -> dict[str, str]:
         """Returns request headers for diagnostic logging (optional hook).
 
         Used only to annotate saved tracebacks. HTTP-based clients should return
         their active headers; non-HTTP clients can rely on the empty default.
 
         Returns:
-            Dict[str, str]: The current headers, or an empty dict.
+            dict[str, str]: The current headers, or an empty dict.
         """
         return {}
