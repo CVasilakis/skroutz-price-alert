@@ -13,7 +13,7 @@ import sys
 import subprocess
 import unittest
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "core"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "core"))
 
 # Run discovery in a clean interpreter, then report any heavy module that leaked in.
 _SNIPPET = r"""

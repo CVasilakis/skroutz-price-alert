@@ -1,0 +1,7 @@
+# Development/CI-only dependencies. Kept separate from requirements.txt so an
+# end-user install (./install.sh) never pulls the test toolchain.
+#
+#   pip install -r requirements-dev.txt
+#
+# pytest >= 7 is required for the `pythonpath` ini option used in pyproject.toml.
+pytest>=7.0

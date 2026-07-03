@@ -7,23 +7,20 @@ field guard.
 import builtins
 import json
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "core")))
-
-from scrapers.base.settings import (  # noqa: E402
+from scrapers.base.settings import (
     SettingSpec, ResolvedSettings, BASE_SETTING_SPECS,
     resolve_all, oncalendar_for,
     KEY_INTERVAL, KEY_RETENTION, KEY_NOTIFY,
     STATUS_OK, DEFAULT_LOG_RETENTION_DAYS,
 )
-from scrapers.base.plugin import BasePlugin  # noqa: E402
-from scrapers.base.client import BaseScraperClient  # noqa: E402
-from scrapers.registry import ScraperRegistry  # noqa: E402
-from exceptions import PluginDiscoveryError  # noqa: E402
+from scrapers.base.plugin import BasePlugin
+from scrapers.base.client import BaseScraperClient
+from scrapers.registry import ScraperRegistry
+from exceptions import PluginDiscoveryError
 
 
 class _FakePlugin:

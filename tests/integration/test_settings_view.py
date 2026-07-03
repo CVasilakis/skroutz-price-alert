@@ -9,13 +9,10 @@ change to base framework code and no parallel settings class.
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "core")))
-
-from scrapers.base.settings import (  # noqa: E402
+from scrapers.base.settings import (
     SettingSpec, BASE_SETTING_SPECS,
     resolve_one, setting_view,
     SPEC_RETENTION, STATUS_OK, STATUS_INVALID, STATUS_DEFAULT,

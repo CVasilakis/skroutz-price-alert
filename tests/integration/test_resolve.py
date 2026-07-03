@@ -8,13 +8,10 @@ key, with no parallel settings dataclass.
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "core")))
-
-from scrapers.base.settings import (  # noqa: E402
+from scrapers.base.settings import (
     resolve_one,
     SPEC_RETENTION, SPEC_NOTIFY, SPEC_INTERVAL,
     STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG,

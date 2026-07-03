@@ -1,0 +1,9 @@
+# Test tooling configuration. The project ships no installable package (the app
+# runs from src/core via PYTHONPATH), so this file is intentionally limited to
+# pytest settings — it is not a packaging manifest.
+[tool.pytest.ini_options]
+# Put the app's import root (src/core) and the tests root on sys.path so tests
+# import production modules (`import tui`, `from scrapers...`) and the UI suite's
+# `ui.*` package without any per-file sys.path juggling.
+pythonpath = ["src/core", "tests"]
+testpaths = ["tests"]

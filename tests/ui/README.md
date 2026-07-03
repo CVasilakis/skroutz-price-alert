@@ -115,18 +115,21 @@ the *consumers*.**
 
 ## Running it
 
-Everything runs through the project's venv. The tests are plain `unittest` (no pytest),
-discovered alongside the project's other tests.
+Everything runs through the project's venv. Tests are written with the stdlib `unittest`
+`TestCase` API but run under **pytest**, which is configured in the repo-root
+`pyproject.toml` (`pythonpath = ["src/core", "tests"]`, `testpaths = ["tests"]`). Install
+the test toolchain once with `./venv/bin/python3 -m pip install -r requirements-dev.txt`.
 
 ### Run the whole suite
 
 ```sh
-PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+./venv/bin/python3 -m pytest
 ```
 
-`PYTHONPATH=src/core` lets the scenarios import the production modules (`tui`, `status`,
-`ping`, …) the same way the app does. This command runs the existing project tests **and**
-the UI snapshot + color tests together.
+The `pythonpath` setting lets the scenarios import the production modules (`tui`, `status`,
+`ping`, …) and the `ui.*` test packages the same way the app does — no `PYTHONPATH=` prefix
+needed. This runs the existing project tests **and** the UI snapshot + color tests together
+(`pytest tests/ui` runs just this suite).
 
 ### Read a failure
 
@@ -145,7 +148,7 @@ Two outcomes are possible:
 The clearest way to *see* what changed is to regenerate and let git show you:
 
 ```sh
-UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+UPDATE_SNAPSHOTS=1 ./venv/bin/python3 -m pytest
 git diff -- tests/ui/snapshots/          # review every changed panel, line by line
 ```
 
@@ -156,7 +159,7 @@ this new output" — always review the diff before committing it.**
 ### Regenerate the golden files
 
 ```sh
-UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+UPDATE_SNAPSHOTS=1 ./venv/bin/python3 -m pytest
 ```
 
 Setting `UPDATE_SNAPSHOTS=1` makes the snapshot test *write* each golden file instead of
@@ -308,7 +311,7 @@ formatting and warning text), `inputs.py` offers small factories:
    filtering.
 3. Mint its golden file and review it:
    ```sh
-   UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+   UPDATE_SNAPSHOTS=1 ./venv/bin/python3 -m pytest
    ./venv/bin/python3 tests/ui/gallery.py --surface <surface>   # look at it in color
    git diff -- tests/ui/snapshots/                              # review the new golden file
    ```

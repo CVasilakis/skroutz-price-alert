@@ -8,13 +8,9 @@ drop price, a red error row) are verified visually via ``gallery.py`` and struct
 the snapshot text.
 """
 
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "core")))
-
-from ui.catalog import ALL_SCENARIOS  # noqa: E402
+from ui.catalog import ALL_SCENARIOS
 
 VALID_COLORS = {"green", "yellow", "red", "blue"}
 

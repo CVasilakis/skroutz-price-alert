@@ -7,13 +7,9 @@ Importing the storage module is import-light (no transport library), so the mana
 constructed directly here.
 """
 
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "core")))
-
-from scrapers.skroutz.storage import SkroutzDataManager  # noqa: E402
+from scrapers.skroutz.storage import SkroutzDataManager
 
 
 class TestSkroutzProductPath(unittest.TestCase):

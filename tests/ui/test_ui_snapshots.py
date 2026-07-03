@@ -8,15 +8,10 @@ plus the plain-text panel) against a committed file in ``snapshots/``. Set
 """
 
 import os
-import sys
 import unittest
 
-# Mirror the existing tests: make src/core importable so the catalog's production imports
-# resolve even when PYTHONPATH is not pre-set.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "core")))
-
-from ui.catalog import ALL_SCENARIOS          # noqa: E402
-from ui.harness.rendering import snapshot_body  # noqa: E402
+from ui.catalog import ALL_SCENARIOS
+from ui.harness.rendering import snapshot_body
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 UPDATE = os.environ.get("UPDATE_SNAPSHOTS") == "1"

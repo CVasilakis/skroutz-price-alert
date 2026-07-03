@@ -59,7 +59,7 @@ The scraper supports all Skroutz domains, dynamically detecting the locale and c
 ## 📋 Prerequisites
 
 *   Linux/Unix environment (`systemd` available for scheduling).
-*   Python 3.7+ installed (`python3`, `python3-venv`).
+*   Python 3.10+ installed (`python3`, `python3-venv`).
 
 ## 🚀 Installation
 
