@@ -29,7 +29,8 @@ from rich.rule import Rule                                # noqa: E402
 from rich.text import Text                                # noqa: E402
 
 from ui.catalog import ALL_SCENARIOS, Surface             # noqa: E402
-from ui.harness.rendering import paint, make_recording_console  # noqa: E402
+from ui.harness.html_report import write_report            # noqa: E402
+from ui.harness.rendering import paint                     # noqa: E402
 
 
 def _filtered(surface, tag):
@@ -84,9 +85,7 @@ def main() -> None:
         return
 
     if args.html:
-        console = make_recording_console()
-        _render_all(console, scenarios)
-        console.save_html(args.html)
+        write_report(scenarios, args.html)
         print(f"Wrote {len(scenarios)} scenario(s) to {args.html}")
     else:
         _render_all(Console(), scenarios)
