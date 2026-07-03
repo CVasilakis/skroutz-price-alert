@@ -1,0 +1,7 @@
+# border: green
+# exit: 0
+
+[skroutz] Background service and timer are already disabled. Nothing to do.
+
+To re-enable background execution, run: ./scripts/enable.sh
+To completely remove the application, run: ./scripts/uninstall.sh

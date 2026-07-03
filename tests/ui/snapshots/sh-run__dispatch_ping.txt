@@ -1,0 +1,4 @@
+# border: green
+# exit: 0
+
+[exec] python3 <BASE_DIR>/src/core/ping.py

@@ -1,0 +1,7 @@
+# border: green
+# exit: 0
+
+[skroutz] No config file found; leaving its timer unchanged.
+Create it by copying config/skroutz.json.example to config/skroutz.json.
+
+All timers already match their configured intervals. Nothing changed.

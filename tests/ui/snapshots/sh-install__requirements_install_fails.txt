@@ -1,0 +1,5 @@
+# border: red
+# exit: 1
+
+Updating python packages in existing virtual environment...
+Error: Failed to install packages from requirements.txt.

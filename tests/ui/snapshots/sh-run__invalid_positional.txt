@@ -1,0 +1,13 @@
+# border: red
+# exit: 1
+
+Error: Invalid flag provided: foo
+
+Usage: run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --quiet           Run script with no console output
+  --status          Perform a health check of the background service
+  --ping            Send a test notification via Apprise
+  --skroutz         Run exclusively the skroutz scraper

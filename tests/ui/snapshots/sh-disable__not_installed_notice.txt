@@ -1,0 +1,5 @@
+# border: green
+# exit: 0
+
+[amazon] is registered but not installed - nothing to disable.
+Install it first with: ./install.sh --amazon

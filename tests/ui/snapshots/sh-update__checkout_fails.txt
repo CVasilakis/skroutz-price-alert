@@ -1,0 +1,6 @@
+# border: red
+# exit: 1
+
+Updating Scrooge Alert...
+
+Error: Failed to checkout 'main' branch. Update aborted.

@@ -1,0 +1,4 @@
+# border: red
+# exit: 1
+
+Error: systemctl (systemd) is not installed or not available.

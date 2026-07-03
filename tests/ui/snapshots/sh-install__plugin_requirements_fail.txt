@@ -1,0 +1,7 @@
+# border: red
+# exit: 1
+
+Updating python packages in existing virtual environment...
+Python virtual environment successfully updated.
+Installing dependencies for the 'skroutz' scraper...
+Error: Failed to install dependencies for the 'skroutz' scraper.

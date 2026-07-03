@@ -1,0 +1,10 @@
+# border: red
+# exit: 1
+
+Updating Scrooge Alert...
+
+Updating python packages in existing virtual environment...
+Error: Failed to upgrade pip in the virtual environment.
+
+
+Error: Installation failed during update. Please run ./install.sh manually.

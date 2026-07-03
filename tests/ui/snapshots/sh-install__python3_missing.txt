@@ -1,0 +1,4 @@
+# border: red
+# exit: 1
+
+Error: python3 is not installed. Please install it first.

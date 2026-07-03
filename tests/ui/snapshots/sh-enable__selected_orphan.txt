@@ -1,0 +1,5 @@
+# border: red
+# exit: 1
+
+Error: 'ghost' is installed but no longer a registered scraper (orphan).
+Remove its leftover units with: ./scripts/uninstall.sh --ghost

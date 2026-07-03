@@ -1,0 +1,12 @@
+# border: green
+# exit: 0
+
+Usage: enable.sh [-h] [--<target> ...]
+
+Enable and start the background schedule (systemd timer) for the installed
+scraper(s). With no target flag every installed scraper's timer is enabled;
+pass one or more --<target> flags to enable only those.
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --skroutz         Enable only the skroutz scraper

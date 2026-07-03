@@ -1,0 +1,5 @@
+# border: red
+# exit: 1
+
+Error: Unknown target 'bogus'.
+Available targets: skroutz

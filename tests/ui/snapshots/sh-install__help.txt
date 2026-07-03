@@ -1,0 +1,15 @@
+# border: green
+# exit: 0
+
+Usage: install.sh [-h] [--<target> ...]
+
+Set up the Python virtual environment and install the systemd timer(s) and
+service(s). With no target flag every registered scraper is installed and
+enabled; pass one or more --<target> flags to install only those. You can
+run this command as many times as you like - run it again in the future
+to install additional scrapers.
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --skroutz         Install and enable only the skroutz scraper
+  --amazon          Install and enable only the amazon scraper

@@ -1,0 +1,10 @@
+# border: green
+# exit: 0
+
+Updating python packages in existing virtual environment...
+Python virtual environment successfully updated.
+
+Setting up Systemd timer(s)...
+Systemd timer(s) configured successfully.
+
+Installation complete!

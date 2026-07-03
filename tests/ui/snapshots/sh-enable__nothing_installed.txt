@@ -1,0 +1,5 @@
+# border: green
+# exit: 0
+
+No installed scrapers found.
+Run ./install.sh to provision your scrapers.

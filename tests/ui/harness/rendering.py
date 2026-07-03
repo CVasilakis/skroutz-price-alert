@@ -57,5 +57,13 @@ def capture_text(result: BuildResult) -> str:
 
 
 def snapshot_body(result: BuildResult) -> str:
-    """The full golden-file content: a border-color header plus the captured panel."""
-    return f"# border: {result.border_color}\n\n{capture_text(result)}\n"
+    """The full golden-file content: a border-color header plus the captured panel.
+
+    Shell scenarios also record the script's exit status as a second header line, so
+    an exit-code regression is a one-line diff. Panel scenarios (exit_code=None) keep
+    the original single-line header byte-for-byte.
+    """
+    header = f"# border: {result.border_color}\n"
+    if result.exit_code is not None:
+        header += f"# exit: {result.exit_code}\n"
+    return f"{header}\n{capture_text(result)}\n"

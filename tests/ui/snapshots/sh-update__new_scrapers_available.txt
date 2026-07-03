@@ -1,0 +1,15 @@
+# border: green
+# exit: 0
+
+Updating Scrooge Alert...
+
+Updating python packages in existing virtual environment...
+Python virtual environment successfully updated.
+
+Setting up Systemd timer(s)...
+Systemd timer(s) configured successfully.
+
+Scrapers available but not installed: amazon
+Install any of them with: ./install.sh --<target>
+
+Update complete! You are now running the latest version.

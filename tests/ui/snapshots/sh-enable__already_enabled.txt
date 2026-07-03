@@ -1,0 +1,7 @@
+# border: green
+# exit: 0
+
+[skroutz] Timer is already enabled and active. Nothing to do.
+
+To disable background execution, run: ./scripts/disable.sh
+To completely remove the application, run: ./scripts/uninstall.sh

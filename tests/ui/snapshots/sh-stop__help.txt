@@ -1,0 +1,12 @@
+# border: green
+# exit: 0
+
+Usage: stop.sh [-h] [--<target> ...]
+
+Stop the currently running scraper service(s), aborting any in-progress
+scrape. With no target flag every running scraper service is stopped; pass
+one or more --<target> flags to stop only those.
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --skroutz         Stop only the skroutz scraper

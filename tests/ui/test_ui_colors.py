@@ -3,7 +3,8 @@
 The plain-text snapshots lock layout and (via the header) record the border color, but
 this module asserts the color *decision* directly: every scenario resolves to a valid
 border color, and a curated, representative set resolves to a specific expected color —
-covering each color-decision branch across all four surfaces. Inner styled spans (a green
+covering each color-decision branch across all surfaces (for the shell surfaces the
+decision is the exit-code mapping: 0 -> green, anything else -> red). Inner styled spans (a green
 drop price, a red error row) are verified visually via ``gallery.py`` and structurally via
 the snapshot text.
 """
@@ -50,6 +51,18 @@ EXPECTED_COLORS = {
     "config__env_mixed": "yellow",
     "config__env_not_configured": "red",
     "config__worst_case": "red",
+    # SHELL (border derives from the exit code: 0 -> green, else red)
+    "sh-install__systemctl_missing": "red",
+    "sh-install__reinstall_all_configured": "green",
+    "sh-update__dirty_declined": "red",
+    "sh-update__new_scrapers_available": "green",
+    "sh-schedule__registry_unreadable_venv_missing": "red",
+    "sh-schedule__invalid_interval": "green",  # a warning notice, but the script exits 0
+    "sh-enable__enable_fails": "red",
+    "sh-disable__disable_success": "green",
+    "sh-stop__not_running": "green",
+    "sh-run__ping_not_alone": "red",
+    "sh-uninstall__full_teardown": "green",
 }
 
 

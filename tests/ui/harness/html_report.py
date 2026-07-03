@@ -281,6 +281,8 @@ def _scenario(sc: Scenario, result: BuildResult) -> str:
     key = sc.snapshot_key
     text = " ".join([key, sc.name, sc.description, " ".join(sc.tags), sc.surface.value]).lower()
     tags = "".join(f'<span class="pill">{_html.escape(t)}</span>' for t in sc.tags)
+    if result.exit_code is not None:
+        tags += f'<span class="pill">exit {result.exit_code}</span>'
     return (
         f'<article class="scn" id="{key}" data-text="{_html.escape(text, quote=True)}">'
         f'<div class="scn-head">{_dot(result.border_color)}'

@@ -1,10 +1,12 @@
 # Terminal-UI test suite
 
 This suite automatically verifies **everything Scrooge Alert draws in the terminal** — the
-live scraping panel of a normal run, and the `--status`, `--ping`, and Configuration Check
-panels. It exists so that changes to the UI (a new footnote, a reworded message, a
-border-color rule, a layout tweak) are caught the moment they alter what a user would see,
-without anyone having to run the app and manually reproduce failure states.
+live scraping panel of a normal run, the `--status`, `--ping`, and Configuration Check
+panels, and the colored transcripts printed by the management shell scripts
+(`install.sh`, `update.sh`, `scripts/*.sh`). It exists so that changes to the UI (a new
+footnote, a reworded message, a border-color rule, a layout tweak) are caught the moment
+they alter what a user would see, without anyone having to run the app and manually
+reproduce failure states.
 
 If you've never touched this folder, read the next two sections and you'll understand the
 whole idea. If you're here to add a case, jump to
@@ -52,13 +54,13 @@ Three things make this tractable:
                     ┌─────────────────────────┐
                     │   catalog/  (scenarios)  │   ← the single source of truth
                     │  run / status / ping /   │
-                    │        config            │
+                    │  config / sh-* (shell)   │
                     └────────────┬────────────┘
                                  │ each scenario.build() → BuildResult(renderable, color)
                                  ▼
                     ┌─────────────────────────┐
-                    │  harness/  (drivers +    │   ← runs the real production builders,
-                    │   deterministic render)  │     captures the panel as text
+                    │  harness/  (drivers +    │   ← runs the real production builders
+                    │   deterministic render)  │     and scripts, captures text
                     └───────┬─────────────┬────┘
                             ▼             ▼
                  ┌────────────────┐  ┌────────────────┐
@@ -96,9 +98,19 @@ tests/ui/
     status_scenarios.py    #    --status: service / not-installed / orphan panels
     ping_scenarios.py      #    --ping: Notification Check Results
     config_scenarios.py    #    Configuration Check panel
-    __init__.py            #    imports the four modules and exposes ALL_SCENARIOS
+    shell_inputs.py        #    shared ShellWorld presets + the shell_case registrar
+    sh_install_scenarios.py    # install.sh transcripts       (surface sh-install)
+    sh_update_scenarios.py     # update.sh transcripts        (surface sh-update)
+    sh_schedule_scenarios.py   # scripts/schedule.sh          (surface sh-schedule)
+    sh_enable_scenarios.py     # scripts/enable.sh            (surface sh-enable)
+    sh_disable_scenarios.py    # scripts/disable.sh           (surface sh-disable)
+    sh_stop_scenarios.py       # scripts/stop.sh              (surface sh-stop)
+    sh_run_scenarios.py        # scripts/run.sh               (surface sh-run)
+    sh_uninstall_scenarios.py  # scripts/uninstall.sh         (surface sh-uninstall)
+    __init__.py            #    imports every module above and exposes ALL_SCENARIOS
   harness/                 # ── HOW to render: turn a scenario into captured text
     drivers.py             #    drive_run / drive_service / drive_ping / drive_config, ...
+    shell.py               #    drive_shell: sandboxed shell-script execution + shims
     rendering.py           #    the deterministic recording console + capture helpers
   snapshots/               # ── the approved output: golden files <surface>__<name>.txt
   test_ui_snapshots.py     #    the gate: compare each scenario to its golden file
@@ -181,7 +193,7 @@ right?" check that snapshots (plain text) can't give you.
 | Option        | What it does                                                                 |
 |---------------|------------------------------------------------------------------------------|
 | *(none)*      | Prints every scenario to the terminal with real ANSI color, grouped by surface. |
-| `--surface S` | Limits to one surface: `run`, `status`, `ping`, or `config`.                 |
+| `--surface S` | Limits to one surface: `run`, `status`, `ping`, `config`, or a shell surface (`sh-install`, `sh-update`, `sh-schedule`, `sh-enable`, `sh-disable`, `sh-stop`, `sh-run`, `sh-uninstall`). |
 | `--tag T`     | Limits to scenarios tagged `T` (e.g. `retry`, `interrupt`, `layout`, `settings`). |
 | `--html PATH` | Renders the same output into one self-contained HTML file (colors preserved) for sharing or archiving, instead of printing. |
 | `--list`      | Prints each (optionally filtered) scenario's key and one-line description, then a count, and exits without rendering. Great for discovering what exists. |
@@ -200,24 +212,28 @@ A **scenario** is a small record (`catalog/_base.py`):
 @dataclass(frozen=True)
 class Scenario:
     name: str            # unique within its surface, snake_case
-    surface: Surface     # RUN | STATUS | PING | CONFIG
+    surface: Surface     # RUN | STATUS | PING | CONFIG | SH_INSTALL | ... | SH_UNINSTALL
     description: str      # one line, shown as the gallery header
     build: Callable[[], BuildResult]   # produces the renderable + its border color
     tags: tuple[str, ...] = ()          # optional filter labels
 ```
 
 You never construct one by hand — the `@scenario(...)` decorator registers the function it
-wraps. `build()` returns a `BuildResult(renderable, border_color)`:
+wraps. `build()` returns a `BuildResult(renderable, border_color, exit_code)`:
 
-- `renderable` is the actual Rich object to draw (a `Panel`, or a `StatusPanelBuilder`),
+- `renderable` is the actual Rich object to draw (a `Panel`, a `StatusPanelBuilder`, or —
+  for the shell surfaces — a `Text` transcript parsed from the script's ANSI output),
 - `border_color` is the color the panel border resolves to. It's recorded as the first
   line of the golden file (`# border: red`) so a **color change shows up as a one-line
-  diff** even though the snapshot body is plain (uncolored) text.
+  diff** even though the snapshot body is plain (uncolored) text. Shell scenarios derive
+  it from the exit code: 0 → green, anything else → red.
+- `exit_code` is the script's exit status for shell scenarios (`None` for the panel
+  surfaces), recorded as a second header line (`# exit: 1`).
 
 The `snapshot_key` is `"<surface>__<name>"` — that's the golden filename stem and the id
 you see in test output and `--list`.
 
-### The four surfaces, and what each drives
+### The surfaces, and what each drives
 
 Each surface has a **driver** in `harness/drivers.py` that feeds synthetic inputs to the
 real production builder:
@@ -228,6 +244,7 @@ real production builder:
 | `STATUS` | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
 | `PING`   | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
 | `CONFIG` | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers (version + .env) |
+| `SH_*`   | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
 
 The per-scraper **products-config health** (the `Config` row) is no longer a `CONFIG`-surface
 concern: it leads each `STATUS` Service Status panel (`drive_service`'s `config`) and each
@@ -280,6 +297,34 @@ def _():
     return drive_service("skroutz", timer_props(True), service_props(), resolved,
                          "skroutz.json", "hourly", "hourly")
 ```
+
+### The shell surfaces (`sh-*`)
+
+A shell scenario snapshots the transcript one management script prints for one world
+state. `drive_shell` (`harness/shell.py`) copies the **real scripts** into a throwaway
+install tree, shims every external command they touch (`systemctl`, `loginctl`, `git`,
+`python3`, and the venv python that answers the registry queries in
+`scripts/lib/common.sh`), runs the script with `/bin/sh`, and captures stdout+stderr
+interleaved — exactly what a terminal user sees. Nothing touches your real system: no
+systemd, no git, no network, no real venv.
+
+The world state is a `ShellWorld` (which plugins are registered/installed, what systemd
+reports, which commands fail, …); `catalog/shell_inputs.py` provides named presets
+(`WORLD_HEALTHY`, `WORLD_ORPHAN`, `WORLD_NO_VENV`, …) and the `shell_case` registrar
+that keeps each scenario to a few declarative lines:
+
+```python
+_case = shell_case(Surface.SH_ENABLE, "scripts/enable.sh")
+
+_case("enable_fails", "systemctl enable --now fails.",
+      world=replace(WORLD_INSTALLED, systemctl_fail=("enable",)), tags=("error",))
+```
+
+The cast is fixed across all shell scenarios: `skroutz` (healthy, installed), `amazon`
+(registered but not installed), `ghost` (an orphan — units on disk, plugin removed).
+Interactive prompts (update.sh's dirty-tree confirmation) are fed via `stdin=`; the
+sandbox path is normalized to `<BASE_DIR>` and sh's own diagnostics to `<line>`, so the
+goldens are machine-independent.
 
 ### Shared input builders (`catalog/inputs.py`)
 
@@ -348,8 +393,20 @@ Each `snapshots/<surface>__<name>.txt` looks like:
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
+A shell golden adds the script's exit status to the header:
+
+```
+# border: red
+# exit: 1
+
+[skroutz] Enabling and starting background schedule (timer)...
+[skroutz] Error: Failed to enable the timer!
+Try running ./install.sh to fix the issue.
+```
+
 - The **`# border:` header** records the resolved border color, so color regressions are a
-  one-line diff.
+  one-line diff. For shell scenarios it is derived from the exit code (0 → green, else
+  red), and the **`# exit:` header** pins the exit status itself.
 - The **body is plain text** (no ANSI escape codes). That's a deliberate choice: colored
   golden files would be an unreadable mess of escape sequences, and every layout change
   would move the codes around and bury the real diff. Layout/wrapping/text live in the
@@ -385,8 +442,10 @@ grep -rIn -e 'xoxb-' -e 'https://' -e '@gmail' -e '/home/' tests/ui/snapshots te
 ```
 
 This is safe *by construction* today: no driver ever reads your real `.env`, config,
-environment, or `systemctl` — `drive_config` patches those seams, and the others take
-literal fixtures. Keep it that way: don't introduce a scenario that reads live data.
+environment, or `systemctl` — `drive_config` patches those seams, the others take
+literal fixtures, and `drive_shell` builds a from-scratch environment inside a temp
+sandbox (fake HOME, fake PATH, canned shim output — the transcripts are fully
+synthetic). Keep it that way: don't introduce a scenario that reads live data.
 
 ---
 
@@ -408,6 +467,12 @@ enforces that:
 - **Literal inputs only.** Scenarios use fixed prices, timestamps, and exit codes — never
   `now()`, `random`, or anything environment-dependent. (If you add a scenario that pulls a
   live value, its snapshot will flap. Don't.)
+- **Sandboxed shell runs.** `drive_shell` never inherits your environment: PATH points at
+  the sandbox's shims (plus `/usr/bin:/bin` for coreutils), HOME and the systemd user dir
+  live inside the sandbox, `LC_ALL=C`, and every shim's output is canned. The sandbox path
+  is rewritten to `<BASE_DIR>` and sh's own diagnostic line numbers to `<line>`, so the
+  goldens don't depend on where or on which machine they were generated. (They do assume
+  `/bin/sh` is dash-compatible — true on Debian/Ubuntu/WSL and the CI runners.)
 
 ---
 

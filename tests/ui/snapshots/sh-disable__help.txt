@@ -1,0 +1,13 @@
+# border: green
+# exit: 0
+
+Usage: disable.sh [-h] [--<target> ...]
+
+Stop and disable the background schedule (systemd timer) for the scraper(s).
+With no target flag every installed scraper's timer is disabled; pass one
+or more --<target> flags to disable only those.
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --skroutz         Disable only the skroutz scraper
+  --ghost           Disable only the ghost scraper

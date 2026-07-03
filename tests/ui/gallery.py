@@ -8,9 +8,14 @@ Usage (standalone; no env vars needed):
 
     ./venv/bin/python3 tests/ui/gallery.py                 # print every scenario (ANSI)
     ./venv/bin/python3 tests/ui/gallery.py --surface run   # only the interactive-run panels
+    ./venv/bin/python3 tests/ui/gallery.py --surface sh-install  # one shell script's transcripts
     ./venv/bin/python3 tests/ui/gallery.py --tag interrupt # only scenarios tagged 'interrupt'
     ./venv/bin/python3 tests/ui/gallery.py --html /tmp/ui.html   # write a shareable page
     ./venv/bin/python3 tests/ui/gallery.py --list          # list scenario keys + descriptions
+
+The shell surfaces (sh-install, sh-update, sh-schedule, sh-enable, sh-disable,
+sh-stop, sh-run, sh-uninstall) render the management scripts' terminal transcripts,
+captured from sandboxed runs of the real scripts (see harness/shell.py).
 """
 
 import argparse

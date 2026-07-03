@@ -1,0 +1,10 @@
+# border: green
+# exit: 0
+
+Updating python packages in existing virtual environment...
+Python virtual environment successfully updated.
+Note: Skipping 'ghost' - no longer a registered scraper in this version.
+      Its leftover units can be removed with: ./scripts/uninstall.sh --ghost
+
+Setting up Systemd timer(s)...
+Systemd timer(s) configured successfully.

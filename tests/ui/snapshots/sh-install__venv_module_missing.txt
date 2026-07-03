@@ -1,0 +1,4 @@
+# border: red
+# exit: 1
+
+Error: The python venv module is not available. Please install it first.

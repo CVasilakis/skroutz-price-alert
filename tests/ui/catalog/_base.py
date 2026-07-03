@@ -22,6 +22,16 @@ class Surface(Enum):
     STATUS = "status"  # a --status panel (service / not-installed / orphan)
     PING = "ping"      # the --ping Notification Check Results panel
     CONFIG = "config"  # the shared Configuration Check panel
+    # Shell surfaces: the transcript a management script prints to the terminal.
+    # The "sh-" prefix groups them in the gallery and keeps "sh-run" clear of RUN.
+    SH_INSTALL = "sh-install"      # install.sh (repo root)
+    SH_UPDATE = "sh-update"        # update.sh (repo root)
+    SH_SCHEDULE = "sh-schedule"    # scripts/schedule.sh
+    SH_ENABLE = "sh-enable"        # scripts/enable.sh
+    SH_DISABLE = "sh-disable"      # scripts/disable.sh
+    SH_STOP = "sh-stop"            # scripts/stop.sh
+    SH_RUN = "sh-run"              # scripts/run.sh
+    SH_UNINSTALL = "sh-uninstall"  # scripts/uninstall.sh
 
 
 @dataclass(frozen=True)
@@ -29,13 +39,18 @@ class BuildResult:
     """The output of a scenario's ``build``: what to render and its border color.
 
     Attributes:
-        renderable: A Rich ``Panel`` or a ``panel.StatusPanelBuilder``. The rendering
-            layer knows how to paint either.
+        renderable: A Rich ``Panel``, a ``panel.StatusPanelBuilder``, or (for the shell
+            surfaces) a plain ``rich.text.Text`` transcript. The rendering layer knows
+            how to paint any of them.
         border_color (str): The panel border color (``green``/``yellow``/``red``/``blue``),
             recorded in the snapshot header so a color regression is a one-line diff.
+            Shell scenarios derive it from the exit code (0 -> green, else red).
+        exit_code (int | None): The script's exit status for shell scenarios, recorded
+            as a ``# exit:`` snapshot-header line. ``None`` for the Rich-panel surfaces.
     """
     renderable: Any
     border_color: str
+    exit_code: int | None = None
 
 
 @dataclass(frozen=True)
