@@ -33,7 +33,11 @@ def main() -> None:
     for scraper in registered_scrapers:
         parser.add_argument(f'--{scraper}', action='store_true', help=f'Run the {scraper.capitalize()} scraper')
 
-    args, _ = parser.parse_known_args()
+    # Strict parsing: an unknown flag (e.g. a typo'd --<plugin>) must error out,
+    # not be silently ignored — parse_known_args would fall through to running
+    # every scraper. run.sh validates its own flags, so nothing it forwards is
+    # unknown here; this guards direct invocation.
+    args = parser.parse_args()
 
     setup_global_logging(args.quiet)
 

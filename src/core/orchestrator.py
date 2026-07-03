@@ -520,7 +520,10 @@ class ScrapingOrchestrator:
                         try:
                             data_manager.save()
                         except StorageFileError as e:
-                            self.ui_strategy.log_error("Storage", f"Failed to update config/{target}.json file!", str(e))
+                            # The config filename comes from the plugin descriptor (the
+                            # single source of truth) — it is not always <target>.json.
+                            config_filename = self.registry.get_plugin(target).get_config_filename()
+                            self.ui_strategy.log_error("Storage", f"Failed to update config/{config_filename} file!", str(e))
 
                 # Notifications involve network I/O and need no lock.
                 if not self.interrupted and self._stale_items:

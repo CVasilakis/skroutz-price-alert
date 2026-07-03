@@ -7,6 +7,7 @@ proves *how* a call sequence renders; this proves *which* calls the orchestrator
 decides to emit, and why. No network, no real notifications, no sleeping.
 """
 
+import contextlib
 import unittest
 from unittest import mock
 from unittest.mock import Mock
@@ -17,6 +18,7 @@ from scrapers.base.model import BaseTrackedItem, ScrapeResult
 from tui import PriceOutcome
 from exceptions import (
     ProductNotFoundError, ServerError, ScraperParseError, RateLimitError,
+    StorageFileError,
 )
 from constants import MAX_RETRIES
 
@@ -201,6 +203,44 @@ class TestRunAttempts(unittest.TestCase):
         # The success row surfaces that it recovered on attempt 2.
         notes = orch.ui_strategy.log_price_result.call_args.args[5]
         self.assertTrue(any("attempt 2" in n for n in notes))
+
+
+# --- Group C: run()'s save-failure reporting -----------------------------------
+
+class TestSaveFailureMessage(unittest.TestCase):
+    """A failed save names the plugin's *declared* config filename, not <target>.json."""
+
+    def test_save_error_names_plugin_config_filename(self):
+        plugin = Mock()
+        plugin.get_config_filename.return_value = "custom-name.json"
+
+        settings = Mock()
+        settings.views.return_value = []
+        settings.block_warning = None
+
+        manager = Mock()
+        manager.get_item_count.return_value = 1
+        manager.get_faulty_indices.return_value = []
+        manager.get_items.return_value = [{"skip": True}]
+        # A skipped item still marks the run dirty, so save() is attempted and fails.
+        manager.parse_item.return_value = BaseTrackedItem(name="Widget", skip=True)
+        manager.save.side_effect = StorageFileError("disk full")
+
+        registry = Mock()
+        registry.settings_for.return_value = settings
+        registry.get_manager.return_value = manager
+        registry.get_plugin.return_value = plugin
+
+        ui = Mock()
+        orch = _make_orch(ui=ui, registry=registry)
+        with mock.patch.object(orchestrator.signal, "signal"), \
+             mock.patch.object(orchestrator, "acquire_lock",
+                               return_value=contextlib.nullcontext()), \
+             mock.patch.object(orchestrator, "get_target_logger"):
+            orch.run()
+
+        ui.log_error.assert_called_once_with(
+            "Storage", "Failed to update config/custom-name.json file!", "disk full")
 
 
 if __name__ == "__main__":

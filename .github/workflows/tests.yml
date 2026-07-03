@@ -35,3 +35,14 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # SC2086/SC2046 are excluded: unquoted expansion of plugin lists is the
+      # library's documented word-splitting idiom (see scripts/lib/common.sh).
+      # -x follows the sourced common.sh via the "shellcheck source=" directives.
+      - name: Run shellcheck
+        run: shellcheck -x --exclude=SC2086,SC2046 install.sh update.sh scripts/*.sh scripts/lib/common.sh

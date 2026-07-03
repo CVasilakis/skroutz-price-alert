@@ -10,6 +10,7 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Shared helpers (colors, plugin enumeration, systemd helpers)
+# shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
 # ==============================================================================

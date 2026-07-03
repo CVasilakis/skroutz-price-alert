@@ -10,6 +10,7 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Shared helpers (colors, plugin enumeration, systemd helpers)
+# shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
 VENV_DIR="venv"
@@ -142,7 +143,9 @@ printf "%b\n" "${GREEN}Systemd configurations removed successfully.${NC}"
 printf "%b\n" "\n${CYAN}Removing Python virtual environment...${NC}"
 
 if [ -d "$BASE_DIR/$VENV_DIR" ]; then
-    rm -rf "$BASE_DIR/$VENV_DIR"
+    # ${BASE_DIR:?} aborts if BASE_DIR is ever empty/unset, so this can never
+    # expand to rm -rf "/<venv>".
+    rm -rf "${BASE_DIR:?}/$VENV_DIR"
     printf "%b\n" "${GREEN}Python virtual environment ($VENV_DIR) removed.${NC}"
 else
     printf "%b\n" "${GREEN}Python virtual environment ($VENV_DIR) already removed.${NC}"

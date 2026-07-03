@@ -39,8 +39,15 @@ class BaseTrackedItem:
         file is co-authored by the user, so a full reserialization would clobber
         unknown keys, coerce the user's original input, and persist the invalid
         ``target_price`` sentinel (see ``from_dict``). Subclasses may add
-        store-specific fields and override ``from_dict`` to read them; to persist a
-        machine-owned field, pass it to ``update_item`` — no ``to_dict`` is needed.
+        store-specific fields and override ``from_dict`` to read them, composing the
+        base parsing via ``_base_field_kwargs`` instead of re-implementing it::
+
+            @classmethod
+            def from_dict(cls, data):
+                return cls(**cls._base_field_kwargs(data), sku=data.get('sku', ''))
+
+        To persist a machine-owned field, pass it to ``update_item`` — no ``to_dict``
+        is needed.
 
         Item rows are the *only* place the application writes machine-owned state.
         The config's top-level ``settings`` block is read-only user input — never
@@ -53,6 +60,34 @@ class BaseTrackedItem:
     last_price: float = 0.0
     skip: bool = False
     last_checked: str = ""
+
+    @classmethod
+    def _base_field_kwargs(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Parses the shared base fields out of a stored row, as constructor kwargs.
+
+        The compositional half of ``from_dict``: a subclass adding store-specific
+        fields overrides ``from_dict`` and reuses this for the base fields (see the
+        class docstring) instead of re-implementing the parsing — in particular the
+        ``target_price`` sentinel rule, which must never drift between stores.
+
+        Args:
+            data (Dict[str, Any]): The item data dictionary.
+
+        Returns:
+            Dict[str, Any]: One kwarg per base field, ready to pass to ``cls(...)``.
+        """
+        target_price = parse_price(data.get('target_price', 0.0))
+        if target_price is None:
+            target_price = -1.0  # sentinel: invalid value
+
+        return {
+            'name': data.get('name', 'Unknown'),
+            'url': data.get('url', ''),
+            'target_price': target_price,
+            'last_price': data.get('last_price', 0.0),
+            'skip': data.get('skip', False),
+            'last_checked': data.get('last_checked', ''),
+        }
 
     @classmethod
     def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
@@ -72,15 +107,4 @@ class BaseTrackedItem:
             BaseTrackedItem: A new instance populated with data from the
             dictionary.
         """
-        target_price = parse_price(data.get('target_price', 0.0))
-        if target_price is None:
-            target_price = -1.0  # sentinel: invalid value
-
-        return cls(
-            name=data.get('name', 'Unknown'),
-            url=data.get('url', ''),
-            target_price=target_price,
-            last_price=data.get('last_price', 0.0),
-            skip=data.get('skip', False),
-            last_checked=data.get('last_checked', ''),
-        )
+        return cls(**cls._base_field_kwargs(data))

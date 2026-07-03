@@ -10,6 +10,7 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Shared helpers (colors, plugin enumeration, systemd helpers)
+# shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
 # ==============================================================================
@@ -19,6 +20,9 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
     _registered="$(list_plugins 2>/dev/null || true)"
+    # The supported cadences come from the settings vocabulary (SUPPORTED_INTERVALS),
+    # not a literal here, so this help can never drift from the code.
+    _intervals="$(list_supported_intervals 2>/dev/null || true)"
 
     printf '\n'
     printf '%s\n' "Usage: schedule.sh [-h] [--<target> ...]"
@@ -29,10 +33,10 @@ print_help() {
     printf '%s\n' "no target flag every installed scraper is updated; pass one or more --<target>"
     printf '%s\n' "flags to update only those."
     printf '\n'
-    printf '%s\n' "Supported intervals: 15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h (many spellings are"
-    printf '%s\n' "accepted, e.g. \"1 hour\", \"60m\" and \"hourly\" all mean 1h). An unset interval"
-    printf '%s\n' "keeps the scraper's default; an unsupported value is reported and the timer is"
-    printf '%s\n' "left unchanged."
+    printf '%s\n' "Supported intervals: ${_intervals:-unavailable (run ./install.sh first)}"
+    printf '%s\n' "Many spellings are accepted, e.g. \"1 hour\", \"60m\" and \"hourly\" all mean 1h."
+    printf '%s\n' "An unset interval keeps the scraper's default; an unsupported value is reported"
+    printf '%s\n' "and the timer is left unchanged."
     printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
@@ -96,13 +100,11 @@ done
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"
 
-# Units exist but the registry can't be read -> the venv is missing/broken. Without
-# it we can neither enumerate scrapers nor resolve their intervals, so refuse with a
-# repair hint rather than guess.
+# Units exist but the registry can't be read -> without it we can neither enumerate
+# scrapers nor resolve their intervals, so refuse rather than guess.
+# registry_diagnose says WHY (venv missing vs. a plugin whose discovery failed).
 if [ -n "$INSTALLED_PLUGINS" ] && [ -z "$REGISTERED" ]; then
-    printf "%b\n" "${RED}Error: Cannot read the scraper registry - the Python environment looks missing or broken.${NC}"
-    printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}"
-    exit 1
+    registry_diagnose || exit 1
 fi
 
 if [ -n "$SELECTED" ]; then
@@ -168,6 +170,8 @@ fi
 
 ALL_TIMER_DIRECTIVES="$(list_plugin_timer_directives || true)"
 INTERVAL_STATUS="$(list_interval_status || true)"
+# The registry is readable at this point (guarded above), so this is non-empty.
+SUPPORTED_INTERVAL_KEYS="$(list_supported_intervals || true)"
 
 CHANGED=""
 for plugin in $PLUGINS; do
@@ -181,7 +185,7 @@ for plugin in $PLUGINS; do
             ;;
         invalid)
             printf "%b\n" "\n${YELLOW}[$plugin] Unsupported execution_interval in config; leaving its timer unchanged.${NC}"
-            printf "%b\n" "Use one of: ${CYAN}15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h${NC}."
+            printf "%b\n" "Use one of: ${CYAN}$SUPPORTED_INTERVAL_KEYS${NC}."
             continue
             ;;
     esac

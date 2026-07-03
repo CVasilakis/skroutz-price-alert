@@ -164,7 +164,8 @@ class AcmeProduct(BaseTrackedItem):
     """An Acme tracked product. Inherits all base fields.
 
     Add store-specific fields here (e.g. `sku: str = ""`) and override `from_dict`
-    to read them when you need them.
+    to read them, composing the base parsing via `cls._base_field_kwargs(data)`
+    (see "Store-specific model fields" below).
     """
     pass
 ```
@@ -355,8 +356,9 @@ tls-client
 ### Step 8 — `config/acme.json.example`
 
 Provide a template so users can `cp config/acme.json.example config/acme.json`. The
-filename **must** match `get_config_filename()`. Include the shared `settings`
-block and a sample product:
+filename **must** match `get_config_filename()`. This is enforced by a guard test
+(`tests/integration/test_plugin_conventions.py`), so a plugin without its example
+config fails CI. Include the shared `settings` block and a sample product:
 
 ```json
 {
@@ -460,9 +462,12 @@ The new setting now resolves, validates, and renders in `--status` and the scrap
 panel automatically — no base/framework file changes — and discovery rejects a blank or
 duplicate `key` at startup.
 
-To *consume* the effective value at scrape time, read it through `self.settings`: the
-registry injects the target's resolved settings into **both** your client and your data
-manager.
+To *consume* the effective value, read it through `self.settings`: the registry passes
+the target's resolved settings to the **constructor** of both your client and your data
+manager, so it is available from `__init__` onward — you can shape your session or
+transport from a setting at construction time. A client that overrides `__init__` must
+accept `settings` and forward it: `def __init__(self, settings=None):
+super().__init__(settings)`.
 
 ```python
 # in your client's scrape_product(), or in your data manager — read a custom setting
@@ -482,7 +487,16 @@ last price, a timestamp) belongs on item rows via `update_item(url, **fields)`
 
 ### Store-specific model fields
 
-Add fields to your `BaseTrackedItem` subclass and override `from_dict` to read them.
+Add fields to your `BaseTrackedItem` subclass and override `from_dict` to read them,
+composing the base parsing through `_base_field_kwargs` (never re-implement it — it
+owns the invalid-`target_price` sentinel rule, which must not drift between stores):
+
+```python
+@classmethod
+def from_dict(cls, data):
+    return cls(**cls._base_field_kwargs(data), sku=data.get("sku", ""))
+```
+
 Never write a `to_dict`/full reserialization — persist machine-owned fields by
 passing them to `update_item(url, **fields)`, which surgically merges only those
 keys and preserves everything the user authored.

@@ -10,6 +10,7 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 BASE_DIR="$SCRIPT_DIR"
 
 # Shared helpers (colors, plugin enumeration, systemd helpers)
+# shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/scripts/lib/common.sh"
 
 # Environment and File Configurations
@@ -150,8 +151,9 @@ fi
 
 ALL_PLUGINS="$(list_plugins || true)"
 if [ -z "$ALL_PLUGINS" ]; then
-    printf "%b\n" "${RED}Error: Failed to enumerate scraper targets. The virtual environment may be broken.${NC}\n"
-    exit 1
+    # Distinguishes a broken venv from a plugin whose discovery failed, and
+    # surfaces the actual error instead of a generic "venv may be broken".
+    registry_diagnose || exit 1
 fi
 
 if [ "$INSTALL_MODE" = "selected" ]; then

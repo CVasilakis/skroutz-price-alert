@@ -100,6 +100,24 @@ class TestRefreshIdentity(unittest.TestCase):
             self.assertIs(client.session, s2)      # a fresh session is installed
             self.assertEqual(client.current_headers, {"User-Agent": "probe"})
 
+    def test_mutating_current_headers_never_pollutes_the_pool(self):
+        # current_headers is a copy of the chosen profile, so a subclass mutating
+        # it in place cannot corrupt the shared class-level pool for later
+        # identities (or other instances).
+        profile = {"User-Agent": "original"}
+
+        class OneProfileClient(_ConcreteClient):
+            HEADERS_POOL = [profile]
+
+        with mock.patch("scrapers.base.http_client.tls_client.Session"):
+            client = OneProfileClient()
+            client.current_headers["authority"] = "mutated.example"
+
+            client.refresh_identity()
+
+            self.assertNotIn("authority", client.current_headers)
+            self.assertEqual(profile, {"User-Agent": "original"})
+
 
 if __name__ == "__main__":
     unittest.main()

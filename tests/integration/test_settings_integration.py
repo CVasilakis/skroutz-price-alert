@@ -237,9 +237,30 @@ class TestSettingsInjection(unittest.TestCase):
             registry.close_all()
 
     def test_base_client_settings_default_none(self):
-        # The injection is post-construction; a client built outside the registry has no
-        # settings yet (its ResolvedSettings.get default still works for callers).
-        self.assertIsNone(BaseScraperClient.settings)
+        # Settings arrive through the constructor (passed by the registry); a client
+        # built without them — e.g. in a unit test — defaults to None.
+        class _MinimalClient(BaseScraperClient):
+            def scrape_product(self, product_url):  # pragma: no cover - never called
+                raise NotImplementedError
+
+        self.assertIsNone(_MinimalClient().settings)
+
+    def test_base_client_settings_available_during_init(self):
+        # The constructor stores settings before a subclass's own __init__ body runs,
+        # so a client can shape its session/transport from a setting at construction.
+        sentinel = object()
+        seen_during_init = []
+
+        class _InitReadingClient(BaseScraperClient):
+            def __init__(self, settings=None):
+                super().__init__(settings)
+                seen_during_init.append(self.settings)
+
+            def scrape_product(self, product_url):  # pragma: no cover - never called
+                raise NotImplementedError
+
+        _InitReadingClient(settings=sentinel)
+        self.assertEqual(seen_during_init, [sentinel])
 
 
 class TestUpdateItemFieldGuard(unittest.TestCase):

@@ -37,22 +37,26 @@ class BaseScraperClient(ABC):
         and re-raise as :class:`ScraperParseError` so it maps to a modeled outcome.
 
     Settings access:
-        The registry injects this client's target settings as ``self.settings`` (a
-        :class:`~scrapers.base.settings.ResolvedSettings`) right after construction, so a
-        store-specific knob declared in the plugin's ``get_setting_specs`` is readable at
-        scrape time without any constructor plumbing — e.g.
-        ``self.settings.get("region")``. It is ``None`` only when a client is constructed
-        outside the registry (e.g. a unit test); guard accordingly or rely on
+        The registry passes this client's target settings to the constructor (a
+        :class:`~scrapers.base.settings.ResolvedSettings`), so a store-specific knob
+        declared in the plugin's ``get_setting_specs`` is readable from ``__init__``
+        onward — including during session/transport setup — e.g.
+        ``self.settings.get("region")``. A subclass that overrides ``__init__`` must
+        accept ``settings`` and forward it via ``super().__init__(settings)``.
+        ``self.settings`` is ``None`` only when a client is constructed without it
+        (e.g. a unit test); guard accordingly or rely on
         ``ResolvedSettings.get``'s default.
     """
 
-    #: The owning target's resolved settings, injected by the registry after construction
-    #: (``None`` until injected / when constructed outside the registry).
-    settings: "Optional[ResolvedSettings]" = None
+    def __init__(self, settings: "Optional[ResolvedSettings]" = None) -> None:
+        """Stores the target's resolved settings.
 
-    def __init__(self) -> None:
-        """Base initializer. Subclasses performing setup should call super().__init__()."""
-        pass
+        Args:
+            settings (Optional[ResolvedSettings]): The owning target's resolved
+                settings, passed by the registry at instantiation. ``None`` when
+                constructed outside the registry (e.g. a unit test).
+        """
+        self.settings = settings
 
     @abstractmethod
     def scrape_product(self, product_url: str) -> ScrapeResult:

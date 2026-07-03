@@ -10,6 +10,7 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Shared helpers (colors, plugin enumeration, systemd helpers)
+# shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
 # ==============================================================================
@@ -73,13 +74,11 @@ done
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"
 
-# Units exist but the registry can't be read -> the venv is missing/broken. Refuse
-# rather than guess: arming a timer we cannot vet (orphan or not) just schedules a
-# job that cannot run. Point the user at a clean reinstall.
+# Units exist but the registry can't be read -> refuse rather than guess: arming a
+# timer we cannot vet (orphan or not) just schedules a job that cannot run.
+# registry_diagnose says WHY (venv missing vs. a plugin whose discovery failed).
 if [ -n "$INSTALLED_PLUGINS" ] && [ -z "$REGISTERED" ]; then
-    printf "%b\n" "${RED}Error: Cannot read the scraper registry - the Python environment looks missing or broken.${NC}"
-    printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}"
-    exit 1
+    registry_diagnose || exit 1
 fi
 
 if [ -n "$SELECTED" ]; then

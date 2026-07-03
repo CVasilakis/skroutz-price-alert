@@ -10,6 +10,7 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
 BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Shared helpers (colors, plugin enumeration)
+# shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
 # Registered plugins (one --<plugin> flag is accepted per registered scraper).
@@ -78,6 +79,11 @@ while [ "$#" -gt 0 ]; do
                 ARGS="$ARGS $1"
                 shift
             else
+                # An empty plugin list means the flag was rejected because the
+                # registry itself is unreadable, not because of a typo - say so.
+                if [ -z "$PLUGINS" ]; then
+                    registry_diagnose || exit 1
+                fi
                 printf "%b\nError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
                 print_help
                 exit 1

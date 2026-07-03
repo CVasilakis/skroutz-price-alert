@@ -32,13 +32,46 @@ class ScraperRegistry:
     _discovered: bool = False
 
     @classmethod
-    def register(cls, plugin: 'BasePlugin') -> None:
-        """Registers a plugin descriptor.
+    def register(cls, plugin: 'BasePlugin', where: Optional[str] = None) -> None:
+        """Registers a plugin descriptor after validating its contract.
+
+        The single validation gate: every registration — via :meth:`discover` or a
+        direct call — passes the descriptor contract check
+        (:meth:`_validate_plugin_contract`) and the incremental domain-overlap check
+        (:meth:`_check_domain_conflicts_for`), so a malformed plugin or an
+        ambiguously-routed domain fails loudly here no matter how it arrives.
 
         Args:
             plugin (BasePlugin): The plugin descriptor instance to register.
+            where (Optional[str]): A source label for error messages (e.g.
+                ``'scrapers.skroutz'``). Defaults to the descriptor's module path.
+
+        Raises:
+            PluginDiscoveryError: If the descriptor contract is unmet or the plugin
+                claims a domain overlapping one already registered.
         """
+        from scrapers.base.plugin import BasePlugin
+        if not isinstance(plugin, BasePlugin):
+            raise PluginDiscoveryError(
+                f"register() requires a BasePlugin instance, got {type(plugin).__name__}."
+            )
+        if where is None:
+            where = type(plugin).__module__
+        cls._validate_plugin_contract(where, plugin)
+        cls._check_domain_conflicts_for(plugin)
         cls._plugins[plugin.get_name()] = plugin
+
+    @classmethod
+    def _reset(cls) -> None:
+        """Clears all registered plugins and the discovery flag. TEST-ONLY.
+
+        Exists so tests can register fake plugins (or exercise the validation gate)
+        against a clean registry and restore auto-discovery afterwards — typically in
+        a try/finally or fixture. Production code must never call this: the registry
+        is deliberately a populate-once process-wide singleton.
+        """
+        cls._plugins = {}
+        cls._discovered = False
 
     @classmethod
     def discover(cls) -> None:
@@ -56,12 +89,13 @@ class ScraperRegistry:
         a :class:`PluginDiscoveryError` naming the offending package rather than
         silently skipping it.
 
-        Every discovered plugin is additionally validated against the lightweight
-        descriptor contract (:meth:`_validate_plugin_contract`) and, once all are
-        registered, the full set is checked for overlapping domains
-        (:meth:`_check_domain_conflicts`). This turns a malformed plugin or an
-        ambiguously-routed domain into a loud failure at startup rather than a
-        confusing error (or silent misrouting) at first scrape. Validation of the
+        Every discovered plugin is registered through :meth:`register` — the single
+        validation gate — which checks the lightweight descriptor contract
+        (:meth:`_validate_plugin_contract`) and rejects domains overlapping an
+        already-registered plugin (:meth:`_check_domain_conflicts_for`). This turns a
+        malformed plugin or an ambiguously-routed domain into a loud failure at
+        startup rather than a confusing error (or silent misrouting) at first
+        scrape. Validation of the
         bound client/storage *classes* is deliberately NOT done here: resolving
         them would trigger each plugin's deferred import of its concrete
         client/storage module (and any heavy transport library it pulls in, e.g.
@@ -103,21 +137,20 @@ class ScraperRegistry:
                     f"The 'plugin' attribute of scraper package 'scrapers.{modname}' is "
                     f"a {type(plugin).__name__}, not a BasePlugin instance."
                 )
-            cls._validate_plugin_contract(modname, plugin)
-            cls.register(plugin)
+            cls.register(plugin, where=f"scrapers.{modname}")
 
-        cls._check_domain_conflicts()
         cls._discovered = True
 
     @classmethod
-    def _validate_plugin_contract(cls, modname: str, plugin: 'BasePlugin') -> None:
-        """Validates that a discovered plugin returns usable descriptor values.
+    def _validate_plugin_contract(cls, where: str, plugin: 'BasePlugin') -> None:
+        """Validates that a plugin being registered returns usable descriptor values.
 
         The :class:`BasePlugin` ABC only guarantees the descriptor methods *exist*;
         this additionally checks they return usable values — a non-empty, unique
         name, a non-empty display name and config filename, and a non-empty list of
-        string domains. A plugin that fails any check is rejected here so the
-        mistake surfaces at startup instead of breaking later at first scrape.
+        string domains. A plugin that fails any check is rejected here (called from
+        :meth:`register`, the single validation gate) so the mistake surfaces at
+        startup instead of breaking later at first scrape.
 
         Only the *cheap* descriptor metadata is checked here. The bound
         client/storage classes are intentionally NOT resolved (that would import a
@@ -125,14 +158,12 @@ class ScraperRegistry:
         lazily in :meth:`_resolve_bound_class` at first instantiation.
 
         Args:
-            modname (str): The plugin package name, for error messages.
+            where (str): A source label for error messages (e.g. ``'scrapers.skroutz'``).
             plugin (BasePlugin): The plugin descriptor to validate.
 
         Raises:
             PluginDiscoveryError: If any part of the descriptor contract is unmet.
         """
-        where = f"scrapers.{modname}"
-
         name = plugin.get_name()
         if not isinstance(name, str) or not name.strip():
             raise PluginDiscoveryError(f"Plugin '{where}' must return a non-empty string from get_name().")
@@ -276,29 +307,37 @@ class ScraperRegistry:
         return d1.endswith("." + d2) or d2.endswith("." + d1)
 
     @classmethod
-    def _check_domain_conflicts(cls) -> None:
-        """Ensures no two registered plugins claim overlapping domains.
+    def _check_domain_conflicts_for(cls, plugin: 'BasePlugin') -> None:
+        """Ensures a plugin being registered claims no domain another plugin handles.
 
         ``plugin_for_url`` returns the *first* plugin whose ``matches_url`` accepts a
-        URL, iterating in (non-guaranteed) discovery order. If two plugins claimed
+        URL, iterating in (non-guaranteed) registration order. If two plugins claimed
         the same — or a nesting — domain, routing would be silent and order-dependent.
-        Detecting it once at discovery turns that latent ambiguity into a loud failure.
+        Checking each registration against the already-registered set (from
+        :meth:`register`, the single validation gate) turns that latent ambiguity
+        into a loud failure at startup.
+
+        Args:
+            plugin (BasePlugin): The plugin descriptor being registered.
 
         Raises:
-            PluginDiscoveryError: If two plugins claim overlapping domains.
+            PluginDiscoveryError: If the plugin claims a domain overlapping one
+                already claimed by a different registered plugin.
         """
-        seen: List[tuple] = []  # (normalized_domain, owning_plugin_name)
-        for name, plugin in cls._plugins.items():
-            for domain in plugin.get_supported_domains():
-                norm = domain.strip().lower()
-                for existing_domain, owner in seen:
-                    if owner != name and cls._domains_overlap(norm, existing_domain):
+        name = plugin.get_name()
+        for domain in plugin.get_supported_domains():
+            norm = domain.strip().lower()
+            for owner, registered in cls._plugins.items():
+                if owner == name:
+                    continue
+                for existing in registered.get_supported_domains():
+                    existing_norm = existing.strip().lower()
+                    if cls._domains_overlap(norm, existing_norm):
                         raise PluginDiscoveryError(
                             f"Domain conflict: plugin '{name}' claims '{norm}', which overlaps with "
-                            f"'{existing_domain}' already claimed by plugin '{owner}'. A domain may be "
+                            f"'{existing_norm}' already claimed by plugin '{owner}'. A domain may be "
                             f"handled by only one plugin."
                         )
-                seen.append((norm, name))
 
     @classmethod
     def registered_targets(cls) -> List[str]:
@@ -413,7 +452,7 @@ class ScraperRegistry:
         return resolve_one(spec, cls._config_path(plugin, config_dir), plugin)
 
     @staticmethod
-    def _timer_directives_for(plugin: 'BasePlugin', interval: ResolvedSetting) -> Dict[str, str]:
+    def timer_directives_for(plugin: 'BasePlugin', interval: ResolvedSetting) -> Dict[str, str]:
         """Applies an already-resolved ``execution_interval`` to a plugin's directives.
 
         The single boundary where the settings layer's user-facing vocabulary becomes a
@@ -421,8 +460,8 @@ class ScraperRegistry:
         ``OnCalendar`` only when the interval resolved to a supported cadence (translating
         the canonical key to its systemd expression). When the interval is unset/invalid,
         the plugin's declared ``OnCalendar`` default is kept. Takes the resolved interval
-        rather than reading the config, so a caller that already holds it (``--status``)
-        reuses its one read instead of re-resolving.
+        rather than reading the config, so a caller that already holds it (``--status``,
+        which consumes this directly) reuses its one read instead of re-resolving.
         """
         directives = dict(plugin.get_timer_directives())
         if interval.status == STATUS_OK:
@@ -434,7 +473,7 @@ class ScraperRegistry:
         """The plugin's ``[Timer]`` directives with ``OnCalendar`` resolved from config.
 
         Reads the target's ``execution_interval`` and folds it through
-        :meth:`_timer_directives_for` (the canonical-key -> systemd translation). This is
+        :meth:`timer_directives_for` (the canonical-key -> systemd translation). This is
         the single source of truth for a plugin's *effective* cadence, consumed by
         ``install.sh`` and ``schedule.sh`` through the shell one-liners.
 
@@ -446,7 +485,7 @@ class ScraperRegistry:
             Dict[str, str]: The effective ``[Timer]`` trigger directives.
         """
         interval = cls.resolve_value(target, KEY_INTERVAL, config_dir)
-        return cls._timer_directives_for(cls.get_plugin(target), interval)
+        return cls.timer_directives_for(cls.get_plugin(target), interval)
 
     @classmethod
     def plugin_for_url(cls, url: str) -> Optional['BasePlugin']:
@@ -529,13 +568,10 @@ class ScraperRegistry:
             from scrapers.base.client import BaseScraperClient
             plugin = self._plugins[target]
             client_cls = self._resolve_bound_class(plugin, "get_client_class", BaseScraperClient)
-            client = client_cls()
-            # Inject the target's resolved settings so a store-specific knob declared in
-            # the plugin's get_setting_specs is readable at scrape time via self.settings.
-            # Attribute injection (not a constructor arg) keeps clients' varied __init__s
-            # untouched.
-            client.settings = self.settings_for(target)
-            self._scrapers[target] = client
+            # Pass the target's resolved settings at construction (mirroring the data
+            # manager) so a store-specific knob declared in the plugin's
+            # get_setting_specs is readable from __init__ onward via self.settings.
+            self._scrapers[target] = client_cls(settings=self.settings_for(target))
 
         return self._scrapers[target]
 

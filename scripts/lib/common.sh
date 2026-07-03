@@ -11,6 +11,9 @@
 # This file intentionally does NOT set `set -eu` (the sourcing script owns its
 # shell options) and uses no `local` (a bashism); helper-internal variables use
 # unique names to avoid clobbering the caller's scope.
+#
+# shellcheck disable=SC2034  # variables here (colors, SYSTEMD_USER_DIR) are
+#                            # consumed by the sourcing scripts, not this file.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -144,6 +147,46 @@ for target in ScraperRegistry.registered_targets():
 PY
 }
 
+# list_supported_intervals: print the canonical execution_interval keys as one
+# comma-separated line (e.g. "15m, 30m, 1h, ..."), straight from the settings
+# vocabulary (SUPPORTED_INTERVALS) so user-facing help text never drifts from the
+# code. Same venv requirement as list_plugins.
+list_supported_intervals() {
+    [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
+    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
+from scrapers.base.settings import SUPPORTED_INTERVALS
+print(", ".join(SUPPORTED_INTERVALS))
+PY
+}
+
+# registry_diagnose: explain on stderr WHY plugin enumeration printed nothing,
+# then return 1. The list_* helpers suppress stderr so their stdout stays a clean
+# machine-readable stream, which would otherwise let a single malformed plugin
+# masquerade as a broken venv. Two cases are distinguished:
+#   1) the venv python is missing/broken            -> the reinstall hint;
+#   2) the venv is fine but plugin discovery failed -> the actual one-line error
+#      (e.g. the PluginDiscoveryError naming the offending plugin package).
+# Callers use it in their "registry unreadable" error paths: registry_diagnose || exit 1
+registry_diagnose() {
+    if [ ! -x "$BASE_DIR/venv/bin/python3" ]; then
+        printf "%b\n" "${RED}Error: Cannot read the scraper registry - the Python environment looks missing or broken.${NC}" >&2
+        printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}" >&2
+        return 1
+    fi
+    printf "%b\n" "${RED}Error: Scraper plugin discovery failed:${NC}" >&2
+    PYTHONPATH="$BASE_DIR/src/core" "$BASE_DIR/venv/bin/python3" - >&2 <<'PY'
+try:
+    from scrapers.registry import ScraperRegistry
+    targets = ScraperRegistry.registered_targets()
+except Exception as e:
+    print(f"  {type(e).__name__}: {e}")
+else:
+    print(f"  (discovery succeeded on retry: {len(targets)} scraper(s) registered)")
+PY
+    printf "%b\n" "Fix (or remove) the offending plugin package under ${CYAN}src/core/scrapers/${NC}, then retry." >&2
+    return 1
+}
+
 # list_installed_plugins <suffix>: print the plugin name behind every installed
 # "<plugin>-scraper.<suffix>" unit file in SYSTEMD_USER_DIR (<suffix> is "service"
 # or "timer"). Glob based, so it needs no venv and still finds units whose plugin
@@ -153,7 +196,7 @@ list_installed_plugins() {
     for _f in "$SYSTEMD_USER_DIR"/*-scraper."$_suffix"; do
         [ -e "$_f" ] || continue   # POSIX sh has no nullglob: skip the literal pattern
         _base="${_f##*/}"                       # strip directory
-        printf '%s\n' "${_base%-scraper.$_suffix}"  # strip "-scraper.<suffix>"
+        printf '%s\n' "${_base%-scraper."$_suffix"}"  # strip "-scraper.<suffix>"
     done
 }
 

@@ -302,7 +302,7 @@ def main():
         expected_oncalendar = ""
         active_oncalendar = ""
         if interval.status in (STATUS_OK, STATUS_DEFAULT):
-            expected_oncalendar = ScraperRegistry._timer_directives_for(
+            expected_oncalendar = ScraperRegistry.timer_directives_for(
                 ScraperRegistry.get_plugin(target), interval
             ).get("OnCalendar", "")
             active_oncalendar = read_timer_oncalendar(target)

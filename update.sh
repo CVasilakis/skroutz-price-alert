@@ -15,6 +15,7 @@ main() {
     # Shared helpers. Sourced here, inside main(), so the library is fully read
     # into memory BEFORE 'git reset' may rewrite it on disk - the same reason the
     # whole update runs from within this function.
+    # shellcheck source=scripts/lib/common.sh
     . "$SCRIPT_DIR/scripts/lib/common.sh"
 
     # ==============================================================================

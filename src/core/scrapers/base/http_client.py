@@ -1,10 +1,13 @@
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 import tls_client
 
 from scrapers.base.client import BaseScraperClient
 from exceptions import ScraperError, RateLimitError, ServerError, ProductNotFoundError
+
+if TYPE_CHECKING:
+    from scrapers.base.settings import ResolvedSettings
 
 
 class HttpScraperClient(BaseScraperClient):
@@ -37,10 +40,17 @@ class HttpScraperClient(BaseScraperClient):
     NOT_FOUND_CODES: tuple = (404, 410)
     RATE_LIMIT_CODES: tuple = (401, 403, 429)
 
-    def __init__(self) -> None:
-        """Picks a random header profile and opens the initial TLS session."""
-        super().__init__()
-        self.current_headers: Dict[str, str] = random.choice(self.HEADERS_POOL)
+    def __init__(self, settings: "Optional[ResolvedSettings]" = None) -> None:
+        """Picks a random header profile and opens the initial TLS session.
+
+        Args:
+            settings (Optional[ResolvedSettings]): The target's resolved settings
+                (see BaseScraperClient); available to subclasses from here onward.
+        """
+        super().__init__(settings)
+        # Copy the chosen profile so a subclass mutating self.current_headers in
+        # place can never corrupt the shared class-level pool.
+        self.current_headers: Dict[str, str] = dict(random.choice(self.HEADERS_POOL))
         self.session = self._new_session()
 
     def _new_session(self) -> tls_client.Session:
@@ -55,8 +65,8 @@ class HttpScraperClient(BaseScraperClient):
         return self.current_headers
 
     def refresh_identity(self) -> None:
-        """Rotates to a new header profile and recreates the TLS session."""
-        self.current_headers = random.choice(self.HEADERS_POOL)
+        """Rotates to a new (copied) header profile and recreates the TLS session."""
+        self.current_headers = dict(random.choice(self.HEADERS_POOL))
         self.session.close()
         self.session = self._new_session()
 
