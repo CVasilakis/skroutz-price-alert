@@ -1,0 +1,12 @@
+# border: yellow
+
+╭────────────────────────── Configuration Check ──────────────────────────╮
+│   ✅    Software Version    Up to date                                  │
+│   ✅    Notifications       2 valid URL(s)                              │
+│   ✅    Reminder            Every 1 month (default)                     │
+│   🟡    Reminder Day        Saturday [1]                                │
+│   🟡    Reminder Time       13:00 [2]                                   │
+│                                                                         │
+│   [1] Unsupported reminder_day value. Using the default (Saturday).     │
+│   [2] Unsupported reminder_time value. Using the default (13:00).       │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,20 @@
+# border: green
+
+╭────────────────────────── Configuration Check ──────────────────────────╮
+│   ✅    Software Version    Up to date                                  │
+│   ✅    Notifications       1 valid URL(s)                              │
+│   🟡    Reminder            Every 1 month [1]                           │
+│   ✅    Reminder Day        Saturday (default)                          │
+│   ✅    Reminder Time       13:00 (default)                             │
+│                                                                         │
+│   [1] Unsupported reminder value. Using the default (1 month).          │
+╰─────────────────────────────────────────────────────────────────────────╯
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Monitored Items       5 loaded                                  │
+│   ✅    Execution Interval    2h                                        │
+│   ✅    Log Retention         14 days                                   │
+│   ✅    Notify On Errors      false                                     │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   🎉    Sony WH-1000XM5       248.0 € (Target: 300.0 €)                 │
+╰─────────────────────────────────────────────────────────────────────────╯

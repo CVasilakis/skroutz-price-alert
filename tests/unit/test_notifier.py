@@ -89,6 +89,44 @@ class TestExtractSite(unittest.TestCase):
             self.assertEqual(notifier._extract_site("garbage-no-netloc"), "Unknown Site")
 
 
+class TestNotifyReminder(unittest.TestCase):
+    """The liveness reminder: title, the three update-line variants, and the fixed lines."""
+
+    def _send(self, update_available):
+        notifier, app = _make_notifier("tgram://token/chat")
+        app.notify.return_value = True
+        ok = notifier.notify_reminder(update_available, "1 month", "01-08-2026 13:00:00")
+        return ok, app.notify.call_args.kwargs
+
+    def test_update_available_variant(self):
+        ok, kwargs = self._send(True)
+        self.assertTrue(ok)
+        self.assertEqual(kwargs["title"], "Scrooge Alert - Status Update")
+        self.assertIn("A project update is available", kwargs["body"])
+        self.assertIn("./update.sh", kwargs["body"])
+
+    def test_up_to_date_variant(self):
+        _, kwargs = self._send(False)
+        self.assertIn("You are running the latest version.", kwargs["body"])
+
+    def test_inconclusive_check_variant(self):
+        _, kwargs = self._send(None)
+        self.assertIn("The update check failed", kwargs["body"])
+
+    def test_fixed_lines_cadence_next_due_and_disable_hint(self):
+        _, kwargs = self._send(False)
+        body = kwargs["body"]
+        self.assertIn("your 1 month reminder", body)
+        self.assertIn("still running in the background", body)
+        self.assertIn("Next reminder: on or shortly after 01-08-2026 13:00:00 (local time).", body)
+        self.assertIn('set "reminder": "off" in config/general.json', body)
+
+    def test_returns_apprise_result_as_bool(self):
+        notifier, app = _make_notifier("tgram://token/chat")
+        app.notify.return_value = 0  # apprise returns falsy non-bool
+        self.assertIs(notifier.notify_reminder(False, "1 week", "x"), False)
+
+
 class TestSummaryTruncation(unittest.TestCase):
     """`_build_summary` (via notify_errors) caps the bullet list at max_show."""
 

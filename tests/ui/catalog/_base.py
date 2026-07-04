@@ -22,6 +22,7 @@ class Surface(Enum):
     STATUS = "status"  # a --status panel (service / not-installed / orphan)
     PING = "ping"      # the --ping Notification Check Results panel
     CONFIG = "config"  # the shared Configuration Check panel
+    STARTUP = "startup"  # the full interactive pre-scrape console transcript (multi-panel)
     # Shell surfaces: the transcript a management script prints to the terminal.
     # The "sh-" prefix groups them in the gallery and keeps "sh-run" clear of RUN.
     SH_INSTALL = "sh-install"      # install.sh (repo root)

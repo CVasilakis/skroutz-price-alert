@@ -13,6 +13,7 @@ from ui.catalog import run_scenarios          # noqa: F401
 from ui.catalog import status_scenarios       # noqa: F401
 from ui.catalog import ping_scenarios         # noqa: F401
 from ui.catalog import config_scenarios       # noqa: F401
+from ui.catalog import startup_scenarios      # noqa: F401
 from ui.catalog import sh_install_scenarios   # noqa: F401
 from ui.catalog import sh_update_scenarios    # noqa: F401
 from ui.catalog import sh_schedule_scenarios  # noqa: F401

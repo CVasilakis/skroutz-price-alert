@@ -1,7 +1,7 @@
 # border: yellow
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   🟡    Config                8 items loaded, 2 misconfigured [1]       │
+│   🟡    Monitored Items       8 loaded, 2 misconfigured [1]             │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │

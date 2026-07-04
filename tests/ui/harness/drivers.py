@@ -9,25 +9,42 @@ the captured snapshot reflects exactly what the application renders:
 * ``drive_service`` / ``drive_not_installed`` / ``drive_orphan`` call the pure builders
   extracted into ``status.py``.
 * ``drive_ping`` calls the pure builder extracted into ``ping.py``.
-* ``drive_config`` calls the existing ``config_check._append_*`` helpers with the three
-  external seams (update check, env check, URL classification) patched.
+* ``drive_config`` calls the existing ``config_check._append_*`` helpers with the four
+  external seams (update check, general-settings resolution, env check, URL
+  classification) patched.
 """
 
+import datetime
 import io
+import json
+import logging
+import os
+import shutil
+import tempfile
 from collections.abc import Callable, Sequence
 from unittest import mock
 
 from rich.console import Console
+from rich.text import Text
 
 from core import tui
 from core import status
 from core import ping
 from core import config_check
+from core import logger as core_logger
 from core.exceptions import UpdateCheckError, EnvFileError
+from core.general import (
+    GENERAL_SETTING_SPECS, KEY_REMINDER, KEY_REMINDER_DAY, KEY_REMINDER_TIME,
+    ReminderService,
+)
+from core.logger import setup_global_logging
 from core.panel import StatusPanelBuilder
-from core.scrapers.base.settings import ResolvedSettings
+from core.scrapers.base.settings import ResolvedSettings, resolve_spec
 
 from ui.catalog._base import BuildResult
+# NB: ``ui.harness.rendering`` is imported lazily inside drive_startup, not here:
+# rendering imports ui.catalog._base, whose package __init__ imports the scenario modules,
+# which import this module — a top-level import here would close that cycle.
 
 
 # The healthy 'Config' row every real Service Status panel leads with; overridden per
@@ -120,12 +137,14 @@ def drive_ping(url_entries: Sequence[tuple[str, bool]],
 
 def drive_config(version_state: str = "uptodate",
                  valid_count: int = 0, invalid_count: int = 0,
-                 env_error: str = "") -> BuildResult:
+                 env_error: str = "", reminder_raw: object = None,
+                 reminder_day_raw: object = None, reminder_time_raw: object = None) -> BuildResult:
     """Builds the Configuration Check panel (global checks only), patching its seams.
 
     Per-scraper products-config health is no longer on this panel — it now leads each
-    Service Status (STATUS surface) and Scraping (RUN surface) panel — so this drives only
-    the version row and the ``.env`` row.
+    Service Status (STATUS surface) and Scraping (RUN surface) panel — so this drives
+    the version row, the ``.env`` row, and the general (project-wide) settings rows (in
+    that on-panel order: the general settings follow the .env row).
 
     Args:
         version_state (str): ``"uptodate"`` / ``"available"`` / ``"error"`` — controls the
@@ -134,6 +153,11 @@ def drive_config(version_state: str = "uptodate",
         invalid_count (int): number of invalid notification URLs.
         env_error (str): a ``.env`` error message; when set (and no URLs), the .env row
             renders the 'Not configured' state with this message.
+        reminder_raw (object): the raw ``reminder`` value the patched general-settings
+            resolution sees; ``None`` (unset) renders the active default, an unsupported
+            value renders the invalid-value row.
+        reminder_day_raw (object): the raw ``reminder_day`` value (same semantics).
+        reminder_time_raw (object): the raw ``reminder_time`` value (same semantics).
     """
     panel = StatusPanelBuilder("Configuration Check")
 
@@ -149,10 +173,101 @@ def drive_config(version_state: str = "uptodate",
     def classify(_urls):
         return (["valid"] * valid_count, ["invalid"] * invalid_count)
 
+    def resolve_general(_config_dir) -> ResolvedSettings:
+        # The real resolve machinery against a synthetic settings block, so each row
+        # renders with production status/default/invalid logic but no file I/O.
+        block = {
+            KEY_REMINDER: reminder_raw,
+            KEY_REMINDER_DAY: reminder_day_raw,
+            KEY_REMINDER_TIME: reminder_time_raw,
+        }
+        return ResolvedSettings(
+            [(spec, resolve_spec(spec, block, None)) for spec in GENERAL_SETTING_SPECS]
+        )
+
     with mock.patch.object(config_check, "check_for_updates", check_for_updates), \
          mock.patch.object(config_check, "check_env_file", check_env_file), \
-         mock.patch.object(config_check, "classify_notification_urls", classify):
+         mock.patch.object(config_check, "classify_notification_urls", classify), \
+         mock.patch.object(config_check, "resolve_general_settings", resolve_general):
         config_check._append_version_row(panel)
         config_check._append_env_row(panel)
+        config_check._append_general_rows(panel)
 
     return BuildResult(panel, panel.get_panel_color())
+
+
+# --- STARTUP: full interactive pre-scrape console transcript -------------------------
+
+def _emit_reminder(console: Console, reminder_raw: object) -> None:
+    """Runs the *real* ``ReminderService.run_once()`` with root logging wired to ``console``.
+
+    Mirrors an interactive run's logging setup (``setup_global_logging(quiet=False)`` points
+    the root Rich handler at the console). The reminder logs only to its own file
+    (``propagate=False``), so nothing should reach ``console`` — but if that isolation ever
+    regresses, the stray line is captured onto the shared transcript exactly where a terminal
+    user would see it, between the Configuration Check and Scraping panels.
+
+    Runs offline and non-mutating: a mock notifier, a stubbed (False) update check, and a
+    fixed clock with ``last_reminder`` on the current slot so the reminder is never due
+    (no send, no network), while an invalid ``reminder`` value still exercises the warning
+    path. ``LOGS_DIR`` is already redirected to a temp dir by the autouse conftest fixture.
+    """
+    cfg_dir = tempfile.mkdtemp()
+    now = datetime.datetime(2026, 7, 4, 14, 0, 0)  # Saturday 14:00, just after the 13:00 slot
+    settings = {} if reminder_raw is None else {"reminder": reminder_raw}
+    with open(os.path.join(cfg_dir, "general.json"), "w") as f:
+        json.dump({"settings": settings, "last_reminder": "04-07-2026 13:00:00"}, f)
+
+    reminder_logger = logging.getLogger("scraper.reminder")
+    saved = (logging.root.handlers[:], logging.root.level, reminder_logger.handlers[:])
+    try:
+        # Drop any cached handler so a fresh one is created under the redirected LOGS_DIR.
+        reminder_logger.handlers[:] = []
+        with mock.patch.object(core_logger, "console", console):
+            setup_global_logging(quiet=False)  # interactive: root Rich handler -> console
+            ReminderService(cfg_dir, notifier=mock.Mock(),
+                            now_fn=lambda: now, update_check_fn=lambda: False).run_once()
+    finally:
+        logging.root.handlers[:], logging.root.level, reminder_logger.handlers[:] = saved
+        shutil.rmtree(cfg_dir, ignore_errors=True)
+
+
+def drive_startup(run_script: Callable[[tui.InteractiveExecutionStrategy], None], *,
+                  reminder_raw: object = None, version_state: str = "uptodate",
+                  valid_count: int = 1, invalid_count: int = 0,
+                  env_error: str = "") -> BuildResult:
+    """Captures the full interactive pre-scrape console transcript, as ``main()`` emits it.
+
+    Reproduces the console output of an interactive run's startup onto *one* recording
+    console: the Configuration Check panel, the once-per-run ``ReminderService.run_once()``
+    (wired to the root console handler exactly as an interactive run configures it), then
+    the interactive Scraping panel produced by ``run_script``. Because everything shares a
+    single console, any text a component prints *between* the panels lands in the transcript
+    right where a terminal user would see it — this is the regression surface for "a line
+    printed outside a panel during an interactive run" (see ``rendering.lines_outside_panels``).
+
+    Args:
+        run_script: The ``drive_run``-style script driving the Scraping panel.
+        reminder_raw: The raw ``reminder`` value the Configuration Check panel and the live
+            reminder check both see (``None`` = unset/default).
+        version_state / valid_count / invalid_count / env_error: Forwarded to
+            :func:`drive_config` for the Configuration Check panel.
+    """
+    # Lazy import to avoid a module-load cycle (see the note at the top of this file).
+    from ui.harness.rendering import make_recording_console, paint
+
+    config_result = drive_config(version_state, valid_count=valid_count,
+                                 invalid_count=invalid_count, env_error=env_error,
+                                 reminder_raw=reminder_raw)
+    run_result = drive_run(run_script)
+
+    console = make_recording_console()
+    console.print()                          # main() prints a leading blank line
+    paint(console, config_result)
+    console.print()                          # blank between preflight and the run
+    _emit_reminder(console, reminder_raw)    # logs to file only; a leak would land here
+    paint(console, run_result)
+
+    text = console.export_text(styles=False)
+    transcript = "\n".join(line.rstrip() for line in text.splitlines()).strip("\n")
+    return BuildResult(renderable=Text(transcript), border_color=run_result.border_color)

@@ -1,0 +1,9 @@
+# border: green
+
+╭────────────────────────── Configuration Check ──────────────────────────╮
+│   ✅    Software Version    Up to date                                  │
+│   ✅    Notifications       2 valid URL(s)                              │
+│   ✅    Reminder            Every 1 week                                │
+│   ✅    Reminder Day        Saturday (default)                          │
+│   ✅    Reminder Time       13:00 (default)                             │
+╰─────────────────────────────────────────────────────────────────────────╯

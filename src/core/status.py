@@ -15,7 +15,7 @@ from core.scrapers.registry import ScraperRegistry
 from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, KEY_INTERVAL
 from core.logger import setup_global_logging
 from core.panel import StatusPanelBuilder
-from core.config_check import render_config_panel, load_targets, config_view, add_config_row, ConfigView
+from core.config_check import render_config_panel, load_targets, config_view, add_config_row, add_setting_row, ConfigView
 from core.utils import install_interrupt_handler
 
 from rich.console import Console
@@ -103,25 +103,6 @@ def get_systemd_properties(unit: str, properties: str) -> dict:
         return dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
     except (subprocess.CalledProcessError, ValueError):
         return {}
-
-def add_setting_row(panel: StatusPanelBuilder, view) -> None:
-    """Renders one resolved setting as a row in the panel's settings section.
-
-    A valid, explicitly-set value shows as ``✅``. An unset value (or a missing config)
-    shows its active default as ``✅`` with a dim ``(default)`` marker. An invalid value
-    shows the default it fell back to as ``🟡`` plus a footnote naming the problem.
-
-    Args:
-        panel (StatusPanelBuilder): The panel being built.
-        view (SettingView): The resolved setting (label, display value, status, footnote).
-    """
-    if view.has_warning:
-        value = f"{view.display_value}{panel.add_note_ref(view.footnote)}"
-    else:
-        value = view.display_value
-        if view.is_default:
-            value += " [dim](default)[/dim]"
-    panel.add_row(view.icon, view.label, value)
 
 def build_not_installed_panel(target: str) -> Panel:
     """Builds the red 'service not installed' panel for a registered-but-unprovisioned plugin.

@@ -11,7 +11,8 @@ import os
 import unittest
 
 from ui.catalog import ALL_SCENARIOS
-from ui.harness.rendering import snapshot_body
+from ui.catalog._base import Surface
+from ui.harness.rendering import capture_text, lines_outside_panels, snapshot_body
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 UPDATE = os.environ.get("UPDATE_SNAPSHOTS") == "1"
@@ -30,6 +31,28 @@ class TestScenarioRegistry(unittest.TestCase):
         keys = [s.snapshot_key for s in ALL_SCENARIOS]
         dupes = sorted({k for k in keys if keys.count(k) > 1})
         self.assertEqual(dupes, [], f"Duplicate scenario keys (surface+name must be unique): {dupes}")
+
+
+class TestNoTextOutsidePanels(unittest.TestCase):
+    """Every interactive-startup transcript keeps all output inside its panels.
+
+    The STARTUP surface stacks the Configuration Check panel, the once-per-run reminder
+    check, and the Scraping panel on a single console. A regression that prints a raw line
+    to the console mid-run (e.g. a reminder warning that leaks to the terminal instead of
+    its file log) lands *between* the panels; this catches it, complementing the golden
+    snapshot, which shows the stray text visually in the diff.
+    """
+
+    def test_startup_transcripts_have_no_out_of_panel_text(self):
+        startup = [s for s in ALL_SCENARIOS if s.surface is Surface.STARTUP]
+        self.assertTrue(startup, "No STARTUP scenarios registered to guard.")
+        for sc in startup:
+            with self.subTest(scenario=sc.snapshot_key):
+                stray = lines_outside_panels(capture_text(sc.build()))
+                self.assertEqual(
+                    stray, [],
+                    f"'{sc.snapshot_key}' printed text outside a panel: {stray}",
+                )
 
 
 class TestUISnapshots(unittest.TestCase):

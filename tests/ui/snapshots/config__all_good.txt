@@ -2,5 +2,8 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version    Up to date                                  │
-│   ✅    .env File           2 valid URL(s)                              │
+│   ✅    Notifications       2 valid URL(s)                              │
+│   ✅    Reminder            Every 1 month (default)                     │
+│   ✅    Reminder Day        Saturday (default)                          │
+│   ✅    Reminder Time       13:00 (default)                             │
 ╰─────────────────────────────────────────────────────────────────────────╯

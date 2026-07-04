@@ -2,7 +2,10 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version    Up to date                                  │
-│   ❗    .env File           Not configured [1]                          │
+│   ❗    Notifications       Not configured [1]                          │
+│   ✅    Reminder            Every 1 month (default)                     │
+│   ✅    Reminder Day        Saturday (default)                          │
+│   ✅    Reminder Time       13:00 (default)                             │
 │                                                                         │
 │   [1] No .env file found or unreadable.                                 │
 ╰─────────────────────────────────────────────────────────────────────────╯

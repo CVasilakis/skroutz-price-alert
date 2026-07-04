@@ -16,6 +16,7 @@ from core.logger import setup_global_logging, save_traceback
 from core.orchestrator import ScrapingOrchestrator
 from core.tui import InteractiveExecutionStrategy, SilentExecutionStrategy
 from core.config_check import preflight, load_targets
+from core.general import ReminderService
 
 from rich.console import Console
 
@@ -78,6 +79,13 @@ def main() -> None:
 
     notification_urls = os.environ.get("NOTIFICATION_URLS", "")
     notifier = Notifier(notification_urls)
+
+    # Periodic liveness reminder: checked once per invocation (not per scraper), right
+    # after the preflight/update-check phase. run_once never raises, and it runs before
+    # the orchestrator so an aborted scrape cannot suppress the heartbeat. It logs only to
+    # its own file (logs/reminder/), never the console, so it can't break the panel layout
+    # of an interactive run.
+    ReminderService(CONFIG_DIR, notifier).run_once()
 
     try:
         try:

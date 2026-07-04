@@ -265,7 +265,7 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         rows: list[tuple] = []
         if config_view is not None:
             refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
-            rows.append((config_view.icon, "Config", f"{config_view.value}{refs}"))
+            rows.append((config_view.icon, "Monitored Items", f"{config_view.value}{refs}"))
         if block_warning:
             rows.append(("🟡", "Settings", f"[yellow]Block ignored[/yellow]{self._build_note_refs(block_warning)}"))
         for view in settings_view:
@@ -550,9 +550,9 @@ class SilentExecutionStrategy(ExecutionStrategy):
             value = Text.from_markup(config_view.value).plain
             if config_view.has_warning:
                 note = f" ({config_view.footnote})" if config_view.footnote else ""
-                target_logger.warning(f"❗ Config: {value}{note}")
+                target_logger.warning(f"❗ Monitored Items: {value}{note}")
             else:
-                target_logger.info(f"🗄️  Config: {value}")
+                target_logger.info(f"🗄️  Monitored Items: {value}")
         if block_warning:
             target_logger.warning(f"❗ Settings: {block_warning}")
         for view in settings_view:

@@ -142,7 +142,7 @@ def target_load(target: str = "skroutz", count: int = 5,
 # --- ConfigView (the CONFIG row atop Service Status / Scraping panels) --------------
 
 def config_ok(count: int = 5) -> ConfigView:
-    """A healthy products-config summary (``✅ N items loaded``)."""
+    """A healthy products-config summary (``✅ N loaded``)."""
     return config_view(count)
 
 

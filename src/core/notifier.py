@@ -169,6 +169,35 @@ class Notifier:
             more_noun=" errors",
         )
 
+    def notify_reminder(self, update_available: bool | None, interval_display: str, next_due: str) -> bool:
+        """Sends the periodic liveness reminder.
+
+        Args:
+            update_available (bool | None): Whether a project update is available, or
+                ``None`` when the check was inconclusive (e.g. no network).
+            interval_display (str): The configured cadence, user-facing (e.g. ``'1 month'``).
+            next_due (str): The next due slot in local time, formatted in ``TIMESTAMP_FORMAT``.
+
+        Returns:
+            bool: True if the notification was sent successfully, False otherwise.
+        """
+        if update_available is True:
+            update_line = 'A project update is available — run ./update.sh to install it.'
+        elif update_available is False:
+            update_line = 'You are running the latest version.'
+        else:
+            update_line = 'The update check failed; could not determine whether an update is available.'
+
+        return self.notify(
+            title='Scrooge Alert - Status Update',
+            body=(
+                f'This is your {interval_display} reminder that the scrapers are still running in the background.\n'
+                f'{update_line}\n'
+                f'Next reminder: on or shortly after {next_due} (local time).\n'
+                'To disable these reminders, set "reminder": "off" in config/general.json.'
+            )
+        )
+
     def notify_crash(self) -> bool:
         """Sends a notification indicating that the script crashed unexpectedly.
 

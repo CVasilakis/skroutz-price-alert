@@ -5,9 +5,10 @@ from collections.abc import Sequence
 
 from rich.console import Console
 
-from core.constants import EXIT_CODE_ENV_ERROR
+from core.constants import CONFIG_DIR, EXIT_CODE_ENV_ERROR
 from core.exceptions import StorageFileError, EnvFileError, UpdateCheckError, PluginDependencyError
 from core.utils import check_env_file, check_for_updates, classify_notification_urls
+from core.general import resolve_general_settings
 from core.logger import get_target_logger
 from core.panel import StatusPanelBuilder
 from core.scrapers.registry import ScraperRegistry
@@ -71,9 +72,9 @@ def config_view(count: int, faulty_indices: Sequence[int] = (), error: str | Non
         return ConfigView("❗", "[red]Failed[/red]", error, has_warning=True)
     if faulty_indices:
         note = f"Problematic items found at JSON index: {', '.join(map(str, faulty_indices))}."
-        value = f"{count} items loaded, [yellow]{len(faulty_indices)} misconfigured[/yellow]"
+        value = f"{count} loaded, [yellow]{len(faulty_indices)} misconfigured[/yellow]"
         return ConfigView("🟡", value, note, has_warning=True)
-    return ConfigView("✅", f"{count} items loaded", None, has_warning=False)
+    return ConfigView("✅", f"{count} loaded", None, has_warning=False)
 
 
 def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
@@ -87,7 +88,31 @@ def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
         view (ConfigView): The resolved products-config health.
     """
     ref = panel.add_note_ref(view.footnote) if view.footnote else ""
-    panel.add_row(view.icon, "Config", f"{view.value}{ref}")
+    panel.add_row(view.icon, "Monitored Items", f"{view.value}{ref}")
+
+
+def add_setting_row(panel: StatusPanelBuilder, view) -> None:
+    """Renders one resolved setting as a row in the panel's settings section.
+
+    A valid, explicitly-set value shows as ``✅``. An unset value (or a missing config)
+    shows its active default as ``✅`` with a dim ``(default)`` marker. An invalid value
+    shows the default it fell back to as ``🟡`` plus a footnote naming the problem.
+
+    Shared by the per-scraper Service Status panels (``--status``) and the general
+    settings rows of the Configuration Check panel, so every settings row renders
+    identically.
+
+    Args:
+        panel (StatusPanelBuilder): The panel being built.
+        view (SettingView): The resolved setting (label, display value, status, footnote).
+    """
+    if view.has_warning:
+        value = f"{view.display_value}{panel.add_note_ref(view.footnote)}"
+    else:
+        value = view.display_value
+        if view.is_default:
+            value += " [dim](default)[/dim]"
+    panel.add_row(view.icon, view.label, value)
 
 
 def load_targets(registry: ScraperRegistry, targets: list) -> list[TargetLoad]:
@@ -141,6 +166,22 @@ def _append_version_row(panel: StatusPanelBuilder) -> None:
         panel.add_row("🟡", "Software Version", f"Could not check for updates{ref}")
 
 
+def _append_general_rows(panel: StatusPanelBuilder) -> None:
+    """Appends one row per project-wide setting, resolved from ``config/general.json``.
+
+    Mirrors the per-scraper settings section of the Service Status panels (block-level
+    warning first, then one row per setting), so the general settings get the same
+    invalid-value UX. Iterates whatever ``GENERAL_SETTING_SPECS`` declares - a future
+    general setting needs no change here.
+    """
+    resolved = resolve_general_settings(CONFIG_DIR)
+    if resolved.block_warning:
+        ref = panel.add_note_ref(resolved.block_warning)
+        panel.add_row("🟡", "General Settings", f"[yellow]Block ignored{ref}[/yellow]")
+    for view in resolved.views():
+        add_setting_row(panel, view)
+
+
 def _append_env_row(panel: StatusPanelBuilder) -> None:
     """Appends the .env row summarizing configured Apprise notification URLs."""
     env_error_msg = ""
@@ -153,19 +194,21 @@ def _append_env_row(panel: StatusPanelBuilder) -> None:
 
     if valid_urls or invalid_urls:
         if not invalid_urls:
-            panel.add_row("✅", ".env File", f"{len(valid_urls)} valid URL(s)")
+            panel.add_row("✅", "Notifications", f"{len(valid_urls)} valid URL(s)")
         else:
             ref = panel.add_note_ref("Run `./scripts/run.sh --ping` for more details.")
-            panel.add_row("🟡", ".env File", f"{len(valid_urls)} valid URL(s), [yellow]{len(invalid_urls)} invalid{ref}[/yellow]")
+            panel.add_row("🟡", "Notifications", f"{len(valid_urls)} valid URL(s), [yellow]{len(invalid_urls)} invalid{ref}[/yellow]")
     else:
         ref = panel.add_note_ref(env_error_msg or "No notification URLs found.")
-        panel.add_row("❗", ".env File", f"[red]Not configured{ref}[/red]")
+        panel.add_row("❗", "Notifications", f"[red]Not configured{ref}[/red]")
 
 
 def render_config_panel(console: Console) -> None:
     """Builds and renders the shared 'Configuration Check' panel (global checks only).
 
-    Runs the update and .env checks behind a single spinner, then renders the panel.
+    Runs the update check, the .env check and the general (project-wide) settings
+    resolution behind a single spinner, then renders the panel (the general settings
+    rows follow the .env row).
     Per-scraper products-config health is intentionally not shown here — it is surfaced
     as a 'Config' row atop each Service Status panel (``--status``) and Scraping panel
     (a run). This is the single presentation path shared by the interactive scraper run
@@ -179,6 +222,7 @@ def render_config_panel(console: Console) -> None:
     with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
         _append_version_row(panel)
         _append_env_row(panel)
+        _append_general_rows(panel)
 
     panel.render(console)
 

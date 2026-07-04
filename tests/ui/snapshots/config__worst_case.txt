@@ -2,7 +2,10 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   🟡    Software Version    Could not check for updates [1]             │
-│   ❗    .env File           Not configured [2]                          │
+│   ❗    Notifications       Not configured [2]                          │
+│   ✅    Reminder            Every 1 month (default)                     │
+│   ✅    Reminder Day        Saturday (default)                          │
+│   ✅    Reminder Time       13:00 (default)                             │
 │                                                                         │
 │   [1] Check your internet connection and retry shortly.                 │
 │   [2] No .env file found or unreadable.                                 │

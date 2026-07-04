@@ -56,6 +56,37 @@ def capture_text(result: BuildResult) -> str:
     return "\n".join(line.rstrip() for line in text.splitlines()).strip("\n")
 
 
+# Box-drawing corners that open / close a Rich panel border.
+_PANEL_OPEN = "╭"
+_PANEL_CLOSE = "╰"
+
+
+def lines_outside_panels(transcript: str) -> list[str]:
+    """Returns the non-blank transcript lines that fall *outside* any panel box.
+
+    A panel is delimited by a top border line (containing ``╭``) and a bottom border line
+    (containing ``╰``); every line between them is inside. Blank lines - including the gaps
+    between stacked panels - are ignored. This is how the interactive-startup surface
+    detects a line printed straight to the console mid-run (e.g. a stray log line), which
+    breaks the panel layout by appearing *between* panels rather than inside one.
+
+    Args:
+        transcript (str): Captured plain-text console output (styles already stripped).
+
+    Returns:
+        list[str]: Every offending line, in order (empty when the layout is clean).
+    """
+    depth = 0
+    stray: list[str] = []
+    for line in transcript.splitlines():
+        opens = line.count(_PANEL_OPEN)
+        closes = line.count(_PANEL_CLOSE)
+        if depth == 0 and opens == 0 and line.strip():
+            stray.append(line)
+        depth = max(0, depth + opens - closes)
+    return stray
+
+
 def snapshot_body(result: BuildResult) -> str:
     """The full golden-file content: a border-color header plus the captured panel.
 

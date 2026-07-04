@@ -1,0 +1,7 @@
+{
+  "settings": {
+    "reminder": "1 month",
+    "reminder_day": "Saturday",
+    "reminder_time": "13:00"
+  }
+}

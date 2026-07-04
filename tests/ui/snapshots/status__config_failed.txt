@@ -1,7 +1,7 @@
 # border: red
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   ❗    Config                      Failed [1]                          │
+│   ❗    Monitored Items             Failed [1]                          │
 │   ✅    Execution Interval          1h                                  │
 │   ✅    Log Retention               7 days                              │
 │   ✅    Notify On Errors            true                                │
