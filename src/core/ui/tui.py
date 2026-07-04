@@ -12,9 +12,9 @@ from rich.markup import escape
 from rich.spinner import Spinner
 from rich.progress_bar import ProgressBar
 
-from core.scrapers.base.settings import SettingView
-from core.config_check import ConfigView
-from core.panel import uniform_column_widths
+from core.settings import SettingView
+from core.ui.config_check import ConfigView
+from core.ui.panel import uniform_column_widths
 
 # Accepts a single note string, a list of note strings, or None.
 Notes = str | list[str] | None
@@ -269,12 +269,11 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         if block_warning:
             rows.append(("🟡", "Settings", f"[yellow]Block ignored[/yellow]{self._build_note_refs(block_warning)}"))
         for view in settings_view:
-            if view.has_warning:
-                value = f"{escape(view.display_value)}{self._build_note_refs(view.footnote)}"
-            else:
-                value = escape(view.display_value)
-                if view.is_default:
-                    value += " [dim](default)[/dim]"
+            note_ref = self._build_note_refs(view.footnote) if view.has_warning else ""
+            value = view.render_value(
+                note_ref, default_marker=" [dim](default)[/dim]",
+                value_text=escape(view.display_value),
+            )
             rows.append((view.icon, escape(view.label), value))
         return rows
 

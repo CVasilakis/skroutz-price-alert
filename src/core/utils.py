@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import json
 import signal
 import subprocess
 from dotenv import load_dotenv
@@ -8,6 +9,27 @@ from dotenv import load_dotenv
 
 from core.constants import BASE_DIR, APPRISE_PLACEHOLDERS, EXIT_CODE_INTERRUPT
 from core.exceptions import EnvFileError, UpdateCheckError
+
+# Upper bound (seconds) for the git subprocesses in :func:`check_for_updates`. The
+# ``ls-remote`` call reaches the network, so without a cap a hung connection would block
+# the caller indefinitely - including the reminder check that runs ahead of a scheduled
+# scrape. A timeout raises ``subprocess.TimeoutExpired`` (an ``Exception``), which the
+# function already folds into ``UpdateCheckError`` (degrading to "could not check").
+UPDATE_CHECK_TIMEOUT = 10
+
+
+def write_json_atomically(path: str, data) -> None:
+    """Serializes ``data`` to ``path`` as JSON via a temp-file swap.
+
+    Writes ``<path>.tmp`` then ``os.replace``s it over ``path``, so a crash mid-write can
+    never leave a partially written file. The single atomic-JSON writer shared by the
+    storage backend and the reminder state file; it raises ``OSError`` and lets each
+    caller pick its own error policy (fatal for a scrape vs. degrade for the reminder).
+    """
+    temp_path = path + ".tmp"
+    with open(temp_path, mode="w") as file:
+        json.dump(data, file, indent=2)
+    os.replace(temp_path, path)
 
 def parse_price(raw_value) -> float | None:
     """Parses a raw price value into a float.
@@ -139,13 +161,13 @@ def check_for_updates() -> bool:
         UpdateCheckError: If there's an error communicating with the remote repository.
     """
     try:
-        remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url'], cwd=BASE_DIR, stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url'], cwd=BASE_DIR, stderr=subprocess.DEVNULL, timeout=UPDATE_CHECK_TIMEOUT).decode('utf-8').strip()
 
         if remote_url.startswith('git@github.com:'):
             remote_url = remote_url.replace('git@github.com:', 'https://github.com/')
 
-        local_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=BASE_DIR, stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        remote_output = subprocess.check_output(['git', 'ls-remote', remote_url, 'HEAD'], cwd=BASE_DIR, stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        local_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=BASE_DIR, stderr=subprocess.DEVNULL, timeout=UPDATE_CHECK_TIMEOUT).decode('utf-8').strip()
+        remote_output = subprocess.check_output(['git', 'ls-remote', remote_url, 'HEAD'], cwd=BASE_DIR, stderr=subprocess.DEVNULL, timeout=UPDATE_CHECK_TIMEOUT).decode('utf-8').strip()
         if remote_output:
             remote_hash = remote_output.split()[0]
             return local_hash != remote_hash

@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.padding import Padding
 from rich.text import Text
 from core.constants import LOGS_DIR
-from core.scrapers.base.settings import DEFAULT_LOG_RETENTION_DAYS
+from core.settings import DEFAULT_LOG_RETENTION_DAYS
 
 console = Console()
 

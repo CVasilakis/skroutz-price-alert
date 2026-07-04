@@ -5,19 +5,19 @@ Pure stdlib dataclasses with no dependency on the rest of the settings package, 
 stays the leaf of the import graph (import-light).
 
 There is deliberately **no** parsed ``settings`` dataclass here: a setting is fully
-described by a single :class:`~core.scrapers.base.settings.resolve.SettingSpec` (its JSON
-``key``, normalizer, default, display and warning), and resolution reads the raw
-``settings`` block by key. The objects below are the *outputs* of resolution.
+described by a single :class:`~core.settings.resolve.SettingSpec` (its JSON ``key``,
+normalizer, default, display and warning), and resolution reads the raw ``settings``
+block by key. The objects below are the *outputs* of resolution.
 """
 
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.scrapers.base.settings.resolve import SettingSpec
+    from core.settings.resolve import SettingSpec
 
 
-# Resolution status codes for a scraper's effective setting value.
+# Resolution status codes for a resolved setting value.
 STATUS_OK = "ok"            # config present with a valid, supported value
 STATUS_DEFAULT = "default"  # no value set; the spec's default is in effect
 STATUS_INVALID = "invalid"  # config sets an unsupported/unparseable value
@@ -28,9 +28,10 @@ STATUS_NOCFG = "nocfg"      # the config file is missing entirely
 class ResolvedSetting:
     """The effective value of one setting, plus how it was derived.
 
-    The single result type shared by every setting (interval, retention, flag, and any
-    per-scraper setting). For ``execution_interval`` the ``value`` is the canonical
-    interval key (e.g. ``"1h"``); for other settings it is the setting's effective value.
+    The single result type shared by every setting (interval, retention, flag, the
+    project-wide reminder settings, and any per-scraper setting). For
+    ``execution_interval`` the ``value`` is the canonical interval key (e.g. ``"1h"``);
+    for other settings it is the setting's effective value.
 
     Attributes:
         value: The effective value to apply - the validated user value when OK,
@@ -51,10 +52,11 @@ class SettingView:
     """A presentation-ready record of one setting for the settings panel section.
 
     Built by ``setting_view`` from a ``SettingSpec`` and its :class:`ResolvedSetting`.
-    Render sites (the ``--status`` Service Status panel and the interactive Scraping
-    panel) map this to their own row/icon idiom, so resolution and rendering stay
-    decoupled. The :attr:`icon` / :attr:`is_default` helpers centralize the
-    status -> row-decoration decision so the render sites do not each re-derive it.
+    Render sites (the ``--status`` Service Status panel, the interactive Scraping panel,
+    and the Configuration Check panel's general settings) map this to their own row/icon
+    idiom, so resolution and rendering stay decoupled. The :attr:`icon` / :attr:`is_default`
+    helpers centralize the status -> row-decoration decision so the render sites do not
+    each re-derive it.
 
     Attributes:
         label (str): The human-readable setting name (e.g. ``"Execution Interval"``).
@@ -94,14 +96,44 @@ class SettingView:
         """
         return self.status not in (STATUS_OK, STATUS_INVALID)
 
+    def render_value(self, note_ref: str = "", *, default_marker: str,
+                     value_text: str | None = None) -> str:
+        """Assembles the row's display value with the shared status decoration.
+
+        The single home for the "invalid → append its footnote reference; unset default →
+        append the ``(default)`` marker; valid → the bare value" decision, so every render
+        site (the Configuration Check panel, the ``--status`` Service Status panel, and
+        the interactive Scraping panel) decorates a settings row identically instead of
+        each re-deriving it. Callers pass the pieces that vary by surface:
+
+        Args:
+            note_ref (str): The already-formatted footnote reference to append when the
+                value is invalid (empty for the other statuses); the caller computes it
+                only when :attr:`has_warning`, since registering a footnote has a side
+                effect on some panels.
+            default_marker (str): The suffix appended for an unset default (e.g.
+                ``" [dim](default)[/dim]"``).
+            value_text (str | None): The display value already prepared for the surface
+                (e.g. Rich-escaped); defaults to :attr:`display_value` when ``None``.
+
+        Returns:
+            str: The decorated value string for the row.
+        """
+        text = self.display_value if value_text is None else value_text
+        if self.has_warning:
+            return f"{text}{note_ref}"
+        if self.is_default:
+            return f"{text}{default_marker}"
+        return text
+
 
 class ResolvedSettings:
     """A target's fully-resolved settings, read once and queried by key.
 
-    Built by :func:`core.scrapers.base.settings.resolve.resolve_all` from a single config-file
-    read, so every consumer (the panel views, the orchestrator's retention/notify gates,
-    and a plugin's own client/storage via the injected ``self.settings``) shares one
-    resolution rather than re-reading the file per setting.
+    Built by :func:`core.settings.resolve.resolve_all` from a single config-file read, so
+    every consumer (the panel views, the orchestrator's retention/notify gates, a plugin's
+    own client/storage via the injected ``self.settings``, and the project-wide reminder
+    service) shares one resolution rather than re-reading the file per setting.
 
     It holds the ordered ``(spec, ResolvedSetting)`` pairs so it can yield both the
     presentation :class:`SettingView` list and typed effective values. It also carries
@@ -156,5 +188,5 @@ class ResolvedSettings:
         """Returns one :class:`SettingView` per setting, in the plugin's declared order."""
         # Imported here (not at module top) to keep this model module the import leaf;
         # setting_view lives with the spec/resolve machinery.
-        from core.scrapers.base.settings.resolve import setting_view
+        from core.settings.resolve import setting_view
         return [setting_view(spec, resolved) for spec, resolved in self._pairs]

@@ -2,6 +2,8 @@
 
 import re
 
+from core.settings.normalizers import fold_token, alias_form
+
 
 # Canonical execution intervals, in first-seen order, each mapped to the systemd
 # OnCalendar expression it generates. This is the authoritative set of supported
@@ -61,17 +63,14 @@ def normalize_interval(raw: object) -> str | None:
         str | None: The canonical key (e.g. ``"1h"``), or ``None`` if the value
             is unrecognized or resolves to an unsupported cadence.
     """
-    if not isinstance(raw, str):
-        return None
-
     # Collapse case and strip *all* whitespace so "1 Hour" == "1hour".
-    token = re.sub(r"\s+", "", raw).lower()
-    if not token:
+    token = fold_token(raw)
+    if token is None:
         return None
 
     # Hyphens/underscores only appear in word aliases ("half-hourly"); drop them
     # for the alias lookup so both "half-hourly" and "halfhourly" resolve.
-    alias_key = token.replace("-", "").replace("_", "")
+    alias_key = alias_form(token)
     if alias_key in _NAMED_ALIASES:
         return _MINUTES_TO_CANONICAL.get(_NAMED_ALIASES[alias_key])
 

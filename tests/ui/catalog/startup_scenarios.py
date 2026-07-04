@@ -9,7 +9,7 @@ assertion in ``test_ui_snapshots`` fails if any captured line falls outside a pa
 and the golden transcript lets that stray text be inspected visually in the diff.
 """
 
-from core.tui import PriceOutcome
+from core.ui.tui import PriceOutcome
 
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import CURRENCY, config_ok, stub_logger, views_all_ok

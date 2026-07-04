@@ -11,7 +11,6 @@ weekday at the configured local time; Saturday 13:00 by default), never actual s
 
 import contextlib
 import datetime
-import json
 import os
 import tempfile
 import unittest
@@ -21,8 +20,11 @@ import core.constants
 import core.logger
 from core.constants import TIMESTAMP_FORMAT
 from core.exceptions import LockAcquisitionError, UpdateCheckError
-from core.general import (
-    LAST_REMINDER_FIELD, ReminderService, most_recent_slot, next_due_slot,
+from core.general import ReminderService
+from core.general.reminder import (
+    LAST_REMINDER_FIELD, most_recent_slot, next_due_slot,
+)
+from core.general.vocab import (
     normalize_reminder, normalize_reminder_day, normalize_reminder_time,
     time_parts, weekday_index,
 )
@@ -32,19 +34,12 @@ from core.general import (
 SAT = datetime.datetime(2026, 7, 4, 13, 0, 0)
 
 
+from support import write_general as _write_general, read_general as _read_general
+
+
 @contextlib.contextmanager
 def _noop_lock(_name, _lock_filename=None):
     yield
-
-
-def _write_general(cfg_dir, data):
-    with open(os.path.join(cfg_dir, "general.json"), "w") as f:
-        json.dump(data, f)
-
-
-def _read_general(cfg_dir):
-    with open(os.path.join(cfg_dir, "general.json")) as f:
-        return json.load(f)
 
 
 def _make_service(cfg_dir, now, notify_return=True, update_return=False):
@@ -413,7 +408,7 @@ class TestNeverRaises(_LockedDownCase):
     def test_unexpected_failure_is_swallowed_and_tracebacked(self):
         _write_general(self.cfg_dir, {"settings": {"reminder": "1 week"}})
         service, _, _, _ = _make_service(self.cfg_dir, SAT)
-        with mock.patch.object(service, "_read_state_slot", side_effect=RuntimeError("boom")), \
+        with mock.patch.object(service, "_read_state", side_effect=RuntimeError("boom")), \
              mock.patch("core.general.reminder.save_traceback") as saver:
             service.run_once()  # must not raise
         saver.assert_called_once()
@@ -430,7 +425,7 @@ class TestNeverRaises(_LockedDownCase):
 
         _write_general(self.cfg_dir, {"settings": {"reminder": "1 week"}})
         service, _, _, _ = _make_service(self.cfg_dir, SAT)
-        with mock.patch.object(service, "_read_state_slot", side_effect=RuntimeError("boom")):
+        with mock.patch.object(service, "_read_state", side_effect=RuntimeError("boom")):
             service.run_once()  # must not raise; writes a real traceback file
 
         # The traceback landed in the redirected temp dir...
@@ -441,17 +436,110 @@ class TestNeverRaises(_LockedDownCase):
         self.assertEqual(before, after,
                          "traceback leaked into the real repository logs/ directory")
 
-    def test_persist_write_failure_degrades_to_log_and_skip(self):
+    def test_persist_write_failure_skips_send_to_avoid_a_storm(self):
+        # State is persisted *before* sending: if the write fails, the reminder is NOT
+        # sent (else a persistent write failure would re-deliver on every run). The
+        # timestamp is left unchanged so the next run retries once the disk recovers.
         _write_general(self.cfg_dir, {"settings": {"reminder": "1 week"},
                                       LAST_REMINDER_FIELD: "27-06-2026 13:00:00"})
         service, notifier, _, _ = _make_service(self.cfg_dir, SAT + datetime.timedelta(hours=1))
-        with mock.patch("core.general.reminder._write_json_atomically",
+        with mock.patch("core.general.reminder.write_json_atomically",
                         side_effect=OSError("disk full")):
             service.run_once()  # must not raise
 
-        notifier.notify_reminder.assert_called_once()
+        notifier.notify_reminder.assert_not_called()
         self.assertEqual(_read_general(self.cfg_dir)[LAST_REMINDER_FIELD],
                          "27-06-2026 13:00:00")  # unchanged; next run retries
+
+    def test_run_once_never_raises_even_if_logging_fails(self):
+        # The except path builds the reminder logger to write a traceback; if the log
+        # directory itself is unwritable, that build fails too. run_once must still not
+        # propagate (it is called outside main()'s crash-handling try block).
+        _write_general(self.cfg_dir, {"settings": {"reminder": "1 week"}})
+        clock = {"now": SAT}
+        service = ReminderService(self.cfg_dir, mock.Mock(),
+                                  now_fn=lambda: clock["now"],
+                                  update_check_fn=mock.Mock(return_value=False))
+        with mock.patch("core.general.reminder.get_target_logger", side_effect=OSError("logs/ read-only")), \
+             mock.patch.object(service, "_read_state", side_effect=RuntimeError("boom")):
+            service.run_once()  # must not raise despite both the run AND the logger failing
+
+
+class TestFutureAndUnreadableState(_LockedDownCase):
+    def test_future_last_reminder_reanchors_with_warning_and_no_send(self):
+        # A parseable but future last_reminder (host clock moved back, restored backup,
+        # manual edit) must not silently mute reminders until that time passes: it is
+        # treated as unusable and re-anchored to the current grid, with a warning.
+        _write_general(self.cfg_dir, {
+            "settings": {"reminder": "1 week"},
+            LAST_REMINDER_FIELD: "01-08-2026 13:00:00",  # a month ahead of `now`
+        })
+        service, notifier, _, _ = _make_service(self.cfg_dir, SAT)
+        service.run_once()
+
+        notifier.notify_reminder.assert_not_called()
+        self.assertEqual(_read_general(self.cfg_dir)[LAST_REMINDER_FIELD],
+                         SAT.strftime(TIMESTAMP_FORMAT))  # re-anchored to the current slot
+        warnings = [c.args[0] for c in service._logger.warning.call_args_list]
+        self.assertTrue(any("future" in w for w in warnings))
+
+    def test_unreadable_state_skips_without_clobbering_settings(self):
+        # An OSError reading an existing file must not lead to a state-only rewrite that
+        # wipes the user's settings block; the run is skipped and retried next time.
+        original = {"settings": {"reminder": "1 week", "reminder_day": "Monday"},
+                    LAST_REMINDER_FIELD: "27-06-2026 13:00:00"}
+        _write_general(self.cfg_dir, original)
+        service, notifier, _, _ = _make_service(self.cfg_dir, SAT + datetime.timedelta(hours=1))
+        with mock.patch.object(service, "_read_state", return_value=(None, None, "unreadable")):
+            service.run_once()
+
+        notifier.notify_reminder.assert_not_called()
+        self.assertEqual(_read_general(self.cfg_dir), original)  # settings untouched
+
+
+class TestNoServices(_LockedDownCase):
+    def test_no_notification_services_skips_entirely(self):
+        # With no deliverable notification target, the reminder can never be sent; it must
+        # skip without probing the network or advancing (else it would retry forever).
+        _write_general(self.cfg_dir, {"settings": {"reminder": "1 week"},
+                                      LAST_REMINDER_FIELD: "27-06-2026 13:00:00"})
+        service, notifier, update_fn, _ = _make_service(self.cfg_dir, SAT + datetime.timedelta(hours=1))
+        notifier.has_services = False
+        service.run_once()
+
+        notifier.notify_reminder.assert_not_called()
+        update_fn.assert_not_called()
+        self.assertEqual(_read_general(self.cfg_dir)[LAST_REMINDER_FIELD],
+                         "27-06-2026 13:00:00")  # untouched
+
+
+class TestRescheduleDoesNotDoubleSend(_LockedDownCase):
+    def test_reminder_time_change_does_not_double_send(self):
+        # A weekly reminder anchored to Saturday 13:00; the user moves the time to 23:00.
+        # The reminder due at the old 13:00 grid is delivered once, but the recorded slot
+        # must not regress and fire a *second* reminder at 23:00 the same day.
+        _write_general(self.cfg_dir, {
+            "settings": {"reminder": "1 week", "reminder_time": "23:00"},
+            LAST_REMINDER_FIELD: "27-06-2026 13:00:00",
+        })
+        service, notifier, _, clock = _make_service(self.cfg_dir, SAT + datetime.timedelta(hours=1))
+        service.run_once()
+        self.assertEqual(notifier.notify_reminder.call_count, 1)
+
+        # Later the same day, after the newly-configured 23:00 grid time: must NOT re-fire.
+        clock["now"] = SAT.replace(hour=23, minute=30)
+        service.run_once()
+        self.assertEqual(notifier.notify_reminder.call_count, 1)  # still one - no double send
+
+    def test_not_due_run_takes_no_lock(self):
+        # The unlocked pre-check short-circuits the common "not due" path before the lock.
+        _write_general(self.cfg_dir, {"settings": {"reminder": "1 month"},
+                                      LAST_REMINDER_FIELD: SAT.strftime(TIMESTAMP_FORMAT)})
+        service, notifier, _, _ = _make_service(self.cfg_dir, SAT + datetime.timedelta(weeks=1))
+        with mock.patch("core.general.reminder.acquire_lock") as lock:
+            service.run_once()
+        lock.assert_not_called()
+        notifier.notify_reminder.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ from core.utils import check_env_file, is_valid_apprise_url, install_interrupt_h
 from core.notifier import Notifier
 from core.logger import setup_global_logging
 from core.exceptions import EnvFileError
-from core.panel import StatusPanelBuilder
+from core.ui.panel import StatusPanelBuilder
 
 from rich.console import Console
 from rich.markup import escape

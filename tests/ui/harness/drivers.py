@@ -27,18 +27,18 @@ from unittest import mock
 from rich.console import Console
 from rich.text import Text
 
-from core import tui
+from core.ui import tui
 from core import status
 from core import ping
-from core import config_check
+from core.ui import config_check
 from core import logger as core_logger
 from core.exceptions import UpdateCheckError, EnvFileError
-from core.general import (
+from core.general import ReminderService
+from core.general.settings import (
     GENERAL_SETTING_SPECS, KEY_REMINDER, KEY_REMINDER_DAY, KEY_REMINDER_TIME,
-    ReminderService,
 )
 from core.logger import setup_global_logging
-from core.panel import StatusPanelBuilder
+from core.ui.panel import StatusPanelBuilder
 from core.scrapers.base.settings import ResolvedSettings, resolve_spec
 
 from ui.catalog._base import BuildResult

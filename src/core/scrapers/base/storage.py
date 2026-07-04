@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from core.scrapers.base.model import BaseTrackedItem
 from core.exceptions import StorageFileError
-from core.utils import parse_price
+from core.utils import parse_price, write_json_atomically
 
 if TYPE_CHECKING:
     from core.scrapers.base.plugin import BasePlugin
@@ -279,8 +279,9 @@ class JsonProductDataManager(BaseDataManager):
     def _save_json_atomically(self, data: dict[str, Any]) -> None:
         """Writes data to the JSON file atomically using a temp-file swap.
 
-        Writes to a temporary file first, then atomically replaces the target
-        file via ``os.replace`` to prevent corruption on crash. This is the sole
+        Delegates to the shared :func:`core.utils.write_json_atomically` (temp-file
+        write then ``os.replace``) - the single atomic-JSON writer - and adapts its
+        ``OSError`` to the storage layer's fatal ``StorageFileError``. This is the sole
         writer for the JSON backend.
 
         Args:
@@ -289,11 +290,8 @@ class JsonProductDataManager(BaseDataManager):
         Raises:
             StorageFileError: If the write operation fails.
         """
-        temp_path = self.filepath + ".tmp"
         try:
-            with open(temp_path, mode='w') as f:
-                json.dump(data, f, indent=2)
-            os.replace(temp_path, self.filepath)
+            write_json_atomically(self.filepath, data)
         except OSError as e:
             raise StorageFileError(str(e))
 

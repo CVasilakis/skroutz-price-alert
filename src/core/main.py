@@ -14,8 +14,8 @@ from core.scrapers.registry import ScraperRegistry
 from core.notifier import Notifier
 from core.logger import setup_global_logging, save_traceback
 from core.orchestrator import ScrapingOrchestrator
-from core.tui import InteractiveExecutionStrategy, SilentExecutionStrategy
-from core.config_check import preflight, load_targets
+from core.ui.tui import InteractiveExecutionStrategy, SilentExecutionStrategy
+from core.ui.config_check import preflight, load_targets
 from core.general import ReminderService
 
 from rich.console import Console

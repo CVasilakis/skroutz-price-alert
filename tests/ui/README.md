@@ -138,7 +138,7 @@ the test toolchain once with `./venv/bin/python3 -m pip install -r requirements-
 ./venv/bin/python3 -m pytest
 ```
 
-The `pythonpath` setting lets the scenarios import the production modules (`core.tui`, `core.status`,
+The `pythonpath` setting lets the scenarios import the production modules (`core.ui.tui`, `core.status`,
 `core.ping`, …) and the `ui.*` test packages the same way the app does — no `PYTHONPATH=` prefix
 needed. This runs the existing project tests **and** the UI snapshot + color tests together
 (`pytest tests/ui` runs just this suite).

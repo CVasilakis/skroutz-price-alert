@@ -7,7 +7,7 @@ orchestrator makes for a given situation, ending at the visual state to capture.
 ``orchestrator.py`` produces at runtime.
 """
 
-from core.tui import PriceOutcome
+from core.ui.tui import PriceOutcome
 
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import (

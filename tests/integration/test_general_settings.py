@@ -5,24 +5,23 @@ state write-back round-trip (user content preserved, only ``last_reminder`` writ
 
 import datetime
 import json
-import os
 import tempfile
 import unittest
 from unittest import mock
 
-from core.general import (
-    DEFAULT_REMINDER, DEFAULT_REMINDER_DAY, DEFAULT_REMINDER_TIME, GENERAL_SETTING_SPECS,
-    KEY_REMINDER, KEY_REMINDER_DAY, KEY_REMINDER_TIME, LAST_REMINDER_FIELD,
-    ReminderService, general_config_path, resolve_general_settings,
+from core.general import ReminderService, general_config_path, resolve_general_settings
+from core.general.settings import (
+    GENERAL_SETTING_SPECS, KEY_REMINDER, KEY_REMINDER_DAY, KEY_REMINDER_TIME,
 )
-from core.scrapers.base.settings import (
+from core.general.vocab import (
+    DEFAULT_REMINDER, DEFAULT_REMINDER_DAY, DEFAULT_REMINDER_TIME,
+)
+from core.general.reminder import LAST_REMINDER_FIELD
+from core.settings import (
     STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG,
 )
 
-
-def _write_general(cfg_dir, data):
-    with open(os.path.join(cfg_dir, "general.json"), "w") as f:
-        json.dump(data, f)
+from support import write_general as _write_general
 
 
 class TestResolveGeneralSettings(unittest.TestCase):
@@ -106,7 +105,10 @@ class TestStateWriteBackRoundTrip(unittest.TestCase):
         service = ReminderService(cfg_dir, notifier=mock.Mock())
         service._logger = mock.Mock()  # no real log dir
         slot = datetime.datetime(2026, 7, 4, 13, 0, 0)
-        self.assertTrue(service._persist_slot(slot))
+        # The read + write-back is one sequence: _read_state hands the parsed file to
+        # _persist_slot, which mutates only the state field and rewrites it.
+        data, _, _ = service._read_state()
+        self.assertTrue(service._persist_slot(data, slot))
 
         with open(general_config_path(cfg_dir)) as f:
             data = json.load(f)

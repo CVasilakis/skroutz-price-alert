@@ -8,22 +8,20 @@ its item list (e.g. ``products``)::
       "products": [ ... ]
     }
 
-This package is the single home for the settings *model* and the resolve machinery. It is
-imported by the plugin descriptors (and, transitively, by the lightweight shell one-liners
-and ``--status``), so it must stay **import-light** - stdlib only, never a
-transport/parsing library - in line with the BasePlugin import-light contract.
+The settings *model* and resolve machinery are generic and live in :mod:`core.settings`;
+this package holds the **scraper-specific** vocabulary and specs (the interval/OnCalendar
+map and the built-in ``BASE_SETTING_SPECS``) and re-exports the engine so that
+``from core.scrapers.base.settings import X`` keeps working unchanged for both the engine
+names and the scraper names. It is imported by the plugin descriptors (and, transitively,
+by the lightweight shell one-liners and ``--status``), so it stays **import-light** -
+stdlib only, never a transport/parsing library - in line with the BasePlugin contract.
 
 Layout (all submodules stdlib-only):
-    * :mod:`~core.scrapers.base.settings.model` - ``ResolvedSetting``, ``ResolvedSettings``,
-      ``SettingView`` and the ``STATUS_*`` codes;
-    * :mod:`~core.scrapers.base.settings.normalizers` - retention/bool normalizers;
+    * :mod:`core.settings` - the generic ``ResolvedSetting``/``SettingSpec``/resolver;
     * :mod:`~core.scrapers.base.settings.intervals` - interval vocabulary + OnCalendar map;
     * :mod:`~core.scrapers.base.settings.messages` - invalid-value messages;
-    * :mod:`~core.scrapers.base.settings.resolve` - the ``SettingSpec``, the resolver, the
-      built-in ``BASE_SETTING_SPECS`` and the ``KEY_*`` constants.
-
-    The public names below are re-exported here, so ``from core.scrapers.base.settings import
-    X`` keeps working unchanged.
+    * :mod:`~core.scrapers.base.settings.specs` - the built-in ``BASE_SETTING_SPECS`` and
+      the ``KEY_*`` constants.
 
 A setting is one ``SettingSpec``:
     A setting is fully described by a single :class:`SettingSpec` (its JSON ``key``,
@@ -45,7 +43,7 @@ Read-only by design:
     settings plain user inputs; do not introduce stateful settings.
 """
 
-from core.scrapers.base.settings.model import (
+from core.settings import (
     ResolvedSetting,
     ResolvedSettings,
     SettingView,
@@ -53,13 +51,20 @@ from core.scrapers.base.settings.model import (
     STATUS_DEFAULT,
     STATUS_INVALID,
     STATUS_NOCFG,
-)
-from core.scrapers.base.settings.normalizers import (
+    fold_token,
+    alias_form,
     normalize_retention_days,
     normalize_bool,
     DEFAULT_LOG_RETENTION_DAYS,
     MIN_LOG_RETENTION_DAYS,
     MAX_LOG_RETENTION_DAYS,
+    unsupported_value_message,
+    SettingSpec,
+    load_settings_block,
+    resolve_spec,
+    resolve_one,
+    resolve_all,
+    setting_view,
 )
 from core.scrapers.base.settings.intervals import (
     SUPPORTED_INTERVALS,
@@ -72,13 +77,7 @@ from core.scrapers.base.settings.messages import (
     retention_warning_message,
     notify_errors_warning_message,
 )
-from core.scrapers.base.settings.resolve import (
-    SettingSpec,
-    load_settings_block,
-    resolve_spec,
-    resolve_one,
-    resolve_all,
-    setting_view,
+from core.scrapers.base.settings.specs import (
     SPEC_INTERVAL,
     SPEC_RETENTION,
     SPEC_NOTIFY,
@@ -89,18 +88,19 @@ from core.scrapers.base.settings.resolve import (
 )
 
 __all__ = [
-    # model
+    # engine (re-exported from core.settings)
     "ResolvedSetting", "ResolvedSettings", "SettingView",
     "STATUS_OK", "STATUS_DEFAULT", "STATUS_INVALID", "STATUS_NOCFG",
-    # normalizers
-    "normalize_retention_days", "normalize_bool",
+    "fold_token", "alias_form", "normalize_retention_days", "normalize_bool",
     "DEFAULT_LOG_RETENTION_DAYS", "MIN_LOG_RETENTION_DAYS", "MAX_LOG_RETENTION_DAYS",
+    "unsupported_value_message",
+    "SettingSpec", "load_settings_block", "resolve_spec", "resolve_one", "resolve_all",
+    "setting_view",
     # intervals
     "SUPPORTED_INTERVALS", "normalize_interval", "oncalendar_for", "canonical_for_oncalendar",
     # messages
     "interval_warning_message", "retention_warning_message", "notify_errors_warning_message",
-    # resolve
-    "SettingSpec", "load_settings_block", "resolve_spec", "resolve_one", "resolve_all",
-    "setting_view", "SPEC_INTERVAL", "SPEC_RETENTION", "SPEC_NOTIFY", "BASE_SETTING_SPECS",
+    # specs
+    "SPEC_INTERVAL", "SPEC_RETENTION", "SPEC_NOTIFY", "BASE_SETTING_SPECS",
     "KEY_INTERVAL", "KEY_RETENTION", "KEY_NOTIFY",
 ]

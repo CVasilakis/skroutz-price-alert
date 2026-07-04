@@ -10,7 +10,7 @@ from core.exceptions import StorageFileError, EnvFileError, UpdateCheckError, Pl
 from core.utils import check_env_file, check_for_updates, classify_notification_urls
 from core.general import resolve_general_settings
 from core.logger import get_target_logger
-from core.panel import StatusPanelBuilder
+from core.ui.panel import StatusPanelBuilder
 from core.scrapers.registry import ScraperRegistry
 
 
@@ -106,12 +106,8 @@ def add_setting_row(panel: StatusPanelBuilder, view) -> None:
         panel (StatusPanelBuilder): The panel being built.
         view (SettingView): The resolved setting (label, display value, status, footnote).
     """
-    if view.has_warning:
-        value = f"{view.display_value}{panel.add_note_ref(view.footnote)}"
-    else:
-        value = view.display_value
-        if view.is_default:
-            value += " [dim](default)[/dim]"
+    note_ref = panel.add_note_ref(view.footnote) if view.has_warning else ""
+    value = view.render_value(note_ref, default_marker=" [dim](default)[/dim]")
     panel.add_row(view.icon, view.label, value)
 
 

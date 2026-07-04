@@ -288,8 +288,6 @@ The single source of truth. Note the **deferred imports** inside
 
 ```python
 # src/core/scrapers/acme/plugin.py
-from typing import List, Type
-
 from core.scrapers.base.plugin import BasePlugin
 from core.scrapers.base.client import BaseScraperClient
 from core.scrapers.base.storage import BaseDataManager
@@ -310,7 +308,7 @@ class AcmePlugin(BasePlugin):
         return "Acme"
 
     @staticmethod
-    def get_supported_domains() -> List[str]:
+    def get_supported_domains() -> list[str]:
         return AcmePlugin._SUPPORTED_DOMAINS
 
     @staticmethod
@@ -318,12 +316,12 @@ class AcmePlugin(BasePlugin):
         return "acme.json"
 
     @staticmethod
-    def get_client_class() -> Type[BaseScraperClient]:
+    def get_client_class() -> type[BaseScraperClient]:
         from core.scrapers.acme.client import AcmeClient        # deferred (import-light)
         return AcmeClient
 
     @staticmethod
-    def get_storage_class() -> Type[BaseDataManager]:
+    def get_storage_class() -> type[BaseDataManager]:
         from core.scrapers.acme.storage import AcmeDataManager  # deferred (import-light)
         return AcmeDataManager
 ```
@@ -518,7 +516,9 @@ this — `JsonProductDataManager` covers file-backed scrapers.
 
 ## Test & validate your scraper
 
-There's no test runner — validate by exercising the real commands:
+The suite under `tests/` (run with `./venv/bin/python3 -m pytest`) covers the core
+framework; a new scraper needs no unit tests of its own. Validate yours by exercising
+the real commands:
 
 ```sh
 # 1) Provision just your scraper (installs core + your requirements.txt + units)

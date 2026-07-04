@@ -8,7 +8,7 @@
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Sony WH-1000XM5       320.0 € (Target: 300.0 €)                 │
 │                                                                         │
-│   [1] Unsupported execution_interval. Using the default.                │
+│   [1] Unsupported execution_interval value. Using the default.          │
 │   [2] log_retention_days must be 1-30. Using default 7.                 │
 │   [3] Invalid notify_scraping_errors setting. Defaulting to true.       │
 ╰─────────────────────────────────────────────────────────────────────────╯

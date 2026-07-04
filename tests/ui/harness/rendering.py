@@ -16,7 +16,7 @@ import io
 
 from rich.console import Console
 
-from core.panel import StatusPanelBuilder
+from core.ui.panel import StatusPanelBuilder
 
 from ui.catalog._base import BuildResult
 

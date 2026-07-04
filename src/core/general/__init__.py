@@ -13,60 +13,24 @@ The file is optional: every general setting degrades to its default when the fil
 key is missing, and the app creates/patches the file only when it persists state.
 
 Layout:
+    * :mod:`~core.general.vocab` - the tolerant reminder/weekday/time vocabulary and the
+      display/parse helpers (the analog of the per-scraper ``intervals.py``).
     * :mod:`~core.general.settings` - the general :class:`SettingSpec` declarations and
-      their resolution (via the shared settings machinery, ``plugin=None``). Adding a
-      project-wide setting is exactly one spec appended to ``GENERAL_SETTING_SPECS``.
-    * :mod:`~core.general.reminder` - the periodic liveness reminder: the Saturday-13:00
-      slot grid, the persisted state, and the dispatch service.
+      their resolution (via the shared :mod:`core.settings` machinery, ``plugin=None``).
+      Adding a project-wide setting is exactly one spec appended to ``GENERAL_SETTING_SPECS``.
+    * :mod:`~core.general.reminder` - the periodic liveness reminder: the anchor-slot grid,
+      the persisted state, and the dispatch service.
 
-The public names below are re-exported here, so consumers import from ``core.general``.
+This package re-exports only the small **production** surface consumers need. Tests and
+tooling that reach for the vocabulary, keys or specs import them from the submodule that
+owns them (``core.general.vocab`` / ``core.general.settings`` / ``core.general.reminder``).
 """
 
-from core.general.settings import (
-    GENERAL_CONFIG_FILENAME,
-    KEY_REMINDER,
-    KEY_REMINDER_DAY,
-    KEY_REMINDER_TIME,
-    SUPPORTED_REMINDERS,
-    DEFAULT_REMINDER,
-    DEFAULT_REMINDER_DAY,
-    DEFAULT_REMINDER_TIME,
-    normalize_reminder,
-    normalize_reminder_day,
-    normalize_reminder_time,
-    weekday_index,
-    time_parts,
-    weeks_for,
-    display_reminder,
-    display_reminder_row,
-    reminder_warning_message,
-    reminder_day_warning_message,
-    reminder_time_warning_message,
-    general_config_path,
-    resolve_general_settings,
-    SPEC_REMINDER,
-    SPEC_REMINDER_DAY,
-    SPEC_REMINDER_TIME,
-    GENERAL_SETTING_SPECS,
-)
-from core.general.reminder import (
-    REMINDER_TARGET,
-    LAST_REMINDER_FIELD,
-    most_recent_slot,
-    next_due_slot,
-    ReminderService,
-)
+from core.general.settings import general_config_path, resolve_general_settings
+from core.general.reminder import ReminderService
 
 __all__ = [
-    # settings
-    "GENERAL_CONFIG_FILENAME", "KEY_REMINDER", "KEY_REMINDER_DAY", "KEY_REMINDER_TIME",
-    "SUPPORTED_REMINDERS", "DEFAULT_REMINDER", "DEFAULT_REMINDER_DAY", "DEFAULT_REMINDER_TIME",
-    "normalize_reminder", "normalize_reminder_day", "normalize_reminder_time",
-    "weekday_index", "time_parts", "weeks_for", "display_reminder", "display_reminder_row",
-    "reminder_warning_message", "reminder_day_warning_message", "reminder_time_warning_message",
-    "general_config_path", "resolve_general_settings",
-    "SPEC_REMINDER", "SPEC_REMINDER_DAY", "SPEC_REMINDER_TIME", "GENERAL_SETTING_SPECS",
-    # reminder
-    "REMINDER_TARGET", "LAST_REMINDER_FIELD", "most_recent_slot", "next_due_slot",
+    "general_config_path",
+    "resolve_general_settings",
     "ReminderService",
 ]

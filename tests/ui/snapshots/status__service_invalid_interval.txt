@@ -11,5 +11,5 @@
 │   ✅    Last Execution Status       OK                                  │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
-│   [1] Unsupported execution_interval. Using the default.                │
+│   [1] Unsupported execution_interval value. Using the default.          │
 ╰─────────────────────────────────────────────────────────────────────────╯

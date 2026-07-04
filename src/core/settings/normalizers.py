@@ -1,6 +1,35 @@
-"""Tolerant normalizers for the retention and boolean settings (stdlib only)."""
+"""Tolerant normalizers and the shared token-folding helpers (stdlib only).
+
+Home to the shared token-folding helpers (:func:`fold_token`, :func:`alias_form`) that
+every tolerant string normalizer starts from - the interval and reminder vocabularies
+included - so a change to how user input is folded (whitespace, case, hyphen/underscore
+handling) is made in exactly one place. Also home to the generic ``retention`` and
+``bool`` normalizers reused by the built-in scraper settings.
+"""
 
 import re
+
+
+def fold_token(raw: object) -> str | None:
+    """Folds a raw setting value to a comparison token, or ``None``.
+
+    Lowercases and strips *all* whitespace so ``"1 Month"`` and ``"1month"`` compare
+    equal. Returns ``None`` for a non-string or an empty/blank value - the shared first
+    step of the tolerant string normalizers (interval, reminder, weekday, time), so their
+    whitespace/case handling can never drift apart.
+    """
+    if not isinstance(raw, str):
+        return None
+    token = re.sub(r"\s+", "", raw).lower()
+    return token or None
+
+
+def alias_form(token: str) -> str:
+    """Drops hyphens and underscores from a folded token for word-alias lookups.
+
+    So ``"half-hourly"`` and ``"half_hourly"`` both match the ``"halfhourly"`` alias key.
+    """
+    return token.replace("-", "").replace("_", "")
 
 
 # Log retention: how many daily log files each scraper keeps (the rotating file
@@ -32,7 +61,9 @@ def normalize_retention_days(raw: object) -> int | None:
     if isinstance(raw, int):
         value = raw
     elif isinstance(raw, str):
-        token = re.sub(r"\s+", "", raw).lower()
+        token = fold_token(raw)
+        if token is None:
+            return None
         match = re.fullmatch(r"(\d+)(d|day|days)?", token)
         if not match:
             return None

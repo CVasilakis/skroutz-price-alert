@@ -15,7 +15,7 @@ from unittest.mock import Mock
 from core import orchestrator
 from core.orchestrator import ScrapingOrchestrator
 from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
-from core.tui import PriceOutcome
+from core.ui.tui import PriceOutcome
 from core.exceptions import (
     ProductNotFoundError, ServerError, ScraperParseError, RateLimitError,
     StorageFileError,
