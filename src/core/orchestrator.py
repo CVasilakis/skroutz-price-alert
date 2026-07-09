@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from types import FrameType
 from typing import Any
 
+from core import messages
 from core.locks import acquire_lock
 from core.constants import MIN_DELAY_SECONDS, RANDOM_DELAY_MIN, RANDOM_DELAY_MAX, RETRY_DELAY_MULTIPLIER, MAX_RETRIES, OLD_ENTRY_HOURS, EXIT_CODE_RATE_LIMIT_ERROR, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED, EXIT_CODE_SUCCESS, EXIT_CODE_PRODUCTS_ERROR, TIMESTAMP_FORMAT
 from core.exceptions import RateLimitError, ServerError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
@@ -72,7 +73,7 @@ _RETRY_POLICIES: dict[type[Exception], ErrorPolicy] = {
     RateLimitError: ErrorPolicy(
         abort=True,
         save_traceback=True,
-        extra_notes=("Rate limit reached; scraping aborted.", ERRORS_LOG_TOKEN),
+        extra_notes=(messages.NOTE_RATE_LIMIT_ABORTED, ERRORS_LOG_TOKEN),
     ),
     # A 5xx is a transient server-side fault: shown and logged, but intentionally
     # not notified and not counted as a failure (a long outage surfaces via stale
@@ -193,11 +194,11 @@ class ScrapingOrchestrator:
                 last_price=item.last_price,
                 last_checked=_utc_now().strftime(TIMESTAMP_FORMAT)
             )
-            return "Corrupted timestamp! Updated to current time."
+            return messages.NOTE_CORRUPTED_TIMESTAMP
 
         if (_utc_now() - timestamp) > datetime.timedelta(hours=OLD_ENTRY_HOURS):
             self._stale_items.append(item)
-            return f"Stale: last scraped {item.last_checked} UTC (over {OLD_ENTRY_HOURS}h ago)."
+            return messages.stale_note(item.last_checked, OLD_ENTRY_HOURS)
 
         return None
 
@@ -232,7 +233,7 @@ class ScrapingOrchestrator:
             attempt_notes (list): The accumulator for the per-attempt footnotes.
         """
         self.ui_strategy.log_attempt(item_name, attempt + 1, MAX_RETRIES, detail)
-        attempt_notes.append(f"Attempt {attempt + 1}: {error_type}")
+        attempt_notes.append(messages.attempt_note(attempt + 1, error_type))
 
     def _emit_failure(self, item: BaseTrackedItem, data_manager: BaseDataManager, error_type: str, attempt_notes: list[str], extra_notes: Notes = None) -> None:
         """Emits the terminal failure row for a product after all retries are exhausted.
@@ -246,11 +247,12 @@ class ScrapingOrchestrator:
                 errors.txt pointer), shown by every strategy alongside the stale note.
         """
         stale_note = self._check_and_repair_timestamp(item, data_manager)
-        self.ui_strategy.log_failure(item.name, error_type, attempt_notes, self._combine_notes(extra_notes, stale_note))
+        self.ui_strategy.log_failure(item.name, error_type, attempt_notes=attempt_notes,
+                                     extra_notes=self._combine_notes(extra_notes, stale_note))
 
     def _errors_log_pointer(self) -> str:
         """Returns the footnote pointing at the current target's error log."""
-        return f"See logs/{self._current_target}/errors.txt for details."
+        return messages.errors_log_pointer(self._current_target)
 
     def _resolve_policy_notes(self, policy: ErrorPolicy) -> list[str] | None:
         """Expands a policy's extra_notes, substituting the runtime error-log pointer."""
@@ -274,28 +276,27 @@ class ScrapingOrchestrator:
         """
         notes: list[str] = []
         if retries_used > 0:
-            notes.append(f"Succeeded on attempt {retries_used + 1}/{MAX_RETRIES}")
+            notes.append(messages.succeeded_on_attempt(retries_used + 1, MAX_RETRIES))
         if original_invalid_price is not None:
-            val = str(original_invalid_price)[:15]
-            notes.append(f"Invalid target price '{val}'. Defaulting to 0.0 {result.currency}")
+            notes.append(messages.invalid_target_price(original_invalid_price, result.currency))
         elif missing_target_price:
-            notes.append(f"Missing target price. Defaulting to 0.0 {result.currency}")
+            notes.append(messages.missing_target_price(result.currency))
 
         if result.price < item.target_price:
             outcome = PriceOutcome.DROP
             if self.notifier.has_services:
                 if self.notifier.notify_low_price(item.name, item.target_price, result.price, item.url, result.currency):
-                    notes.append("Notification delivered to all valid apprise URL(s).")
+                    notes.append(messages.NOTE_NOTIFIED_OK)
                 else:
-                    notes.append("Notification delivery failed for some apprise URL(s).")
+                    notes.append(messages.NOTE_NOTIFIED_FAIL)
             else:
-                notes.append("No notification sent (.env not configured).")
+                notes.append(messages.NOTE_NOTIFIED_NONE)
         elif item.target_price == 0.0:
             outcome = PriceOutcome.NO_TARGET
         else:
             outcome = PriceOutcome.OK
 
-        self.ui_strategy.log_price_result(item.name, result.price, result.currency, item.target_price, outcome, notes, attempt_notes)
+        self.ui_strategy.log_price_result(item.name, result.price, result.currency, item.target_price, outcome, notes=notes, attempt_notes=attempt_notes)
 
         data_manager.update_item(
             item.url,
@@ -345,12 +346,12 @@ class ScrapingOrchestrator:
         item = data_manager.parse_item(row)
 
         if item.skip:
-            self.ui_strategy.log_result("✅", item.name, "Skipped", "The skip field was set to true in the configuration file.")
+            self.ui_strategy.log_result("✅", item.name, "Skipped", messages.NOTE_SKIP_FIELD)
             return item, None, False
 
         if not data_manager.is_scrapable_item(row):
             stale_note = self._check_and_repair_timestamp(item, data_manager)
-            self.ui_strategy.log_warning(item.name, "Invalid URL. Skipping product...", stale_note)
+            self.ui_strategy.log_warning(item.name, messages.WARN_INVALID_URL, notes=stale_note)
             return item, None, False
 
         original_invalid_price, missing_target_price = self._normalize_target_price(item, row)
@@ -403,7 +404,8 @@ class ScrapingOrchestrator:
                 # Terminal for this item, no retry: the product is gone, unavailable,
                 # or its URL is unusable. Surfaced as a warning, not a failure.
                 stale_note = self._check_and_repair_timestamp(item, data_manager)
-                self.ui_strategy.log_warning(item.name, f"Skipping ({type(e).__name__})", self._combine_notes(str(e), stale_note), attempt_notes)
+                self.ui_strategy.log_warning(item.name, messages.skipping_warning(type(e).__name__),
+                                             notes=self._combine_notes(str(e), stale_note), attempt_notes=attempt_notes)
                 return None, False
 
             except Exception as e:
@@ -525,7 +527,7 @@ class ScrapingOrchestrator:
                             # The config filename comes from the plugin descriptor (the
                             # single source of truth) — it is not always <target>.json.
                             config_filename = self.registry.get_plugin(target).get_config_filename()
-                            self.ui_strategy.log_error("Storage", f"Failed to update config/{config_filename} file!", str(e))
+                            self.ui_strategy.log_error("Storage", messages.save_failed(config_filename), str(e))
 
                 # Notifications involve network I/O and need no lock.
                 if not self.interrupted and self._stale_items:
@@ -542,7 +544,7 @@ class ScrapingOrchestrator:
                         self.notifier.notify_errors(failed_items)
 
             except LockAcquisitionError:
-                self.ui_strategy.log_error("System", "Another instance is currently running. Aborting...")
+                self.ui_strategy.log_error("System", messages.ERR_LOCK_HELD)
                 self.ui_strategy.complete_target()
                 skipped_count += 1
                 continue

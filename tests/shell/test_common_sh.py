@@ -201,5 +201,33 @@ class TestListSupportedIntervals(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), ", ".join(SUPPORTED_INTERVALS))
 
 
+class TestVenvResponderMarkers(unittest.TestCase):
+    """The shell-snapshot harness recognizes common.sh's inline Python heredocs by
+    marker substrings. If a heredoc in common.sh is reworded past its marker, the
+    fake venv responder would silently answer nothing and the transcripts would
+    drift — so pin the coupling from both ends here."""
+
+    def test_every_marker_appears_in_common_sh_and_in_the_shim(self):
+        # Load the catalog package first: entering via ui.harness.shell directly
+        # would re-enter it mid-import through the sh_* scenario modules.
+        import ui.catalog  # noqa: F401
+        from ui.harness.shell import VENV_RESPONDER_MARKERS, _VENV_PYTHON_SHIM
+
+        common_text = COMMON_SH.read_text()
+        for marker in VENV_RESPONDER_MARKERS:
+            with self.subTest(marker=marker):
+                self.assertIn(
+                    marker, common_text,
+                    f"marker {marker!r} no longer appears in common.sh - update the "
+                    f"venv responder in tests/ui/harness/shell.py (and this list) to "
+                    f"match the reworded heredoc",
+                )
+                self.assertIn(
+                    marker, _VENV_PYTHON_SHIM,
+                    f"marker {marker!r} is declared but the shim does not match it - "
+                    f"keep VENV_RESPONDER_MARKERS and the case patterns in sync",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

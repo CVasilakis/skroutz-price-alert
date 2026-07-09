@@ -10,6 +10,7 @@ from ui.catalog._base import Scenario, Surface, scenario, all_scenarios, BuildRe
 
 # Importing each module runs its @scenario decorators, populating the registry.
 from ui.catalog import run_scenarios          # noqa: F401
+from ui.catalog import e2e_run_scenarios      # noqa: F401
 from ui.catalog import status_scenarios       # noqa: F401
 from ui.catalog import ping_scenarios         # noqa: F401
 from ui.catalog import config_scenarios       # noqa: F401

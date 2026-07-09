@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from typing import TYPE_CHECKING
 
+from core import messages
 from core.exceptions import PluginDiscoveryError, PluginDependencyError
 from core.scrapers.base.settings import (
     SettingSpec, ResolvedSetting, ResolvedSettings, SettingView,
@@ -280,11 +281,7 @@ class ScraperRegistry:
             # that is not installed (its requirements.txt was never installed).
             # Surface a clear, actionable message instead of a raw ModuleNotFoundError.
             missing = getattr(e, "name", None)
-            missing_note = f" (missing module: {missing})" if missing else ""
-            raise PluginDependencyError(
-                f"Scraper '{name}' requires dependencies that are not installed{missing_note}. "
-                f"Install them with: ./install.sh --{name}"
-            ) from e
+            raise PluginDependencyError(messages.plugin_dependency_detail(name, missing)) from e
         except Exception as e:
             raise PluginDiscoveryError(f"Plugin '{name}' failed to provide {getter_name}(): {e}") from e
         if not (isinstance(bound_class, type) and issubclass(bound_class, base)):

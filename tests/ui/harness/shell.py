@@ -232,6 +232,21 @@ esac
 exit 0
 """
 
+# The marker substrings the venv responder below matches to recognize each inline
+# Python program common.sh pipes to `venv/bin/python3 -`. Guard-tested in
+# tests/shell/test_common_sh.py: every marker must still appear both in
+# scripts/lib/common.sh and in the shim's case patterns, so a reword of a heredoc
+# there fails loudly instead of the shim silently answering nothing.
+VENV_RESPONDER_MARKERS: tuple[str, ...] = (
+    "get_requirements_path",
+    "get_config_filename",
+    "resolve_timer_directives",
+    "resolve_value",
+    "SUPPORTED_INTERVALS",
+    "discovery succeeded on retry",
+    "registered_targets",
+)
+
 # The venv responder. common.sh pipes each helper's python program to
 # `venv/bin/python3 -` on stdin; every program carries a marker string unique to
 # that snippet, matched MOST SPECIFIC FIRST (several share `registered_targets`).

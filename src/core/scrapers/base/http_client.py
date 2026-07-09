@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 import tls_client
 
+from core import messages
 from core.scrapers.base.client import BaseScraperClient
 from core.exceptions import ScraperError, RateLimitError, ServerError, ProductNotFoundError
 
@@ -92,13 +93,13 @@ class HttpScraperClient(BaseScraperClient):
             ServerError: Any 5xx server-side error.
         """
         if status_code is None:
-            raise ScraperError("Empty response or no status code received from server")
+            raise ScraperError(messages.EMPTY_RESPONSE_DETAIL)
         if status_code == 200:
             return
         if status_code in self.NOT_FOUND_CODES:
-            raise ProductNotFoundError(f"Product not found or removed (HTTP {status_code}).")
+            raise ProductNotFoundError(messages.not_found_detail(status_code))
         if status_code in self.RATE_LIMIT_CODES:
-            raise RateLimitError(f"Blocked or rate limited (HTTP {status_code})")
+            raise RateLimitError(messages.rate_limited_detail(status_code))
         if 500 <= status_code < 600:
-            raise ServerError(f"Server error (HTTP {status_code}), retrying...")
-        raise ScraperError(f"HTTP request failed with status code {status_code}")
+            raise ServerError(messages.server_error_detail(status_code))
+        raise ScraperError(messages.http_failed_detail(status_code))

@@ -8,7 +8,7 @@ delegation to apprise, site-name resolution, and summary truncation.
 import unittest
 from unittest import mock
 
-from core.notifier import Notifier
+from core.notifier import Notifier, TITLE_PRICE_DROP, TITLE_STATUS_UPDATE
 from core.scrapers.base.model import BaseTrackedItem
 
 
@@ -61,7 +61,7 @@ class TestNotifyDelegation(unittest.TestCase):
             ok = notifier.notify_low_price("Widget", 12.0, 9.0, "https://x/1", "€")
         self.assertTrue(ok)
         kwargs = app.notify.call_args.kwargs
-        self.assertEqual(kwargs["title"], "Scrooge Alert - Price Drop!")
+        self.assertEqual(kwargs["title"], TITLE_PRICE_DROP)
         self.assertIn("Skroutz", kwargs["body"])
         self.assertIn("9.0", kwargs["body"])
 
@@ -101,7 +101,7 @@ class TestNotifyReminder(unittest.TestCase):
     def test_update_available_variant(self):
         ok, kwargs = self._send(True)
         self.assertTrue(ok)
-        self.assertEqual(kwargs["title"], "Scrooge Alert - Status Update")
+        self.assertEqual(kwargs["title"], TITLE_STATUS_UPDATE)
         self.assertIn("A project update is available", kwargs["body"])
         self.assertIn("./update.sh", kwargs["body"])
 

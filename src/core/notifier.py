@@ -8,6 +8,15 @@ from core.scrapers.registry import ScraperRegistry
 if TYPE_CHECKING:
     from core.scrapers.base.model import BaseTrackedItem
 
+# The fixed notification titles, exported so tests assert against the same
+# constants the sends use (one home per wording; the per-site titles below
+# stay inline as f-strings).
+TITLE_PRICE_DROP = 'Scrooge Alert - Price Drop!'
+TITLE_STATUS_UPDATE = 'Scrooge Alert - Status Update'
+TITLE_CRASH = 'Scrooge Alert - Script Crash'
+TITLE_TEST = 'Scrooge Alert - Test Notification'
+
+
 class Notifier:
     """Handles sending notifications via configured Apprise URLs."""
     def __init__(self, notification_urls: str):
@@ -76,7 +85,7 @@ class Notifier:
         """
         site = self._extract_site(url)
         return self.notify(
-            title='Scrooge Alert - Price Drop!',
+            title=TITLE_PRICE_DROP,
             body=f'{product_name} is now available for {current_price}{currency} in {site}, which is below your target of {target_price}{currency}.\nView it here: {url}'
         )
 
@@ -189,7 +198,7 @@ class Notifier:
             update_line = 'The update check failed; could not determine whether an update is available.'
 
         return self.notify(
-            title='Scrooge Alert - Status Update',
+            title=TITLE_STATUS_UPDATE,
             body=(
                 f'This is your {interval_display} reminder that the scrapers are still running in the background.\n'
                 f'{update_line}\n'
@@ -205,7 +214,7 @@ class Notifier:
             bool: True if the notification was sent successfully, False otherwise.
         """
         return self.notify(
-            title='Scrooge Alert - Script Crash',
+            title=TITLE_CRASH,
             body='The script failed unexpectedly. Please review the error logs for more details on the crash.'
         )
 
@@ -215,7 +224,7 @@ class Notifier:
         Returns:
             list: A list of tuples containing the identifier and the success status (bool).
         """
-        title = 'Scrooge Alert - Test Notification'
+        title = TITLE_TEST
         body = 'This is a test message to confirm that your Scrooge Alert notifications are configured correctly!'
 
         results = []

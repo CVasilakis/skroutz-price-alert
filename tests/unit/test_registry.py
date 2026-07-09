@@ -3,11 +3,13 @@
 ``ScraperRegistry.register`` is the single gate every plugin passes through —
 whether it arrives via ``discover()`` or a direct call — so a malformed
 descriptor or an ambiguously-routed domain must be rejected here. These tests
-register fake, import-light plugin descriptors against a reset registry
-(``ScraperRegistry._reset``, the test-only hook) and assert each contract rule
-fires. No client/storage class is ever resolved, so no transport library loads.
+register fake, import-light plugin descriptors (the shared ``support.fake_plugin``
+factory) against a clean registry (the shared ``support.registry_sandbox``) and
+assert each contract rule fires. No client/storage class is ever resolved, so no
+transport library loads.
 """
 
+import contextlib
 import unittest
 from typing import cast
 
@@ -15,53 +17,16 @@ from core.exceptions import PluginDiscoveryError
 from core.scrapers.base.plugin import BasePlugin
 from core.scrapers.registry import ScraperRegistry
 
-
-def _fake_plugin(name="fakestore", domains=("fake-store.example",),
-                 config="fakestore.json", specs=None, directives=None):
-    """Builds a minimal import-light plugin descriptor for registration tests."""
-    class _Fake(BasePlugin):
-        @staticmethod
-        def get_name():
-            return name
-
-        @staticmethod
-        def get_display_name():
-            return "Fake Store"
-
-        @staticmethod
-        def get_supported_domains():
-            return list(domains)
-
-        @staticmethod
-        def get_config_filename():
-            return config
-
-        @staticmethod
-        def get_client_class():  # pragma: no cover - registration must not resolve it
-            raise AssertionError("client class resolved during registration")
-
-        @staticmethod
-        def get_storage_class():  # pragma: no cover - registration must not resolve it
-            raise AssertionError("storage class resolved during registration")
-
-    if specs is not None:
-        _Fake.get_setting_specs = lambda self: specs
-    if directives is not None:
-        _Fake.get_timer_directives = lambda self: directives
-    return _Fake()
+from support import fake_plugin as _fake_plugin, registry_sandbox
 
 
 class TestRegisterValidationGate(unittest.TestCase):
     def setUp(self):
         # Snapshot the process-wide registry state and start from a clean slate,
         # so fake registrations never leak into (or inherit from) other tests.
-        self._saved_plugins = dict(ScraperRegistry._plugins)
-        self._saved_discovered = ScraperRegistry._discovered
-        ScraperRegistry._reset()
-
-    def tearDown(self):
-        ScraperRegistry._plugins = self._saved_plugins
-        ScraperRegistry._discovered = self._saved_discovered
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(registry_sandbox())
 
     def test_valid_plugin_registers_and_routes_its_domain(self):
         ScraperRegistry.register(_fake_plugin())

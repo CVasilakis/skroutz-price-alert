@@ -357,9 +357,9 @@ tls-client
 ### Step 8 — `config/acme.json.example`
 
 Provide a template so users can `cp config/acme.json.example config/acme.json`. The
-filename **must** match `get_config_filename()`. This is enforced by a guard test
-(`tests/integration/test_plugin_conventions.py`), so a plugin without its example
-config fails CI. Include the shared `settings` block and a sample product:
+filename **must** match `get_config_filename()`. This is enforced by the per-plugin
+contract battery (`tests/integration/test_plugin_contract.py`), so a plugin without
+its example config fails CI. Include the shared `settings` block and a sample product:
 
 ```json
 {
@@ -584,7 +584,8 @@ package — so run any command, e.g. `./scripts/run.sh --status`, to surface it)
    `requirements.txt` (if any), and `config/acme.json.example`. Update `README.md`
    (e.g. supported stores) and `AGENTS.md` if your addition is user-visible.
 3. **Manually test** per [Test & validate](#test--validate-your-scraper) and note in
-   the PR what you ran (there's no CI to do it for you).
+   the PR what you ran. CI runs the test suite (including the per-plugin contract
+   battery) and shellcheck, but it cannot scrape your real store — that part is on you.
 4. **Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/),**
    matching the existing history. For a new store use the `scrapers` scope, e.g.:
 

@@ -241,6 +241,7 @@ real production builder:
 | Surface  | Driver(s)                                                   | Drives (production code)                              |
 |----------|-------------------------------------------------------------|------------------------------------------------------|
 | `RUN`    | `drive_run(script)`                                         | the real `tui.InteractiveExecutionStrategy` panel    |
+| `E2E_RUN`| `drive_orchestrated_run(products, results_by_url)`          | the real `ScrapingOrchestrator` driving that same panel |
 | `STATUS` | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
 | `PING`   | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
 | `CONFIG` | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers (version + .env) |
@@ -285,9 +286,21 @@ The **capture point is wherever the script ends**:
 Because a RUN script mirrors the orchestrator's real call sequence, it doubles as
 executable documentation of the orchestrator→strategy contract. If the orchestrator ever
 changes *which* calls it emits for a situation, update the matching scenario and
-regenerate.
+regenerate. The note strings a script feeds the strategy are imported from the
+production catalog (`core.messages`), so their wording can never drift from what the
+orchestrator emits.
 
-The other three surfaces are *static* panels, so their scenarios just hand the driver the
+**E2E_RUN closes the loop from the other end.** Where a RUN script hand-feeds the
+strategy, an `E2E_RUN` scenario (`e2e_run_scenarios.py`) gives `drive_orchestrated_run`
+only the config rows and each product's scrape outcomes (`ScrapeResult`s / exceptions);
+the *real* `ScrapingOrchestrator` then runs against a scripted client and a real JSON
+storage on a temp dir, and whatever notes it actually emits land on the captured panel.
+A change to the orchestrator's UI payloads (wording, ordering, which notes appear at
+all) flips these goldens even if the hand-scripted catalog were forgotten. Keep this
+surface to the main note-producing flows; states the orchestrator can't finish
+deterministically (spinners, sleeps, interrupts, stale timestamps) belong in RUN.
+
+The other three panel surfaces are *static*, so their scenarios just hand the driver the
 inputs and return its result directly — no script:
 
 ```python

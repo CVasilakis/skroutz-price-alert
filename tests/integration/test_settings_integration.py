@@ -17,10 +17,11 @@ from core.scrapers.base.settings import (
     KEY_INTERVAL, KEY_RETENTION, KEY_NOTIFY,
     STATUS_OK, DEFAULT_LOG_RETENTION_DAYS,
 )
-from core.scrapers.base.plugin import BasePlugin
 from core.scrapers.base.client import BaseScraperClient
 from core.scrapers.registry import ScraperRegistry
 from core.exceptions import PluginDiscoveryError
+
+from support import fake_plugin
 
 
 class _FakePlugin:
@@ -98,48 +99,15 @@ def _spec(key, label="X"):
                        display=str, warning="w", default=None)
 
 
-class _SpecPlugin(BasePlugin):
-    """A concrete plugin whose only interesting behavior is its setting specs.
+def _SpecPlugin(specs, directives=None):
+    """A plugin descriptor whose only interesting behavior is its setting specs.
 
-    Optionally overrides the timer directives so the cadence-validation path can be
-    exercised; ``directives=None`` keeps the canonical ``BasePlugin`` default.
+    Built on the shared ``support.fake_plugin`` factory; ``directives=None`` keeps
+    the canonical ``BasePlugin`` default cadence.
     """
-    def __init__(self, specs, directives=None):
-        self._specs = specs
-        self._directives = directives
-
-    def get_timer_directives(self):
-        if self._directives is not None:
-            return self._directives
-        return super().get_timer_directives()
-
-    @staticmethod
-    def get_name():
-        return "specfake"
-
-    @staticmethod
-    def get_display_name():
-        return "SpecFake"
-
-    @staticmethod
-    def get_supported_domains():
-        return ["specfake.example"]
-
-    @staticmethod
-    def get_config_filename():
-        return "specfake.json"
-
-    @staticmethod
-    def get_client_class():  # never called during validation
-        return BaseScraperClient
-
-    @staticmethod
-    def get_storage_class():  # never called during validation
-        from core.scrapers.base.storage import BaseDataManager
-        return BaseDataManager
-
-    def get_setting_specs(self):
-        return self._specs
+    return fake_plugin(name="specfake", domains=("specfake.example",),
+                       config="specfake.json", display_name="SpecFake",
+                       specs=specs, directives=directives)
 
 
 class TestDiscoverySpecValidation(unittest.TestCase):

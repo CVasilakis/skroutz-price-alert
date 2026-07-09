@@ -5,7 +5,7 @@ import os
 EXIT_CODE_SUCCESS: int = 0
 EXIT_CODE_ERROR: int = 1
 EXIT_CODE_INTERRUPT: int = 130        # Script was interrupted (user or system termination)
-EXIT_CODE_PRODUCTS_ERROR: int = 15    # Issue with the config/skroutz.json file
+EXIT_CODE_PRODUCTS_ERROR: int = 15    # Issue with a plugin's products config file (e.g. config/skroutz.json)
 EXIT_CODE_ENV_ERROR: int = 16         # Issue with the .env file
 EXIT_CODE_RATE_LIMIT_ERROR: int = 17  # Blocked by server due to rate limits
 EXIT_CODE_SKIPPED: int = 42           # Skipped execution (another instance running)

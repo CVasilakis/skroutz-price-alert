@@ -19,6 +19,7 @@ from typing import Any
 class Surface(Enum):
     """The UI surface a scenario belongs to (also the snapshot-filename prefix)."""
     RUN = "run"        # the interactive scraping panel (tui.InteractiveExecutionStrategy)
+    E2E_RUN = "e2e-run"  # the same panel, driven end-to-end by the real ScrapingOrchestrator
     STATUS = "status"  # a --status panel (service / not-installed / orphan)
     PING = "ping"      # the --ping Notification Check Results panel
     CONFIG = "config"  # the shared Configuration Check panel

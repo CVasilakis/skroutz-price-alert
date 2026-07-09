@@ -3,10 +3,15 @@
 Each scenario replays the exact sequence of ``InteractiveExecutionStrategy`` calls the
 orchestrator makes for a given situation, ending at the visual state to capture. A
 *finished* target ends with ``complete_target()`` (settling the final border color); a
-*mid-flight* state (spinner, sleeping) stops earlier. The note strings here mirror what
-``orchestrator.py`` produces at runtime.
+*mid-flight* state (spinner, sleeping) stops earlier. The note strings come straight
+from the production catalog (``core.messages``), so these fixtures cannot drift from
+what the orchestrator actually emits: a reword there flows into these snapshots via
+``UPDATE_SNAPSHOTS=1``. Only store-specific details (e.g. a parse error's message)
+stay as illustrative literals — they are arbitrary inputs, not framework wording.
 """
 
+from core import messages
+from core.constants import OLD_ENTRY_HOURS
 from core.ui.tui import PriceOutcome
 
 from ui.catalog._base import scenario, Surface
@@ -24,15 +29,20 @@ LOGGER = stub_logger()
 # The healthy 'Config' row every real Scraping panel leads with (overridden per scenario).
 _CONFIG_OK = config_ok()
 
-# Common note strings as the orchestrator phrases them (kept here so the fixtures read
-# like real output; they represent inputs to the UI, not assertions on the orchestrator).
-NOTIFIED_OK = "Notification delivered to all valid apprise URL(s)."
-NOTIFIED_FAIL = "Notification delivery failed for some apprise URL(s)."
-NOTIFIED_NONE = "No notification sent (.env not configured)."
-ERRORS_LOG = "See logs/skroutz/errors.txt for details."
-ABORTED = "Rate limit reached; scraping aborted."
-CORRUPTED_TS = "Corrupted timestamp! Updated to current time."
-STALE = "Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago)."
+# Common notes, resolved through the production catalog with this suite's fixed
+# example inputs (target 'skroutz', an example stale timestamp).
+NOTIFIED_OK = messages.NOTE_NOTIFIED_OK
+NOTIFIED_FAIL = messages.NOTE_NOTIFIED_FAIL
+NOTIFIED_NONE = messages.NOTE_NOTIFIED_NONE
+ERRORS_LOG = messages.errors_log_pointer("skroutz")
+ABORTED = messages.NOTE_RATE_LIMIT_ABORTED
+CORRUPTED_TS = messages.NOTE_CORRUPTED_TIMESTAMP
+STALE = messages.stale_note("25-06-2026 09:00:00", OLD_ENTRY_HOURS)
+
+
+def _attempts(*error_types: str) -> list[str]:
+    """Consecutive per-attempt footnotes (attempts 1..n), as the orchestrator builds them."""
+    return [messages.attempt_note(i + 1, t) for i, t in enumerate(error_types)]
 
 
 def _start(s, settings=None, block_warning=None, target="skroutz", config=_CONFIG_OK):
@@ -94,7 +104,7 @@ def _():
         s.start_scraping("Generic Monitor", 1, 3)
         s.complete_scraping()
         s.log_price_result("Generic Monitor", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET,
-                           notes=[f"Missing target price. Defaulting to 0.0 {CURRENCY}"])
+                           notes=[messages.missing_target_price(CURRENCY)])
         s.complete_target()
     return drive_run(script)
 
@@ -106,7 +116,7 @@ def _():
         s.start_scraping("Generic Monitor", 1, 3)
         s.complete_scraping()
         s.log_price_result("Generic Monitor", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET,
-                           notes=[f"Invalid target price 'abc'. Defaulting to 0.0 {CURRENCY}"])
+                           notes=[messages.invalid_target_price("abc", CURRENCY)])
         s.complete_target()
     return drive_run(script)
 
@@ -150,7 +160,7 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_result("✅", "Paused Product", "Skipped", "The skip field was set to true in the configuration file.")
+        s.log_result("✅", "Paused Product", "Skipped", messages.NOTE_SKIP_FIELD)
         s.complete_target()
     return drive_run(script)
 
@@ -159,7 +169,7 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_warning("Mistyped Product", "Invalid URL. Skipping product...")
+        s.log_warning("Mistyped Product", messages.WARN_INVALID_URL)
         s.complete_target()
     return drive_run(script)
 
@@ -168,7 +178,7 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_warning("Mistyped Product", "Invalid URL. Skipping product...", STALE)
+        s.log_warning("Mistyped Product", messages.WARN_INVALID_URL, STALE)
         s.complete_target()
     return drive_run(script)
 
@@ -179,7 +189,7 @@ def _():
         _start(s)
         s.start_scraping("Removed Product", 1, 3)
         s.complete_scraping()
-        s.log_warning("Removed Product", "Skipping (ProductNotFoundError)", ["Product not found or removed (HTTP 404)."])
+        s.log_warning("Removed Product", messages.skipping_warning("ProductNotFoundError"), [messages.not_found_detail(404)])
         s.complete_target()
     return drive_run(script)
 
@@ -190,7 +200,7 @@ def _():
         _start(s)
         s.start_scraping("Out Of Stock Item", 1, 3)
         s.complete_scraping()
-        s.log_warning("Out Of Stock Item", "Skipping (ProductUnavailableError)", ["Product found but has no available price."])
+        s.log_warning("Out Of Stock Item", messages.skipping_warning("ProductUnavailableError"), ["Product found but has no available price."])
         s.complete_target()
     return drive_run(script)
 
@@ -201,7 +211,7 @@ def _():
         _start(s)
         s.start_scraping("Weird URL Product", 1, 3)
         s.complete_scraping()
-        s.log_warning("Weird URL Product", "Skipping (InvalidURLError)", ["Could not parse a product ID from the URL."])
+        s.log_warning("Weird URL Product", messages.skipping_warning("InvalidURLError"), ["Could not parse a product ID from the URL."])
         s.complete_target()
     return drive_run(script)
 
@@ -218,8 +228,8 @@ def _():
         s.start_scraping("Sony WH-1000XM5", 2, 3)
         s.complete_scraping()
         s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP,
-                           notes=["Succeeded on attempt 2/3", NOTIFIED_OK],
-                           attempt_notes=["Attempt 1: ScraperParseError"])
+                           notes=[messages.succeeded_on_attempt(2, 3), NOTIFIED_OK],
+                           attempt_notes=_attempts("ScraperParseError"))
         s.complete_target()
     return drive_run(script)
 
@@ -232,12 +242,12 @@ def _():
             s.start_scraping("Sony WH-1000XM5", a, 3)
             s.complete_scraping()
         s.log_attempt("Sony WH-1000XM5", 1, 3, "ScraperParseError: No price element found")
-        s.log_attempt("Sony WH-1000XM5", 2, 3, "ServerError: Server error (HTTP 503)")
+        s.log_attempt("Sony WH-1000XM5", 2, 3, f"ServerError: {messages.server_error_detail(503)}")
         s.start_scraping("Sony WH-1000XM5", 3, 3)
         s.complete_scraping()
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK,
-                           notes=["Succeeded on attempt 3/3"],
-                           attempt_notes=["Attempt 1: ScraperParseError", "Attempt 2: ServerError"])
+                           notes=[messages.succeeded_on_attempt(3, 3)],
+                           attempt_notes=_attempts("ScraperParseError", "ServerError"))
         s.complete_target()
     return drive_run(script)
 
@@ -252,16 +262,18 @@ def _():
         s.start_scraping("Sony WH-1000XM5", 2, 3)
         s.complete_scraping()
         s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP,
-                           notes=["Succeeded on attempt 2/3", NOTIFIED_OK, STALE],
-                           attempt_notes=["Attempt 1: ScraperParseError"])
+                           notes=[messages.succeeded_on_attempt(2, 3), NOTIFIED_OK, STALE],
+                           attempt_notes=_attempts("ScraperParseError"))
         s.complete_target()
     return drive_run(script)
 
 
 # --- Terminal failures ---------------------------------------------------------------
 
-@scenario(Surface.RUN, "failure_all_parse", "All three attempts failed (ScraperParseError)", tags=("failure", "retry"))
+@scenario(Surface.RUN, "failure_all_parse", "All three attempts failed (ScraperParseError; no errors.txt pointer)", tags=("failure", "retry"))
 def _():
+    # ScraperParseError's policy saves no traceback, so its failure row carries no
+    # errors.txt pointer (only default-policy errors like ConnectionError do).
     def script(s):
         _start(s)
         for a in (1, 2, 3):
@@ -269,8 +281,7 @@ def _():
             s.complete_scraping()
             s.log_attempt("Flaky Product", a, 3, "ScraperParseError: No price element found")
         s.log_failure("Flaky Product", "ScraperParseError",
-                      ["Attempt 1: ScraperParseError", "Attempt 2: ScraperParseError", "Attempt 3: ScraperParseError"],
-                      [ERRORS_LOG])
+                      _attempts("ScraperParseError", "ScraperParseError", "ScraperParseError"))
         s.complete_target()
     return drive_run(script)
 
@@ -282,9 +293,9 @@ def _():
         for a in (1, 2, 3):
             s.start_scraping("Down Backend Item", a, 3)
             s.complete_scraping()
-            s.log_attempt("Down Backend Item", a, 3, "ServerError: Server error (HTTP 503)")
+            s.log_attempt("Down Backend Item", a, 3, f"ServerError: {messages.server_error_detail(503)}")
         s.log_failure("Down Backend Item", "ServerError",
-                      ["Attempt 1: ServerError", "Attempt 2: ServerError", "Attempt 3: ServerError"])
+                      _attempts("ServerError", "ServerError", "ServerError"))
         s.complete_target()
     return drive_run(script)
 
@@ -298,7 +309,7 @@ def _():
             s.complete_scraping()
             s.log_attempt("Sony WH-1000XM5", a, 3, "ConnectionError: Connection aborted")
         s.log_failure("Sony WH-1000XM5", "ConnectionError",
-                      ["Attempt 1: ConnectionError", "Attempt 2: ConnectionError", "Attempt 3: ConnectionError"],
+                      _attempts("ConnectionError", "ConnectionError", "ConnectionError"),
                       [ERRORS_LOG])
         s.complete_target()
     return drive_run(script)
@@ -311,9 +322,9 @@ def _():
         for a in (1, 2, 3):
             s.start_scraping("Blocked Product", a, 3)
             s.complete_scraping()
-            s.log_attempt("Blocked Product", a, 3, "RateLimitError: Blocked or rate limited (HTTP 429)")
+            s.log_attempt("Blocked Product", a, 3, f"RateLimitError: {messages.rate_limited_detail(429)}")
         s.log_failure("Blocked Product", "RateLimitError",
-                      ["Attempt 1: RateLimitError", "Attempt 2: RateLimitError", "Attempt 3: RateLimitError"],
+                      _attempts("RateLimitError", "RateLimitError", "RateLimitError"),
                       [ABORTED, ERRORS_LOG])
         s.complete_target()
     return drive_run(script)
@@ -327,10 +338,10 @@ def _():
             s.start_scraping("Blocked Product", a, 3)
             s.complete_scraping()
         s.log_attempt("Blocked Product", 1, 3, "ScraperParseError: No price element found")
-        s.log_attempt("Blocked Product", 2, 3, "ServerError: Server error (HTTP 503)")
-        s.log_attempt("Blocked Product", 3, 3, "RateLimitError: Blocked or rate limited (HTTP 429)")
+        s.log_attempt("Blocked Product", 2, 3, f"ServerError: {messages.server_error_detail(503)}")
+        s.log_attempt("Blocked Product", 3, 3, f"RateLimitError: {messages.rate_limited_detail(429)}")
         s.log_failure("Blocked Product", "RateLimitError",
-                      ["Attempt 1: ScraperParseError", "Attempt 2: ServerError", "Attempt 3: RateLimitError"],
+                      _attempts("ScraperParseError", "ServerError", "RateLimitError"),
                       [ABORTED, ERRORS_LOG])
         s.complete_target()
     return drive_run(script)
@@ -338,14 +349,16 @@ def _():
 
 @scenario(Surface.RUN, "failure_stale", "Terminal failure on a product that is also stale", tags=("failure", "stale"))
 def _():
+    # A default-policy error (ConnectionError): its failure row stacks the
+    # errors.txt pointer with the stale warning.
     def script(s):
         _start(s)
         for a in (1, 2, 3):
             s.start_scraping("Flaky Stale Item", a, 3)
             s.complete_scraping()
-            s.log_attempt("Flaky Stale Item", a, 3, "ScraperParseError: No price element found")
-        s.log_failure("Flaky Stale Item", "ScraperParseError",
-                      ["Attempt 1: ScraperParseError", "Attempt 2: ScraperParseError", "Attempt 3: ScraperParseError"],
+            s.log_attempt("Flaky Stale Item", a, 3, "ConnectionError: Connection aborted")
+        s.log_failure("Flaky Stale Item", "ConnectionError",
+                      _attempts("ConnectionError", "ConnectionError", "ConnectionError"),
                       [ERRORS_LOG, STALE])
         s.complete_target()
     return drive_run(script)
@@ -455,7 +468,7 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_error("System", "Another instance is currently running. Aborting...")
+        s.log_error("System", messages.ERR_LOCK_HELD)
         s.complete_target()
     return drive_run(script)
 
@@ -464,7 +477,7 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_error("System", "Scraper 'skroutz' is missing its dependencies. Run './install.sh --skroutz' to install them.")
+        s.log_error("System", messages.plugin_dependency_detail("skroutz", "tls_client"))
         s.complete_target()
     return drive_run(script)
 
@@ -476,7 +489,7 @@ def _():
         s.start_scraping("Sony WH-1000XM5", 1, 3)
         s.complete_scraping()
         s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP, notes=[NOTIFIED_OK])
-        s.log_error("Storage", "Failed to update config/skroutz.json file!", "Permission denied: 'config/skroutz.json'")
+        s.log_error("Storage", messages.save_failed("skroutz.json"), "Permission denied: 'config/skroutz.json'")
         s.complete_target()
     return drive_run(script)
 
@@ -568,7 +581,7 @@ def _():
             s.log_attempt("Samsung Odyssey G9 49-inch Curved Gaming Monitor", a, 3, "ScraperParseError")
         s.log_failure(
             "Samsung Odyssey G9 49-inch Curved Gaming Monitor", "ScraperParseError",
-            ["Attempt 1: ScraperParseError"],
+            _attempts("ScraperParseError"),
             ["The server returned an unexpected page structure and the price element could not be located "
              "after exhausting every configured selector fallback; inspect the saved response for details."],
         )
@@ -584,8 +597,8 @@ def _():
         s.complete_scraping()
         s.log_price_result(
             "Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP,
-            notes=["Succeeded on attempt 3/3", NOTIFIED_OK, CORRUPTED_TS, STALE],
-            attempt_notes=["Attempt 1: ScraperParseError", "Attempt 2: ServerError"],
+            notes=[messages.succeeded_on_attempt(3, 3), NOTIFIED_OK, CORRUPTED_TS, STALE],
+            attempt_notes=_attempts("ScraperParseError", "ServerError"),
         )
         s.complete_target()
     return drive_run(script)
@@ -603,11 +616,11 @@ def _():
         s.start_scraping("Logitech MX Master 3S", 1, 3)
         s.complete_scraping()
         s.log_price_result("Logitech MX Master 3S", 79.0, CURRENCY, 70.0, PriceOutcome.OK)
-        s.log_warning("Removed Product", "Skipping (ProductNotFoundError)", ["Product not found or removed (HTTP 404)."])
+        s.log_warning("Removed Product", messages.skipping_warning("ProductNotFoundError"), [messages.not_found_detail(404)])
         s.log_price_result("Untargeted Product", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET,
-                           notes=[f"Missing target price. Defaulting to 0.0 {CURRENCY}"])
-        s.log_failure("Flaky Product", "ScraperParseError",
-                      ["Attempt 1: ScraperParseError", "Attempt 2: ScraperParseError", "Attempt 3: ScraperParseError"],
+                           notes=[messages.missing_target_price(CURRENCY)])
+        s.log_failure("Flaky Product", "ConnectionError",
+                      _attempts("ConnectionError", "ConnectionError", "ConnectionError"),
                       [ERRORS_LOG])
         s.complete_target()
     return drive_run(script)

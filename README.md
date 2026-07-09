@@ -108,7 +108,7 @@ The scraper supports all Skroutz domains, dynamically detecting the locale and c
     ./install.sh
     ```
 
-    The `install.sh` script will automatically create a Python virtual environment, install the required dependencies, and set up an hourly systemd user timer pointing to the script wrapper. No `sudo` or elevated privileges are required for the installation.
+    The `install.sh` script will automatically create a Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper (hourly by default). No `sudo` or elevated privileges are required for the installation.
 
 4. **Configure your settings:**
 
@@ -230,7 +230,7 @@ There are two ways to execute the script: automatically via the scheduled system
 
 ### Automated Systemd Execution
 
-Once `install.sh` has run successfully, the script executes automatically via a systemd timer every hour. The systemd timer applies a randomized up-to-3m startup delay before launching the execution wrapper (`scripts/run.sh`) to simulate human timing and avoid exact scheduling footprints.
+Once `install.sh` has run successfully, each scraper executes automatically via its own systemd timer — every hour by default, or on the cadence set by its [execution_interval](#scraper-settings) setting. The systemd timer applies a randomized up-to-3m startup delay before launching the execution wrapper (`scripts/run.sh`) to simulate human timing and avoid exact scheduling footprints.
 
 ### Manual Execution
 
@@ -375,13 +375,13 @@ Updates Scrooge Alert to the latest version by pulling from the repository and r
 
 You might receive the following push notification alerts throughout the lifecycle of the script:
 
-| Notification Title | Trigger Condition |
+| Notification&nbsp;Title&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Trigger Condition |
 | :--- | :--- |
 | **Scrooge Alert - Price Drop!** | Sent when a product's price falls below your price limit. |
 | **Scrooge Alert - Tracking Stale** | Sent if a specific product continuously fails the scrape. |
-| **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [`notify_scraping_errors`](#scraper-settings) setting. |
+| **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_error](#scraper-settings) setting. |
 | **Scrooge Alert - Script Crash** | Sent if the script completely failed to run. |
-| **Scrooge Alert - Status Update** | Periodic liveness reminder confirming the scrapers still run in the background, as well as notifying you of any available updates. Can be turned off per scraper via the [`reminder`](#file-3-general-settings-configgeneraljson) setting. |
+| **Scrooge Alert - Status Update** | Periodic liveness reminder confirming the scrapers still run in the background, as well as notifying you of any available updates. Can be turned off via the project-wide [reminder](#file-3-general-settings-configgeneraljson) setting. |
 | **Scrooge Alert - Test Notification** | Sent when manually invoking the script with the `--ping` flag. |
 
 ## 🗑️ Uninstallation
@@ -407,7 +407,7 @@ The uninstallation process safely performs the following actions:
 **1. Failing to Fetch Products:**
 
 If the script cannot retrieve data for certain items, begin by checking for broken links in your `config/<target>.json` file. Invalid URLs are often redirected to similar products.
-If the URLs are correct but failures persist across multiple products, your connection has likely been temporarily restricted by the website's anti-bot protection. To mitigate this, reduce your network traffic by tracking fewer products, or decrease the script's run frequency by editing the respective timer (e.g., `~/.config/systemd/user/skroutz-scraper.timer`).
+If the URLs are correct but failures persist across multiple products, your connection has likely been temporarily restricted by the website's anti-bot protection. To mitigate this, reduce your network traffic by tracking fewer products, or decrease the script's run frequency by setting a longer [`execution_interval`](#scraper-settings) in the scraper's config and applying it with `./scripts/schedule.sh`.
 
 > [!TIP]  
 > For the best results, this script should **not** be run behind a VPN and should ideally be executed from a standard Greek residential IP address. High traffic coming from known VPS providers, data centers, or VPNs is very likely to trigger strict anti-bot mechanisms, causing the script to fail.

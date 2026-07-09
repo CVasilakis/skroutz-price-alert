@@ -1,13 +1,13 @@
-# border: red
+# border: green
 
-╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
+╭────────────────────────── Fakestore Scraping ───────────────────────────╮
+│   ✅    Monitored Items       1 loaded                                  │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    System                Scraper 'skroutz' requires dependencies   │
-│                               that are not installed (missing module:   │
-│                               tls_client). Install them with:           │
-│                               ./install.sh --skroutz                    │
+│   ✅    Sony WH-1000XM5       320.0 € (Target: 300.0 €) [1] [2]         │
+│                                                                         │
+│   [1] Attempt 1: ServerError.                                           │
+│   [2] Succeeded on attempt 2/3.                                         │
 ╰─────────────────────────────────────────────────────────────────────────╯

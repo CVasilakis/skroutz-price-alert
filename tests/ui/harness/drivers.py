@@ -93,6 +93,89 @@ def drive_run(script: Callable[[tui.InteractiveExecutionStrategy], None]) -> Bui
     return BuildResult(panel, str(panel.border_style))
 
 
+# --- E2E_RUN: the same panel, driven by the real orchestrator ------------------------
+
+def drive_orchestrated_run(products: list[dict],
+                           results_by_url: dict[str, list],
+                           *, has_services: bool = False,
+                           delivery_ok: bool = True) -> BuildResult:
+    """Runs the *real* ``ScrapingOrchestrator`` over a scripted store and captures the
+    finished interactive panel.
+
+    Where :func:`drive_run` replays a hand-written script of strategy calls (and so can
+    depict any rendering state), this driver closes the loop the other way: the notes,
+    warnings, and footnotes on the captured panel are whatever the production
+    orchestrator actually emits (via ``core.messages``) for the given scrape outcomes —
+    nothing is hand-fed to the UI. Only the pacing sleep, the signal-handler install,
+    and the per-target file logger are patched.
+
+    Args:
+        products: The config rows written to the temp ``fakestore.json``.
+        results_by_url: ``url -> [outcome, ...]`` where each outcome is a
+            ``ScrapeResult`` or an exception instance to raise; consecutive attempts
+            consume the list and the last entry repeats.
+        has_services / delivery_ok: The notifier double's gates (see
+            ``support.mock_notifier``), controlling which notification note appears.
+
+    Returns:
+        BuildResult: the finished panel and its settled border color.
+    """
+    from core import orchestrator as orchestrator_module
+    from core.orchestrator import ScrapingOrchestrator
+    from core.scrapers.base.client import BaseScraperClient
+    from core.scrapers.base.storage import JsonProductDataManager
+    from core.scrapers.registry import ScraperRegistry
+    from core.ui.config_check import load_targets
+    from support import fake_plugin, mock_notifier, registry_sandbox
+
+    scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
+
+    class _ScriptedClient(BaseScraperClient):
+        def scrape_product(self, product_url):
+            script = scripts[product_url]
+            outcome = script.pop(0) if len(script) > 1 else script[0]
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    class _ScriptedStorage(JsonProductDataManager):
+        def _matches_product_path(self, url):
+            return True
+
+    stub = logging.getLogger("ui.catalog.e2e-stub")
+    stub.handlers[:] = [logging.NullHandler()]
+    stub.propagate = False
+
+    cfg_dir = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(cfg_dir, "fakestore.json"), "w") as f:
+            json.dump({"products": products}, f)
+
+        plugin = fake_plugin(name="fakestore", domains=("fake-store.example",),
+                             client_class=_ScriptedClient, storage_class=_ScriptedStorage)
+        with registry_sandbox(plugin), mock.patch.object(tui, "Live", _FakeLive):
+            strat = tui.InteractiveExecutionStrategy()
+            strat.console = Console(file=io.StringIO())
+
+            registry = ScraperRegistry(cfg_dir)
+            loads_by_target = {tl.target: tl for tl in load_targets(registry, ["fakestore"])}
+            orch = ScrapingOrchestrator(
+                targets_to_run=["fakestore"], registry=registry,
+                notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
+                config_dir=cfg_dir, quiet=False, ui_strategy=strat,
+                loads_by_target=loads_by_target,
+            )
+            with mock.patch.object(orch, "_sleep_with_jitter"), \
+                 mock.patch.object(orchestrator_module.signal, "signal"), \
+                 mock.patch.object(orchestrator_module, "get_target_logger",
+                                   lambda *a, **k: stub):
+                orch.run()
+            panel = strat._generate_panel()
+        return BuildResult(panel, str(panel.border_style))
+    finally:
+        shutil.rmtree(cfg_dir, ignore_errors=True)
+
+
 # --- STATUS: service / not-installed / orphan panels --------------------------------
 
 def drive_service(target: str, timer: dict, service: dict, resolved: ResolvedSettings,

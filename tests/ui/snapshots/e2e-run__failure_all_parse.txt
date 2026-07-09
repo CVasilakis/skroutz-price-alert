@@ -1,13 +1,14 @@
 # border: red
 
-╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
+╭────────────────────────── Fakestore Scraping ───────────────────────────╮
+│   ✅    Monitored Items       1 loaded                                  │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    System                Scraper 'skroutz' requires dependencies   │
-│                               that are not installed (missing module:   │
-│                               tls_client). Install them with:           │
-│                               ./install.sh --skroutz                    │
+│   ❗    Flaky Product         ScraperParseError [1] [2] [3]             │
+│                                                                         │
+│   [1] Attempt 1: ScraperParseError.                                     │
+│   [2] Attempt 2: ScraperParseError.                                     │
+│   [3] Attempt 3: ScraperParseError.                                     │
 ╰─────────────────────────────────────────────────────────────────────────╯

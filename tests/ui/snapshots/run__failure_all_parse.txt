@@ -6,10 +6,9 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Flaky Product         ScraperParseError [1] [2] [3] [4]         │
+│   ❗    Flaky Product         ScraperParseError [1] [2] [3]             │
 │                                                                         │
 │   [1] Attempt 1: ScraperParseError.                                     │
 │   [2] Attempt 2: ScraperParseError.                                     │
 │   [3] Attempt 3: ScraperParseError.                                     │
-│   [4] See logs/skroutz/errors.txt for details.                          │
 ╰─────────────────────────────────────────────────────────────────────────╯
