@@ -19,6 +19,13 @@ if TYPE_CHECKING:
     from core.scrapers.base.client import BaseScraperClient
     from core.scrapers.base.storage import BaseDataManager
 
+#: Names the management scripts already claim as built-in '--<name>' flags:
+#: --help everywhere, --quiet/--ping/--status in run.sh, --update in install.sh.
+#: Those flags are matched before the per-plugin branch in the scripts' argument
+#: loops, so a plugin with one of these names would register fine yet its own
+#: '--<name>' flag could never reach it.
+RESERVED_PLUGIN_NAMES = frozenset({"help", "quiet", "ping", "status", "update"})
+
 
 class ScraperRegistry:
     """Unified registry that replaces ScraperFactory + DataManagerFactory.
@@ -179,6 +186,12 @@ class ScraperRegistry:
                 f"Plugin '{where}' returned an invalid get_name() value {name!r}: names must "
                 f"contain only letters, digits and underscores (no hyphens, dots or spaces) so "
                 f"they map cleanly to '--<name>' CLI flags and '<name>-scraper' systemd units."
+            )
+        if name in RESERVED_PLUGIN_NAMES:
+            raise PluginDiscoveryError(
+                f"Plugin '{where}' returned the reserved get_name() value {name!r}: the "
+                f"management scripts already use '--{name}' as a built-in flag, so this "
+                f"plugin's own '--{name}' flag could never be dispatched. Pick another name."
             )
         if name in cls._plugins:
             raise PluginDiscoveryError(

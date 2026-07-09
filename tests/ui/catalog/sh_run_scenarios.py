@@ -28,6 +28,15 @@ _case("registry_unreadable", "An unknown flag while the registry is unreadable -
 _case("ping_not_alone", "--ping combined with another flag is rejected.",
       "--ping", "--quiet", tags=("error",))
 
+_case("ping_repeated", "A repeated --ping still violates the must-be-used-alone rule.",
+      "--ping", "--ping", tags=("error",))
+
+_case("bare_double_dash", "A bare '--' is rejected (it would parse as an empty target name).",
+      "--", tags=("error",))
+
+_case("no_venv_dispatch", "No flags with the venv missing: the repair hint, not a raw exec failure.",
+      world=WORLD_NO_VENV, tags=("error",))
+
 _case("status_not_alone", "--status combined with another flag is rejected.",
       "--status", "--skroutz", tags=("error",))
 

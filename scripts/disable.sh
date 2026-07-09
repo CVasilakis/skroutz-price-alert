@@ -37,29 +37,27 @@ print_help() {
     printf '\n'
 }
 
-cd "$SCRIPT_DIR"
-
-case "${1:-}" in
-    -h|--help) print_help; exit 0 ;;
-esac
-
-require_systemctl
-
 # ------------------------------------------------------------------------------
 # TARGET RESOLUTION
 # ------------------------------------------------------------------------------
 # With no flag, disable every *installed* scraper's timer - glob-derived, so it
 # needs no venv and also catches an orphaned unit whose plugin was removed from
 # the source tree. With one or more --<plugin> flags, disable just those.
+# -h/--help is honored anywhere in the argument list; a bare '--' is rejected
+# (it would otherwise parse as an empty target name and silently select nothing).
 
 SELECTED=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        -h|--help) print_help; exit 0 ;;
+        --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
         --*) SELECTED="$SELECTED ${1#--}" ;;
         *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
     esac
     shift
 done
+
+require_systemctl
 
 if [ -n "$SELECTED" ]; then
     # Teardown acts on installed units. A name with an installed timer (incl. an

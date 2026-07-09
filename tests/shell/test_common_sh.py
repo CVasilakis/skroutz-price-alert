@@ -21,13 +21,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_SH = REPO_ROOT / "scripts" / "lib" / "common.sh"
 
 
-def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None):
+def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None):
     """Runs `script` under `sh -eu` with common.sh sourced (the caller contract).
 
     Args:
         script: The shell snippet to run after the library is sourced.
         base_dir: The BASE_DIR to expose (the sourcing contract requires it).
         xdg_config_home: When set, exported so SYSTEMD_USER_DIR lands in a tmp dir.
+        extra_env: Overrides applied on top of the inherited environment before
+            sourcing; a value of None *removes* the variable (so the color-guard
+            tests are immune to NO_COLOR/CLICOLOR_FORCE in the developer's shell).
 
     Returns:
         subprocess.CompletedProcess: With captured text stdout/stderr.
@@ -35,10 +38,39 @@ def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None):
     env = os.environ.copy()
     if xdg_config_home is not None:
         env["XDG_CONFIG_HOME"] = str(xdg_config_home)
+    for key, value in (extra_env or {}).items():
+        if value is None:
+            env.pop(key, None)
+        else:
+            env[key] = value
     full = f'BASE_DIR="{base_dir}"\n. "{COMMON_SH}"\n{script}'
     return subprocess.run(
         ["sh", "-eu", "-c", full], capture_output=True, text=True, env=env,
     )
+
+
+class TestColorGuard(unittest.TestCase):
+    """The color variables are set at source time: on for a TTY (or when forced),
+    empty when piped or when NO_COLOR is set - so redirected output (logs, tee,
+    the systemd journal) never captures escape sequences."""
+
+    RED_SEQ = r"\033[0;31m"  # the literal characters common.sh assigns
+
+    def _red(self, **env):
+        # capture_output pipes stdout, so [ -t 1 ] is false in every test here.
+        return run_sh('printf %s "$RED"', extra_env={
+            "NO_COLOR": None, "CLICOLOR_FORCE": None, **env,
+        }).stdout
+
+    def test_piped_output_is_colorless(self):
+        self.assertEqual(self._red(), "")
+
+    def test_clicolor_force_keeps_colors_on_a_pipe(self):
+        # The snapshot harness relies on this to capture colored transcripts.
+        self.assertEqual(self._red(CLICOLOR_FORCE="1"), self.RED_SEQ)
+
+    def test_no_color_wins_over_force(self):
+        self.assertEqual(self._red(NO_COLOR="1", CLICOLOR_FORCE="1"), "")
 
 
 class TestNamingHelpers(unittest.TestCase):

@@ -424,6 +424,9 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "LC_ALL": "C",
         "USER": "tester",  # install.sh's LINGER_USER; keeps `id -un` out of the transcript
         "COLUMNS": "100",
+        # The scripts drop colors when stdout is not a TTY (as here, a pipe);
+        # force them on so the transcript matches what a terminal user sees.
+        "CLICOLOR_FORCE": "1",
         "FAKE_PLUGINS": " ".join(plugins),
         "FAKE_PLUGIN_CONFIGS": "\n".join(f"{p} {c}" for p, c in configs.items()),
         "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p} {r}" for p, r in (world.requirements or {}).items()),

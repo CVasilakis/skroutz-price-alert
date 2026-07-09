@@ -15,7 +15,7 @@ from typing import cast
 
 from core.exceptions import PluginDiscoveryError
 from core.scrapers.base.plugin import BasePlugin
-from core.scrapers.registry import ScraperRegistry
+from core.scrapers.registry import RESERVED_PLUGIN_NAMES, ScraperRegistry
 
 from support import fake_plugin as _fake_plugin, registry_sandbox
 
@@ -49,6 +49,17 @@ class TestRegisterValidationGate(unittest.TestCase):
         with self.assertRaises(PluginDiscoveryError) as ctx:
             ScraperRegistry.register(_fake_plugin(name="my-store"))
         self.assertIn("letters, digits and underscores", str(ctx.exception))
+
+    def test_reserved_cli_flag_names_are_rejected(self):
+        # Each of these is a built-in '--<flag>' the management scripts match
+        # before their per-plugin branch, so a plugin by that name could never
+        # be selected from the command line.
+        for name in sorted(RESERVED_PLUGIN_NAMES):
+            with self.subTest(name=name):
+                with self.assertRaises(PluginDiscoveryError) as ctx:
+                    ScraperRegistry.register(_fake_plugin(name=name))
+                self.assertIn("reserved", str(ctx.exception))
+                self.assertNotIn(name, ScraperRegistry._plugins)
 
     def test_equal_domain_conflict_is_rejected(self):
         ScraperRegistry.register(_fake_plugin(name="first"))

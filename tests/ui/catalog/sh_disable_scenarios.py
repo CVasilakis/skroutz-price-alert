@@ -25,6 +25,12 @@ _case("help", "Usage text listing registered targets and installed orphans alike
 _case("invalid_argument", "A positional argument is rejected.",
       "foo", world=WORLD_INSTALLED, tags=("error",))
 
+_case("bare_double_dash", "A bare '--' is rejected instead of silently selecting nothing.",
+      "--", world=WORLD_INSTALLED, tags=("error",))
+
+_case("help_after_target", "-h/--help is honored anywhere in the argument list.",
+      "--skroutz", "--help", world=WORLD_INSTALLED, tags=("help",))
+
 _case("not_installed_notice", "A registered but never-installed target - notice, not an error.",
       "--amazon", world=WORLD_AMAZON_UNINSTALLED)
 

@@ -47,6 +47,14 @@ _case("discovery_failed", "The venv is fine but plugin discovery raises - the di
 _case("unknown_target", "An explicit --<target> that is not a registered scraper.",
       "--ghost", tags=("error",))
 
+_case("bare_double_dash", "A bare '--' is rejected instead of silently selecting nothing.",
+      "--", tags=("error",))
+
+_case("duplicate_target", "A repeated --<target> is de-duplicated: provisioned once.",
+      "--skroutz", "--skroutz",
+      world=replace(_CONFIGURED,
+                    requirements={"skroutz": "/opt/fake/scrapers/skroutz/requirements.txt"}))
+
 _case("update_skips_removed_target", "--update skips a selection no longer in the registry.",
       "--update", "--ghost", "--skroutz",
       world=_CONFIGURED, tags=("orphan",))

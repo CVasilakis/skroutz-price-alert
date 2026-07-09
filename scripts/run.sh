@@ -56,19 +56,27 @@ while [ "$#" -gt 0 ]; do
             exit 0
             ;;
         --ping)
-            FLAG_PING=1
+            # Counted (not just set) so a repeated flag still trips the
+            # "must be used alone" validation below.
+            FLAG_PING=$((FLAG_PING + 1))
             TARGET="ping.py"
             shift
             ;;
         --status)
-            FLAG_STATUS=1
+            FLAG_STATUS=$((FLAG_STATUS + 1))
             TARGET="status.py"
             shift
             ;;
         --quiet)
-            FLAG_QUIET=1
+            FLAG_QUIET=$((FLAG_QUIET + 1))
             ARGS="$ARGS --quiet"
             shift
+            ;;
+        --)
+            # A bare '--' would otherwise parse as an empty target name.
+            printf "%bError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
+            print_help
+            exit 1
             ;;
         --*)
             # Any registered plugin (e.g. --skroutz) selects that scraper and is
@@ -84,13 +92,13 @@ while [ "$#" -gt 0 ]; do
                 if [ -z "$PLUGINS" ]; then
                     registry_diagnose || exit 1
                 fi
-                printf "%b\nError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
+                printf "%bError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
                 print_help
                 exit 1
             fi
             ;;
         *)
-            printf "%b\nError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
+            printf "%bError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
             print_help
             exit 1
             ;;
@@ -103,8 +111,9 @@ done
 
 TOTAL_FLAGS=$((FLAG_PING + FLAG_STATUS + FLAG_QUIET + FLAG_PLUGIN))
 
-# Check --ping rules
-if [ "$FLAG_PING" -eq 1 ]; then
+# Check --ping rules (-gt 0, not -eq 1: a repeated flag counts up and must
+# still land in this validation)
+if [ "$FLAG_PING" -gt 0 ]; then
     if [ "$TOTAL_FLAGS" -gt 1 ]; then
         printf "%b\n" "${RED}\nError: The --ping flag must be used alone.${NC}"
         print_help
@@ -113,12 +122,21 @@ if [ "$FLAG_PING" -eq 1 ]; then
 fi
 
 # Check --status rules
-if [ "$FLAG_STATUS" -eq 1 ]; then
+if [ "$FLAG_STATUS" -gt 0 ]; then
     if [ "$TOTAL_FLAGS" -gt 1 ]; then
         printf "%b\n" "${RED}\nError: The --status flag must be used alone.${NC}"
         print_help
         exit 1
     fi
+fi
+
+# A missing venv would otherwise surface as the shell's raw "not found" from exec;
+# fail with the same repair hint registry_diagnose gives. (The plugin-flag path
+# already routes through registry_diagnose above.)
+if [ ! -x "$BASE_DIR/venv/bin/python3" ]; then
+    printf "%b\n" "${RED}Error: Cannot run - the Python environment looks missing or broken.${NC}" >&2
+    printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}" >&2
+    exit 1
 fi
 
 # Intentionally unquoted ARGS to allow multiple arguments to expand properly

@@ -58,27 +58,27 @@ print_help() {
     printf '\n'
 }
 
-case "${1:-}" in
-    -h|--help) print_help; exit 0 ;;
-esac
-
-require_systemctl
-
 # ------------------------------------------------------------------------------
 # ARGUMENTS
 # ------------------------------------------------------------------------------
 # Usage:
 #   ./scripts/uninstall.sh                  Full teardown (all units + venv).
 #   ./scripts/uninstall.sh --<plugin> [..]  Remove only the named plugins' units (keep venv).
+# -h/--help is honored anywhere in the argument list; a bare '--' is rejected
+# (it would otherwise parse as an empty target name and silently select nothing).
 
 SELECTED=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        -h|--help) print_help; exit 0 ;;
+        --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
         --*) SELECTED="$SELECTED ${1#--}" ;;
         *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
     esac
     shift
 done
+
+require_systemctl
 
 # ------------------------------------------------------------------------------
 # SELECTED-PLUGIN REMOVAL

@@ -66,9 +66,16 @@ while [ "$#" -gt 0 ]; do
         --update)
             IS_UPDATE=1
             ;;
+        --)
+            # A bare '--' would otherwise parse as an empty target name and
+            # silently select nothing.
+            printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"
+            exit 1
+            ;;
         --*)
             INSTALL_MODE="selected"
-            SELECTED="$SELECTED ${1#--}"
+            # De-duplicate: repeating a --<target> is harmless, provision it once.
+            plugin_in_list "${1#--}" $SELECTED || SELECTED="$SELECTED ${1#--}"
             ;;
         *)
             printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"

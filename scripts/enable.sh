@@ -41,14 +41,6 @@ print_help() {
     printf '\n'
 }
 
-cd "$SCRIPT_DIR"
-
-case "${1:-}" in
-    -h|--help) print_help; exit 0 ;;
-esac
-
-require_systemctl
-
 # ------------------------------------------------------------------------------
 # TARGET RESOLUTION
 # ------------------------------------------------------------------------------
@@ -61,15 +53,21 @@ require_systemctl
 # registry is REQUIRED: if units exist but it can't be read the Python environment
 # is broken (and broken scrapers cannot run anyway), so enable refuses with a
 # repair hint rather than arming timers that would only fail on schedule.
+# -h/--help is honored anywhere in the argument list; a bare '--' is rejected
+# (it would otherwise parse as an empty target name and silently select nothing).
 
 SELECTED=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        -h|--help) print_help; exit 0 ;;
+        --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
         --*) SELECTED="$SELECTED ${1#--}" ;;
         *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
     esac
     shift
 done
+
+require_systemctl
 
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"

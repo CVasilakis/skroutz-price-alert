@@ -39,6 +39,11 @@ main() {
         esac
     fi
 
+    # The update ends in a reprovision (install.sh), which requires systemd - check
+    # up front so a systemd-less host fails BEFORE the destructive git reset, not
+    # halfway through with the working tree already overwritten.
+    require_systemctl
+
     # ==============================================================================
     # EXECUTION
     # ==============================================================================
@@ -75,17 +80,14 @@ main() {
     #
     # Captured before 'git reset' for clarity, though the unit files live under
     # ~/.config/systemd/user and are unaffected by it.
-    INSTALLED_PLUGINS=""
-    if command -v systemctl > /dev/null 2>&1; then
-        INSTALLED_PLUGINS="$(list_installed_plugins timer)"
+    INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 
-        # Ensure no scraper is actively running while we change the files out from
-        # under it. Glob the installed services (also catches an orphaned service
-        # whose timer is gone).
-        for plugin in $(list_installed_plugins service); do
-            systemctl --user stop "$(unit_name "$plugin" service)" 2>/dev/null || true
-        done
-    fi
+    # Ensure no scraper is actively running while we change the files out from
+    # under it. Glob the installed services (also catches an orphaned service
+    # whose timer is gone).
+    for plugin in $(list_installed_plugins service); do
+        systemctl --user stop "$(unit_name "$plugin" service)" 2>/dev/null || true
+    done
 
     if ! git checkout -f main --quiet; then
         printf "%b\n" "\n${RED}Error: Failed to checkout 'main' branch. Update aborted.${NC}\n"
