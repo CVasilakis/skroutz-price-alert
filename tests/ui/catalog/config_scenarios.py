@@ -49,6 +49,13 @@ def _():
                         reminder_day_raw="Funday", reminder_time_raw="25:00")
 
 
+@scenario(Surface.CONFIG, "general_block_ignored", "general.json's settings block is not an object", tags=("reminder", "error"))
+def _():
+    # The user wrote e.g. `"settings": "1 month"` — the whole block is ignored
+    # (every row shows its default) and the panel flags it once.
+    return drive_config("uptodate", valid_count=2, general_block_raw="1 month")
+
+
 @scenario(Surface.CONFIG, "env_mixed", "Some notification URLs are invalid", tags=("env",))
 def _():
     return drive_config("uptodate", valid_count=1, invalid_count=2)

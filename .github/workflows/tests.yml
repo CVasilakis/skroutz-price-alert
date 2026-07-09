@@ -34,7 +34,9 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest
+        # Coverage is report-only (no threshold): the summary makes untested
+        # modules visible in the CI log without ever failing the build over it.
+        run: pytest --cov=src/core --cov-report=term-missing:skip-covered
 
   shellcheck:
     runs-on: ubuntu-latest

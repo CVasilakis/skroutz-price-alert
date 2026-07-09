@@ -157,10 +157,15 @@ if [ -z "$ALL_PLUGINS" ]; then
 fi
 
 if [ "$INSTALL_MODE" = "selected" ]; then
+    # PLUGINS is newline-joined (matching list_plugins' output shape): the
+    # per-plugin dependency and missing-config loops below split it under
+    # IFS=newline, where a space-joined list would arrive as one bogus
+    # " name" item and silently skip every selected plugin's requirements.
     PLUGINS=""
     for sel in $SELECTED; do
         if plugin_in_list "$sel" $ALL_PLUGINS; then
-            PLUGINS="$PLUGINS $sel"
+            PLUGINS="$PLUGINS
+$sel"
         elif [ "$IS_UPDATE" -eq 1 ]; then
             # During an update the selection is derived from the installed units;
             # a plugin removed or renamed in the incoming version is no longer in

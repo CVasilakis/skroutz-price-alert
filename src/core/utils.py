@@ -135,11 +135,12 @@ def check_env_file() -> None:
         EnvFileError: If the .env file is missing, unreadable, or missing valid NOTIFICATION_URLS.
     """
     env_path = os.path.join(BASE_DIR, '.env')
-    env_loaded = load_dotenv(dotenv_path=env_path)
-    env_exists = env_loaded or os.path.exists(env_path)
-
-    if not env_exists or not os.access(env_path, os.R_OK):
+    # Existence/readability is checked BEFORE load_dotenv: python-dotenv raises a
+    # raw PermissionError on an unreadable file, which would escape as a crash
+    # instead of the modeled EnvFileError (clean exit 16) this function promises.
+    if not os.path.isfile(env_path) or not os.access(env_path, os.R_OK):
         raise EnvFileError("No .env file found or unreadable")
+    load_dotenv(dotenv_path=env_path)
 
     notification_urls = os.environ.get("NOTIFICATION_URLS", "").strip()
     if not notification_urls:

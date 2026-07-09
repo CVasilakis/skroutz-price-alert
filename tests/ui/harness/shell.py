@@ -54,10 +54,10 @@ _SCRIPT_FILES = (
     "scripts/lib/common.sh",
 )
 
-# Real utilities symlinked into the sandbox bin/ for the minimal-PATH modes
-# ("no-systemctl"/"no-python3"), where /usr/bin is deliberately absent so the host's
-# genuine systemctl/python3 can never leak in. Only what runs before the scripts'
-# prerequisite checks abort is needed, plus the teardown basics.
+# The coreutils allowlist symlinked into the sandbox bin/ in EVERY mode. PATH is
+# sandbox-only, so these symlinks plus the shims are the entire command universe a
+# script can reach — the host's genuine systemctl/python3 (or any unshimmed
+# external) can never leak in.
 _REAL_TOOLS = ("dirname", "cut", "cat", "chmod", "mkdir", "rm", "cp", "id")
 
 
@@ -99,8 +99,8 @@ class ShellWorld:
 
     User config artifacts: config_files (created under config/), env_file (.env exists).
 
-    tools: PATH shape. "full" = all shims + /usr/bin:/bin. "no-systemctl"/"no-python3" =
-        sandbox-only PATH missing that one shim (with _REAL_TOOLS symlinked in).
+    tools: which shims exist. "full" = all four; "no-systemctl"/"no-python3" drops
+        that one shim (PATH is sandbox-only in every mode, with _REAL_TOOLS symlinked in).
     """
 
     plugins: tuple[str, ...] = ("skroutz",)
@@ -350,11 +350,14 @@ def _write_shims(bin_dir: Path, world: ShellWorld) -> None:
     # Always present: `python3 -m venv` copies it into the venv it "creates".
     (bin_dir / "venv-python-template").write_text(_VENV_PYTHON_SHIM)
 
-    if world.tools != "full":
-        for tool in _REAL_TOOLS:
-            real = shutil.which(tool, path="/usr/bin:/bin")
-            if real:
-                (bin_dir / tool).symlink_to(real)
+    # Allowlist by construction (every mode): PATH is sandbox-only, so the only
+    # real binaries a script can reach are the coreutils explicitly symlinked
+    # here. An unshimmed external (a future `curl`, `date`, ...) fails loudly
+    # instead of silently running the host's binary.
+    for tool in _REAL_TOOLS:
+        real = shutil.which(tool, path="/usr/bin:/bin")
+        if real:
+            (bin_dir / tool).symlink_to(real)
 
 
 def _build_sandbox(world: ShellWorld) -> Path:
@@ -412,13 +415,10 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
     interval_status = (world.interval_status if world.interval_status is not None
                        else {p: "ok" for p in plugins})
 
-    if world.tools == "full":
-        path = f"{sandbox / 'bin'}:/usr/bin:/bin"
-    else:
-        path = str(sandbox / "bin")
-
     return {
-        "PATH": path,
+        # Sandbox-only in every mode (an allowlist, not shim-by-precedence): the
+        # shims plus the _REAL_TOOLS symlinks are the entire command universe.
+        "PATH": str(sandbox / "bin"),
         "HOME": str(sandbox / "home"),
         "XDG_CONFIG_HOME": str(sandbox / "xdg"),  # -> SYSTEMD_USER_DIR=<sandbox>/xdg/systemd/user
         "LC_ALL": "C",

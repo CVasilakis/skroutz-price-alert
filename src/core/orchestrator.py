@@ -3,6 +3,7 @@ import signal
 import datetime
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from types import FrameType
 from typing import Any
@@ -93,7 +94,7 @@ def _policy_for(exc: Exception) -> ErrorPolicy:
 
 class ScrapingOrchestrator:
     """Orchestrates the scraping process across multiple targets and manages execution flow."""
-    def __init__(self, targets_to_run: list[str], registry: ScraperRegistry, notifier: Notifier, config_dir: str, quiet: bool = False, ui_strategy: ExecutionStrategy | None = None, loads_by_target: dict[str, TargetLoad] | None = None):
+    def __init__(self, targets_to_run: list[str], registry: ScraperRegistry, notifier: Notifier, config_dir: str, quiet: bool = False, ui_strategy: ExecutionStrategy | None = None, loads_by_target: dict[str, TargetLoad] | None = None, now_fn: Callable[[], datetime.datetime] = _utc_now):
         """Initializes the ScrapingOrchestrator.
 
         Args:
@@ -107,6 +108,10 @@ class ScrapingOrchestrator:
                 target (``{target: TargetLoad}``). Drives the per-scraper 'Config' row and the
                 per-target skip of a scraper whose products config failed to load. Targets
                 absent from the map (e.g. missing dependencies) simply get no 'Config' row.
+            now_fn (Callable): Returns the current time as a naive *UTC* datetime (the
+                contract of ``_utc_now``, its default). The clock seam mirroring
+                ``ReminderService.now_fn``, so the staleness window and timestamp
+                writes are testable without patching the module.
         """
         self.targets_to_run: list[str] = targets_to_run
         self.registry: ScraperRegistry = registry
@@ -120,6 +125,7 @@ class ScrapingOrchestrator:
         self._stale_items: list[BaseTrackedItem] = []
         self.ui_strategy: ExecutionStrategy = ui_strategy or SilentExecutionStrategy()
         self.loads_by_target: dict[str, TargetLoad] = loads_by_target or {}
+        self._now_fn: Callable[[], datetime.datetime] = now_fn
 
     def signal_handler(self, signum: int, _frame: FrameType | None) -> None:
         """Handles termination signals gracefully.
@@ -192,11 +198,11 @@ class ScrapingOrchestrator:
             data_manager.update_item(
                 item.url,
                 last_price=item.last_price,
-                last_checked=_utc_now().strftime(TIMESTAMP_FORMAT)
+                last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT)
             )
             return messages.NOTE_CORRUPTED_TIMESTAMP
 
-        if (_utc_now() - timestamp) > datetime.timedelta(hours=OLD_ENTRY_HOURS):
+        if (self._now_fn() - timestamp) > datetime.timedelta(hours=OLD_ENTRY_HOURS):
             self._stale_items.append(item)
             return messages.stale_note(item.last_checked, OLD_ENTRY_HOURS)
 
@@ -301,7 +307,7 @@ class ScrapingOrchestrator:
         data_manager.update_item(
             item.url,
             last_price=result.price,
-            last_checked=_utc_now().strftime(TIMESTAMP_FORMAT)
+            last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT)
         )
 
     @staticmethod

@@ -1,0 +1,11 @@
+# border: green
+# exit: 0
+
+Updating python packages in existing virtual environment...
+Python virtual environment successfully updated.
+Installing dependencies for the 'skroutz' scraper...
+
+Setting up Systemd timer(s)...
+Systemd timer(s) configured successfully.
+
+Installation complete!

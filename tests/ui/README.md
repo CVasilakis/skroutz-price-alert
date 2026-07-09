@@ -30,7 +30,7 @@ panels. Getting it right means caring about things that only show up *when rende
 Historically the only way to check these was to **run the app and induce each state by
 hand** — turn off Wi-Fi to see a network error, corrupt a config to see a parse failure,
 hit Ctrl+C at just the right moment to see an interrupt. That doesn't scale: there are
-~85 distinct UI states, many of which are annoying or slow to reproduce on demand.
+~200 distinct UI states, many of which are annoying or slow to reproduce on demand.
 
 This suite reproduces every one of those states **deterministically, in milliseconds**,
 and fails loudly if the rendered output ever changes unexpectedly.
@@ -70,7 +70,7 @@ Three things make this tractable:
                  └────────────────┘  └────────────────┘
 ```
 
-**Why snapshot testing?** Asserting "the panel contains the string X" by hand for 85
+**Why snapshot testing?** Asserting "the panel contains the string X" by hand for ~200
 states would be enormous and would still miss layout/wrapping. A snapshot captures the
 *entire* rendered panel in one shot; the test just asks "is it byte-for-byte what we
 approved last time?" You approve the output once (by generating the golden file and
@@ -95,9 +95,11 @@ tests/ui/
     inputs.py              #    shared input builders (SettingViews, ResolvedSettings,
                            #      ConfigView, systemd property dicts) — reused by scenarios
     run_scenarios.py       #    interactive scraping panel (a normal run)
+    e2e_run_scenarios.py   #    the same panel, driven by the real orchestrator
     status_scenarios.py    #    --status: service / not-installed / orphan panels
     ping_scenarios.py      #    --ping: Notification Check Results
     config_scenarios.py    #    Configuration Check panel
+    startup_scenarios.py   #    the full pre-scrape console transcript (surface startup)
     shell_inputs.py        #    shared ShellWorld presets + the shell_case registrar
     sh_install_scenarios.py    # install.sh transcripts       (surface sh-install)
     sh_update_scenarios.py     # update.sh transcripts        (surface sh-update)
@@ -193,7 +195,7 @@ right?" check that snapshots (plain text) can't give you.
 | Option        | What it does                                                                 |
 |---------------|------------------------------------------------------------------------------|
 | *(none)*      | Prints every scenario to the terminal with real ANSI color, grouped by surface. |
-| `--surface S` | Limits to one surface: `run`, `status`, `ping`, `config`, or a shell surface (`sh-install`, `sh-update`, `sh-schedule`, `sh-enable`, `sh-disable`, `sh-stop`, `sh-run`, `sh-uninstall`). |
+| `--surface S` | Limits to one surface: `run`, `e2e-run`, `status`, `ping`, `config`, `startup`, or a shell surface (`sh-install`, `sh-update`, `sh-schedule`, `sh-enable`, `sh-disable`, `sh-stop`, `sh-run`, `sh-uninstall`). |
 | `--tag T`     | Limits to scenarios tagged `T` (e.g. `retry`, `interrupt`, `layout`, `settings`). |
 | `--html PATH` | Renders the same output into one self-contained HTML file (colors preserved) for sharing or archiving, instead of printing. |
 | `--list`      | Prints each (optionally filtered) scenario's key and one-line description, then a count, and exits without rendering. Great for discovering what exists. |
@@ -245,6 +247,7 @@ real production builder:
 | `STATUS` | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
 | `PING`   | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
 | `CONFIG` | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers (version + .env) |
+| `STARTUP`| `drive_startup(run_script, …)`                              | the whole pre-scrape transcript on one console: Configuration Check + the real `ReminderService.run_once()` + the Scraping panel (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
 | `SH_*`   | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
 
 The per-scraper **products-config health** (the `Config` row) is no longer a `CONFIG`-surface

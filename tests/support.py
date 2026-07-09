@@ -11,6 +11,9 @@ silently.
 
 import contextlib
 import json
+import os
+import shutil
+import tempfile
 from unittest import mock
 
 from core.general import general_config_path
@@ -132,6 +135,32 @@ def mock_scraper() -> mock.Mock:
 def mock_data_manager() -> mock.Mock:
     """An autospec'd BaseDataManager double."""
     return mock.create_autospec(BaseDataManager, instance=True)
+
+
+def write_settings_config(case, settings, filename="x.json", products=()) -> str:
+    """Writes a temp config file with the given ``settings`` block; returns its path.
+
+    The shared fixture behind the settings suites (resolve/view/integration), so the
+    "fresh temp dir + one JSON config" idiom lives in one place *and* is cleaned up:
+    the temp dir is registered on ``case`` (a ``TestCase``) via ``addCleanup``.
+
+    Args:
+        case: The owning TestCase (its addCleanup removes the temp dir).
+        settings: The raw ``settings`` block (any JSON-serializable value, so
+            malformed-block tests can pass a string or list).
+        filename: The config filename — pass the plugin's real name (e.g.
+            ``skroutz.json``) when the path is resolved through the registry.
+        products: The ``products`` list to include.
+
+    Returns:
+        str: The absolute path of the written config file.
+    """
+    cfg_dir = tempfile.mkdtemp()
+    case.addCleanup(shutil.rmtree, cfg_dir, ignore_errors=True)
+    path = os.path.join(cfg_dir, filename)
+    with open(path, "w") as f:
+        json.dump({"settings": settings, "products": list(products)}, f)
+    return path
 
 
 def write_general(cfg_dir, data) -> None:

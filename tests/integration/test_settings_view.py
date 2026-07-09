@@ -7,9 +7,8 @@ its own setting (a single :class:`SettingSpec`) and have it resolve and render w
 change to base framework code and no parallel settings class.
 """
 
-import json
+import contextlib
 import os
-import tempfile
 import unittest
 
 from core.scrapers.base.settings import (
@@ -18,18 +17,18 @@ from core.scrapers.base.settings import (
     SPEC_RETENTION, STATUS_OK, STATUS_INVALID, STATUS_DEFAULT,
 )
 
-
-def _write_config(settings):
-    tmp = tempfile.mkdtemp()
-    path = os.path.join(tmp, "x.json")
-    with open(path, "w") as f:
-        json.dump({"settings": settings, "products": []}, f)
-    return path
+from support import registry_sandbox, write_settings_config
 
 
-class TestSettingView(unittest.TestCase):
+class _ViewCase(unittest.TestCase):
+    def _cfg(self, settings):
+        """A temp config file with the given ``settings`` block (auto-cleaned)."""
+        return write_settings_config(self, settings)
+
+
+class TestSettingView(_ViewCase):
     def test_ok_has_no_footnote(self):
-        resolved = resolve_one(SPEC_RETENTION, _write_config({"log_retention_days": 4}))
+        resolved = resolve_one(SPEC_RETENTION, self._cfg({"log_retention_days": 4}))
         view = setting_view(SPEC_RETENTION, resolved)
         self.assertEqual(view.label, "Log Retention")
         self.assertEqual(view.display_value, "4 days")
@@ -39,18 +38,18 @@ class TestSettingView(unittest.TestCase):
         self.assertFalse(view.is_default)
 
     def test_singular_day_display(self):
-        resolved = resolve_one(SPEC_RETENTION, _write_config({"log_retention_days": 1}))
+        resolved = resolve_one(SPEC_RETENTION, self._cfg({"log_retention_days": 1}))
         self.assertEqual(setting_view(SPEC_RETENTION, resolved).display_value, "1 day")
 
     def test_default_marks_is_default(self):
-        resolved = resolve_one(SPEC_RETENTION, _write_config({}))
+        resolved = resolve_one(SPEC_RETENTION, self._cfg({}))
         view = setting_view(SPEC_RETENTION, resolved)
         self.assertEqual(view.status, STATUS_DEFAULT)
         self.assertTrue(view.is_default)
         self.assertEqual(view.icon, "✅")
 
     def test_invalid_carries_warning_footnote(self):
-        resolved = resolve_one(SPEC_RETENTION, _write_config({"log_retention_days": 99}))
+        resolved = resolve_one(SPEC_RETENTION, self._cfg({"log_retention_days": 99}))
         view = setting_view(SPEC_RETENTION, resolved)
         self.assertEqual(view.status, STATUS_INVALID)
         self.assertEqual(view.footnote, SPEC_RETENTION.warning)
@@ -61,9 +60,9 @@ class TestSettingView(unittest.TestCase):
     def test_has_warning_tracks_invalid_only(self):
         # has_warning is the single "this row needs its footnote" decision the render
         # sites share; True only for an invalid value, not for ok or default.
-        invalid = setting_view(SPEC_RETENTION, resolve_one(SPEC_RETENTION, _write_config({"log_retention_days": 99})))
-        ok = setting_view(SPEC_RETENTION, resolve_one(SPEC_RETENTION, _write_config({"log_retention_days": 4})))
-        default = setting_view(SPEC_RETENTION, resolve_one(SPEC_RETENTION, _write_config({})))
+        invalid = setting_view(SPEC_RETENTION, resolve_one(SPEC_RETENTION, self._cfg({"log_retention_days": 99})))
+        ok = setting_view(SPEC_RETENTION, resolve_one(SPEC_RETENTION, self._cfg({"log_retention_days": 4})))
+        default = setting_view(SPEC_RETENTION, resolve_one(SPEC_RETENTION, self._cfg({})))
         self.assertTrue(invalid.has_warning)
         self.assertFalse(ok.has_warning)
         self.assertFalse(default.has_warning)
@@ -90,18 +89,18 @@ _SPEC_PAGES = SettingSpec(
 )
 
 
-class TestPerScraperSetting(unittest.TestCase):
+class TestPerScraperSetting(_ViewCase):
     def test_custom_setting_resolves_ok(self):
-        resolved = resolve_one(_SPEC_PAGES, _write_config({"max_pages": 5}))
+        resolved = resolve_one(_SPEC_PAGES, self._cfg({"max_pages": 5}))
         self.assertEqual((resolved.value, resolved.status), (5, STATUS_OK))
         self.assertEqual(setting_view(_SPEC_PAGES, resolved).display_value, "5")
 
     def test_custom_setting_default_when_unset(self):
-        resolved = resolve_one(_SPEC_PAGES, _write_config({}))
+        resolved = resolve_one(_SPEC_PAGES, self._cfg({}))
         self.assertEqual((resolved.value, resolved.status), (3, STATUS_DEFAULT))
 
     def test_custom_setting_invalid(self):
-        resolved = resolve_one(_SPEC_PAGES, _write_config({"max_pages": "lots"}))
+        resolved = resolve_one(_SPEC_PAGES, self._cfg({"max_pages": "lots"}))
         self.assertEqual((resolved.value, resolved.status), (3, STATUS_INVALID))
         self.assertEqual(setting_view(_SPEC_PAGES, resolved).footnote, _SPEC_PAGES.warning)
 
@@ -113,15 +112,20 @@ class TestPerScraperSetting(unittest.TestCase):
 
 
 class TestRegistryResolveSettings(unittest.TestCase):
-    """resolve_settings against the real registry/skroutz plugin (needs discovery)."""
+    """resolve_settings against the real skroutz plugin, inside a registry sandbox."""
+
+    def setUp(self):
+        from core.scrapers.skroutz import plugin as skroutz_plugin
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(registry_sandbox(skroutz_plugin))
 
     def test_one_view_per_builtin_setting(self):
         from core.scrapers.registry import ScraperRegistry
         # The registry joins <config_dir>/<plugin config filename>, so the file must be
         # named for the plugin (skroutz.json), not the generic helper's x.json.
-        cfg_dir = tempfile.mkdtemp()
-        with open(os.path.join(cfg_dir, "skroutz.json"), "w") as f:
-            json.dump({"settings": {"execution_interval": "1 hour"}, "products": []}, f)
+        cfg_dir = os.path.dirname(write_settings_config(
+            self, {"execution_interval": "1 hour"}, filename="skroutz.json"))
         views = ScraperRegistry.resolve_settings("skroutz", cfg_dir)
         labels = [v.label for v in views]
         self.assertEqual(labels, ["Execution Interval", "Log Retention", "Notify On Errors"])

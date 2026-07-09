@@ -11,6 +11,7 @@ from ui.catalog.shell_inputs import (
     WORLD_AMAZON_UNINSTALLED,
     WORLD_EMPTY,
     WORLD_INSTALLED,
+    WORLD_ORPHAN,
     shell_case,
 )
 
@@ -36,3 +37,8 @@ _case("not_running", "The service exists but nothing is executing.",
 
 _case("stop_active", "An in-flight scrape (ActiveState=activating) is aborted.",
       world=replace(WORLD_INSTALLED, activating_services=("skroutz",)))
+
+_case("orphan_by_name", "An orphan's in-flight service is stopped by explicit --<target>.",
+      "--ghost",
+      world=replace(WORLD_ORPHAN, activating_services=("ghost",)),
+      tags=("orphan",))

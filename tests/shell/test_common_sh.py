@@ -201,6 +201,58 @@ class TestListSupportedIntervals(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), ", ".join(SUPPORTED_INTERVALS))
 
 
+class TestRealRegistryBridge(unittest.TestCase):
+    """The list_* helpers' real Python bodies, run through sh against the real venv.
+
+    The UI shell snapshots fake the venv responder (canned answers), so these are
+    the only place the actual Python inside common.sh's heredocs executes via the
+    shell — a break in the shell<->Python contract (the tab-stream shape, the
+    name/filename pairing) fails here instead of hiding behind the shim. Assertions
+    are shape-based where the value depends on the user's local config (the
+    resolved cadence), exact where it comes from the plugin descriptor.
+    """
+
+    def setUp(self):
+        if not (REPO_ROOT / "venv" / "bin" / "python3").exists():  # pragma: no cover
+            self.skipTest("project venv not available")
+
+    def test_list_plugins_yields_registered_names(self):
+        result = run_sh('list_plugins')
+        self.assertIn("skroutz", result.stdout.split())
+
+    def test_list_plugin_configs_pairs_names_with_filenames(self):
+        result = run_sh('list_plugin_configs')
+        pairs = dict(line.split(" ", 1) for line in result.stdout.splitlines())
+        self.assertEqual(pairs.get("skroutz"), "skroutz.json")
+
+    def test_list_plugin_timer_directives_feeds_plugin_timer_block(self):
+        # The stream itself is well-formed: "<plugin>\t<Key>=<Value>" per line.
+        result = run_sh('list_plugin_timer_directives')
+        lines = result.stdout.splitlines()
+        self.assertTrue(lines)
+        for line in lines:
+            plugin, tab, directive = line.partition("\t")
+            self.assertEqual(tab, "\t", f"no tab separator in {line!r}")
+            self.assertTrue(plugin)
+            self.assertIn("=", directive)
+        self.assertTrue(any(line.startswith("skroutz\tOnCalendar=") for line in lines))
+
+        # And the shell consumer parses that real stream end to end: the exact
+        # contract install.sh and schedule.sh rely on.
+        block = run_sh(
+            'all="$(list_plugin_timer_directives)"\n'
+            'plugin_timer_block skroutz "$all"'
+        )
+        self.assertTrue(block.stdout.startswith("OnCalendar="), block.stdout)
+
+    def test_list_interval_status_reports_a_known_status(self):
+        result = run_sh('list_interval_status')
+        statuses = dict(line.split("\t") for line in result.stdout.splitlines())
+        # The value depends on the local config/skroutz.json; the contract is that
+        # it is one of the resolver's four statuses.
+        self.assertIn(statuses.get("skroutz"), {"ok", "default", "invalid", "nocfg"})
+
+
 class TestVenvResponderMarkers(unittest.TestCase):
     """The shell-snapshot harness recognizes common.sh's inline Python heredocs by
     marker substrings. If a heredoc in common.sh is reworded past its marker, the

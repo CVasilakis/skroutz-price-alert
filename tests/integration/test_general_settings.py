@@ -5,6 +5,7 @@ state write-back round-trip (user content preserved, only ``last_reminder`` writ
 
 import datetime
 import json
+import shutil
 import tempfile
 import unittest
 from unittest import mock
@@ -27,6 +28,7 @@ from support import write_general as _write_general
 class TestResolveGeneralSettings(unittest.TestCase):
     def setUp(self):
         self.cfg_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.cfg_dir, ignore_errors=True)
 
     def test_valid_value_resolves_ok(self):
         _write_general(self.cfg_dir, {"settings": {"reminder": "3 months"}})
@@ -95,6 +97,7 @@ class TestResolveGeneralSettings(unittest.TestCase):
 class TestStateWriteBackRoundTrip(unittest.TestCase):
     def test_persist_slot_touches_only_the_state_field(self):
         cfg_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, cfg_dir, ignore_errors=True)
         original = {
             "settings": {"reminder": "1 week", "future_setting": 42},
             LAST_REMINDER_FIELD: "27-06-2026 13:00:00",

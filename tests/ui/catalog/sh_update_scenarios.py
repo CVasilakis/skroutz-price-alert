@@ -20,6 +20,9 @@ _BASE = ShellWorld(
 
 _case("help", "The short usage text.", "--help", world=_BASE, tags=("help",))
 
+_case("clean_happy_path", "Clean tree already on 'main': the plainest, most common update.",
+      world=_BASE, tags=("ok",))
+
 _case("invalid_argument", "Any argument other than -h/--help is rejected.",
       "foo", world=_BASE, tags=("error",))
 

@@ -5,6 +5,8 @@ target is a yellow *notice* (exit 0), not an error, and orphans are first-class
 disable targets (glob-derived, no registry needed).
 """
 
+from dataclasses import replace
+
 from ui.catalog._base import Surface
 from ui.catalog.shell_inputs import (
     WORLD_AMAZON_UNINSTALLED,
@@ -37,3 +39,8 @@ _case("already_disabled", "The timer and service are already fully stopped.",
 
 _case("disable_success", "An enabled and active timer is stopped and disabled.",
       world=WORLD_HEALTHY)
+
+_case("orphan_by_name", "An orphan's still-armed timer is disabled by explicit --<target>.",
+      "--ghost",
+      world=replace(WORLD_ORPHAN, enabled_timers=("ghost",), active_timers=("ghost",)),
+      tags=("orphan",))

@@ -1,0 +1,12 @@
+# border: red
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ❗    System                Scraper 'skroutz' requires dependencies   │
+│                               that are not installed (missing module:   │
+│                               tls_client). Install them with:           │
+│                               ./install.sh --skroutz                    │
+╰─────────────────────────────────────────────────────────────────────────╯

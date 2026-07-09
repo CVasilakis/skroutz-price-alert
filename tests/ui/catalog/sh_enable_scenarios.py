@@ -6,6 +6,7 @@ from ui.catalog._base import Surface
 from ui.catalog.shell_inputs import (
     WORLD_ALL_ORPHANS,
     WORLD_AMAZON_UNINSTALLED,
+    WORLD_BROKEN_REG,
     WORLD_EMPTY,
     WORLD_HEALTHY,
     WORLD_INSTALLED,
@@ -25,6 +26,9 @@ _case("invalid_argument", "A positional argument is rejected.",
 _case("registry_unreadable", "Units exist but the venv is gone - refuse with a repair hint.",
       world=WORLD_NO_VENV, tags=("error", "registry"))
 
+_case("registry_unreadable_discovery_failed", "Units exist but plugin discovery raises.",
+      world=WORLD_BROKEN_REG, tags=("error", "registry"))
+
 _case("selected_orphan", "An explicit --<target> whose plugin was removed upstream.",
       "--ghost", world=WORLD_ORPHAN, tags=("error", "orphan"))
 
@@ -33,6 +37,9 @@ _case("selected_not_installed", "An explicit --<target> that is registered but n
 
 _case("unknown_target", "An explicit --<target> in neither the registry nor the units.",
       "--bogus", world=WORLD_INSTALLED, tags=("error",))
+
+_case("unknown_target_nothing_installed", "An unknown --<target> with no units installed (no hint line).",
+      "--bogus", world=WORLD_EMPTY, tags=("error",))
 
 _case("all_orphans", "Every installed unit is an orphan - nothing to enable.",
       world=WORLD_ALL_ORPHANS, tags=("orphan",))

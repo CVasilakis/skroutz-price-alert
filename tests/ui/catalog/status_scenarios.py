@@ -161,6 +161,16 @@ def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(), CFG, "hourly", "*:0/30")
 
 
+@scenario(Surface.STATUS, "drift_suppressed_invalid_interval", "An invalid interval suppresses the drift footnote", tags=("service", "drift", "settings"))
+def _():
+    # The on-disk OnCalendar differs, but the configured interval is *invalid* — the
+    # Execution Interval row owns that problem, so the panel's own gate must NOT add
+    # the drift footnote on top (build_service_panel checks the interval status even
+    # when a caller hands it differing schedules).
+    resolved = resolved_settings(interval=("1h", STATUS_INVALID, "3h"))
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "*:0/30")
+
+
 @scenario(Surface.STATUS, "service_many_issues", "Invalid setting + timer down + failed run + drift", tags=("service", "combined"))
 def _():
     resolved = resolved_settings(

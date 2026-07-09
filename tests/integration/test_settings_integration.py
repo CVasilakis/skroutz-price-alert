@@ -2,12 +2,15 @@
 ``ResolvedSettings`` accessor, the timer-directive translation boundary, discovery-time
 spec validation, the per-target injection into client/storage, and the ``update_item``
 field guard.
+
+The registry-facing tests run against the *real* skroutz plugin, but registered inside
+a ``registry_sandbox`` — so they never depend on (or dirty) the process-wide registry
+state other tests see.
 """
 
 import builtins
-import json
+import contextlib
 import os
-import tempfile
 import unittest
 from unittest import mock
 
@@ -19,29 +22,34 @@ from core.scrapers.base.settings import (
 )
 from core.scrapers.base.client import BaseScraperClient
 from core.scrapers.registry import ScraperRegistry
+from core.scrapers.skroutz import plugin as skroutz_plugin
 from core.exceptions import PluginDiscoveryError
 
-from support import fake_plugin
+from support import fake_plugin, registry_sandbox, write_settings_config
 
 
-class _FakePlugin:
-    """Minimal stand-in supplying the plugin-aware interval default."""
-    def get_timer_directives(self):
-        return {"OnCalendar": "hourly"}
+class _SkroutzConfigCase(unittest.TestCase):
+    """Base: temp skroutz.json configs (auto-cleaned) + helpers shared below."""
+
+    def _cfg_path(self, settings):
+        return write_settings_config(self, settings, filename="skroutz.json")
+
+    def _cfg_dir(self, settings):
+        return os.path.dirname(self._cfg_path(settings))
 
 
-def _write_skroutz_config(settings):
-    """Writes a temp <dir>/skroutz.json with the given settings block; returns the dir."""
-    cfg_dir = tempfile.mkdtemp()
-    with open(os.path.join(cfg_dir, "skroutz.json"), "w") as f:
-        json.dump({"settings": settings, "products": []}, f)
-    return cfg_dir
+class _SandboxedSkroutzCase(_SkroutzConfigCase):
+    """Adds a clean registry holding exactly the real skroutz plugin."""
+
+    def setUp(self):
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(registry_sandbox(skroutz_plugin))
 
 
-class TestResolveAllSingleRead(unittest.TestCase):
+class TestResolveAllSingleRead(_SkroutzConfigCase):
     def test_reads_config_once_for_all_specs(self):
-        cfg_dir = _write_skroutz_config({"execution_interval": "2h"})
-        path = os.path.join(cfg_dir, "skroutz.json")
+        path = self._cfg_path({"execution_interval": "2h"})
 
         real_open = builtins.open
         opens = {"n": 0}
@@ -52,17 +60,17 @@ class TestResolveAllSingleRead(unittest.TestCase):
             return real_open(file, *args, **kwargs)
 
         with mock.patch("builtins.open", counting_open):
-            resolved = resolve_all(BASE_SETTING_SPECS, path, _FakePlugin())
+            resolved = resolve_all(BASE_SETTING_SPECS, path, fake_plugin())
 
         self.assertIsInstance(resolved, ResolvedSettings)
         # Three base specs, but the file is opened exactly once.
         self.assertEqual(opens["n"], 1)
 
 
-class TestResolvedSettingsAccessor(unittest.TestCase):
+class TestResolvedSettingsAccessor(_SkroutzConfigCase):
     def test_value_get_status_and_views(self):
-        cfg_dir = _write_skroutz_config({"log_retention_days": 10})
-        resolved = resolve_all(BASE_SETTING_SPECS, os.path.join(cfg_dir, "skroutz.json"), _FakePlugin())
+        resolved = resolve_all(BASE_SETTING_SPECS,
+                               self._cfg_path({"log_retention_days": 10}), fake_plugin())
 
         self.assertEqual(resolved.value(KEY_RETENTION), 10)
         self.assertEqual(resolved.status(KEY_RETENTION), STATUS_OK)
@@ -72,22 +80,22 @@ class TestResolvedSettingsAccessor(unittest.TestCase):
         self.assertEqual(labels, ["Execution Interval", "Log Retention", "Notify On Errors"])
 
 
-class TestTimerDirectiveTranslation(unittest.TestCase):
+class TestTimerDirectiveTranslation(_SandboxedSkroutzCase):
     """resolve_timer_directives owns the canonical-key -> OnCalendar translation."""
 
     def test_valid_interval_translates_to_oncalendar(self):
-        cfg_dir = _write_skroutz_config({"execution_interval": "2h"})
+        cfg_dir = self._cfg_dir({"execution_interval": "2h"})
         directives = ScraperRegistry.resolve_timer_directives("skroutz", cfg_dir)
         self.assertEqual(directives["OnCalendar"], oncalendar_for("2h"))
 
     def test_invalid_interval_falls_back_to_plugin_default(self):
-        cfg_dir = _write_skroutz_config({"execution_interval": "3h"})  # unsupported
+        cfg_dir = self._cfg_dir({"execution_interval": "3h"})  # unsupported
         directives = ScraperRegistry.resolve_timer_directives("skroutz", cfg_dir)
         # Skroutz keeps the BasePlugin default cadence.
         self.assertEqual(directives["OnCalendar"], "hourly")
 
     def test_unset_interval_falls_back_to_plugin_default(self):
-        cfg_dir = _write_skroutz_config({})
+        cfg_dir = self._cfg_dir({})
         directives = ScraperRegistry.resolve_timer_directives("skroutz", cfg_dir)
         self.assertEqual(directives["OnCalendar"], "hourly")
 
@@ -165,27 +173,26 @@ class TestDiscoveryCadenceValidation(unittest.TestCase):
             ScraperRegistry._validate_plugin_contract("specfake", plugin)
 
 
-class TestMalformedSettingsBlock(unittest.TestCase):
+class TestMalformedSettingsBlock(_SkroutzConfigCase):
     """A present-but-non-object settings block sets block_warning and uses defaults."""
 
     def test_non_dict_block_sets_warning_and_defaults(self):
-        cfg_dir = _write_skroutz_config("1h")  # a string, not an object
-        resolved = resolve_all(BASE_SETTING_SPECS, os.path.join(cfg_dir, "skroutz.json"), _FakePlugin())
+        path = self._cfg_path("1h")  # a string, not an object
+        resolved = resolve_all(BASE_SETTING_SPECS, path, fake_plugin())
         self.assertIsNotNone(resolved.block_warning)
         # Every setting still falls back to its default.
         self.assertEqual(resolved.value(KEY_RETENTION), DEFAULT_LOG_RETENTION_DAYS)
         self.assertEqual(resolved.value(KEY_NOTIFY), True)
 
     def test_well_formed_block_no_warning(self):
-        cfg_dir = _write_skroutz_config({"log_retention_days": 5})
-        resolved = resolve_all(BASE_SETTING_SPECS, os.path.join(cfg_dir, "skroutz.json"), _FakePlugin())
+        path = self._cfg_path({"log_retention_days": 5})
+        resolved = resolve_all(BASE_SETTING_SPECS, path, fake_plugin())
         self.assertIsNone(resolved.block_warning)
 
 
-class TestSettingsInjection(unittest.TestCase):
+class TestSettingsInjection(_SandboxedSkroutzCase):
     def test_storage_manager_receives_resolved_settings(self):
-        cfg_dir = _write_skroutz_config({"log_retention_days": 9})
-        registry = ScraperRegistry(cfg_dir)
+        registry = ScraperRegistry(self._cfg_dir({"log_retention_days": 9}))
         manager = registry.get_manager("skroutz")
         settings = manager.settings
         assert isinstance(settings, ResolvedSettings)  # narrows the Optional
@@ -196,8 +203,7 @@ class TestSettingsInjection(unittest.TestCase):
             import tls_client  # noqa: F401  (the skroutz client's transport)
         except Exception:  # pragma: no cover - dependency not installed
             self.skipTest("tls_client not installed; client cannot be instantiated")
-        cfg_dir = _write_skroutz_config({"execution_interval": "2h"})
-        registry = ScraperRegistry(cfg_dir)
+        registry = ScraperRegistry(self._cfg_dir({"execution_interval": "2h"}))
         try:
             client = registry.get_scraper("https://www.skroutz.gr/s/123/product.html")
             settings = client.settings
@@ -233,10 +239,9 @@ class TestSettingsInjection(unittest.TestCase):
         self.assertEqual(seen_during_init, [sentinel])
 
 
-class TestUpdateItemFieldGuard(unittest.TestCase):
+class TestUpdateItemFieldGuard(_SandboxedSkroutzCase):
     def test_unknown_update_key_raises(self):
-        cfg_dir = _write_skroutz_config({})
-        registry = ScraperRegistry(cfg_dir)
+        registry = ScraperRegistry(self._cfg_dir({}))
         manager = registry.get_manager("skroutz")
         url = "https://www.skroutz.gr/s/123/product.html"
         # A real MODEL field is accepted...

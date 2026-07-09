@@ -33,6 +33,17 @@ from core.scrapers.registry import ScraperRegistry
 TARGETS = ScraperRegistry.registered_targets()
 
 
+def test_discovery_registered_at_least_one_plugin():
+    """The silent-green guard for the whole battery below.
+
+    Every other test here is parametrized over TARGETS; if discovery ever came
+    back empty (a broken registry, a collection-order accident), they would all
+    collect to zero tests and the battery would pass green while checking
+    nothing. This makes that state a loud failure instead.
+    """
+    assert TARGETS, "plugin discovery returned no targets — the contract battery ran on nothing"
+
+
 def _example_path(target: str) -> str:
     filename = ScraperRegistry.get_plugin(target).get_config_filename()
     return os.path.join(CONFIG_DIR, filename + ".example")

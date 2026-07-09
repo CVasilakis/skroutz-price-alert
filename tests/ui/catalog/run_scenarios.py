@@ -482,6 +482,18 @@ def _():
     return drive_run(script)
 
 
+@scenario(Surface.RUN, "config_unavailable", "No Config row: the storage layer's dependencies are missing", tags=("system", "layout"))
+def _():
+    # The storage-deps branch: the manager could not even be instantiated, so the
+    # panel opens with NO 'Monitored Items' row (config_view=None) — unlike
+    # system_plugin_dependency, where storage loaded and only the client failed.
+    def script(s):
+        _start(s, config=None)
+        s.log_error("System", messages.plugin_dependency_detail("skroutz", "tls_client"))
+        s.complete_target()
+    return drive_run(script)
+
+
 @scenario(Surface.RUN, "storage_save_failure", "The config file could not be written back", tags=("system",))
 def _():
     def script(s):

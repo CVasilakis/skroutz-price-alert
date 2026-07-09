@@ -1,8 +1,10 @@
 """Unit tests for the orchestrator's decision logic.
 
-These exercise the two methods that hold the real product behavior — the price
-outcome + notify gate (``_handle_successful_scrape``) and the retry/error-policy
-loop (``_run_attempts``) — with every collaborator mocked. The UI snapshot suite
+These exercise the methods that hold the real product behavior — the price
+outcome + notify gate (``_handle_successful_scrape``), the retry/error-policy
+loop (``_run_attempts``), the timestamp staleness/repair logic
+(``_check_and_repair_timestamp``), and ``run()``'s exit codes, skip paths and
+notification gates — with every collaborator mocked. The UI snapshot suite
 proves *how* a call sequence renders; this proves *which* calls the orchestrator
 decides to emit, and why. No network, no real notifications, no sleeping.
 
@@ -13,6 +15,7 @@ reordered fails here too — no substring scanning).
 """
 
 import contextlib
+import datetime
 import unittest
 from unittest import mock
 
@@ -20,25 +23,38 @@ from core import messages, orchestrator
 from core.orchestrator import ScrapingOrchestrator
 from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
 from core.scrapers.base.plugin import BasePlugin
-from core.scrapers.base.settings import ResolvedSettings
+from core.scrapers.base.settings import ResolvedSettings, KEY_RETENTION, KEY_NOTIFY
 from core.ui.tui import PriceOutcome
 from core.exceptions import (
     ProductNotFoundError, ServerError, ScraperParseError, RateLimitError,
-    StorageFileError,
+    StorageFileError, LockAcquisitionError, PluginDependencyError,
 )
-from core.constants import MAX_RETRIES
+from core.constants import (
+    MAX_RETRIES, OLD_ENTRY_HOURS, TIMESTAMP_FORMAT,
+    EXIT_CODE_SUCCESS, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED,
+    EXIT_CODE_PRODUCTS_ERROR, EXIT_CODE_RATE_LIMIT_ERROR,
+)
+from core.ui.config_check import TargetLoad
+from core.utils import describe_signal
 
 from support import mock_notifier, mock_ui, mock_registry, mock_scraper, mock_data_manager
 
+# A fixed "now" for the clock seam: tests derive stored timestamps from it, so
+# nothing here depends on the wall clock.
+NOW = datetime.datetime(2026, 7, 9, 12, 0, 0)
 
-def _make_orch(notifier=None, ui=None, registry=None):
-    """A ScrapingOrchestrator with autospec'd mock collaborators."""
+
+def _make_orch(notifier=None, ui=None, registry=None, targets=None,
+               loads_by_target=None, now_fn=None):
+    """A ScrapingOrchestrator with autospec'd mock collaborators and a fixed clock."""
     return ScrapingOrchestrator(
-        targets_to_run=["skroutz"],
+        targets_to_run=targets or ["skroutz"],
         registry=registry or mock_registry(),
         notifier=notifier or mock_notifier(),
         config_dir="/tmp/cfg",
         ui_strategy=ui or mock_ui(),
+        loads_by_target=loads_by_target,
+        now_fn=now_fn or (lambda: NOW),
     )
 
 
@@ -303,6 +319,261 @@ class TestSaveFailureMessage(unittest.TestCase):
 
         ui.log_error.assert_called_once_with(
             "Storage", messages.save_failed("custom-name.json"), "disk full")
+
+
+# --- Group D: timestamp staleness / repair --------------------------------------
+
+class TestTimestampRepair(unittest.TestCase):
+    """`_check_and_repair_timestamp` repairs corrupt timestamps and flags stale ones.
+
+    Uses the injected clock seam (``now_fn``), so the staleness window is asserted
+    against a fixed NOW instead of the wall clock.
+    """
+
+    def _check(self, last_checked):
+        orch = _make_orch()
+        dm = mock_data_manager()
+        item = _item(last_checked=last_checked, last_price=9.5)
+        note = orch._check_and_repair_timestamp(item, dm)
+        return note, dm, orch, item
+
+    def test_corrupt_timestamp_is_repaired_in_place(self):
+        note, dm, orch, item = self._check("not-a-date")
+        self.assertEqual(note, messages.NOTE_CORRUPTED_TIMESTAMP)
+        # The repair write keeps the stored price and stamps the current time.
+        dm.update_item.assert_called_once_with(
+            item.url, last_price=9.5, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
+        self.assertEqual(orch._stale_items, [])
+
+    def test_stale_timestamp_is_flagged_and_recorded(self):
+        stale = (NOW - datetime.timedelta(hours=OLD_ENTRY_HOURS + 1)).strftime(TIMESTAMP_FORMAT)
+        note, dm, orch, item = self._check(stale)
+        self.assertEqual(note, messages.stale_note(stale, OLD_ENTRY_HOURS))
+        # Stale items are accumulated for the aggregated end-of-target notification.
+        self.assertEqual(orch._stale_items, [item])
+        dm.update_item.assert_not_called()
+
+    def test_exactly_at_threshold_is_not_stale(self):
+        # The window uses a strict '>', so an entry exactly OLD_ENTRY_HOURS old is fresh.
+        boundary = (NOW - datetime.timedelta(hours=OLD_ENTRY_HOURS)).strftime(TIMESTAMP_FORMAT)
+        note, dm, orch, _ = self._check(boundary)
+        self.assertIsNone(note)
+        self.assertEqual(orch._stale_items, [])
+        dm.update_item.assert_not_called()
+
+    def test_fresh_timestamp_yields_no_note(self):
+        fresh = (NOW - datetime.timedelta(hours=1)).strftime(TIMESTAMP_FORMAT)
+        note, dm, orch, _ = self._check(fresh)
+        self.assertIsNone(note)
+        dm.update_item.assert_not_called()
+
+    def test_empty_timestamp_yields_no_note_and_no_write(self):
+        note, dm, orch, _ = self._check("")
+        self.assertIsNone(note)
+        dm.update_item.assert_not_called()
+
+
+# --- Group E: run()'s exit codes, skip paths, and notification gates -------------
+
+def _wired_target(rows, item=None, notify=True, config_filename="skroutz.json"):
+    """A (registry, manager, settings) trio wired for a full run() pass over ``rows``.
+
+    The settings double answers the two built-in keys run() reads (retention for
+    the logger, the notify gate); the manager serves ``rows`` and parses every row
+    to ``item`` (a skip item by default, the cheapest way through the loop).
+    """
+    plugin = mock.create_autospec(BasePlugin, instance=True)
+    plugin.get_config_filename.return_value = config_filename
+
+    settings = mock.create_autospec(ResolvedSettings, instance=True)
+    settings.views.return_value = []
+    settings.block_warning = None
+    settings.value.side_effect = lambda key: {KEY_RETENTION: 7, KEY_NOTIFY: notify}[key]
+
+    manager = mock_data_manager()
+    manager.get_items.return_value = rows
+    manager.get_item_count.return_value = len(rows)
+    manager.get_faulty_indices.return_value = []
+    manager.is_scrapable_item.return_value = True
+    manager.parse_item.return_value = item or BaseTrackedItem(name="Widget", skip=True)
+
+    registry = mock_registry()
+    registry.settings_for.return_value = settings
+    registry.get_manager.return_value = manager
+    registry.get_plugin.return_value = plugin
+    return registry, manager, settings
+
+
+@contextlib.contextmanager
+def _run_patches(orch, lock_fn=None):
+    """The patches every run()-level test needs: no signals, no logger, no sleeping.
+
+    ``lock_fn`` replaces ``acquire_lock`` (default: an always-free lock), so a test
+    can simulate contention without touching the filesystem.
+    """
+    with mock.patch.object(orchestrator.signal, "signal"), \
+         mock.patch.object(orchestrator, "get_target_logger"), \
+         mock.patch.object(orchestrator, "save_traceback"), \
+         mock.patch.object(orch, "_sleep_with_jitter"), \
+         mock.patch.object(orchestrator, "acquire_lock",
+                           lock_fn or (lambda target: contextlib.nullcontext())):
+        yield
+
+
+class TestRunExitCodes(unittest.TestCase):
+    """run()'s exit codes: interrupt, the precedence ladder, and the skip path."""
+
+    def test_interrupt_mid_run_exits_130_without_writing(self):
+        import signal as signal_module
+        product_row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
+        registry, manager, _ = _wired_target([product_row], item=_item(target_price=5.0))
+        scraper = mock_scraper()
+        ui = mock_ui()
+        orch = _make_orch(ui=ui, registry=registry)
+
+        def interrupt_then_succeed(url):
+            # The real handler runs mid-scrape (as a signal would), so the loop
+            # must discard the completed result and stop before any write.
+            orch.signal_handler(signal_module.SIGINT, None)
+            return ScrapeResult(price=1.0, currency="€")
+
+        scraper.scrape_product.side_effect = interrupt_then_succeed
+        registry.get_scraper.return_value = scraper
+
+        with _run_patches(orch):
+            exit_code = orch.run()
+
+        self.assertEqual(exit_code, EXIT_CODE_INTERRUPT)
+        ui.log_interrupt.assert_called_once_with(
+            f"Received signal {describe_signal(signal_module.SIGINT)}")
+        # The interrupted product's own result is discarded (no update_item), but
+        # save() still runs under the lock: progress from products completed
+        # *before* the interrupt must be persisted, not thrown away.
+        manager.update_item.assert_not_called()
+        manager.save.assert_called_once()
+
+    def test_products_error_outranks_rate_limit(self):
+        # One target's config failed to load, another aborts on rate limits: the
+        # persistent setup problem (15) must win over the transient block (17).
+        product_row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
+        registry, _, _ = _wired_target([product_row], item=_item(target_price=5.0))
+        scraper = mock_scraper()
+        scraper.scrape_product.side_effect = RateLimitError("429")
+        registry.get_scraper.return_value = scraper
+        notifier = mock_notifier()
+        orch = _make_orch(
+            notifier=notifier, registry=registry, targets=["broken", "limited"],
+            loads_by_target={"broken": TargetLoad("broken", error="invalid JSON")},
+        )
+
+        with _run_patches(orch):
+            exit_code = orch.run()
+
+        self.assertEqual(exit_code, EXIT_CODE_PRODUCTS_ERROR)
+        # The healthy target still ran (and its failures were still notified).
+        scraper.scrape_product.assert_called()
+        notifier.notify_errors.assert_called_once()
+
+    def test_all_targets_locked_exits_42(self):
+        registry, _, _ = _wired_target([{"skip": True}])
+        ui = mock_ui()
+        orch = _make_orch(ui=ui, registry=registry, targets=["one", "two"])
+
+        def held(target):
+            raise LockAcquisitionError
+
+        with _run_patches(orch, lock_fn=held):
+            exit_code = orch.run()
+
+        self.assertEqual(exit_code, EXIT_CODE_SKIPPED)
+        ui.log_error.assert_has_calls([
+            mock.call("System", messages.ERR_LOCK_HELD),
+            mock.call("System", messages.ERR_LOCK_HELD),
+        ])
+
+    def test_one_of_two_locked_is_still_success(self):
+        registry, _, _ = _wired_target([{"skip": True}])
+        orch = _make_orch(registry=registry, targets=["one", "two"])
+
+        locks = iter([LockAcquisitionError(), None])
+
+        def contended(target):
+            outcome = next(locks)
+            if outcome is not None:
+                raise outcome
+            return contextlib.nullcontext()
+
+        with _run_patches(orch, lock_fn=contended):
+            exit_code = orch.run()
+
+        self.assertEqual(exit_code, EXIT_CODE_SUCCESS)
+
+
+class TestRunNotificationGates(unittest.TestCase):
+    """run()'s end-of-target notifications: the notify_scraping_errors gate and stale alerts."""
+
+    def _run_failing_target(self, notify, last_checked=""):
+        product_row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
+        item = _item(target_price=5.0, last_checked=last_checked)
+        registry, manager, _ = _wired_target([product_row], item=item, notify=notify)
+        scraper = mock_scraper()
+        scraper.scrape_product.side_effect = ScraperParseError("bad html")
+        registry.get_scraper.return_value = scraper
+        notifier = mock_notifier()
+        orch = _make_orch(notifier=notifier, registry=registry)
+        with _run_patches(orch):
+            exit_code = orch.run()
+        return exit_code, notifier, item
+
+    def test_gate_on_sends_the_errors_push(self):
+        exit_code, notifier, item = self._run_failing_target(notify=True)
+        self.assertEqual(exit_code, EXIT_CODE_SUCCESS)  # a counted failure does not change the exit code
+        notifier.notify_errors.assert_called_once()
+        (failed_items,), _ = notifier.notify_errors.call_args
+        self.assertEqual([(i, type(e)) for i, e in failed_items],
+                         [(item, ScraperParseError)])
+
+    def test_gate_off_suppresses_the_errors_push_but_not_stale_alerts(self):
+        stale = (NOW - datetime.timedelta(hours=OLD_ENTRY_HOURS + 1)).strftime(TIMESTAMP_FORMAT)
+        exit_code, notifier, item = self._run_failing_target(notify=False, last_checked=stale)
+        self.assertEqual(exit_code, EXIT_CODE_SUCCESS)
+        # The per-scraper opt-out silences only the Scraping Errors push...
+        notifier.notify_errors.assert_not_called()
+        # ...while the stale-tracking alert still goes out, so a persistent
+        # problem cannot be muted entirely.
+        notifier.notify_old_entries.assert_called_once_with([item], OLD_ENTRY_HOURS)
+
+
+class TestRunDependencySkips(unittest.TestCase):
+    """A scraper whose dependencies are missing is skipped alone; the run proceeds."""
+
+    def test_manager_dependency_error_skips_only_that_target(self):
+        registry, manager, settings = _wired_target([{"skip": True}])
+        registry.get_manager.side_effect = [PluginDependencyError("deps missing"), manager]
+        ui = mock_ui()
+        orch = _make_orch(ui=ui, registry=registry, targets=["heavy", "healthy"])
+
+        with _run_patches(orch):
+            exit_code = orch.run()
+
+        self.assertEqual(exit_code, EXIT_CODE_SUCCESS)
+        ui.log_error.assert_called_once_with("System", "deps missing")
+        # The healthy target still completed a full pass (its save ran).
+        manager.save.assert_called_once()
+
+    def test_scraper_dependency_error_skips_only_that_target(self):
+        product_row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
+        registry, manager, _ = _wired_target([product_row], item=_item(target_price=5.0))
+        registry.get_scraper.side_effect = PluginDependencyError("client deps missing")
+        ui = mock_ui()
+        orch = _make_orch(ui=ui, registry=registry)
+
+        with _run_patches(orch):
+            exit_code = orch.run()
+
+        self.assertEqual(exit_code, EXIT_CODE_SUCCESS)
+        ui.log_error.assert_called_once_with("System", "client deps missing")
+        ui.complete_target.assert_called()
 
 
 if __name__ == "__main__":

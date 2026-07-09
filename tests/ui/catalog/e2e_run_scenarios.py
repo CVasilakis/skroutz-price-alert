@@ -32,6 +32,24 @@ def _():
     )
 
 
+@scenario(Surface.E2E_RUN, "drop_notify_failed", "Real orchestrator: price drop, notification delivery failed", tags=("e2e", "drop"))
+def _():
+    return drive_orchestrated_run(
+        products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
+        results_by_url={_URL.format(1): [ScrapeResult(price=248.0, currency="€")]},
+        has_services=True, delivery_ok=False,
+    )
+
+
+@scenario(Surface.E2E_RUN, "drop_not_configured", "Real orchestrator: price drop with no notification services configured", tags=("e2e", "drop"))
+def _():
+    return drive_orchestrated_run(
+        products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
+        results_by_url={_URL.format(1): [ScrapeResult(price=248.0, currency="€")]},
+        has_services=False,
+    )
+
+
 @scenario(Surface.E2E_RUN, "retry_then_success", "Real orchestrator: 5xx on attempt 1, success on attempt 2", tags=("e2e", "retry"))
 def _():
     return drive_orchestrated_run(

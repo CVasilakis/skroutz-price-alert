@@ -221,7 +221,8 @@ def drive_ping(url_entries: Sequence[tuple[str, bool]],
 def drive_config(version_state: str = "uptodate",
                  valid_count: int = 0, invalid_count: int = 0,
                  env_error: str = "", reminder_raw: object = None,
-                 reminder_day_raw: object = None, reminder_time_raw: object = None) -> BuildResult:
+                 reminder_day_raw: object = None, reminder_time_raw: object = None,
+                 general_block_raw: object = None) -> BuildResult:
     """Builds the Configuration Check panel (global checks only), patching its seams.
 
     Per-scraper products-config health is no longer on this panel — it now leads each
@@ -241,6 +242,9 @@ def drive_config(version_state: str = "uptodate",
             value renders the invalid-value row.
         reminder_day_raw (object): the raw ``reminder_day`` value (same semantics).
         reminder_time_raw (object): the raw ``reminder_time`` value (same semantics).
+        general_block_raw (object): when set, the raw ``settings`` *block* itself
+            (e.g. a string, for the malformed-block "Block ignored" row); overrides
+            the per-key raws above. ``None`` builds a well-formed block from them.
     """
     panel = StatusPanelBuilder("Configuration Check")
 
@@ -258,14 +262,18 @@ def drive_config(version_state: str = "uptodate",
 
     def resolve_general(_config_dir) -> ResolvedSettings:
         # The real resolve machinery against a synthetic settings block, so each row
-        # renders with production status/default/invalid logic but no file I/O.
-        block = {
+        # renders with production status/default/invalid logic but no file I/O. The
+        # block-shape warning comes from the same production helper resolve_all uses,
+        # so the "Block ignored" wording can never drift from what users see.
+        from core.settings.resolve import _block_warning
+        block = general_block_raw if general_block_raw is not None else {
             KEY_REMINDER: reminder_raw,
             KEY_REMINDER_DAY: reminder_day_raw,
             KEY_REMINDER_TIME: reminder_time_raw,
         }
         return ResolvedSettings(
-            [(spec, resolve_spec(spec, block, None)) for spec in GENERAL_SETTING_SPECS]
+            [(spec, resolve_spec(spec, block, None)) for spec in GENERAL_SETTING_SPECS],
+            block_warning=_block_warning(block, None),
         )
 
     with mock.patch.object(config_check, "check_for_updates", check_for_updates), \

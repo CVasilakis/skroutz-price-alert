@@ -56,6 +56,24 @@ def _():
     )
 
 
+@scenario(Surface.PING, "invalid_short_token", "An invalid URL whose token is too short to sample", tags=("error",))
+def _():
+    # obfuscate_invalid_url's 1-2 char branch: only the first character survives.
+    return drive_ping(
+        url_entries=[("tgram://ab/chat", False)],
+        test_results=[],
+    )
+
+
+@scenario(Surface.PING, "invalid_no_scheme", "An invalid entry with no URL scheme at all", tags=("error",))
+def _():
+    # No '://' to anchor on: the whole value is treated as the token.
+    return drive_ping(
+        url_entries=[("plainword", False)],
+        test_results=[],
+    )
+
+
 @scenario(Surface.PING, "not_configured_default", "No URLs configured (default message)", tags=("error",))
 def _():
     return drive_ping(url_entries=[], test_results=[], env_error_msg="")

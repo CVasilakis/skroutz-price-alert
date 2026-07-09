@@ -5,3 +5,5 @@
 #
 # pytest >= 7 is required for the `pythonpath` ini option used in pyproject.toml.
 pytest>=7.0
+# Coverage visibility (report-only; CI prints the summary, no threshold gate).
+pytest-cov

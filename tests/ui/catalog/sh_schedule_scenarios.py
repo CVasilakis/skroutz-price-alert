@@ -50,6 +50,9 @@ _case("selected_not_installed", "An explicit --<target> that is registered but n
 _case("unknown_target", "An explicit --<target> in neither the registry nor the units.",
       "--bogus", world=WORLD_INSTALLED, tags=("error",))
 
+_case("unknown_target_nothing_installed", "An unknown --<target> with no units installed (no hint line).",
+      "--bogus", world=WORLD_EMPTY, tags=("error",))
+
 _case("orphan_skipped_no_flag", "No flags: the orphan is reported and skipped, the rest proceed.",
       world=WORLD_ORPHAN, tags=("orphan",))
 

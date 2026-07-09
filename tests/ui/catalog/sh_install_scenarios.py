@@ -74,3 +74,8 @@ _case("fresh_install_config_notes", "First-ever run: venv created, lingering ena
 
 _case("reinstall_all_configured", "Re-run on a fully configured install: quiet happy path.",
       world=_CONFIGURED)
+
+_case("selected_install", "A single-target install (--skroutz) with the plugin's own requirements.",
+      "--skroutz",
+      world=replace(_CONFIGURED,
+                    requirements={"skroutz": "/opt/fake/scrapers/skroutz/requirements.txt"}))
