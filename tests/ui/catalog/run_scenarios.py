@@ -53,7 +53,7 @@ def _start(s, settings=None, block_warning=None, target="skroutz", config=_CONFI
 
 # --- Single-attempt price outcomes --------------------------------------------------
 
-@scenario(Surface.RUN, "success_drop_notified", "Price drop below target; notification delivered", tags=("price", "drop"))
+@scenario(Surface.RUN, "success_drop_notified", "Price drop below target; notification delivered", tags=("price_drop",))
 def _():
     def script(s):
         _start(s)
@@ -64,7 +64,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "success_drop_notify_failed", "Price drop; some notifications failed to deliver", tags=("price", "drop"))
+@scenario(Surface.RUN, "success_drop_notify_failed", "Price drop; some notifications failed to deliver", tags=("price_drop",))
 def _():
     def script(s):
         _start(s)
@@ -75,7 +75,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "success_drop_not_configured", "Price drop; .env has no notification URLs", tags=("price", "drop"))
+@scenario(Surface.RUN, "success_drop_not_configured", "Price drop; .env has no notification URLs", tags=("price_drop",))
 def _():
     def script(s):
         _start(s)
@@ -86,7 +86,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "success_ok", "Price at/above target (no drop)", tags=("price",))
+@scenario(Surface.RUN, "success_ok", "Price at/above target (no drop)", tags=("ok",))
 def _():
     def script(s):
         _start(s)
@@ -97,7 +97,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "no_target_missing", "Success with no target_price field set", tags=("price", "no_target"))
+@scenario(Surface.RUN, "no_target_missing", "Success with no target_price field set", tags=("ok",))
 def _():
     def script(s):
         _start(s)
@@ -109,7 +109,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "no_target_invalid", "Success with an unparseable target_price", tags=("price", "no_target"))
+@scenario(Surface.RUN, "no_target_invalid", "Success with an unparseable target_price", tags=("ok",))
 def _():
     def script(s):
         _start(s)
@@ -121,7 +121,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "no_target_zero", "Success with target explicitly 0.0 (no note)", tags=("price", "no_target"))
+@scenario(Surface.RUN, "no_target_zero", "Success with target explicitly 0.0 (no note)", tags=("ok",))
 def _():
     def script(s):
         _start(s)
@@ -132,7 +132,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "success_corrupted_timestamp", "Success after repairing a corrupted timestamp", tags=("price",))
+@scenario(Surface.RUN, "success_corrupted_timestamp", "Success after repairing a corrupted timestamp", tags=("ok",))
 def _():
     def script(s):
         _start(s)
@@ -143,7 +143,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "success_stale", "Success on a product that had gone stale (>48h)", tags=("price", "stale"))
+@scenario(Surface.RUN, "success_stale", "Success on a product that had gone stale (>48h)", tags=("ok",))
 def _():
     def script(s):
         _start(s)
@@ -156,7 +156,7 @@ def _():
 
 # --- Skips and non-retryable warnings -----------------------------------------------
 
-@scenario(Surface.RUN, "skip_true", "Product skipped via skip:true in config", tags=("skip",))
+@scenario(Surface.RUN, "skip_true", "Product skipped via skip:true in config", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
@@ -165,7 +165,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "invalid_url_warning", "Product URL not scrapable; skipped with a warning", tags=("warning",))
+@scenario(Surface.RUN, "invalid_url_warning", "Product URL not scrapable; skipped with a warning", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
@@ -174,7 +174,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "invalid_url_warning_stale", "Invalid-URL warning on a stale product", tags=("warning", "stale"))
+@scenario(Surface.RUN, "invalid_url_warning_stale", "Invalid-URL warning on a stale product", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
@@ -183,7 +183,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "skip_product_not_found", "Scraper raised ProductNotFoundError", tags=("warning", "skip_error"))
+@scenario(Surface.RUN, "skip_product_not_found", "Scraper raised ProductNotFoundError", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
@@ -194,7 +194,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "skip_product_unavailable", "Scraper raised ProductUnavailableError", tags=("warning", "skip_error"))
+@scenario(Surface.RUN, "skip_product_unavailable", "Scraper raised ProductUnavailableError", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
@@ -205,7 +205,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "skip_invalid_url_error", "Scraper raised InvalidURLError", tags=("warning", "skip_error"))
+@scenario(Surface.RUN, "skip_invalid_url_error", "Scraper raised InvalidURLError", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
@@ -252,7 +252,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "retry_success_stale_notified", "Stale product: fail attempt 1, succeed attempt 2, drop + notify", tags=("retry", "stale", "drop"))
+@scenario(Surface.RUN, "retry_success_stale_notified", "Stale product: fail attempt 1, succeed attempt 2, drop + notify", tags=("retry", "price_drop"))
 def _():
     def script(s):
         _start(s)
@@ -270,7 +270,7 @@ def _():
 
 # --- Terminal failures ---------------------------------------------------------------
 
-@scenario(Surface.RUN, "failure_all_parse", "All three attempts failed (ScraperParseError; no errors.txt pointer)", tags=("failure", "retry"))
+@scenario(Surface.RUN, "failure_all_parse", "All three attempts failed (ScraperParseError; no errors.txt pointer)", tags=("error", "retry"))
 def _():
     # ScraperParseError's policy saves no traceback, so its failure row carries no
     # errors.txt pointer (only default-policy errors like ConnectionError do).
@@ -286,7 +286,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "failure_server_error", "All attempts hit 5xx (ServerError; no errors.txt pointer)", tags=("failure",))
+@scenario(Surface.RUN, "failure_server_error", "All attempts hit 5xx (ServerError; no errors.txt pointer)", tags=("error",))
 def _():
     def script(s):
         _start(s)
@@ -300,7 +300,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "failure_network", "All attempts hit a network error (Wi-Fi down)", tags=("failure", "network"))
+@scenario(Surface.RUN, "failure_network", "All attempts hit a network error (Wi-Fi down)", tags=("error",))
 def _():
     def script(s):
         _start(s)
@@ -315,7 +315,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "failure_rate_limit", "Rate limited on every attempt; target aborts", tags=("failure", "rate_limit"))
+@scenario(Surface.RUN, "failure_rate_limit", "Rate limited on every attempt; target aborts", tags=("error",))
 def _():
     def script(s):
         _start(s)
@@ -330,7 +330,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "failure_rate_limit_mixed", "Two failures then a rate limit on attempt 3; aborts", tags=("failure", "rate_limit", "retry"))
+@scenario(Surface.RUN, "failure_rate_limit_mixed", "Two failures then a rate limit on attempt 3; aborts", tags=("error", "retry"))
 def _():
     def script(s):
         _start(s)
@@ -347,7 +347,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "failure_stale", "Terminal failure on a product that is also stale", tags=("failure", "stale"))
+@scenario(Surface.RUN, "failure_stale", "Terminal failure on a product that is also stale", tags=("error",))
 def _():
     # A default-policy error (ConnectionError): its failure row stacks the
     # errors.txt pointer with the stale warning.
@@ -366,7 +366,7 @@ def _():
 
 # --- Mid-flight states (sleep / spinner; no complete_target) -------------------------
 
-@scenario(Surface.RUN, "sleeping_pacing", "Normal pacing delay between products (progress bar)", tags=("sleep",))
+@scenario(Surface.RUN, "sleeping_pacing", "Normal pacing delay between products (progress bar)", tags=("in_progress",))
 def _():
     def script(s):
         _start(s)
@@ -378,7 +378,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "sleeping_retry", "Retry back-off delay ('Retrying (2/3)')", tags=("sleep", "retry"))
+@scenario(Surface.RUN, "sleeping_retry", "Retry back-off delay ('Retrying (2/3)')", tags=("in_progress", "retry"))
 def _():
     def script(s):
         _start(s)
@@ -390,7 +390,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "scraping_spinner", "Active scraping spinner (attempt 1)", tags=("spinner",))
+@scenario(Surface.RUN, "scraping_spinner", "Active scraping spinner (attempt 1)", tags=("in_progress",))
 def _():
     def script(s):
         _start(s)
@@ -398,7 +398,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "scraping_spinner_retry", "Active scraping spinner showing the retry counter", tags=("spinner", "retry"))
+@scenario(Surface.RUN, "scraping_spinner_retry", "Active scraping spinner showing the retry counter", tags=("in_progress", "retry"))
 def _():
     def script(s):
         _start(s)
@@ -422,7 +422,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "interrupt_during_sleep", "Ctrl+C during the pacing delay", tags=("interrupt", "sleep"))
+@scenario(Surface.RUN, "interrupt_during_sleep", "Ctrl+C during the pacing delay", tags=("interrupt", "in_progress"))
 def _():
     def script(s):
         _start(s)
@@ -436,7 +436,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "interrupt_during_retry_sleep", "Ctrl+C during a retry back-off", tags=("interrupt", "sleep", "retry"))
+@scenario(Surface.RUN, "interrupt_during_retry_sleep", "Ctrl+C during a retry back-off", tags=("interrupt", "in_progress", "retry"))
 def _():
     def script(s):
         _start(s)
@@ -482,7 +482,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "config_unavailable", "No Config row: the storage layer's dependencies are missing", tags=("system", "layout"))
+@scenario(Surface.RUN, "config_unavailable", "No Config row shown: this scraper's optional dependencies are not installed", tags=("system", "layout"))
 def _():
     # The storage-deps branch: the manager could not even be instantiated, so the
     # panel opens with NO 'Monitored Items' row (config_view=None) — unlike
@@ -562,7 +562,7 @@ def _():
 # The healthy 'Config' row leads every scenario above (_start defaults to a clean load);
 # these cover the faulty row and the per-target broken-config skip.
 
-@scenario(Surface.RUN, "config_faulty", "Some products misconfigured (Config row leads)", tags=("config",))
+@scenario(Surface.RUN, "config_faulty", "Some products misconfigured (Config row leads)", tags=("products",))
 def _():
     def script(s):
         _start(s, config=config_faulty())
@@ -571,7 +571,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "config_failed_skip", "Products config failed to load; scraper skipped", tags=("config", "error"))
+@scenario(Surface.RUN, "config_failed_skip", "Products config failed to load; scraper skipped", tags=("products", "error"))
 def _():
     # Mirrors the orchestrator's per-target skip: open the panel with a failed 'Config' row
     # and finish immediately — no products are scraped for this target.

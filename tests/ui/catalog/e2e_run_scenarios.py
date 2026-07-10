@@ -23,7 +23,7 @@ from ui.harness.drivers import drive_orchestrated_run
 _URL = "https://fake-store.example/p/{}"
 
 
-@scenario(Surface.E2E_RUN, "drop_notified", "Real orchestrator: price drop, notification delivered", tags=("e2e", "drop"))
+@scenario(Surface.E2E_RUN, "drop_notified", "Price drop, notification delivered", tags=("price_drop",))
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
@@ -32,7 +32,7 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "drop_notify_failed", "Real orchestrator: price drop, notification delivery failed", tags=("e2e", "drop"))
+@scenario(Surface.E2E_RUN, "drop_notify_failed", "Price drop, notification delivery failed", tags=("price_drop",))
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
@@ -41,7 +41,7 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "drop_not_configured", "Real orchestrator: price drop with no notification services configured", tags=("e2e", "drop"))
+@scenario(Surface.E2E_RUN, "drop_not_configured", "Price drop with no notification services configured", tags=("price_drop",))
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
@@ -50,7 +50,7 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "retry_then_success", "Real orchestrator: 5xx on attempt 1, success on attempt 2", tags=("e2e", "retry"))
+@scenario(Surface.E2E_RUN, "retry_then_success", "5xx on attempt 1, success on attempt 2", tags=("retry",))
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
@@ -61,7 +61,7 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "failure_all_parse", "Real orchestrator: every attempt fails to parse", tags=("e2e", "failure"))
+@scenario(Surface.E2E_RUN, "failure_all_parse", "Every attempt fails to parse", tags=("error",))
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Flaky Product", "url": _URL.format(1), "target_price": 50.0}],
@@ -69,7 +69,7 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "mixed_skip_warning_no_target", "Real orchestrator: skip, 404 warning, and a missing target price", tags=("e2e", "combined"))
+@scenario(Surface.E2E_RUN, "mixed_skip_warning_no_target", "Skip, 404 warning, and a missing target price", tags=("combined",))
 def _():
     return drive_orchestrated_run(
         products=[

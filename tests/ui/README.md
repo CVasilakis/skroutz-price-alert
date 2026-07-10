@@ -196,9 +196,19 @@ right?" check that snapshots (plain text) can't give you.
 |---------------|------------------------------------------------------------------------------|
 | *(none)*      | Prints every scenario to the terminal with real ANSI color, grouped by surface. |
 | `--surface S` | Limits to one surface: `run`, `e2e-run`, `status`, `ping`, `config`, `startup`, or a shell surface (`sh-install`, `sh-update`, `sh-schedule`, `sh-enable`, `sh-disable`, `sh-stop`, `sh-run`, `sh-uninstall`). |
-| `--tag T`     | Limits to scenarios tagged `T` (e.g. `retry`, `interrupt`, `layout`, `settings`). |
+| `--tag T`     | Limits to scenarios tagged `T` (e.g. `retry`, `interrupt`, `layout`, `settings`). `T` must be one of the curated tags in `TAG_VOCABULARY` (`catalog/_base.py`); the flag rejects anything else. |
 | `--html PATH` | Renders the same output into one self-contained HTML file (colors preserved) for sharing or archiving, instead of printing. |
 | `--list`      | Prints each (optionally filtered) scenario's key and one-line description, then a count, and exits without rendering. Great for discovering what exists. |
+
+Test-only scenarios (`in_gallery=False`, currently the `startup` layout guards) are
+hidden from the gallery and the HTML report by default — their panels are already
+reviewed on their own surfaces — but still snapshot and still feed the
+outside-panels assertion; render them explicitly with `--surface startup`.
+
+Section headers (terminal rules and the HTML report's sections) show each surface's
+human-readable label from `SURFACE_INFO` (`catalog/_base.py`) — e.g. `sh-install`
+renders as **install.sh** and `startup` as **Full startup transcript** — while the
+`--surface` values and snapshot filenames keep the stable machine names.
 
 `--surface` and `--tag` combine, and both work with `--list` and `--html`. The gallery
 needs no environment setup — it adds `src/` (the `core` package root) and `tests/` to the path itself, so
@@ -217,8 +227,16 @@ class Scenario:
     surface: Surface     # RUN | STATUS | PING | CONFIG | SH_INSTALL | ... | SH_UNINSTALL
     description: str      # one line, shown as the gallery header
     build: Callable[[], BuildResult]   # produces the renderable + its border color
-    tags: tuple[str, ...] = ()          # optional filter labels
+    tags: tuple[str, ...] = ()          # optional filter labels, from TAG_VOCABULARY
 ```
+
+Tags come from one curated vocabulary — `TAG_VOCABULARY` in `catalog/_base.py`, a
+`tag -> one-line meaning` mapping (currently: `ok`, `error`, `skipped`, `help`,
+`retry`, `interrupt`, `in_progress`, `price_drop`, `settings`, `products`,
+`reminder`, `timer`, `last_run`, `orphan`, `registry`, `system`, `combined`,
+`layout`). `test_ui_catalog.py` rejects a tag outside the vocabulary and a
+vocabulary entry no scenario uses, so the filter chips in the HTML report stay
+small and meaningful. To introduce a tag, add it there with its meaning.
 
 You never construct one by hand — the `@scenario(...)` decorator registers the function it
 wraps. `build()` returns a `BuildResult(renderable, border_color, exit_code)`:
@@ -240,15 +258,15 @@ you see in test output and `--list`.
 Each surface has a **driver** in `harness/drivers.py` that feeds synthetic inputs to the
 real production builder:
 
-| Surface  | Driver(s)                                                   | Drives (production code)                              |
-|----------|-------------------------------------------------------------|------------------------------------------------------|
-| `RUN`    | `drive_run(script)`                                         | the real `tui.InteractiveExecutionStrategy` panel    |
-| `E2E_RUN`| `drive_orchestrated_run(products, results_by_url)`          | the real `ScrapingOrchestrator` driving that same panel |
-| `STATUS` | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
-| `PING`   | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
-| `CONFIG` | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers (version + .env) |
-| `STARTUP`| `drive_startup(run_script, …)`                              | the whole pre-scrape transcript on one console: Configuration Check + the real `ReminderService.run_once()` + the Scraping panel (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
-| `SH_*`   | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
+| Surface  | Gallery label | Driver(s)                                                   | Drives (production code)                              |
+|----------|---------------|-------------------------------------------------------------|------------------------------------------------------|
+| `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `tui.InteractiveExecutionStrategy` panel    |
+| `E2E_RUN`| Scraping panel (end-to-end) | `drive_orchestrated_run(products, results_by_url)`          | the real `ScrapingOrchestrator` driving that same panel |
+| `STATUS` | Health check (--status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
+| `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
+| `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers (version + .env) |
+| `STARTUP`| Full startup transcript (test-only; hidden from gallery/report) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript on one console: Configuration Check + the real `ReminderService.run_once()` + the Scraping panel (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
+| `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
 
 The per-scraper **products-config health** (the `Config` row) is no longer a `CONFIG`-surface
 concern: it leads each `STATUS` Service Status panel (`drive_service`'s `config`) and each
@@ -262,7 +280,7 @@ script against a real strategy (with the live-refresh loop stubbed out so nothin
 and captures the resulting panel:
 
 ```python
-@scenario(Surface.RUN, "retry_then_drop", "Attempt 1 failed, attempt 2 dropped below target", tags=("retry", "drop"))
+@scenario(Surface.RUN, "retry_then_drop", "Attempt 1 failed, attempt 2 dropped below target", tags=("retry", "price_drop"))
 def _():
     def script(s):
         _start(s)                                   # opens the target with a Config row + settings section
@@ -307,7 +325,7 @@ The other three panel surfaces are *static*, so their scenarios just hand the dr
 inputs and return its result directly — no script:
 
 ```python
-@scenario(Surface.STATUS, "invalid_retention", "log_retention_days out of range", tags=("service", "settings"))
+@scenario(Surface.STATUS, "invalid_retention", "log_retention_days out of range", tags=("settings",))
 def _():
     resolved = resolved_settings(retention=(7, STATUS_INVALID, 99))   # from inputs.py
     return drive_service("skroutz", timer_props(True), service_props(), resolved,
@@ -369,7 +387,7 @@ formatting and warning text), `inputs.py` offers small factories:
 2. Write one `@scenario(...)`-decorated function that returns a driver call (use the
    examples above and the existing scenarios as templates). Give it a **unique**
    snake_case `name` and a clear one-line `description`; add `tags` if useful for gallery
-   filtering.
+   filtering (they must come from `TAG_VOCABULARY` in `catalog/_base.py`).
 3. Mint its golden file and review it:
    ```sh
    UPDATE_SNAPSHOTS=1 ./venv/bin/python3 -m pytest

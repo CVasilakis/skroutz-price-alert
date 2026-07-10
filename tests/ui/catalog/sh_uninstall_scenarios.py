@@ -25,13 +25,13 @@ _case("unknown_target", "An explicit --<target> in neither the registry nor the 
       "--bogus", world=WORLD_INSTALLED, tags=("error",))
 
 _case("selected_removal", "Only the named target's units are removed; the venv stays.",
-      "--skroutz", world=WORLD_INSTALLED, tags=("teardown",))
+      "--skroutz", world=WORLD_INSTALLED)
 
 _case("orphan_removal", "An orphan's leftover units can be purged by name.",
-      "--ghost", world=WORLD_ORPHAN, tags=("teardown", "orphan"))
+      "--ghost", world=WORLD_ORPHAN, tags=("orphan",))
 
 _case("full_teardown", "No flags: every unit removed and the venv deleted.",
-      world=WORLD_INSTALLED, tags=("teardown",))
+      world=WORLD_INSTALLED)
 
 _case("full_teardown_no_venv", "Full teardown when the venv is already gone.",
-      world=replace(WORLD_INSTALLED, venv=False), tags=("teardown",))
+      world=replace(WORLD_INSTALLED, venv=False))

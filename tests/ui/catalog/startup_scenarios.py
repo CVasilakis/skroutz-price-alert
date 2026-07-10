@@ -7,6 +7,11 @@ structurally cannot: a stray line breaking the panel layout *between* panels —
 reminder warning logged straight to the console during an interactive run. The companion
 assertion in ``test_ui_snapshots`` fails if any captured line falls outside a panel box,
 and the golden transcript lets that stray text be inspected visually in the diff.
+
+Test-only (``in_gallery=False``): every panel in these transcripts is already reviewed
+on its own surface (CONFIG + RUN), so the gallery and the HTML report skip this section
+as redundant for a human reviewer. The snapshots and the outside-panels assertion keep
+running; render on demand with ``gallery.py --surface startup``.
 """
 
 from core.ui.tui import PriceOutcome
@@ -27,11 +32,11 @@ def _run_script(s):
     s.complete_target()
 
 
-@scenario(Surface.STARTUP, "clean", "Valid config: panels stack with no stray text", tags=("startup",))
+@scenario(Surface.STARTUP, "clean", "Valid config: panels stack with no stray text", tags=("layout",), in_gallery=False)
 def _():
     return drive_startup(_run_script, valid_count=1)
 
 
-@scenario(Surface.STARTUP, "invalid_reminder", "Invalid reminder value must not leak a line between panels", tags=("startup", "reminder"))
+@scenario(Surface.STARTUP, "invalid_reminder", "Invalid reminder value must not leak a line between panels", tags=("reminder", "layout"), in_gallery=False)
 def _():
     return drive_startup(_run_script, valid_count=1, reminder_raw="fortnightly")

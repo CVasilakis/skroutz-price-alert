@@ -24,7 +24,7 @@ def _():
     )
 
 
-@scenario(Surface.PING, "mixed_valid_invalid", "One valid+delivered, one invalid URL", tags=("mixed",))
+@scenario(Surface.PING, "mixed_valid_invalid", "One valid+delivered, one invalid URL", tags=("combined",))
 def _():
     return drive_ping(
         url_entries=[("tgram://token/123", True), ("discord://broken", False)],
@@ -40,7 +40,7 @@ def _():
     )
 
 
-@scenario(Surface.PING, "delivered_and_failed", "One delivered, one failed (mixed)", tags=("mixed",))
+@scenario(Surface.PING, "delivered_and_failed", "One delivered, one failed (mixed)", tags=("combined",))
 def _():
     return drive_ping(
         url_entries=[("tgram://token/123", True), ("discord://id/tok", True)],

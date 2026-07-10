@@ -26,13 +26,13 @@ def _svc(result="success", code="0", running=False, exec_start=RAN_AT):
 
 # --- Settings section variants -------------------------------------------------------
 
-@scenario(Surface.STATUS, "service_healthy", "Installed, all settings valid, timer active, last run OK", tags=("service",))
+@scenario(Surface.STATUS, "service_healthy", "Installed, all settings valid, timer active, last run OK", tags=("ok",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
                          CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "service_defaults", "All settings unset (active defaults shown)", tags=("service", "settings"))
+@scenario(Surface.STATUS, "service_defaults", "All settings unset (active defaults shown)", tags=("settings",))
 def _():
     resolved = resolved_settings(
         interval=("1h", STATUS_DEFAULT, None),
@@ -42,7 +42,7 @@ def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "service_nocfg", "Config file missing (settings fall back to defaults)", tags=("service", "settings"))
+@scenario(Surface.STATUS, "service_nocfg", "Config file missing (settings fall back to defaults)", tags=("settings",))
 def _():
     resolved = resolved_settings(
         interval=("1h", STATUS_NOCFG, None),
@@ -52,25 +52,25 @@ def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "service_invalid_interval", "An unsupported execution_interval", tags=("service", "settings"))
+@scenario(Surface.STATUS, "service_invalid_interval", "An unsupported execution_interval", tags=("settings",))
 def _():
     resolved = resolved_settings(interval=("1h", STATUS_INVALID, "3h"))
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "service_invalid_retention", "An out-of-range log_retention_days", tags=("service", "settings"))
+@scenario(Surface.STATUS, "service_invalid_retention", "An out-of-range log_retention_days", tags=("settings",))
 def _():
     resolved = resolved_settings(retention=(7, STATUS_INVALID, 99))
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "service_invalid_notify", "An unrecognized notify_scraping_errors value", tags=("service", "settings"))
+@scenario(Surface.STATUS, "service_invalid_notify", "An unrecognized notify_scraping_errors value", tags=("settings",))
 def _():
     resolved = resolved_settings(notify=(True, STATUS_INVALID, "maybe"))
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "service_block_ignored", "A malformed settings block (ignored)", tags=("service", "settings"))
+@scenario(Surface.STATUS, "service_block_ignored", "A malformed settings block (ignored)", tags=("settings",))
 def _():
     resolved = resolved_settings(
         interval=("1h", STATUS_DEFAULT, None),
@@ -85,19 +85,19 @@ def _():
 # The healthy 'Config' row is exercised by every scenario above (drive_service defaults to
 # a clean load); these cover the faulty / failed / unavailable variants.
 
-@scenario(Surface.STATUS, "config_faulty", "Some products are misconfigured (Config row)", tags=("service", "config"))
+@scenario(Surface.STATUS, "config_faulty", "Some products are misconfigured (Config row)", tags=("products",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
                          CFG, "hourly", "hourly", config=config_faulty())
 
 
-@scenario(Surface.STATUS, "config_failed", "Products config failed to load (Config row)", tags=("service", "config", "error"))
+@scenario(Surface.STATUS, "config_failed", "Products config failed to load (Config row)", tags=("products", "error"))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
                          CFG, "hourly", "hourly", config=config_failed(STORAGE_BAD_JSON))
 
 
-@scenario(Surface.STATUS, "config_unavailable", "Dependencies missing (no Config row)", tags=("service", "config"))
+@scenario(Surface.STATUS, "config_unavailable", "Dependencies missing (no Config row)", tags=("products", "system"))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
                          CFG, "hourly", "hourly", config=None)
@@ -105,63 +105,63 @@ def _():
 
 # --- Timer / last-execution / next-execution variants --------------------------------
 
-@scenario(Surface.STATUS, "timer_inactive", "The systemd timer is not active", tags=("service", "timer"))
+@scenario(Surface.STATUS, "timer_inactive", "The systemd timer is not active", tags=("timer",))
 def _():
     return drive_service(TARGET, timer_props(False, NEXT_AT), _svc(), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "exec_skipped", "Last run skipped (another instance was running)", tags=("service", "verdict"))
+@scenario(Surface.STATUS, "exec_skipped", "Last run skipped (another instance was running)", tags=("last_run",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "42"), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "exec_products_error", "Last run failed on the products config (exit 15)", tags=("service", "verdict"))
+@scenario(Surface.STATUS, "exec_products_error", "Last run failed on the products config (exit 15)", tags=("last_run",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "15"), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "exec_env_error", "Last run failed on the .env (exit 16)", tags=("service", "verdict"))
+@scenario(Surface.STATUS, "exec_env_error", "Last run failed on the .env (exit 16)", tags=("last_run",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "16"), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "exec_rate_limit", "Last run was rate limited (exit 17)", tags=("service", "verdict"))
+@scenario(Surface.STATUS, "exec_rate_limit", "Last run was rate limited (exit 17)", tags=("last_run",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "17"), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "exec_interrupt", "Last run was interrupted (exit 130)", tags=("service", "verdict"))
+@scenario(Surface.STATUS, "exec_interrupt", "Last run was interrupted (exit 130)", tags=("last_run",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "130"), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "exec_unknown_code", "Last run failed with an unrecognized exit code", tags=("service", "verdict"))
+@scenario(Surface.STATUS, "exec_unknown_code", "Last run failed with an unrecognized exit code", tags=("last_run",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("signal", "9"), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "running_now", "The service is currently running", tags=("service",))
+@scenario(Surface.STATUS, "running_now", "The service is currently running", tags=("in_progress",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(running=True), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "not_scheduled", "Installed but the timer has no next elapse", tags=("service", "timer"))
+@scenario(Surface.STATUS, "not_scheduled", "Installed but the timer has no next elapse", tags=("timer",))
 def _():
     return drive_service(TARGET, timer_props(True, "0"), _svc(), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "never_run", "Installed and scheduled but never executed yet", tags=("service",))
+@scenario(Surface.STATUS, "never_run", "Installed and scheduled but never executed yet", tags=("ok",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(exec_start=""), resolved_settings(), CFG, "hourly", "hourly")
 
 
-@scenario(Surface.STATUS, "schedule_drift", "Live timer differs from the configured interval", tags=("service", "drift"))
+@scenario(Surface.STATUS, "schedule_drift", "Live timer differs from the configured interval", tags=("timer",))
 def _():
     # interval ok/default, but the on-disk OnCalendar ("*:0/30") != the configured one.
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(), CFG, "hourly", "*:0/30")
 
 
-@scenario(Surface.STATUS, "drift_suppressed_invalid_interval", "An invalid interval suppresses the drift footnote", tags=("service", "drift", "settings"))
+@scenario(Surface.STATUS, "drift_suppressed_invalid_interval", "An invalid interval suppresses the drift footnote", tags=("timer", "settings"))
 def _():
     # The on-disk OnCalendar differs, but the configured interval is *invalid* — the
     # Execution Interval row owns that problem, so the panel's own gate must NOT add
@@ -171,7 +171,7 @@ def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "*:0/30")
 
 
-@scenario(Surface.STATUS, "service_many_issues", "Invalid setting + timer down + failed run + drift", tags=("service", "combined"))
+@scenario(Surface.STATUS, "service_many_issues", "Invalid setting + timer down + failed run + drift", tags=("combined",))
 def _():
     resolved = resolved_settings(
         interval=("1h", STATUS_OK, "1h"),
@@ -182,11 +182,11 @@ def _():
 
 # --- Whole panels (not built via the per-row settings/systemd path) ------------------
 
-@scenario(Surface.STATUS, "not_installed", "Plugin registered but no units installed", tags=("whole",))
+@scenario(Surface.STATUS, "not_installed", "Plugin registered but no units installed", tags=("error",))
 def _():
     return drive_not_installed(TARGET)
 
 
-@scenario(Surface.STATUS, "orphan", "Units installed for a plugin no longer registered", tags=("whole", "orphan"))
+@scenario(Surface.STATUS, "orphan", "Units installed for a plugin no longer registered", tags=("orphan",))
 def _():
     return drive_orphan("oldstore")

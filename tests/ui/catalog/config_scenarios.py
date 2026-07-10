@@ -17,12 +17,12 @@ def _():
     return drive_config("uptodate", valid_count=2)
 
 
-@scenario(Surface.CONFIG, "update_available", "A newer version is available", tags=("version",))
+@scenario(Surface.CONFIG, "update_available", "A newer version is available")
 def _():
     return drive_config("available", valid_count=2)
 
 
-@scenario(Surface.CONFIG, "update_check_error", "The update check could not reach the remote", tags=("version",))
+@scenario(Surface.CONFIG, "update_check_error", "The update check could not reach the remote", tags=("error",))
 def _():
     return drive_config("error", valid_count=2)
 
@@ -56,12 +56,12 @@ def _():
     return drive_config("uptodate", valid_count=2, general_block_raw="1 month")
 
 
-@scenario(Surface.CONFIG, "env_mixed", "Some notification URLs are invalid", tags=("env",))
+@scenario(Surface.CONFIG, "env_mixed", "Some notification URLs are invalid", tags=("error",))
 def _():
     return drive_config("uptodate", valid_count=1, invalid_count=2)
 
 
-@scenario(Surface.CONFIG, "env_not_configured", "No usable notification URLs", tags=("env", "error"))
+@scenario(Surface.CONFIG, "env_not_configured", "No usable notification URLs", tags=("error",))
 def _():
     return drive_config("uptodate", valid_count=0, invalid_count=0, env_error=ENV_NONE)
 

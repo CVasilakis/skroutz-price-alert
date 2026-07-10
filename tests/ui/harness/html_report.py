@@ -19,7 +19,7 @@ import re
 from rich.cells import cell_len
 from rich.terminal_theme import TerminalTheme
 
-from ui.catalog._base import BuildResult, Scenario, Surface
+from ui.catalog._base import BuildResult, Scenario, Surface, SURFACE_INFO
 from ui.harness.rendering import make_recording_console, paint
 
 # The eight ANSI slots the panels actually use, in Rich order:
@@ -397,7 +397,8 @@ def _dot(color: str) -> str:
 
 def _scenario(sc: Scenario, result: BuildResult) -> str:
     key = sc.snapshot_key
-    text = " ".join([key, sc.name, sc.description, " ".join(sc.tags), sc.surface.value]).lower()
+    text = " ".join([key, sc.name, sc.description, " ".join(sc.tags), sc.surface.value,
+                     SURFACE_INFO[sc.surface].label]).lower()
     tags = "".join(f'<span class="pill">{_html.escape(t)}</span>' for t in sc.tags)
     if result.exit_code is not None:
         tags += f'<span class="pill">exit {result.exit_code}</span>'
@@ -436,20 +437,25 @@ def render_report(scenarios: list[Scenario]) -> str:
 
     nav, main = [], []
     for surface, items in groups.items():
-        label = surface.value
-        anchor = f"surface-{label}"
+        info = SURFACE_INFO[surface]
+        # Anchors keep the stable surface *value* (snapshot-key prefix); only the
+        # visible label is the human-readable one.
+        anchor = f"surface-{surface.value}"
         nav.append(
-            f'<a class="nav-surface" href="#{anchor}">{_html.escape(label)}'
+            f'<a class="nav-surface" href="#{anchor}">{_html.escape(info.label)}'
             f'<span class="nav-count">{len(items)}</span></a>'
         )
         main.append(f'<section class="surface" id="{anchor}">')
         main.append(
             f'<button class="surface-head" type="button" aria-expanded="true">'
             f'<span class="chev">&#9662;</span>'
-            f'<span class="surface-name">{_html.escape(label)} surface</span>'
+            f'<span class="surface-name">{_html.escape(info.label)}</span>'
             f'<span class="surface-count">{len(items)}</span></button>'
         )
         main.append('<div class="surface-body">')
+        # One-line section subtitle, reusing the existing muted description style so
+        # no new CSS is introduced; collapses along with the section body.
+        main.append(f'<div class="scn-desc">{_html.escape(info.blurb)}</div>')
         
         # Build all items so we can sort them by color
         built_items = [(sc, sc.build()) for sc in items]
@@ -460,7 +466,8 @@ def render_report(scenarios: list[Scenario]) -> str:
         
         for sc, result in built_items:
             tags_str = " ".join(sc.tags)
-            data = " ".join([sc.snapshot_key, sc.name, sc.description, tags_str]).lower()
+            data = " ".join([sc.snapshot_key, sc.name, sc.description, tags_str,
+                             info.label]).lower()
             nav.append(
                 f'<a class="nav-item" href="#{sc.snapshot_key}" data-text="{_html.escape(data, quote=True)}" data-tags=" {tags_str} ">'
                 f'{_dot(result.border_color)}<span>{_html.escape(sc.name)}</span></a>'
