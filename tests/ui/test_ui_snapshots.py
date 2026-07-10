@@ -4,7 +4,7 @@ Renders every catalogued scenario and compares the result (a ``# border: <color>
 plus the plain-text panel) against a committed file in ``snapshots/``. Set
 ``UPDATE_SNAPSHOTS=1`` to (re)write the golden files after reviewing a change:
 
-    UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests
+    UPDATE_SNAPSHOTS=1 ./venv/bin/python3 -m pytest
 """
 
 import os
@@ -16,9 +16,7 @@ from ui.harness.rendering import capture_text, lines_outside_panels, snapshot_bo
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 UPDATE = os.environ.get("UPDATE_SNAPSHOTS") == "1"
-_REGEN_HINT = (
-    "Run: UPDATE_SNAPSHOTS=1 PYTHONPATH=src/core ./venv/bin/python3 -m unittest discover -s tests"
-)
+_REGEN_HINT = "Run: UPDATE_SNAPSHOTS=1 ./venv/bin/python3 -m pytest"
 
 
 class TestScenarioRegistry(unittest.TestCase):

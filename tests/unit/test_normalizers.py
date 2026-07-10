@@ -3,9 +3,10 @@
 These are pure, stdlib-only functions with a lot of edge cases (the bool-vs-int
 subclass traps in particular), so they get exhaustive case tables here.
 
-Run from the repo root with the project interpreter::
+Run from the repo root with the project interpreter (pytest supplies the import
+paths via pyproject.toml — no PYTHONPATH needed)::
 
-    PYTHONPATH=src/core venv/bin/python3 -m unittest discover -s tests
+    ./venv/bin/python3 -m pytest
 """
 
 import unittest
