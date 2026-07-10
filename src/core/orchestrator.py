@@ -12,7 +12,8 @@ from core import messages
 from core.locks import acquire_lock
 from core.constants import MIN_DELAY_SECONDS, RANDOM_DELAY_MIN, RANDOM_DELAY_MAX, RETRY_DELAY_MULTIPLIER, MAX_RETRIES, OLD_ENTRY_HOURS, EXIT_CODE_RATE_LIMIT_ERROR, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED, EXIT_CODE_SUCCESS, EXIT_CODE_PRODUCTS_ERROR, TIMESTAMP_FORMAT
 from core.exceptions import RateLimitError, ServerError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
-from core.ui.config_check import TargetLoad, config_view
+from core.preflight import TargetLoad
+from core.ui.config_check import config_view
 from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
 from core.scrapers.base.storage import BaseDataManager
 from core.scrapers.base.settings import KEY_RETENTION, KEY_NOTIFY

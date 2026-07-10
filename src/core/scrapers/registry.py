@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from core import messages
 from core.exceptions import PluginDiscoveryError, PluginDependencyError
 from core.scrapers.base.settings import (
-    SettingSpec, ResolvedSetting, ResolvedSettings, SettingView,
+    SettingSpec, ResolvedSetting, ResolvedSettings,
     resolve_one, resolve_all, oncalendar_for, canonical_for_oncalendar,
     SUPPORTED_INTERVALS, BASE_SETTING_SPECS, KEY_INTERVAL, STATUS_OK,
 )
@@ -419,24 +419,6 @@ class ScraperRegistry:
         return resolve_all(plugin.get_setting_specs(), cls._config_path(plugin, config_dir), plugin)
 
     @classmethod
-    def resolve_settings(cls, target: str, config_dir: str) -> list[SettingView]:
-        """One presentation-ready :class:`SettingView` per setting, in declared order.
-
-        The single source for the settings section rendered atop the ``--status`` Service
-        Status panel and the interactive Scraping panel; a thin view over
-        :meth:`resolve_all_settings`, so a per-scraper setting appears in both with no
-        change here.
-
-        Args:
-            target (str): The registered target name (e.g. ``'skroutz'``).
-            config_dir (str): The directory holding the scrapers' config files.
-
-        Returns:
-            list[SettingView]: One view per setting, in the plugin's declared order.
-        """
-        return cls.resolve_all_settings(target, config_dir).views()
-
-    @classmethod
     def resolve_value(cls, target: str, key: str, config_dir: str) -> ResolvedSetting:
         """Resolves a single setting by key for a registered plugin.
 
@@ -598,12 +580,9 @@ class ScraperRegistry:
             ValueError: If the target is unsupported.
         """
         if target not in self._managers:
-            self.discover()
-            if target not in self._plugins:
-                raise ValueError(f"Unsupported storage plugin: {target}")
+            plugin = self.get_plugin(target)
 
             from core.scrapers.base.storage import BaseDataManager
-            plugin = self._plugins[target]
             storage_cls = self._resolve_bound_class(plugin, "get_storage_class", BaseDataManager)
             path = self._config_path(plugin, self.config_dir)
             # Inject the plugin so the manager resolves supported domains through it (the

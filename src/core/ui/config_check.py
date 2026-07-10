@@ -1,39 +1,16 @@
 import os
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections.abc import Sequence
 
 from rich.console import Console
 
 from core.constants import CONFIG_DIR, EXIT_CODE_ENV_ERROR
-from core.exceptions import StorageFileError, EnvFileError, UpdateCheckError, PluginDependencyError
+from core.exceptions import EnvFileError, UpdateCheckError
 from core.utils import check_env_file, check_for_updates, classify_notification_urls
 from core.general import resolve_general_settings
 from core.logger import get_target_logger
 from core.ui.panel import StatusPanelBuilder
-from core.scrapers.registry import ScraperRegistry
-
-
-@dataclass
-class TargetLoad:
-    """Outcome of loading a single target's storage during the preflight load phase.
-
-    Attributes:
-        target (str): The target name.
-        count (int): The number of loaded items (0 when the load failed).
-        faulty_indices (list[int]): 1-based indices of items failing validation.
-        error (str | None): The failure message if the storage could not be loaded.
-
-    Note:
-        This outcome is no longer rendered on the shared 'Configuration Check' panel.
-        Both it and the ``settings`` block are surfaced per-scraper: the products-config
-        health as a 'Config' row (built via :func:`config_view`) and the settings section
-        atop each Service Status panel (``--status``) and Scraping panel (a run).
-    """
-    target: str
-    count: int = 0
-    faulty_indices: list[int] = field(default_factory=list)
-    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,44 +86,6 @@ def add_setting_row(panel: StatusPanelBuilder, view) -> None:
     note_ref = panel.add_note_ref(view.footnote) if view.has_warning else ""
     value = view.render_value(note_ref, default_marker=" [dim](default)[/dim]")
     panel.add_row(view.icon, view.label, value)
-
-
-def load_targets(registry: ScraperRegistry, targets: list) -> list[TargetLoad]:
-    """Loads every target's storage exactly once — the single read/validation point.
-
-    The managers are cached in the registry, so the orchestrator later reuses the
-    very same in-memory snapshot without re-reading any file. This is the only
-    place a config file is opened for validation.
-
-    Args:
-        registry (ScraperRegistry): The registry used to resolve and cache managers.
-        targets (list): The targets to load.
-
-    Returns:
-        list[TargetLoad]: One outcome per resolvable target, in the given order
-            (targets without a registered plugin are skipped).
-    """
-    results: list[TargetLoad] = []
-    for target in targets:
-        try:
-            manager = registry.get_manager(target)
-        except ValueError:
-            continue
-        except PluginDependencyError:
-            # The plugin's storage layer needs dependencies that are not
-            # installed. Skip it here so preflight does not crash; the
-            # orchestrator surfaces the actionable './install.sh --<plugin>'
-            # message per-target and lets the other targets proceed, matching
-            # how a missing transport (client) dependency is handled at runtime.
-            continue
-        try:
-            manager.load()
-            results.append(TargetLoad(
-                target, manager.get_item_count(), manager.get_faulty_indices(),
-            ))
-        except StorageFileError as e:
-            results.append(TargetLoad(target, error=str(e)))
-    return results
 
 
 def _append_version_row(panel: StatusPanelBuilder) -> None:

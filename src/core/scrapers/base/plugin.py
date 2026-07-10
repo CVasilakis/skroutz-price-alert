@@ -145,6 +145,9 @@ class BasePlugin(ABC):
         label-boundary-aware against ``get_supported_domains()`` (a supported domain
         or a subdomain of it) and tolerant of non-string or empty input. The boundary
         check prevents a host like ``myskroutz.gr`` from falsely matching ``skroutz.gr``.
+        Each declared domain is folded (``strip().lower()``) before comparison — the
+        same normalization the registry's domain-conflict check applies — so a plugin
+        declaring ``"Store.example "`` still routes instead of silently never matching.
 
         Args:
             url (str): The URL to test.
@@ -155,4 +158,5 @@ class BasePlugin(ABC):
         if not isinstance(url, str) or not url:
             return False
         domain = urlparse(url).netloc.lower()
-        return any(domain == d or domain.endswith("." + d) for d in self.get_supported_domains())
+        return any(domain == d or domain.endswith("." + d)
+                   for d in (raw.strip().lower() for raw in self.get_supported_domains()))

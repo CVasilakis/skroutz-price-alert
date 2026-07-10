@@ -15,7 +15,8 @@ from core.notifier import Notifier
 from core.logger import setup_global_logging, save_traceback
 from core.orchestrator import ScrapingOrchestrator
 from core.ui.tui import InteractiveExecutionStrategy, SilentExecutionStrategy
-from core.ui.config_check import preflight, load_targets
+from core.preflight import load_targets
+from core.ui.config_check import preflight
 from core.general import ReminderService
 
 from rich.console import Console

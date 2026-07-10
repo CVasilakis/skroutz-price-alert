@@ -10,7 +10,8 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from core.ui.config_check import TargetLoad, config_view, ConfigView
+from core.preflight import TargetLoad
+from core.ui.config_check import config_view, ConfigView
 from core.scrapers.base.settings import (
     ResolvedSetting, ResolvedSettings, SettingView, setting_view,
     SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY,

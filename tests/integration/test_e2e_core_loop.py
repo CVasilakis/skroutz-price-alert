@@ -32,7 +32,7 @@ from core.constants import (
 from core.locks import acquire_lock
 from core.orchestrator import ScrapingOrchestrator
 from core.scrapers.registry import ScraperRegistry
-from core.ui.config_check import load_targets
+from core.preflight import load_targets
 from core.ui.tui import PriceOutcome
 
 from integration.fake_store import FakeStoreClient, FakeStoreDataManager, fake_store_server

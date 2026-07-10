@@ -7,6 +7,7 @@ from core.scrapers.registry import ScraperRegistry
 
 if TYPE_CHECKING:
     from core.scrapers.base.model import BaseTrackedItem
+    from core.scrapers.base.plugin import BasePlugin
 
 # The fixed notification titles, exported so tests assert against the same
 # constants the sends use (one home per wording; the per-site titles below
@@ -19,12 +20,19 @@ TITLE_TEST = 'Scrooge Alert - Test Notification'
 
 class Notifier:
     """Handles sending notifications via configured Apprise URLs."""
-    def __init__(self, notification_urls: str):
+    def __init__(self, notification_urls: str,
+                 plugin_for_url: "Callable[[str], BasePlugin | None] | None" = None):
         """Initializes the Notifier with a list of notification URLs.
 
         Args:
             notification_urls (str): A comma-separated list of Apprise notification URLs.
+            plugin_for_url (Callable | None): Resolves a product URL to its plugin, for
+                the display name in message bodies. Defaults to
+                ``ScraperRegistry.plugin_for_url`` — the injection seam (mirroring the
+                orchestrator's ``now_fn``) exists so tests and non-scraper callers can
+                use the Notifier without triggering plugin discovery as a side effect.
         """
+        self._plugin_for_url = plugin_for_url or ScraperRegistry.plugin_for_url
         self.app_notif = apprise.Apprise()
         self.has_services = False
         if notification_urls:
@@ -43,7 +51,7 @@ class Notifier:
         if not url:
             return "Unknown Site"
 
-        plugin = ScraperRegistry.plugin_for_url(url)
+        plugin = self._plugin_for_url(url)
         if plugin is not None:
             return plugin.get_display_name()
 

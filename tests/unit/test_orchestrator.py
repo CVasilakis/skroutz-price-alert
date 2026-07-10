@@ -34,7 +34,7 @@ from core.constants import (
     EXIT_CODE_SUCCESS, EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED,
     EXIT_CODE_PRODUCTS_ERROR, EXIT_CODE_RATE_LIMIT_ERROR,
 )
-from core.ui.config_check import TargetLoad
+from core.preflight import TargetLoad
 from core.utils import describe_signal
 
 from support import mock_notifier, mock_ui, mock_registry, mock_scraper, mock_data_manager

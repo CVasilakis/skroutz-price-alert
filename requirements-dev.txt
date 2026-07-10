@@ -7,3 +7,6 @@
 pytest>=7.0
 # Coverage visibility (report-only; CI prints the summary, no threshold gate).
 pytest-cov
+# Shell linting: provides a `shellcheck` binary in the venv so
+# tests/shell/test_shellcheck.py runs locally (it skips when absent).
+shellcheck-py

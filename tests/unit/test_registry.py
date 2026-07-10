@@ -10,8 +10,10 @@ transport library loads.
 """
 
 import contextlib
+import types
 import unittest
 from typing import cast
+from unittest import mock
 
 from core.exceptions import PluginDiscoveryError
 from core.scrapers.base.plugin import BasePlugin
@@ -93,6 +95,60 @@ class TestRegisterValidationGate(unittest.TestCase):
         with self.assertRaises(PluginDiscoveryError):
             ScraperRegistry.register(_fake_plugin(name="bad-name"))
         self.assertNotIn("bad-name", ScraperRegistry._plugins)
+
+    def test_non_normalized_domain_still_routes(self):
+        # matches_url folds each declared domain (strip + lower) the same way the
+        # domain-conflict check does, so a padded/uppercase domain routes instead of
+        # registering as a silently dead plugin.
+        ScraperRegistry.register(_fake_plugin(domains=("CapStore.example ",)))
+        plugin = ScraperRegistry.plugin_for_url("https://capstore.example/item/1")
+        assert plugin is not None, "a non-normalized declared domain must still route"
+        self.assertEqual(plugin.get_name(), "fakestore")
+
+
+class TestDiscoverPackageShape(unittest.TestCase):
+    """discover()'s own package-level failure branches (before register() is reached).
+
+    A plugin package that cannot be imported, exposes no module-level ``plugin``, or
+    exposes a non-BasePlugin value must fail discovery loudly — these branches sit in
+    front of the well-tested ``register()`` gate and would otherwise only be exercised
+    by prose. ``pkgutil``/``importlib`` are mocked so the fake package needs no files.
+    """
+
+    def _discover(self, module=None, import_error=None):
+        """Runs discovery over the one fake package; returns the resulting plugin dict
+        (captured inside the sandbox, which restores the real registry on exit)."""
+        import_mock = (mock.Mock(side_effect=import_error) if import_error
+                       else mock.Mock(return_value=module))
+        with registry_sandbox(frozen=False), \
+             mock.patch("core.scrapers.registry.pkgutil.iter_modules",
+                        return_value=[(None, "fakepkg", True)]), \
+             mock.patch("core.scrapers.registry.importlib.import_module", import_mock):
+            ScraperRegistry.discover()
+            return dict(ScraperRegistry._plugins)
+
+    def test_unimportable_package_fails_loudly(self):
+        with self.assertRaises(PluginDiscoveryError) as ctx:
+            self._discover(import_error=ImportError("No module named 'heavy_lib'"))
+        self.assertIn("Failed to import scraper plugin package", str(ctx.exception))
+        self.assertIn("fakepkg", str(ctx.exception))
+
+    def test_missing_plugin_attribute_fails_loudly(self):
+        with self.assertRaises(PluginDiscoveryError) as ctx:
+            self._discover(module=types.SimpleNamespace())
+        self.assertIn("does not expose", str(ctx.exception))
+        self.assertIn("fakepkg", str(ctx.exception))
+
+    def test_non_baseplugin_value_fails_loudly(self):
+        with self.assertRaises(PluginDiscoveryError) as ctx:
+            self._discover(module=types.SimpleNamespace(plugin=object()))
+        self.assertIn("not a BasePlugin instance", str(ctx.exception))
+
+    def test_well_formed_package_registers(self):
+        # The happy path through the same mocked discovery, so the failure tests
+        # above can't pass merely because the mocking itself broke discovery.
+        registered = self._discover(module=types.SimpleNamespace(plugin=_fake_plugin()))
+        self.assertIn("fakestore", registered)
 
 
 if __name__ == "__main__":

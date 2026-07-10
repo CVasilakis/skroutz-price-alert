@@ -112,7 +112,7 @@ class TestPerScraperSetting(_ViewCase):
 
 
 class TestRegistryResolveSettings(unittest.TestCase):
-    """resolve_settings against the real skroutz plugin, inside a registry sandbox."""
+    """resolve_all_settings().views() against the real skroutz plugin, in a sandbox."""
 
     def setUp(self):
         from core.scrapers.skroutz import plugin as skroutz_plugin
@@ -126,7 +126,7 @@ class TestRegistryResolveSettings(unittest.TestCase):
         # named for the plugin (skroutz.json), not the generic helper's x.json.
         cfg_dir = os.path.dirname(write_settings_config(
             self, {"execution_interval": "1 hour"}, filename="skroutz.json"))
-        views = ScraperRegistry.resolve_settings("skroutz", cfg_dir)
+        views = ScraperRegistry.resolve_all_settings("skroutz", cfg_dir).views()
         labels = [v.label for v in views]
         self.assertEqual(labels, ["Execution Interval", "Log Retention", "Notify On Errors"])
         self.assertEqual(views[0].display_value, "1h")

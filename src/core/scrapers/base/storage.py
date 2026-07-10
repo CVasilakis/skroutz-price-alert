@@ -380,7 +380,7 @@ class JsonProductDataManager(BaseDataManager):
         Note:
             The config's top-level ``settings`` block is **not** read here. Settings are
             a config-file concept resolved import-light through
-            :meth:`core.scrapers.registry.ScraperRegistry.resolve_settings` (and the
+            :meth:`core.scrapers.registry.ScraperRegistry.resolve_all_settings` (and the
             per-setting ``resolve_*`` helpers), so they are read uniformly for any
             backend rather than through this JSON-only manager. This manager owns only
             the *item* lifecycle; it never reads or writes ``settings``.

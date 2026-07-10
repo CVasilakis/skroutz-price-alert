@@ -15,7 +15,8 @@ from core.scrapers.registry import ScraperRegistry
 from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, KEY_INTERVAL
 from core.logger import setup_global_logging
 from core.ui.panel import StatusPanelBuilder
-from core.ui.config_check import render_config_panel, load_targets, config_view, add_config_row, add_setting_row, ConfigView
+from core.preflight import load_targets
+from core.ui.config_check import render_config_panel, config_view, add_config_row, add_setting_row, ConfigView
 from core.utils import install_interrupt_handler
 
 from rich.console import Console

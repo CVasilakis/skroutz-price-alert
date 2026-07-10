@@ -46,5 +46,7 @@ jobs:
       # SC2086/SC2046 are excluded: unquoted expansion of plugin lists is the
       # library's documented word-splitting idiom (see scripts/lib/common.sh).
       # -x follows the sourced common.sh via the "shellcheck source=" directives.
+      # The list comes from git so a new script anywhere in the repo is covered
+      # the moment it is tracked (tests/shell/test_shellcheck.py mirrors this).
       - name: Run shellcheck
-        run: shellcheck -x --exclude=SC2086,SC2046 install.sh update.sh scripts/*.sh scripts/lib/common.sh
+        run: git ls-files -z -- '*.sh' | xargs -0 shellcheck -x --exclude=SC2086,SC2046

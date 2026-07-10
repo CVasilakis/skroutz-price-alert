@@ -125,7 +125,7 @@ def drive_orchestrated_run(products: list[dict],
     from core.scrapers.base.client import BaseScraperClient
     from core.scrapers.base.storage import JsonProductDataManager
     from core.scrapers.registry import ScraperRegistry
-    from core.ui.config_check import load_targets
+    from core.preflight import load_targets
     from support import fake_plugin, mock_notifier, registry_sandbox
 
     scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
