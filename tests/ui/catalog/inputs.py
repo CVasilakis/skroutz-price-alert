@@ -86,6 +86,32 @@ def views_one_invalid_each() -> list[SettingView]:
     ]
 
 
+def malformed_block_warning() -> str:
+    """The exact block-shape warning production emits for a non-object ``settings`` block.
+
+    Sourced from the same ``_block_warning`` helper ``resolve_all`` uses, so the RUN/STATUS
+    scenarios' footnote text can never drift from what users see.
+    """
+    from core.settings.resolve import _block_warning
+    warning = _block_warning("not-an-object", None)
+    assert warning is not None  # a non-dict, cleanly-read block always warns
+    return warning
+
+
+def views_malformed_block() -> list[SettingView]:
+    """Every built-in setting defaulted because the ``settings`` block was malformed.
+
+    Built through ``ResolvedSettings.views()`` with ``block_warning`` set, so each view is
+    flagged ``block_malformed`` exactly as production does — the rows render as ``🟡``
+    defaults citing the shared block footnote (no standalone "Block ignored" row)."""
+    return resolved_settings(
+        interval=("1h", STATUS_DEFAULT, None),
+        retention=(7, STATUS_DEFAULT, None),
+        notify=(True, STATUS_DEFAULT, None),
+        block_warning=malformed_block_warning(),
+    ).views()
+
+
 # --- ResolvedSettings (the STATUS settings section) ---------------------------------
 
 _Triple = tuple[object, str, object]

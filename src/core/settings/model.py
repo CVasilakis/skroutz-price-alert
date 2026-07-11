@@ -65,16 +65,24 @@ class SettingView:
         status (str): The ``STATUS_*`` code (drives the row icon: invalid -> warn).
         footnote (str | None): The invalid-value message when the status is
             :data:`STATUS_INVALID`, otherwise ``None``.
+        block_malformed (bool): True when the whole ``settings`` block was ignored
+            (present but not an object), so this row fell back to its default *because
+            of* that — not because the user simply left it unset. Renders the row as a
+            warning (🟡) pointing at the shared block footnote, replacing the old
+            standalone "Block ignored" row. Every row shares this flag when it is set,
+            since a malformed block defaults them all.
     """
     label: str
     display_value: str
     status: str
     footnote: str | None = None
+    block_malformed: bool = False
 
     @property
     def icon(self) -> str:
-        """The status icon: a warning sign for an invalid value, else a check."""
-        return "🟡" if self.status == STATUS_INVALID else "✅"
+        """The status icon: a warning sign for an invalid value (or a malformed block
+        that forced this default), else a check."""
+        return "🟡" if self.status == STATUS_INVALID or self.block_malformed else "✅"
 
     @property
     def has_warning(self) -> bool:
@@ -97,7 +105,7 @@ class SettingView:
         return self.status not in (STATUS_OK, STATUS_INVALID)
 
     def render_value(self, note_ref: str = "", *, default_marker: str,
-                     value_text: str | None = None) -> str:
+                     value_text: str | None = None, default_note_ref: str = "") -> str:
         """Assembles the row's display value with the shared status decoration.
 
         The single home for the "invalid → append its footnote reference; unset default →
@@ -115,6 +123,11 @@ class SettingView:
                 ``" [dim](default)[/dim]"``).
             value_text (str | None): The display value already prepared for the surface
                 (e.g. Rich-escaped); defaults to :attr:`display_value` when ``None``.
+            default_note_ref (str): The already-formatted reference to the shared
+                block-malformed footnote, appended after the ``(default)`` marker when
+                the block was ignored (see :attr:`block_malformed`); empty otherwise. One
+                footnote is shared across all the rows, so the caller registers it once
+                and passes the same ref to each.
 
         Returns:
             str: The decorated value string for the row.
@@ -123,7 +136,7 @@ class SettingView:
         if self.has_warning:
             return f"{text}{note_ref}"
         if self.is_default:
-            return f"{text}{default_marker}"
+            return f"{text}{default_marker}{default_note_ref}"
         return text
 
 
@@ -138,8 +151,10 @@ class ResolvedSettings:
     It holds the ordered ``(spec, ResolvedSetting)`` pairs so it can yield both the
     presentation :class:`SettingView` list and typed effective values. It also carries
     an optional :attr:`block_warning` describing a structurally malformed ``settings``
-    block (present but not an object), surfaced once by the render sites — distinct from
-    a per-setting invalid *value*, which each :class:`SettingView` flags itself.
+    block (present but not an object). When it is set, every :class:`SettingView` from
+    :meth:`views` is flagged :attr:`SettingView.block_malformed`, and the render sites
+    register the warning once as a shared footnote that each defaulted row references —
+    distinct from a per-setting invalid *value*, which each view footnotes itself.
     """
 
     def __init__(self, pairs: list[tuple["SettingSpec", ResolvedSetting]],
@@ -151,13 +166,14 @@ class ResolvedSettings:
                 order.
             block_warning: A one-line message when the config's ``settings`` block is
                 present but not an object (so it was ignored and every setting fell back
-                to its default), else ``None``. Render sites show it once, above the
-                per-setting rows.
+                to its default), else ``None``. Render sites register it once as a shared
+                footnote referenced by each defaulted (🟡) setting row.
         """
         self._pairs = list(pairs)
         self._by_key = {spec.key: resolved for spec, resolved in self._pairs}
         #: A malformed-``settings``-block message (block present but not an object), or
-        #: ``None``. Additive to the per-setting rows, which still show their defaults.
+        #: ``None``. Flags every :meth:`views` row :attr:`SettingView.block_malformed`,
+        #: which still show their defaults but as a warning citing the shared footnote.
         self.block_warning = block_warning
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -185,8 +201,16 @@ class ResolvedSettings:
         return self._by_key[key]
 
     def views(self) -> list["SettingView"]:
-        """Returns one :class:`SettingView` per setting, in the plugin's declared order."""
+        """Returns one :class:`SettingView` per setting, in the plugin's declared order.
+
+        When the ``settings`` block was malformed (:attr:`block_warning` set), every view
+        is flagged :attr:`SettingView.block_malformed` so the render sites draw each
+        defaulted row as a warning pointing at the shared block footnote, rather than a
+        separate "Block ignored" row above them.
+        """
         # Imported here (not at module top) to keep this model module the import leaf;
         # setting_view lives with the spec/resolve machinery.
         from core.settings.resolve import setting_view
-        return [setting_view(spec, resolved) for spec, resolved in self._pairs]
+        malformed = self.block_warning is not None
+        return [setting_view(spec, resolved, block_malformed=malformed)
+                for spec, resolved in self._pairs]

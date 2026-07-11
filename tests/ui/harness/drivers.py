@@ -243,8 +243,9 @@ def drive_config(version_state: str = "uptodate",
         reminder_day_raw (object): the raw ``reminder_day`` value (same semantics).
         reminder_time_raw (object): the raw ``reminder_time`` value (same semantics).
         general_block_raw (object): when set, the raw ``settings`` *block* itself
-            (e.g. a string, for the malformed-block "Block ignored" row); overrides
-            the per-key raws above. ``None`` builds a well-formed block from them.
+            (e.g. a string, for the malformed-block case where each defaulted row cites
+            the shared footnote); overrides the per-key raws above. ``None`` builds a
+            well-formed block from them.
     """
     panel = StatusPanelBuilder("Configuration Check")
 
@@ -264,7 +265,7 @@ def drive_config(version_state: str = "uptodate",
         # The real resolve machinery against a synthetic settings block, so each row
         # renders with production status/default/invalid logic but no file I/O. The
         # block-shape warning comes from the same production helper resolve_all uses,
-        # so the "Block ignored" wording can never drift from what users see.
+        # so the malformed-block footnote wording can never drift from what users see.
         from core.settings.resolve import _block_warning
         block = general_block_raw if general_block_raw is not None else {
             KEY_REMINDER: reminder_raw,

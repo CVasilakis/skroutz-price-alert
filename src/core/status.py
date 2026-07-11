@@ -173,11 +173,9 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     # settings (or its active default), then a separator, then the systemd status rows.
     if config is not None:
         add_config_row(service_panel, config)
-    if resolved.block_warning:
-        ref = service_panel.add_note_ref(resolved.block_warning)
-        service_panel.add_row("🟡", "Settings", f"[yellow]Block ignored{ref}[/yellow]")
+    block_ref = service_panel.add_note_ref(resolved.block_warning) if resolved.block_warning else ""
     for view in resolved.views():
-        add_setting_row(service_panel, view)
+        add_setting_row(service_panel, view, block_ref)
     service_panel.add_separator()
 
     timer_active_val = timer_props.get("ActiveState") == "active"

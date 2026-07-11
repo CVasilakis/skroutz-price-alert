@@ -3,10 +3,9 @@
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version    Up to date                                  │
 │   ✅    Notifications       2 valid URL(s)                              │
-│   🟡    General Settings    Block ignored [1]                           │
-│   ✅    Reminder            Every 1 month (default)                     │
-│   ✅    Reminder Day        Saturday (default)                          │
-│   ✅    Reminder Time       13:00 (default)                             │
+│   🟡    Reminder            Every 1 month (default) [1]                 │
+│   🟡    Reminder Day        Saturday (default) [1]                      │
+│   🟡    Reminder Time       13:00 (default) [1]                         │
 │                                                                         │
-│   [1] settings block is not an object; using defaults.                  │
+│   [1] The settings section is misformatted; using defaults.             │
 ╰─────────────────────────────────────────────────────────────────────────╯

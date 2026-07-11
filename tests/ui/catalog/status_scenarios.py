@@ -8,7 +8,7 @@ schedule-drift footnote.
 
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import (
-    resolved_settings, timer_props, service_props,
+    resolved_settings, malformed_block_warning, timer_props, service_props,
     config_faulty, config_failed, STORAGE_BAD_JSON,
 )
 from ui.harness.drivers import drive_service, drive_not_installed, drive_orphan
@@ -76,7 +76,7 @@ def _():
         interval=("1h", STATUS_DEFAULT, None),
         retention=(7, STATUS_DEFAULT, None),
         notify=(True, STATUS_DEFAULT, None),
-        block_warning="settings block is not an object; using defaults",
+        block_warning=malformed_block_warning(),
     )
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 

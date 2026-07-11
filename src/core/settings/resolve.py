@@ -196,16 +196,21 @@ def _block_warning(block: Any, load_status: str | None) -> str | None:
     """
     if load_status is not None or block is None or isinstance(block, dict):
         return None
-    return "settings block is not an object; using defaults"
+    return "The settings section is misformatted; using defaults"
 
 
-def setting_view(spec: SettingSpec, resolved: ResolvedSetting) -> SettingView:
+def setting_view(spec: SettingSpec, resolved: ResolvedSetting,
+                 block_malformed: bool = False) -> SettingView:
     """Combines a spec and its resolved value into a presentation-ready view.
 
     Args:
         spec (SettingSpec): The setting's spec (supplies the label, display formatter
             and invalid-value message).
         resolved (ResolvedSetting): The resolved value and status.
+        block_malformed (bool): True when the whole ``settings`` block was ignored (not
+            an object), so this row's default is a consequence of that; renders as a
+            warning pointing at the shared block footnote (see
+            :attr:`~core.settings.model.SettingView.block_malformed`).
 
     Returns:
         SettingView: The row to render in the settings panel section.
@@ -215,4 +220,5 @@ def setting_view(spec: SettingSpec, resolved: ResolvedSetting) -> SettingView:
         display_value=spec.display(resolved.value),
         status=resolved.status,
         footnote=spec.warning if resolved.status == STATUS_INVALID else None,
+        block_malformed=block_malformed,
     )

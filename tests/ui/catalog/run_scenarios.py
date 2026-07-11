@@ -17,8 +17,8 @@ from core.ui.tui import PriceOutcome
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import (
     stub_logger, CURRENCY,
-    views_all_default, views_all_ok, views_one_invalid_each,
-    interval_view, retention_view, notify_view,
+    views_all_default, views_all_ok, views_one_invalid_each, views_malformed_block,
+    malformed_block_warning, interval_view, retention_view, notify_view,
     config_ok, config_faulty, config_failed, STORAGE_BAD_JSON,
 )
 from ui.harness.drivers import drive_run
@@ -552,7 +552,7 @@ def _():
 @scenario(Surface.RUN, "settings_malformed_block", "The settings block is not an object (ignored)", tags=("settings",))
 def _():
     def script(s):
-        _start(s, block_warning="settings block is not an object; using defaults")
+        _start(s, settings=views_malformed_block(), block_warning=malformed_block_warning())
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
     return drive_run(script)

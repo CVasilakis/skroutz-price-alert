@@ -81,7 +81,8 @@ class ExecutionStrategy(ABC):
                 presentation-only.
             block_warning (str | None): A one-line message when the config's
                 ``settings`` block was malformed (present but not an object) and ignored,
-                surfaced once above the per-setting rows; ``None`` when well-formed.
+                shown once as a shared footnote cited by each defaulted (🟡) setting row;
+                ``None`` when well-formed.
             config_view (ConfigView | None): The target's products-config health,
                 rendered as the leading 'Config' row of the section (and logged once by the
                 silent strategy); ``None`` when unavailable (e.g. missing dependencies).
@@ -259,20 +260,21 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         set. A valid setting shows as ``✅``; an unset value (or missing config) shows its
         active default as ``✅`` with a dim ``(default)`` marker; an invalid value shows
         the default it fell back to as ``🟡`` plus a footnote naming the problem. A
-        malformed ``settings`` block (when ``block_warning`` is set) is surfaced once as a
-        leading ``🟡`` row, since every per-setting row below it then shows its default.
+        malformed ``settings`` block (when ``block_warning`` is set) is registered once as
+        a shared footnote, and every per-setting row — which then shows its default —
+        renders as ``🟡`` citing it, rather than a standalone "Block ignored" row.
         """
         rows: list[tuple] = []
         if config_view is not None:
             refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
             rows.append((config_view.icon, "Monitored Items", f"{config_view.value}{refs}"))
-        if block_warning:
-            rows.append(("🟡", "Settings", f"[yellow]Block ignored[/yellow]{self._build_note_refs(block_warning)}"))
+        block_ref = self._build_note_refs(block_warning) if block_warning else ""
         for view in settings_view:
             note_ref = self._build_note_refs(view.footnote) if view.has_warning else ""
             value = view.render_value(
                 note_ref, default_marker=" [dim](default)[/dim]",
                 value_text=escape(view.display_value),
+                default_note_ref=block_ref,
             )
             rows.append((view.icon, escape(view.label), value))
         return rows
