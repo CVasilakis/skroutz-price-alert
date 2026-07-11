@@ -18,8 +18,8 @@ sh-stop, sh-run, sh-uninstall) render the management scripts' terminal transcrip
 captured from sandboxed runs of the real scripts (see harness/shell.py).
 
 Test-only scenarios (``in_gallery=False``, currently the STARTUP layout guards) are
-hidden from the default output and the HTML report; request their surface explicitly
-(``--surface startup``) to render them anyway.
+hidden from the default (unfiltered) output and HTML report; an explicit filter that
+matches them (``--surface startup``, or a ``--tag`` they carry) renders them anyway.
 """
 
 import argparse
@@ -47,8 +47,9 @@ def _filtered(surface, tag):
     out = []
     for sc in ALL_SCENARIOS:
         # Test-only scenarios (in_gallery=False, e.g. the STARTUP layout guards) are
-        # hidden from review output unless their surface is requested explicitly.
-        if not sc.in_gallery and surface != sc.surface.value:
+        # hidden only from the unfiltered everything-view; an explicit --surface or
+        # --tag that matches them (checked below) still reveals them.
+        if not sc.in_gallery and not surface and not tag:
             continue
         if surface and sc.surface.value != surface:
             continue

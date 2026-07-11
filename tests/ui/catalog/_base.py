@@ -20,9 +20,9 @@ class Surface(Enum):
     """The UI surface a scenario belongs to (also the snapshot-filename prefix).
 
     Member order is the display order of the gallery/report sections (Python surfaces
-    in workflow order, then the shell scripts in lifecycle order) and must match the
-    module import order in ``catalog/__init__.py`` — guarded by
-    ``tests/ui/test_ui_catalog.py``. The *values* are stable snapshot-filename
+    in workflow order, then the shell scripts in lifecycle order): ``ALL_SCENARIOS``
+    in ``catalog/__init__.py`` is sorted by it, so the enum is the single source of
+    truth for section order. The *values* are stable snapshot-filename
     prefixes; never rename them (that would rename every snapshot file). The
     human-readable section labels live in :data:`SURFACE_INFO` instead.
     """
@@ -172,7 +172,8 @@ class Scenario:
             scenario — it still snapshots and still feeds assertion tests (e.g. the
             STARTUP outside-panels guard), but reviewers are not shown a section that
             only duplicates panels covered elsewhere. The gallery still renders it
-            when its surface is requested explicitly via ``--surface``.
+            when an explicit filter matches it: its surface via ``--surface``, or
+            one of its tags via ``--tag``.
     """
     name: str
     surface: Surface
@@ -202,7 +203,8 @@ def scenario(surface: Surface, name: str, description: str, tags: tuple[str, ...
 
     The decorated function is returned unchanged, so it stays directly callable.
     Pass ``in_gallery=False`` for a test-only scenario (snapshotted and asserted on,
-    but hidden from the gallery/report unless its surface is explicitly requested).
+    but hidden from the gallery/report unless an explicit ``--surface``/``--tag``
+    filter matches it).
     """
     def decorator(build_fn: Callable[[], BuildResult]) -> Callable[[], BuildResult]:
         _REGISTRY.append(Scenario(

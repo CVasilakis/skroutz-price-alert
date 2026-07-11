@@ -9,9 +9,10 @@ assertion in ``test_ui_snapshots`` fails if any captured line falls outside a pa
 and the golden transcript lets that stray text be inspected visually in the diff.
 
 Test-only (``in_gallery=False``): every panel in these transcripts is already reviewed
-on its own surface (CONFIG + RUN), so the gallery and the HTML report skip this section
-as redundant for a human reviewer. The snapshots and the outside-panels assertion keep
-running; render on demand with ``gallery.py --surface startup``.
+on its own surface (CONFIG + RUN), so the unfiltered gallery and HTML report skip this
+section as redundant for a human reviewer. The snapshots and the outside-panels
+assertion keep running; render on demand with ``gallery.py --surface startup`` or a
+matching ``--tag`` (e.g. ``layout``).
 """
 
 from core.ui.tui import PriceOutcome

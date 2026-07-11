@@ -56,7 +56,8 @@ class TestGalleryVisibility(unittest.TestCase):
 
     The STARTUP transcripts exist for the outside-panels assertion and their golden
     snapshots; every panel they stack is already reviewed on its own surface, so the
-    gallery and the HTML report hide them unless the surface is requested explicitly.
+    gallery and the HTML report hide them unless an explicit --surface or --tag
+    filter matches them.
     """
 
     def test_hidden_scenarios_are_excluded_by_default(self):
@@ -72,24 +73,27 @@ class TestGalleryVisibility(unittest.TestCase):
         self.assertTrue(startup, "explicit --surface startup should still render")
         self.assertTrue(all(sc.surface is Surface.STARTUP for sc in startup))
 
+    def test_hidden_scenarios_render_when_a_tag_matches_them(self):
+        # A tag audit (e.g. --tag layout) must not silently omit the hidden
+        # scenarios that carry the tag — they are often the canonical guards.
+        from ui.gallery import _filtered
+        for sc in ALL_SCENARIOS:
+            if not sc.in_gallery:
+                for tag in sc.tags:
+                    self.assertIn(sc, _filtered(None, tag),
+                                  f"--tag {tag} should reveal {sc.snapshot_key}")
+
 
 class TestSectionOrder(unittest.TestCase):
-    def test_registration_groups_each_surface_contiguously(self):
-        # Report sections are first-seen registration order; an interleaved surface
-        # would split into a confusing duplicate section.
+    def test_sections_follow_surface_member_order(self):
+        # ALL_SCENARIOS is sorted so sections follow the Surface member order (the
+        # single source of truth). The change-run of surfaces equals list(Surface)
+        # exactly when every surface has scenarios, appears contiguously (a split
+        # surface would repeat in the run), and in enum order — one assertion covers
+        # all three, guarding the sort in catalog/__init__.py.
         seen: list[Surface] = []
         for sc in ALL_SCENARIOS:
             if not seen or sc.surface != seen[-1]:
-                seen.append(sc.surface)
-        self.assertEqual(len(seen), len(set(seen)),
-                         f"a surface registers non-contiguously: {[s.value for s in seen]}")
-
-    def test_registration_order_matches_surface_member_order(self):
-        # catalog/__init__.py's import order (what the report shows) must agree with
-        # the Surface member order (what the enum documents as the display order).
-        seen: list[Surface] = []
-        for sc in ALL_SCENARIOS:
-            if sc.surface not in seen:
                 seen.append(sc.surface)
         self.assertEqual(seen, list(Surface))
 

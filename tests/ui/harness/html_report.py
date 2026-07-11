@@ -395,10 +395,16 @@ def _dot(color: str) -> str:
     return f'<span class="dot" style="background:{_DOT.get(color, "#8c9aab")}"></span>'
 
 
+def _search_text(sc: Scenario) -> str:
+    """The lowercased haystack behind the sidebar filter — one definition shared by a
+    scenario's card and its nav item, so the two can never match differently."""
+    return " ".join([sc.snapshot_key, sc.name, sc.description, " ".join(sc.tags),
+                     sc.surface.value, SURFACE_INFO[sc.surface].label]).lower()
+
+
 def _scenario(sc: Scenario, result: BuildResult) -> str:
     key = sc.snapshot_key
-    text = " ".join([key, sc.name, sc.description, " ".join(sc.tags), sc.surface.value,
-                     SURFACE_INFO[sc.surface].label]).lower()
+    text = _search_text(sc)
     tags = "".join(f'<span class="pill">{_html.escape(t)}</span>' for t in sc.tags)
     if result.exit_code is not None:
         tags += f'<span class="pill">exit {result.exit_code}</span>'
@@ -466,8 +472,7 @@ def render_report(scenarios: list[Scenario]) -> str:
         
         for sc, result in built_items:
             tags_str = " ".join(sc.tags)
-            data = " ".join([sc.snapshot_key, sc.name, sc.description, tags_str,
-                             info.label]).lower()
+            data = _search_text(sc)
             nav.append(
                 f'<a class="nav-item" href="#{sc.snapshot_key}" data-text="{_html.escape(data, quote=True)}" data-tags=" {tags_str} ">'
                 f'{_dot(result.border_color)}<span>{_html.escape(sc.name)}</span></a>'

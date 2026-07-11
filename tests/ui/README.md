@@ -96,18 +96,18 @@ tests/ui/
                            #      ConfigView, systemd property dicts) — reused by scenarios
     run_scenarios.py       #    interactive scraping panel (a normal run)
     e2e_run_scenarios.py   #    the same panel, driven by the real orchestrator
-    status_scenarios.py    #    --status: service / not-installed / orphan panels
-    ping_scenarios.py      #    --ping: Notification Check Results
     config_scenarios.py    #    Configuration Check panel
     startup_scenarios.py   #    the full pre-scrape console transcript (surface startup)
+    status_scenarios.py    #    --status: service / not-installed / orphan panels
+    ping_scenarios.py      #    --ping: Notification Check Results
     shell_inputs.py        #    shared ShellWorld presets + the shell_case registrar
     sh_install_scenarios.py    # install.sh transcripts       (surface sh-install)
-    sh_update_scenarios.py     # update.sh transcripts        (surface sh-update)
+    sh_run_scenarios.py        # scripts/run.sh               (surface sh-run)
     sh_schedule_scenarios.py   # scripts/schedule.sh          (surface sh-schedule)
     sh_enable_scenarios.py     # scripts/enable.sh            (surface sh-enable)
     sh_disable_scenarios.py    # scripts/disable.sh           (surface sh-disable)
     sh_stop_scenarios.py       # scripts/stop.sh              (surface sh-stop)
-    sh_run_scenarios.py        # scripts/run.sh               (surface sh-run)
+    sh_update_scenarios.py     # update.sh transcripts        (surface sh-update)
     sh_uninstall_scenarios.py  # scripts/uninstall.sh         (surface sh-uninstall)
     __init__.py            #    imports every module above and exposes ALL_SCENARIOS
   harness/                 # ── HOW to render: turn a scenario into captured text
@@ -201,9 +201,10 @@ right?" check that snapshots (plain text) can't give you.
 | `--list`      | Prints each (optionally filtered) scenario's key and one-line description, then a count, and exits without rendering. Great for discovering what exists. |
 
 Test-only scenarios (`in_gallery=False`, currently the `startup` layout guards) are
-hidden from the gallery and the HTML report by default — their panels are already
+hidden from the unfiltered gallery and HTML report — their panels are already
 reviewed on their own surfaces — but still snapshot and still feed the
-outside-panels assertion; render them explicitly with `--surface startup`.
+outside-panels assertion. Any explicit filter that matches them reveals them:
+`--surface startup`, or a `--tag` they carry (e.g. `--tag layout`).
 
 Section headers (terminal rules and the HTML report's sections) show each surface's
 human-readable label from `SURFACE_INFO` (`catalog/_base.py`) — e.g. `sh-install`
