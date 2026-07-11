@@ -344,8 +344,45 @@ class JsonProductDataManager(BaseDataManager):
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
+    # ------------------------------------------------------------------
+    # Row identity
+    # ------------------------------------------------------------------
+    # A row's identity decides which rows are duplicates (dedup grouping) and
+    # which stored row a cached update lands on (save merge). For classic
+    # product scrapers the clean URL *is* the identity, so the defaults below
+    # change nothing for them. A listing-type scraper, where several rows
+    # legitimately share one listing URL and differ only in their filter
+    # fields, overrides both hooks with the same composite key so that
+    # grouping (computed from the stored dict) and update caching (computed
+    # from the item's URL) can never disagree.
+
+    def _row_key(self, product: dict[str, Any]) -> str:
+        """Returns the identity of a stored row, used for dedup and save-merge.
+
+        Args:
+            product (dict[str, Any]): The raw stored row.
+
+        Returns:
+            str: The row's identity key (default: the clean URL).
+        """
+        return self._get_clean_url(str(product.get("url", "")))
+
+    def _update_key(self, url: str) -> str:
+        """Returns the identity key for an ``update_item`` URL.
+
+        Must produce the same key as :meth:`_row_key` does for the row the URL
+        was parsed from, so cached updates land on the right stored row.
+
+        Args:
+            url (str): The URL passed to ``update_item`` (an item's ``url``).
+
+        Returns:
+            str: The update cache key (default: the clean URL).
+        """
+        return self._get_clean_url(url)
+
     def update_item(self, url: str, **updates: Any) -> None:
-        """Caches updates for an item based on its clean URL.
+        """Caches updates for an item, keyed by its row identity (``_update_key``).
 
         Every update key must name a field of :attr:`MODEL` (the store's
         :class:`BaseTrackedItem` subclass). A key that does not is a programming error -
@@ -368,11 +405,11 @@ class JsonProductDataManager(BaseDataManager):
                 f"valid fields are {sorted(allowed)}."
             )
 
-        clean_url = self._get_clean_url(url)
-        if clean_url in self._updates:
-            self._updates[clean_url].update(updates)
+        key = self._update_key(url)
+        if key in self._updates:
+            self._updates[key].update(updates)
         else:
-            self._updates[clean_url] = dict(updates)
+            self._updates[key] = dict(updates)
 
     def get_items(self) -> list[dict[str, Any]]:
         """Returns the list of items as dictionaries.
@@ -396,9 +433,9 @@ class JsonProductDataManager(BaseDataManager):
                 product["skip"] = False
 
             url = str(product.get("url", ""))
-            # Group by clean URL if scrapable, otherwise fallback to string representation of raw url
-            clean_url = self._get_clean_url(url) if self.is_scrapable_item(product) else url
-            groups[clean_url].append((i, product))
+            # Group by row identity if scrapable, otherwise fallback to string representation of raw url
+            row_key = self._row_key(product) if self.is_scrapable_item(product) else url
+            groups[row_key].append((i, product))
 
         items_to_keep = set()
         for clean_url, group in groups.items():
@@ -490,11 +527,10 @@ class JsonProductDataManager(BaseDataManager):
 
         if self.ROOT_KEY in fresh_data:
             for product in fresh_data[self.ROOT_KEY]:
-                url = str(product.get("url", ""))
-                clean_url = self._get_clean_url(url)
+                row_key = self._row_key(product)
 
-                if clean_url in self._updates:
-                    for key, value in self._updates[clean_url].items():
+                if row_key in self._updates:
+                    for key, value in self._updates[row_key].items():
                         product[key] = value
 
             # We also need to clean duplicates when saving to ensure any user edits during scraping are handled.

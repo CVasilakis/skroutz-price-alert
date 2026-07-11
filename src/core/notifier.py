@@ -78,23 +78,28 @@ class Notifier:
         """
         return bool(self.app_notif.notify(title=title, body=body))
 
-    def notify_low_price(self, product_name: str, target_price: float, current_price: float, url: str, currency: str = '€') -> bool:
+    def notify_low_price(self, product_name: str, target_price: float, current_price: float, url: str, currency: str = '€', advert_title: str | None = None) -> bool:
         """Sends a notification about a price drop below the target price.
 
         Args:
             product_name (str): The name of the product.
             target_price (float): The target price set by the user.
             current_price (float): The current price of the product.
-            url (str): The URL of the product.
+            url (str): The URL of the product — for a listing-type match, the
+                direct link to the advert itself.
             currency (str): The currency symbol. Defaults to '€'.
+            advert_title (str | None): For a listing-type match, the advert's own
+                title, shown on its own line so the user can tell which advert
+                triggered the alert. None (default) for classic product scrapes.
 
         Returns:
             bool: True if the notification was sent successfully, False otherwise.
         """
         site = self._extract_site(url)
+        advert_line = f'\nAdvert: {advert_title}' if advert_title else ''
         return self.notify(
             title=TITLE_PRICE_DROP,
-            body=f'{product_name} is now available for {current_price}{currency} in {site}, which is below your target of {target_price}{currency}.\nView it here: {url}'
+            body=f'{product_name} is now available for {current_price}{currency} in {site}, which is below your target of {target_price}{currency}.{advert_line}\nView it here: {url}'
         )
 
     def _build_summary(self, title: str, header: str, items: Sequence[Any], format_item: Callable[[Any], str], footer: str, more_noun: str = "", max_show: int = 3) -> bool:

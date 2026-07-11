@@ -403,7 +403,10 @@ as an unexpected fault.
 
 Practical rules:
 
-- **Always `return ScrapeResult(price=…, currency=…)` on success.**
+- **Always `return ScrapeResult(price=…, currency=…)` on success.** (A listing-type
+  scraper additionally fills `matches=[…]` and may return `price=None` for a
+  checked-but-nothing-matched result — see
+  [Listing-type stores](#listing-type-stores-classifieds-searches).)
 - **Use `parse_price()`** (`from core.utils import parse_price`) for any price string — it
   handles currency symbols and EU/US digit grouping and returns `None` on failure
   (map that `None` to `ScraperParseError`).
@@ -463,6 +466,9 @@ The new setting now resolves, validates, and renders in `--status` and the scrap
 panel automatically — no base/framework file changes — and discovery rejects a blank or
 duplicate `key` at startup.
 
+For a real in-tree example see `SPEC_MIN_ADVERT_PRICE` in `scrapers/insomnia/plugin.py`
+(a numeric floor with a bool-rejecting normalizer and a "disabled" display for 0).
+
 To *consume* the effective value, read it through `self.settings`: the registry passes
 the target's resolved settings to the **constructor** of both your client and your data
 manager, so it is available from `__init__` onward — you can shape your session or
@@ -498,9 +504,60 @@ def from_dict(cls, data):
     return cls(**cls._base_field_kwargs(data), sku=data.get("sku", ""))
 ```
 
+For a real in-tree example see `scrapers/insomnia/model.py`, which adds the
+`title_include`/`title_exclude` list fields (and validates their shape in the
+storage's `is_valid_item`, so a malformed field surfaces in the `Config` row
+instead of being silently read as empty).
+
 Never write a `to_dict`/full reserialization — persist machine-owned fields by
 passing them to `update_item(url, **fields)`, which surgically merges only those
 keys and preserves everything the user authored.
+
+### Listing-type stores (classifieds searches)
+
+Most stores fit the classic shape: one row = one product URL = one price. A
+*listing-type* store monitors a **listing page** of many independent adverts,
+filtered per row — one row = one *search*, and several rows may share one
+listing URL with different filters. The built-in `insomnia` plugin is the
+reference implementation; the framework models this natively with four pieces:
+
+1. **Return matches, not just a price.** Build one `AdvertMatch(title, price, url)`
+   per advert that passes your filters and return
+   `ScrapeResult(price=<cheapest match, or None>, currency=…, matches=[…])`.
+   The orchestrator sends **one price-drop push per match below target**, each
+   linking to that advert's own `url`. `price=None` means "checked fine, nothing
+   matched": the row renders as *No matching advert*, `last_checked` refreshes
+   (an empty search never goes stale), `last_price` is untouched, and no alert
+   is sent. Reserve `ScraperParseError` for pages that don't look like a
+   listing at all (markup change, block/interstitial page) — never report those
+   as "no match", or a breakage would masquerade as silence forever.
+
+2. **Transport row filters on the URL.** `scrape_product(url)` receives only a
+   URL, so fold the row's filter fields into it as query parameters inside your
+   model's `from_dict` (see `insomnia/model.py`: `build_search_url` /
+   `split_search_url`). The client splits them back out and fetches the bare
+   listing URL — the `scrape_product(url)` contract stays unchanged.
+
+3. **Give rows a composite identity.** The base storage keys duplicate-removal
+   and write-back merging by clean URL, which would collapse same-URL search
+   rows. Override the two row-identity hooks with the same canonical key
+   (clean listing URL + normalized terms), one computed from the stored dict
+   and one from the item's virtual URL:
+
+   ```python
+   def _row_key(self, product): ...   # dedup grouping + save-merge (stored row dict)
+   def _update_key(self, url): ...    # update-cache key (item.url)
+   ```
+
+   Derive both from one shared helper so they can never disagree —
+   `tests/unit/test_insomnia_model.py` pins that invariant
+   (`test_dict_side_and_url_side_agree`).
+
+4. **Lead your example config with a filterless row.** The contract battery
+   round-trips a save via `update_item(first_row["url"])` — the raw stored URL,
+   whose identity carries no filter terms. Make the first row of
+   `config/<name>.json.example` one without filters (which also documents that
+   the filters are optional).
 
 ### Non-JSON storage backend
 
@@ -614,6 +671,8 @@ package — so run any command, e.g. `./scripts/run.sh --status`, to surface it)
 [ ] requirements.txt — added if you use non-core libs (tls-client for HTTP; your HTML parser)
 [ ] config/<name>.json.example — matches get_config_filename(); has settings + a sample product
 [ ] get_name() is [A-Za-z0-9_]+, unique; domains don't overlap another plugin
+[ ] listing-type store? — ScrapeResult carries matches / price=None, the
+    _row_key/_update_key hooks are overridden, and the first example row is filterless
 [ ] ./install.sh --<name> succeeds
 [ ] ./scripts/run.sh --<name> scrapes a real product
 [ ] ./scripts/run.sh --status is clean

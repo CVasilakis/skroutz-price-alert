@@ -21,7 +21,7 @@ from unittest import mock
 
 from core import messages, orchestrator
 from core.orchestrator import ScrapingOrchestrator
-from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
+from core.scrapers.base.model import AdvertMatch, BaseTrackedItem, ScrapeResult
 from core.scrapers.base.plugin import BasePlugin
 from core.scrapers.base.settings import ResolvedSettings, KEY_RETENTION, KEY_NOTIFY
 from core.ui.tui import PriceOutcome
@@ -145,6 +145,106 @@ class TestPriceOutcome(unittest.TestCase):
         ui.log_price_result.assert_called_once_with(
             "Widget", 5.0, "€", 0.0, PriceOutcome.NO_TARGET,
             notes=[messages.missing_target_price("€")], attempt_notes=None)
+
+
+# --- Group A2: listing-type results (multi-advert matches / no match) ----------
+
+class TestListingOutcomes(unittest.TestCase):
+    """`_handle_successful_scrape` for listing-type results (``matches`` / ``price=None``)."""
+
+    def _call(self, item, result, notifier, ui):
+        dm = mock_data_manager()
+        orch = _make_orch(notifier=notifier, ui=ui)
+        orch._handle_successful_scrape(item, result, dm)
+        return dm
+
+    def test_no_match_refreshes_timestamp_only_and_never_alerts(self):
+        notifier = mock_notifier(has_services=True)
+        ui = mock_ui()
+        dm = self._call(_item(target_price=10.0), ScrapeResult(price=None, currency="€"), notifier, ui)
+        notifier.notify_low_price.assert_not_called()
+        ui.log_price_result.assert_called_once_with(
+            "Widget", None, "€", 10.0, PriceOutcome.NO_MATCH, notes=[], attempt_notes=None)
+        # last_checked refreshes (the row never goes stale) but last_price is untouched.
+        dm.update_item.assert_called_once_with(
+            "https://x/s/1/p.html", last_checked=NOW.strftime(TIMESTAMP_FORMAT))
+
+    def test_each_match_below_target_gets_its_own_push(self):
+        notifier = mock_notifier(has_services=True, delivery_ok=True)
+        ui = mock_ui()
+        result = ScrapeResult(price=6.0, currency="€", matches=[
+            AdvertMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
+            AdvertMatch("Mid ad", 8.0, "https://x/classifieds/ad-2/"),
+            AdvertMatch("Pricey ad", 12.0, "https://x/classifieds/ad-3/"),
+        ])
+        dm = self._call(_item(target_price=10.0), result, notifier, ui)
+
+        # One push per advert below target, each linking to that advert.
+        notifier.notify_low_price.assert_has_calls([
+            mock.call("Widget", 10.0, 6.0, "https://x/classifieds/ad-1/", "€", advert_title="Cheap ad"),
+            mock.call("Widget", 10.0, 8.0, "https://x/classifieds/ad-2/", "€", advert_title="Mid ad"),
+        ])
+        self.assertEqual(notifier.notify_low_price.call_count, 2)
+        ui.log_price_result.assert_called_once_with(
+            "Widget", 6.0, "€", 10.0, PriceOutcome.DROP,
+            notes=[messages.advert_matches_note(3, 2), messages.advert_notified_ok(2)],
+            attempt_notes=None)
+        # The cheapest match's price is persisted as the row's last_price.
+        dm.update_item.assert_called_once_with(
+            "https://x/s/1/p.html", last_price=6.0, last_checked=mock.ANY)
+
+    def test_partial_delivery_failure_is_footnoted(self):
+        notifier = mock_notifier(has_services=True)
+        notifier.notify_low_price.side_effect = [True, False]
+        ui = mock_ui()
+        result = ScrapeResult(price=6.0, currency="€", matches=[
+            AdvertMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
+            AdvertMatch("Mid ad", 8.0, "https://x/classifieds/ad-2/"),
+        ])
+        self._call(_item(target_price=10.0), result, notifier, ui)
+        ui.log_price_result.assert_called_once_with(
+            "Widget", 6.0, "€", 10.0, PriceOutcome.DROP,
+            notes=[messages.advert_matches_note(2, 2), messages.advert_notified_fail(1, 2)],
+            attempt_notes=None)
+
+    def test_matches_at_or_above_target_is_ok_without_pushes(self):
+        notifier = mock_notifier(has_services=True)
+        ui = mock_ui()
+        result = ScrapeResult(price=12.0, currency="€", matches=[
+            AdvertMatch("Pricey ad", 12.0, "https://x/classifieds/ad-3/"),
+        ])
+        dm = self._call(_item(target_price=10.0), result, notifier, ui)
+        notifier.notify_low_price.assert_not_called()
+        ui.log_price_result.assert_called_once_with(
+            "Widget", 12.0, "€", 10.0, PriceOutcome.OK,
+            notes=[messages.advert_matches_note(1, 0)], attempt_notes=None)
+        dm.update_item.assert_called_once_with(
+            "https://x/s/1/p.html", last_price=12.0, last_checked=mock.ANY)
+
+    def test_matches_without_target_is_no_target_outcome(self):
+        notifier = mock_notifier(has_services=True)
+        ui = mock_ui()
+        result = ScrapeResult(price=5.0, currency="€", matches=[
+            AdvertMatch("Some ad", 5.0, "https://x/classifieds/ad-1/"),
+        ])
+        self._call(_item(target_price=0.0), result, notifier, ui)
+        notifier.notify_low_price.assert_not_called()
+        ui.log_price_result.assert_called_once_with(
+            "Widget", 5.0, "€", 0.0, PriceOutcome.NO_TARGET,
+            notes=[messages.advert_matches_note(1, 0)], attempt_notes=None)
+
+    def test_matches_below_target_without_services_notes_none(self):
+        notifier = mock_notifier(has_services=False)
+        ui = mock_ui()
+        result = ScrapeResult(price=6.0, currency="€", matches=[
+            AdvertMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
+        ])
+        self._call(_item(target_price=10.0), result, notifier, ui)
+        notifier.notify_low_price.assert_not_called()
+        ui.log_price_result.assert_called_once_with(
+            "Widget", 6.0, "€", 10.0, PriceOutcome.DROP,
+            notes=[messages.advert_matches_note(1, 1), messages.NOTE_NOTIFIED_NONE],
+            attempt_notes=None)
 
 
 # --- Group B: retry loop + error policy ----------------------------------------

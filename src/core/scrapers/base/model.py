@@ -7,18 +7,46 @@ T = TypeVar('T', bound='BaseTrackedItem')
 
 
 @dataclass
+class AdvertMatch:
+    """One concrete offer found by a listing-type scrape.
+
+    A classic product scrape resolves one URL to one price, but a listing-type
+    scraper (a classifieds search) can surface several independent offers in a
+    single check. Each one carries its own title and direct link so the
+    orchestrator can alert on every offer below the target, linking straight
+    to the advert rather than the listing page.
+
+    Attributes:
+        title: The advert's own title as published on the listing.
+        price: The advert's price as a float.
+        url: The direct link to the advert.
+    """
+    title: str
+    price: float
+    url: str
+
+
+@dataclass
 class ScrapeResult:
     """Represents the result of a successful price scrape.
 
     Attributes:
-        price: The scraped price as a float.
+        price: The scraped price as a float, or ``None`` for a listing-type
+            scrape that completed fine but matched no advert ("checked, nothing
+            to report"): the orchestrator refreshes ``last_checked`` without
+            touching ``last_price`` and sends no alert. Classic single-product
+            scrapers always set a float.
         currency: The currency symbol (e.g. ``"€"``, ``"Lei"``).
+        matches: The independent offers found by a listing-type scrape, each a
+            candidate for its own price-drop alert. Empty for single-product
+            scrapers. When non-empty, ``price`` is the cheapest match's price.
         metadata: Optional extra data returned by the scraper (e.g.
             ``{"stock": "in_stock", "seller": "StoreName"}``).  Consumers
             that only need ``price`` and ``currency`` can ignore this.
     """
-    price: float
+    price: float | None
     currency: str
+    matches: list[AdvertMatch] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

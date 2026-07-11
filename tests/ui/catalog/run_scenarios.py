@@ -97,6 +97,41 @@ def _():
     return drive_run(script)
 
 
+@scenario(Surface.RUN, "listing_matches_notified", "Listing search: adverts below target, one push each", tags=("price_drop", "listing"))
+def _():
+    def script(s):
+        _start(s, target="insomnia")
+        s.start_scraping("Google Pixel 9 (128 GB)", 1, 3)
+        s.complete_scraping()
+        s.log_price_result("Google Pixel 9 (128 GB)", 185.0, CURRENCY, 200.0, PriceOutcome.DROP,
+                           notes=[messages.advert_matches_note(3, 2), messages.advert_notified_ok(2)])
+        s.complete_target()
+    return drive_run(script)
+
+
+@scenario(Surface.RUN, "listing_matches_notify_failed", "Listing search: some per-advert pushes failed to deliver", tags=("price_drop", "listing"))
+def _():
+    def script(s):
+        _start(s, target="insomnia")
+        s.start_scraping("Google Pixel 9 (128 GB)", 1, 3)
+        s.complete_scraping()
+        s.log_price_result("Google Pixel 9 (128 GB)", 185.0, CURRENCY, 200.0, PriceOutcome.DROP,
+                           notes=[messages.advert_matches_note(3, 2), messages.advert_notified_fail(1, 2)])
+        s.complete_target()
+    return drive_run(script)
+
+
+@scenario(Surface.RUN, "listing_no_match", "Listing search checked fine; no advert matched", tags=("ok", "listing"))
+def _():
+    def script(s):
+        _start(s, target="insomnia")
+        s.start_scraping("Google Pixel 9 (128 GB)", 1, 3)
+        s.complete_scraping()
+        s.log_price_result("Google Pixel 9 (128 GB)", None, CURRENCY, 200.0, PriceOutcome.NO_MATCH)
+        s.complete_target()
+    return drive_run(script)
+
+
 @scenario(Surface.RUN, "no_target_missing", "Success with no target_price field set", tags=("ok",))
 def _():
     def script(s):

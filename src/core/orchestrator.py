@@ -289,7 +289,17 @@ class ScrapingOrchestrator:
         elif missing_target_price:
             notes.append(messages.missing_target_price(result.currency))
 
-        if result.price < item.target_price:
+        if result.price is None:
+            # A listing check that completed fine but matched no advert: refresh
+            # the check timestamp (so the row never goes stale) without touching
+            # last_price — there is no price — and send no alert.
+            self.ui_strategy.log_price_result(item.name, None, result.currency, item.target_price, PriceOutcome.NO_MATCH, notes=notes, attempt_notes=attempt_notes)
+            data_manager.update_item(item.url, last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT))
+            return
+
+        if result.matches:
+            outcome = self._notify_matching_adverts(item, result, notes)
+        elif result.price < item.target_price:
             outcome = PriceOutcome.DROP
             if self.notifier.has_services:
                 if self.notifier.notify_low_price(item.name, item.target_price, result.price, item.url, result.currency):
@@ -310,6 +320,42 @@ class ScrapingOrchestrator:
             last_price=result.price,
             last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT)
         )
+
+    def _notify_matching_adverts(self, item: BaseTrackedItem, result: ScrapeResult, notes: list[str]) -> PriceOutcome:
+        """Sends one price-drop push per matching advert below the target price.
+
+        The listing-type counterpart of the single-price notification branch:
+        every advert in ``result.matches`` priced below the item's target gets its
+        own push, linking directly to that advert. The delivery outcome is
+        summarized in the row notes rather than one note per advert.
+
+        Args:
+            item (BaseTrackedItem): The product row (a listing search) being processed.
+            result (ScrapeResult): The scrape result carrying the matched adverts.
+            notes (list): The row's notes accumulator (appended in place).
+
+        Returns:
+            PriceOutcome: DROP when any advert was below target, otherwise
+                NO_TARGET/OK mirroring the single-price outcome buckets.
+        """
+        below = [m for m in result.matches if m.price < item.target_price]
+        notes.append(messages.advert_matches_note(len(result.matches), len(below)))
+
+        if not below:
+            return PriceOutcome.NO_TARGET if item.target_price == 0.0 else PriceOutcome.OK
+
+        if self.notifier.has_services:
+            delivered = sum(
+                1 for match in below
+                if self.notifier.notify_low_price(item.name, item.target_price, match.price,
+                                                  match.url, result.currency, advert_title=match.title)
+            )
+            failed = len(below) - delivered
+            notes.append(messages.advert_notified_ok(delivered) if failed == 0
+                         else messages.advert_notified_fail(failed, len(below)))
+        else:
+            notes.append(messages.NOTE_NOTIFIED_NONE)
+        return PriceOutcome.DROP
 
     @staticmethod
     def _normalize_target_price(item: BaseTrackedItem, row: dict[str, Any]) -> tuple[object | None, bool]:

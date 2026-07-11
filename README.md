@@ -3,11 +3,11 @@
   Scrooge Alert
 </h1>
 
-<p align="center">An open-source Skroutz web scraper and price monitor. Receive automated push notifications when products reach your desired price.</p>
+<p align="center">An open-source web scraper and price monitor for Skroutz and the insomnia.gr classifieds. Receive automated push notifications when products reach your desired price.</p>
 
 
 > [!IMPORTANT]
-> Skroutz is a registered trademark of Skroutz S.A. This project is an independent, unofficial tool and is not affiliated with, authorized, maintained, sponsored, or endorsed by Skroutz S.A. in any way.
+> Skroutz is a registered trademark of Skroutz S.A., and Insomnia is a trademark of its respective owner. This project is an independent, unofficial tool and is not affiliated with, authorized, maintained, sponsored, or endorsed by Skroutz S.A. or the operators of insomnia.gr in any way.
 
 ## 📑 Table of Contents
 
@@ -16,7 +16,7 @@
   <br>
 
 1. [Features](#-features)
-2. [Supported Domains](#-supported-domains)
+2. [Supported Stores](#-supported-stores)
 3. [Prerequisites](#-prerequisites)
 4. [Installation](#-installation)
 5. [Configuration](#%EF%B8%8F-configuration)
@@ -24,6 +24,7 @@
    - [Scraper Configuration (config/<target>.json)](#file-2-scraper-configuration-configtargetjson)
      - [Scraper Settings](#scraper-settings)
      - [Monitored Products](#monitored-products)
+     - [Insomnia Classifieds Searches](#insomnia-classifieds-searches)
    - [General Settings (config/general.json)](#file-3-general-settings-configgeneraljson)
 6. [Usage](#-usage)
    - [Automated Systemd Execution](#automated-systemd-execution)
@@ -48,14 +49,21 @@
 * **Instant Notifications:** Get instant push notifications (Telegram, Discord, Slack, Email, etc.) for price drops.
 * **Custom Target Prices:** Define specific price drop thresholds for every individual product.
 
-## 🌍 Supported Domains
-The scraper supports all Skroutz domains, dynamically detecting the locale and currency:
+## 🌍 Supported Stores
+
+### Skroutz
+
+All Skroutz domains are supported, dynamically detecting the locale and currency:
 
 * `.gr` (Greece - €)
 * `.cy` (Cyprus - €)
 * `.bg` (Bulgaria - €)
 * `.de` (Germany - €)
 * `.ro` (Romania - Lei)
+
+### Insomnia
+
+The [insomnia.gr](https://www.insomnia.gr/classifieds/) second-hand classifieds (Greece - €). Instead of single product pages you monitor **classifieds listing pages** with per-advert title filters, and every matching advert below your target gets its own alert — see [Insomnia Classifieds Searches](#insomnia-classifieds-searches).
 
 ## 📋 Prerequisites
 
@@ -194,6 +202,48 @@ The `products` array lists the items you want to keep an eye on. Each entry supp
 
 > [!NOTE]
 > You do not need to manually add the internal fields. The script will generate and maintain them during execution.
+
+#### Insomnia Classifieds Searches
+
+The Insomnia scraper (`config/insomnia.json`) works on the [insomnia.gr classifieds](https://www.insomnia.gr/classifieds/), and its entries are **searches** rather than single products: each row points at a category *listing page* and describes which advert titles you are after. Every advert that passes your title filters and is priced below `target_price` triggers its own **Price Drop** notification, linking directly to that advert.
+
+```json
+{
+  "settings": {
+    "execution_interval": "1h",
+    "min_advert_price": 30
+  },
+  "products": [
+    {
+      "name": "Google Pixel 9 (128 GB)",
+      "url": "https://www.insomnia.gr/classifieds/category/174-google/",
+      "target_price": 200,
+      "title_include": ["Pixel 9", "128"],
+      "title_exclude": ["9a"]
+    }
+  ]
+}
+```
+
+On top of the base product fields above, each search supports two extra fields:
+
+| Field | Type | Source | Description |
+| :--- | :--- | :--- | :--- |
+| `title_include` | Array of strings | **User-defined** | Optional. An advert matches only when its title contains **all** of these strings (case-insensitive). |
+| `title_exclude` | Array of strings | **User-defined** | Optional. An advert is rejected when its title contains **any** of these strings (case-insensitive). |
+
+And the `settings` block supports one extra setting on top of the [shared ones](#scraper-settings):
+
+| Setting | Type | Description |
+| :--- | :--- | :--- |
+| `min_advert_price` | Number | Adverts priced below this value are ignored entirely. This filters out bait adverts (an iPhone listed for 1 € just to attract clicks). If omitted, unsupported, or `0`, the filter is disabled. |
+
+> [!NOTE]
+> * Several searches can safely share the same listing URL with different filters — e.g. one row per Pixel storage size, each with its own `target_price`.
+> * Only the **first page** of a listing (the newest adverts) is checked each run, so point your searches at the most specific category available.
+> * "Ζήτηση" (want-to-buy) adverts and adverts without a listed price ("Επικοινωνία") are skipped.
+> * `last_price` stores the cheapest matching advert of the last check. When nothing matches, the search still counts as a successful check (you will not get stale-tracking alerts) and `last_price` keeps its previous value.
+> * While an advert stays below your target you will be re-alerted about it on **every** scheduled run. Set your target price to a genuine "I'd buy it right now" number, and remove or `skip` the search once you have bought.
 
 ### File 3: General Settings (`config/general.json`)
 
@@ -377,7 +427,7 @@ You might receive the following push notification alerts throughout the lifecycl
 
 | Notification&nbsp;Title&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Trigger Condition |
 | :--- | :--- |
-| **Scrooge Alert - Price Drop!** | Sent when a product's price falls below your price limit. |
+| **Scrooge Alert - Price Drop!** | Sent when a product's price falls below your price limit. For Insomnia classifieds searches, one alert is sent per matching advert, each linking directly to that advert. |
 | **Scrooge Alert - Tracking Stale** | Sent if a specific product continuously fails the scrape. |
 | **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_error](#scraper-settings) setting. |
 | **Scrooge Alert - Script Crash** | Sent if the script completely failed to run. |
@@ -542,7 +592,7 @@ To re-enable background scheduled executions later, run:
 ## 🗺️ Future Updates (Roadmap)
 
 - [x] **Enhanced Evasion:** Rotate TLS sessions and request fingerprints intelligently.
-- [ ] **Multi-Marketplace Expansion:** Support more scrapers for other marketplaces.
+- [x] **Multi-Marketplace Expansion:** Support more scrapers for other marketplaces.
 - [ ] **User Interface:** Introduction of a Web UI for non-CLI management.
 - [ ] **Docker Support:** Add an alternative Dockerized setup via docker-compose configuration.
 

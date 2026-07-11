@@ -12,6 +12,7 @@ from rich.markup import escape
 from rich.spinner import Spinner
 from rich.progress_bar import ProgressBar
 
+from core import messages
 from core.settings import SettingView
 from core.ui.config_check import ConfigView
 from core.ui.panel import uniform_column_widths
@@ -29,6 +30,7 @@ class PriceOutcome(Enum):
     DROP = "drop"            # below target -> celebrate + notify
     NO_TARGET = "no_target"  # no real target set (target price is 0.0)
     OK = "ok"                # at or above a real target
+    NO_MATCH = "no_match"    # listing checked fine, no advert matched (no price)
 
 
 class ExecutionStrategy(ABC):
@@ -117,7 +119,7 @@ class ExecutionStrategy(ABC):
         pass
 
     @abstractmethod
-    def log_price_result(self, name: str, price: float, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_price_result(self, name: str, price: float | None, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
         """Logs a completed price scrape, choosing icon/formatting from the outcome.
 
         The orchestrator passes semantic values only; each strategy owns how the
@@ -125,7 +127,8 @@ class ExecutionStrategy(ABC):
 
         Args:
             name (str): The product name.
-            price (float): The scraped current price.
+            price (float | None): The scraped current price, or None for a
+                listing check that matched no advert (``PriceOutcome.NO_MATCH``).
             currency (str): The currency symbol/label (e.g. ``"€"``).
             target (float): The product's target price (0.0 means no real threshold).
             outcome (PriceOutcome): Which bucket the result falls into.
@@ -426,16 +429,17 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         if self.live:
             self.live.update(self._generate_panel())
 
-    def log_price_result(self, name: str, price: float, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_price_result(self, name: str, price: float | None, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
         """Renders a price result row, coloring the price/target per the outcome."""
-        price_str = f"{price} {currency}"
         target_str = f"(Target: {target} {currency})"
-        if outcome == PriceOutcome.DROP:
-            value = f"[bold green]{price_str}[/bold green] {target_str}"
+        if outcome == PriceOutcome.NO_MATCH or price is None:
+            value = f"[dim]{messages.ROW_NO_MATCH}[/dim] {target_str}"
+        elif outcome == PriceOutcome.DROP:
+            value = f"[bold green]{price} {currency}[/bold green] {target_str}"
         elif outcome == PriceOutcome.NO_TARGET:
-            value = f"{price_str} [yellow]{target_str}[/yellow]"
+            value = f"{price} {currency} [yellow]{target_str}[/yellow]"
         else:
-            value = f"{price_str} {target_str}"
+            value = f"{price} {currency} {target_str}"
         self.log_result(self._outcome_icon(outcome), name, value, notes, attempt_notes)
 
     def log_warning(self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
@@ -582,10 +586,11 @@ class SilentExecutionStrategy(ExecutionStrategy):
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.info(f"{icon} {name}: {clean_value}{suffix}")
 
-    def log_price_result(self, name: str, price: float, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_price_result(self, name: str, price: float | None, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
         """Logs a price result as plain text (``attempt_notes`` ignored; already streamed)."""
         if self.target_logger:
-            value = f"{price} {currency} (Target: {target} {currency})"
+            price_str = messages.ROW_NO_MATCH if (outcome == PriceOutcome.NO_MATCH or price is None) else f"{price} {currency}"
+            value = f"{price_str} (Target: {target} {currency})"
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.info(f"{self._outcome_icon(outcome)} {name}: {value}{suffix}")
 

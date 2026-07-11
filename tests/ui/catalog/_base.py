@@ -122,6 +122,7 @@ TAG_VOCABULARY: dict[str, str] = {
     "interrupt": "Ctrl-C / termination mid-run",
     "in_progress": "Transient state (spinner, sleep progress bar, running service)",
     "price_drop": "Price fell below target (notification flow)",
+    "listing": "Listing-type scrape (multi-advert search rows)",
     "settings": "The settings section / an invalid setting",
     "products": "Products-config health (Config row / load failures)",
     "reminder": "Reminder cadence settings",

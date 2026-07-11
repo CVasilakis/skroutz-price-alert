@@ -72,6 +72,51 @@ def missing_target_price(currency: str) -> str:
     return f"Missing target price. Defaulting to 0.0 {currency}"
 
 
+# --- Listing-type (multi-advert) success rows (orchestrator) --------------------------
+
+# The price-column wording for a listing check that completed fine but matched
+# no advert (a normal steady state for a rare-item filter, not a failure).
+ROW_NO_MATCH = "No matching advert"
+
+
+def advert_matches_note(total: int, below: int) -> str:
+    """The note summarizing a listing check's matches on the product row.
+
+    Args:
+        total (int): How many adverts survived the row's filters.
+        below (int): How many of them are priced below the target.
+
+    Returns:
+        str: The note wording.
+    """
+    return f"{total} advert(s) matched the filters; {below} below target."
+
+
+def advert_notified_ok(count: int) -> str:
+    """The note recording that every per-advert notification was delivered.
+
+    Args:
+        count (int): How many adverts were notified about.
+
+    Returns:
+        str: The note wording.
+    """
+    return f"Notification delivered for {count} advert(s)."
+
+
+def advert_notified_fail(failed: int, total: int) -> str:
+    """The note recording that some per-advert notifications failed to deliver.
+
+    Args:
+        failed (int): How many notifications failed.
+        total (int): How many adverts were notified about.
+
+    Returns:
+        str: The note wording.
+    """
+    return f"Notification delivery failed for {failed} of {total} advert(s)."
+
+
 # --- Skips, warnings, and failures (orchestrator) -------------------------------------
 
 NOTE_SKIP_FIELD = "The skip field was set to true in the configuration file."
