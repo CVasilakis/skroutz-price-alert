@@ -6,6 +6,10 @@ from core.constants import (
     EXIT_CODE_PRODUCTS_ERROR,
     EXIT_CODE_ENV_ERROR,
     EXIT_CODE_RATE_LIMIT_ERROR,
+    EXIT_CODE_SCRAPE_ERROR,
+    EXIT_CODE_STORAGE_ERROR,
+    EXIT_CODE_NOTIFICATION_ERROR,
+    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
     EXIT_CODE_INTERRUPT,
 )
 
@@ -37,6 +41,21 @@ _VERDICTS: dict[int, ServiceVerdict] = {
     EXIT_CODE_PRODUCTS_ERROR: ServiceVerdict("❗", "Failed", "red", "Issue with the `config/{detail}` file."),
     EXIT_CODE_ENV_ERROR: ServiceVerdict("❗", "Failed", "red", "Issue with the `.env` file."),
     EXIT_CODE_RATE_LIMIT_ERROR: ServiceVerdict("❗", "Failed", "red", "Blocked by server due to rate limits."),
+    EXIT_CODE_SCRAPE_ERROR: ServiceVerdict(
+        "❗", "Scraping Failed", "red",
+        "A parser or unexpected scraper failure exhausted all retries. Check `logs/{target}/output.log`.",
+    ),
+    EXIT_CODE_STORAGE_ERROR: ServiceVerdict(
+        "❗", "Storage Failed", "red", "Could not update `config/{detail}` with the latest scrape state."
+    ),
+    EXIT_CODE_NOTIFICATION_ERROR: ServiceVerdict(
+        "🟡", "Notification Warning", "yellow",
+        "At least one configured notification could not be delivered. Run `./scripts/run.sh --ping`.",
+    ),
+    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR: ServiceVerdict(
+        "❗", "Dependencies Missing", "red",
+        "Install this scraper's dependencies with `./install.sh --{target}`.",
+    ),
     EXIT_CODE_INTERRUPT: ServiceVerdict("🟡", "Interrupted", "yellow", "Process was terminated by the user or system."),
 }
 
@@ -44,7 +63,8 @@ _VERDICTS: dict[int, ServiceVerdict] = {
 _UNKNOWN_VERDICT = ServiceVerdict("❗", "Failed", "red", "{detail}")
 
 
-def classify_service_state(result: str, exec_status: str, config_filename: str) -> ServiceVerdict:
+def classify_service_state(result: str, exec_status: str, target: str,
+                           config_filename: str) -> ServiceVerdict:
     """Maps a finished service's systemd outcome to a presentation verdict.
 
     A run counts as fully successful only when systemd reports ``Result=success``
@@ -55,6 +75,7 @@ def classify_service_state(result: str, exec_status: str, config_filename: str) 
     Args:
         result (str): The systemd ``Result`` property (e.g. ``"success"``).
         exec_status (str): The process exit code as a string (``ExecMainStatus``).
+        target (str): The scraper target, used in actionable paths and commands.
         config_filename (str): The target's config filename, used to fill the
             products-error note's ``{detail}`` placeholder.
 
@@ -74,6 +95,8 @@ def classify_service_state(result: str, exec_status: str, config_filename: str) 
         detail = f"Reason: {result or 'Unknown'}, Exit Code: {exec_status or 'Unknown'}"
         return replace(_UNKNOWN_VERDICT, note=detail)
 
-    if verdict.note and "{detail}" in verdict.note:
-        return replace(verdict, note=verdict.note.format(detail=config_filename))
+    if verdict.note:
+        return replace(verdict, note=verdict.note.format(
+            detail=config_filename, target=target,
+        ))
     return verdict

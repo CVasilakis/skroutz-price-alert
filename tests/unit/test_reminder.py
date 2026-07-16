@@ -449,10 +449,10 @@ class TestNeverRaises(_LockedDownCase):
         self.assertEqual(before, after,
                          "traceback leaked into the real repository logs/ directory")
 
-    def test_persist_write_failure_skips_send_to_avoid_a_storm(self):
-        # State is persisted *before* sending: if the write fails, the reminder is NOT
-        # sent (else a persistent write failure would re-deliver on every run). The
-        # timestamp is left unchanged so the next run retries once the disk recovers.
+    def test_post_delivery_persist_failure_keeps_old_slot(self):
+        # Delivery happens first. If recording its slot then fails, the old timestamp
+        # remains so an undelivered reminder is never falsely recorded; this can cause
+        # an intentional at-least-once duplicate on the next run.
         _write_general(self.cfg_dir, {"settings": {"reminder": "1 week"},
                                       LAST_REMINDER_FIELD: "27-06-2026 13:00:00"})
         service, notifier, _, _ = _make_service(self.cfg_dir, SAT + datetime.timedelta(hours=1))
@@ -460,9 +460,26 @@ class TestNeverRaises(_LockedDownCase):
                         side_effect=OSError("disk full")):
             service.run_once()  # must not raise
 
-        notifier.notify_reminder.assert_not_called()
+        notifier.notify_reminder.assert_called_once()
         self.assertEqual(_read_general(self.cfg_dir)[LAST_REMINDER_FIELD],
                          "27-06-2026 13:00:00")  # unchanged; next run retries
+        warnings = [c.args[0] for c in service._logger.warning.call_args_list]
+        self.assertTrue(any("may deliver it again" in w for w in warnings))
+
+    def test_delivery_exception_never_advances_timestamp(self):
+        _write_general(self.cfg_dir, {"settings": {"reminder": "1 week"},
+                                      LAST_REMINDER_FIELD: "27-06-2026 13:00:00"})
+        service, notifier, _, _ = _make_service(
+            self.cfg_dir, SAT + datetime.timedelta(hours=1),
+        )
+        notifier.notify_reminder.side_effect = RuntimeError("transport exploded")
+
+        with mock.patch("core.general.reminder.save_traceback") as saver:
+            service.run_once()  # never raises and never records the due slot
+
+        saver.assert_called_once()
+        self.assertEqual(_read_general(self.cfg_dir)[LAST_REMINDER_FIELD],
+                         "27-06-2026 13:00:00")
 
     def test_run_once_never_raises_even_if_logging_fails(self):
         # The except path builds the reminder logger to write a traceback; if the log

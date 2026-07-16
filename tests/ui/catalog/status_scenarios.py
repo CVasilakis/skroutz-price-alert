@@ -130,6 +130,26 @@ def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "17"), resolved_settings(), CFG, "hourly", "hourly")
 
 
+@scenario(Surface.STATUS, "exec_scrape_error", "Last run exhausted a parser or unexpected scraper fault (exit 18)", tags=("last_run",))
+def _():
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "18"), resolved_settings(), CFG, "hourly", "hourly")
+
+
+@scenario(Surface.STATUS, "exec_storage_error", "Last run could not persist scrape state (exit 19)", tags=("last_run",))
+def _():
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "19"), resolved_settings(), CFG, "hourly", "hourly")
+
+
+@scenario(Surface.STATUS, "exec_notification_error", "Last run missed at least one notification (exit 20)", tags=("last_run",))
+def _():
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "20"), resolved_settings(), CFG, "hourly", "hourly")
+
+
+@scenario(Surface.STATUS, "exec_dependency_error", "Last run lacked scraper dependencies (exit 21)", tags=("last_run",))
+def _():
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "21"), resolved_settings(), CFG, "hourly", "hourly")
+
+
 @scenario(Surface.STATUS, "exec_interrupt", "Last run was interrupted (exit 130)", tags=("last_run",))
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc("exit-code", "130"), resolved_settings(), CFG, "hourly", "hourly")

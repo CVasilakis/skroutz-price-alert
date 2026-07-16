@@ -1,0 +1,16 @@
+# border: red
+
+╭──────────────────────── Skroutz Service Status ─────────────────────────╮
+│   ✅    Monitored Items             5 loaded                            │
+│   ✅    Execution Interval          1h                                  │
+│   ✅    Log Retention               7 days                              │
+│   ✅    Notify On Errors            true                                │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ✅    Systemd Timer Active        Yes                                 │
+│   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
+│   ❗    Last Execution Status       Scraping Failed [1]                 │
+│   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
+│                                                                         │
+│   [1] A parser or unexpected scraper failure exhausted all retries.     │
+│ Check logs/skroutz/output.log.                                          │
+╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,4 +1,4 @@
-# border: yellow
+# border: red
 
 ╭────────────────────────── Fakestore Scraping ───────────────────────────╮
 │   🟡    Monitored Items       3 loaded, 1 misconfigured [1]             │
@@ -7,7 +7,7 @@
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Paused Product        Skipped [2]                               │
-│   🟡    Removed Product       Skipping (ProductNotFoundError) [3]       │
+│   ❗    Removed Product       Skipping (ProductNotFoundError) [3]       │
 │   🟡    Untargeted Product    55.0 € (Target: 0.0 €) [4]                │
 │                                                                         │
 │   [1] Problematic items found at JSON index: 3.                         │

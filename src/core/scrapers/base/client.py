@@ -15,16 +15,19 @@ class BaseScraperClient(ABC):
 
         * ``ProductNotFoundError`` / ``ProductUnavailableError`` /
           ``InvalidURLError`` — terminal for this item, NO retry; the item is
-          skipped (not counted as a failure, not notified).
+          rendered as a red product failure without aborting. Invalid URLs are
+          included in the aggregated error notification.
         * ``ScraperParseError`` — retried (with ``refresh_identity`` between
-          attempts); if it still fails after all retries it counts as a failure.
+          attempts); terminal exhaustion is counted and marks the run unhealthy.
         * ``RateLimitError`` — retried (with ``refresh_identity``); a terminal
           failure ABORTS the whole run for the target and saves a traceback.
         * ``ServerError`` — retried WITHOUT ``refresh_identity``; a terminal 5xx
           is shown and logged but intentionally NOT notified and NOT counted as a
           failure (a sustained outage instead surfaces via stale-entry tracking).
-        * any other ``Exception`` — retried (with ``refresh_identity``); a
-          terminal failure is counted and a traceback is saved.
+        * other modeled ``ScraperError`` values — retried and counted for the error
+          notification, but do not turn a remote fault into an unhealthy run.
+        * any non-``ScraperError`` ``Exception`` — treated as a plugin/programming
+          fault; retried, counted, tracebacked, and marks the run unhealthy.
 
         A successful call must return a :class:`ScrapeResult`. To plug a new
         store into the retry machinery, raise these exceptions accordingly.

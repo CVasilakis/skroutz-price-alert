@@ -76,7 +76,12 @@ class Notifier:
         Returns:
             bool: True if the notification was sent successfully, False otherwise.
         """
-        return bool(self.app_notif.notify(title=title, body=body))
+        try:
+            return bool(self.app_notif.notify(title=title, body=body))
+        except Exception:
+            # Delivery is a recoverable runtime outcome. Callers decide how to
+            # report False without confusing a transport fault with a scrape fault.
+            return False
 
     def notify_low_price(self, product_name: str, target_price: float, current_price: float, url: str, currency: str = '€', advert_title: str | None = None) -> bool:
         """Sends a notification about a price drop below the target price.

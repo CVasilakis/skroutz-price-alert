@@ -24,10 +24,11 @@ Anti-sliding by construction:
     never drift.
 
 Delivery safety:
-    State is persisted *before* the notification is sent: a reminder is never delivered
-    unless its slot has been recorded, so a persistent write failure cannot re-send the
-    reminder on every subsequent run. If delivery then fails, the slot is rolled back so
-    the next run retries rather than skipping a whole cadence.
+    For an established schedule, state advances only *after* notification delivery returns
+    success. A false return or exception therefore leaves the old slot intact and the next
+    invocation retries. If delivery succeeds but persistence fails, the old slot remains
+    and a later invocation may deliver a duplicate; this deliberate at-least-once policy
+    never marks an undelivered reminder as sent.
 
 State:
     ``last_reminder`` is a machine-written top-level field of ``config/general.json``,
@@ -129,9 +130,9 @@ class ReminderService:
     raises - a reminder bug must not kill a scraping run, and it executes *before* the
     orchestrator so an aborted scrape cannot suppress the heartbeat either.
 
-    The authoritative read-check-persist-send sequence runs under the ``reminder`` file
-    lock: concurrent plugin timers each invoke ``main.py``, and the lock makes "record
-    the slot, then send" one atomic decision. A cheap unlocked pre-check skips the lock
+    The authoritative read-check-send-persist sequence runs under the ``reminder`` file
+    lock: concurrent plugin timers each invoke ``main.py``, and the lock makes "send,
+    then record the slot" one serialized decision. A cheap unlocked pre-check skips the lock
     (and creating ``logs/reminder/``) on the common "not due yet" path. Contenders never
     block (the lock fails immediately) - they skip and let the holder finish.
 
@@ -247,7 +248,7 @@ class ReminderService:
 
     def _check_and_send(self, weeks: int, canonical: str,
                         weekday: int, hour: int, minute: int) -> None:
-        """Performs one due-check and, when due, one persist-then-send (under the lock)."""
+        """Performs one due-check and, when due, one send-then-persist (under the lock)."""
         now = self._now_fn()
         data, last_slot, problem = self._read_state()
 
@@ -304,21 +305,36 @@ class ReminderService:
         new_slot = max(most_recent_slot(now, weekday, hour, minute), due_slot)
         next_due = next_due_slot(new_slot, weeks).strftime(TIMESTAMP_FORMAT)
 
-        # Persist *before* sending: a reminder must never go out unless its slot is on
-        # disk, or a persistent write failure would re-send it on every subsequent run.
-        if not self._persist_slot(data, new_slot):
+        try:
+            delivered = bool(self.notifier.notify_reminder(
+                update_available, display_reminder(canonical), next_due,
+            ))
+        except Exception:
+            # A notifier bug/transport exception must obey the same state invariant as
+            # a normal False result: leave last_reminder untouched so the next run retries.
+            try:
+                save_traceback(self._log, target_name=REMINDER_TARGET)
+            except Exception:
+                pass
             self._log.warning(
-                "🟡 Could not record reminder state; skipping this send (will retry next run)."
+                "🟡 Reminder delivery raised an exception; timestamp unchanged - "
+                "will retry on the next run."
             )
             return
 
-        if not self.notifier.notify_reminder(update_available, display_reminder(canonical), next_due):
-            # Delivery failed: roll the slot back so the next run retries instead of
-            # skipping a whole cadence. Best-effort - a failed rollback only costs this
-            # one cycle.
-            self._persist_slot(data, last_slot)
+        if not delivered:
             self._log.warning(
-                "🟡 Reminder delivery failed; timestamp restored - will retry on the next run."
+                "🟡 Reminder delivery failed; timestamp unchanged - will retry on the next run."
+            )
+            return
+
+        # Only a confirmed delivery may advance an established last_reminder. If this
+        # write fails, keeping the old slot can cause a duplicate next run, but never a
+        # false record claiming that an undelivered reminder was sent.
+        if not self._persist_slot(data, new_slot):
+            self._log.warning(
+                "🟡 Reminder was delivered but its timestamp could not be recorded; "
+                "the next run may deliver it again."
             )
             return
 

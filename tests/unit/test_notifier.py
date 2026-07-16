@@ -54,6 +54,12 @@ class TestNotifyDelegation(unittest.TestCase):
         self.assertIs(result, True)
         app.notify.assert_called_once_with(title="T", body="B")
 
+    def test_notify_converts_transport_exception_to_false(self):
+        notifier, app = _make_notifier("tgram://token/chat")
+        app.notify.side_effect = RuntimeError("transport exploded")
+
+        self.assertIs(notifier.notify("T", "B"), False)
+
     def test_notify_low_price_sends_price_drop(self):
         notifier, app = _make_notifier("tgram://token/chat")
         app.notify.return_value = True

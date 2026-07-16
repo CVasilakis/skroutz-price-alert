@@ -121,6 +121,8 @@ def advert_notified_fail(failed: int, total: int) -> str:
 
 NOTE_SKIP_FIELD = "The skip field was set to true in the configuration file."
 WARN_INVALID_URL = "Invalid URL. Skipping product..."
+WARN_STALE_NOTIFICATION_FAILED = "Failed to deliver the stale-products notification."
+WARN_ERROR_NOTIFICATION_FAILED = "Failed to deliver the scraping-errors notification."
 NOTE_RATE_LIMIT_ABORTED = "Rate limit reached; scraping aborted."
 ERR_LOCK_HELD = "Another instance is currently running. Aborting..."
 

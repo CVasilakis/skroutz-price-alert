@@ -37,8 +37,10 @@ class ExecutionStrategy(ABC):
     """Abstract base class for execution UI and logging strategies."""
 
     @staticmethod
-    def _outcome_icon(outcome: PriceOutcome) -> str:
+    def _outcome_icon(outcome: PriceOutcome, delivery_failed: bool = False) -> str:
         """Maps a price outcome to its status icon (shared by all strategies)."""
+        if delivery_failed:
+            return "🟡"
         return {PriceOutcome.DROP: "🎉", PriceOutcome.NO_TARGET: "🟡"}.get(outcome, "✅")
 
     @staticmethod
@@ -119,7 +121,10 @@ class ExecutionStrategy(ABC):
         pass
 
     @abstractmethod
-    def log_price_result(self, name: str, price: float | None, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_price_result(self, name: str, price: float | None, currency: str,
+                         target: float, outcome: PriceOutcome, notes: Notes = None,
+                         attempt_notes: Notes = None,
+                         delivery_failed: bool = False) -> None:
         """Logs a completed price scrape, choosing icon/formatting from the outcome.
 
         The orchestrator passes semantic values only; each strategy owns how the
@@ -134,6 +139,8 @@ class ExecutionStrategy(ABC):
             outcome (PriceOutcome): Which bucket the result falls into.
             notes (Notes): Result footnotes (e.g. notification status).
             attempt_notes (Notes): Per-attempt footnotes for preceding failed retries.
+            delivery_failed (bool): Whether at least one due notification failed,
+                overriding the normal outcome icon with a yellow warning.
         """
         pass
 
@@ -149,8 +156,9 @@ class ExecutionStrategy(ABC):
         pass
 
     @abstractmethod
-    def log_error(self, name: str, error_str: str, notes: Notes = None) -> None:
-        """Logs an error message for a specific product."""
+    def log_error(self, name: str, error_str: str, notes: Notes = None,
+                  attempt_notes: Notes = None) -> None:
+        """Logs a red error row, optionally retaining preceding retry footnotes."""
         pass
 
     @abstractmethod
@@ -429,7 +437,10 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         if self.live:
             self.live.update(self._generate_panel())
 
-    def log_price_result(self, name: str, price: float | None, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_price_result(self, name: str, price: float | None, currency: str,
+                         target: float, outcome: PriceOutcome, notes: Notes = None,
+                         attempt_notes: Notes = None,
+                         delivery_failed: bool = False) -> None:
         """Renders a price result row, coloring the price/target per the outcome."""
         target_str = f"(Target: {target} {currency})"
         if outcome == PriceOutcome.NO_MATCH or price is None:
@@ -440,7 +451,10 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
             value = f"{price} {currency} [yellow]{target_str}[/yellow]"
         else:
             value = f"{price} {currency} {target_str}"
-        self.log_result(self._outcome_icon(outcome), name, value, notes, attempt_notes)
+        self.log_result(
+            self._outcome_icon(outcome, delivery_failed), name, value,
+            notes, attempt_notes,
+        )
 
     def log_warning(self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
         """Logs a warning entry to the live display."""
@@ -449,9 +463,12 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         if self.live:
             self.live.update(self._generate_panel())
 
-    def log_error(self, name: str, error_str: str, notes: Notes = None) -> None:
+    def log_error(self, name: str, error_str: str, notes: Notes = None,
+                  attempt_notes: Notes = None) -> None:
         """Logs an error entry to the live display."""
-        refs = self._build_note_refs(notes)
+        refs = self._build_note_refs(
+            self._normalize_notes(attempt_notes) + self._normalize_notes(notes)
+        )
         self.rows.append(("❗", escape(self._truncate_name(name)), f"{escape(error_str)}{refs}"))
         if self.live:
             self.live.update(self._generate_panel())
@@ -586,13 +603,20 @@ class SilentExecutionStrategy(ExecutionStrategy):
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.info(f"{icon} {name}: {clean_value}{suffix}")
 
-    def log_price_result(self, name: str, price: float | None, currency: str, target: float, outcome: PriceOutcome, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_price_result(self, name: str, price: float | None, currency: str,
+                         target: float, outcome: PriceOutcome, notes: Notes = None,
+                         attempt_notes: Notes = None,
+                         delivery_failed: bool = False) -> None:
         """Logs a price result as plain text (``attempt_notes`` ignored; already streamed)."""
         if self.target_logger:
             price_str = messages.ROW_NO_MATCH if (outcome == PriceOutcome.NO_MATCH or price is None) else f"{price} {currency}"
             value = f"{price_str} (Target: {target} {currency})"
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            self.target_logger.info(f"{self._outcome_icon(outcome)} {name}: {value}{suffix}")
+            message = f"{self._outcome_icon(outcome, delivery_failed)} {name}: {value}{suffix}"
+            if delivery_failed:
+                self.target_logger.warning(message)
+            else:
+                self.target_logger.info(message)
 
     def log_warning(self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
         """Logs a warning to the target logger (``attempt_notes`` ignored; already streamed)."""
@@ -600,7 +624,8 @@ class SilentExecutionStrategy(ExecutionStrategy):
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.warning(f"❗ {name}: {warning_str}{suffix}")
 
-    def log_error(self, name: str, error_str: str, notes: Notes = None) -> None:
+    def log_error(self, name: str, error_str: str, notes: Notes = None,
+                  attempt_notes: Notes = None) -> None:
         """Logs an error to the target logger."""
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(notes))

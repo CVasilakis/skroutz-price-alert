@@ -213,7 +213,7 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     if last_exec_time:
         # Exit-code presentation lives in one table (exit_status.py); status only renders
         # the resolved verdict and links its note as a footnote.
-        verdict = classify_service_state(result, exec_status, config_filename)
+        verdict = classify_service_state(result, exec_status, target, config_filename)
         ref = service_panel.add_note_ref(verdict.note) if verdict.note else ""
         completed_str = f"[{verdict.color}]{verdict.label}{ref}[/{verdict.color}]"
         service_panel.add_row("✅", "Last Execution Time", last_exec_time)

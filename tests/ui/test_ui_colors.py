@@ -20,10 +20,13 @@ EXPECTED_COLORS = {
     # RUN: drop celebration wins; OK-completed settles green; warning -> yellow;
     # error -> red; in-progress -> blue.
     "run__success_drop_notified": "green",
+    "run__success_drop_notify_failed": "yellow",
+    "run__listing_matches_notify_failed": "yellow",
     "run__success_ok": "green",
     "run__no_target_missing": "yellow",
     "run__settings_each_invalid": "yellow",
     "run__failure_all_parse": "red",
+    "run__invalid_url_warning": "red",
     "run__system_lock_held": "red",
     "run__interrupt_during_scraping": "red",
     "run__config_faulty": "yellow",         # a faulty 'Config' row tints the panel yellow
@@ -36,6 +39,7 @@ EXPECTED_COLORS = {
     "status__service_invalid_retention": "yellow",
     "status__config_faulty": "yellow",      # a faulty 'Config' row tints the panel yellow
     "status__config_failed": "red",         # a failed 'Config' row -> red
+    "status__exec_notification_error": "yellow",
     "status__schedule_drift": "green",      # drift is a footnote on a ✅ row, not a warning
     "status__timer_inactive": "red",
     "status__not_installed": "red",

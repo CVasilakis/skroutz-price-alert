@@ -1,4 +1,4 @@
-# border: yellow
+# border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
 │   ✅    Monitored Items       5 loaded                                  │
@@ -6,7 +6,7 @@
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🟡    Mistyped Product      Invalid URL. Skipping product... [1]      │
+│   ❗    Mistyped Product      Invalid URL. Skipping product... [1]      │
 │                                                                         │
 │   [1] Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago).       │
 ╰─────────────────────────────────────────────────────────────────────────╯

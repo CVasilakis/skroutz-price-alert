@@ -70,7 +70,9 @@ def _():
         _start(s)
         s.start_scraping("Sony WH-1000XM5", 1, 3)
         s.complete_scraping()
-        s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP, notes=[NOTIFIED_FAIL])
+        s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0,
+                           PriceOutcome.DROP, notes=[NOTIFIED_FAIL],
+                           delivery_failed=True)
         s.complete_target()
     return drive_run(script)
 
@@ -116,7 +118,8 @@ def _():
         s.start_scraping("Google Pixel 9 (128 GB)", 1, 3)
         s.complete_scraping()
         s.log_price_result("Google Pixel 9 (128 GB)", 185.0, CURRENCY, 200.0, PriceOutcome.DROP,
-                           notes=[messages.advert_matches_note(3, 2), messages.advert_notified_fail(1, 2)])
+                           notes=[messages.advert_matches_note(3, 2), messages.advert_notified_fail(1, 2)],
+                           delivery_failed=True)
         s.complete_target()
     return drive_run(script)
 
@@ -200,20 +203,20 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "invalid_url_warning", "Product URL not scrapable; skipped with a warning", tags=("skipped",))
+@scenario(Surface.RUN, "invalid_url_warning", "Product URL not scrapable; shown as a failure", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
-        s.log_warning("Mistyped Product", messages.WARN_INVALID_URL)
+        s.log_error("Mistyped Product", messages.WARN_INVALID_URL)
         s.complete_target()
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "invalid_url_warning_stale", "Invalid-URL warning on a stale product", tags=("skipped",))
+@scenario(Surface.RUN, "invalid_url_warning_stale", "Invalid-URL failure on a stale product", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
-        s.log_warning("Mistyped Product", messages.WARN_INVALID_URL, STALE)
+        s.log_error("Mistyped Product", messages.WARN_INVALID_URL, STALE)
         s.complete_target()
     return drive_run(script)
 
@@ -224,7 +227,7 @@ def _():
         _start(s)
         s.start_scraping("Removed Product", 1, 3)
         s.complete_scraping()
-        s.log_warning("Removed Product", messages.skipping_warning("ProductNotFoundError"), [messages.not_found_detail(404)])
+        s.log_error("Removed Product", messages.skipping_warning("ProductNotFoundError"), [messages.not_found_detail(404)])
         s.complete_target()
     return drive_run(script)
 
@@ -235,7 +238,7 @@ def _():
         _start(s)
         s.start_scraping("Out Of Stock Item", 1, 3)
         s.complete_scraping()
-        s.log_warning("Out Of Stock Item", messages.skipping_warning("ProductUnavailableError"), ["Product found but has no available price."])
+        s.log_error("Out Of Stock Item", messages.skipping_warning("ProductUnavailableError"), ["Product found but has no available price."])
         s.complete_target()
     return drive_run(script)
 
@@ -246,7 +249,7 @@ def _():
         _start(s)
         s.start_scraping("Weird URL Product", 1, 3)
         s.complete_scraping()
-        s.log_warning("Weird URL Product", messages.skipping_warning("InvalidURLError"), ["Could not parse a product ID from the URL."])
+        s.log_error("Weird URL Product", messages.skipping_warning("InvalidURLError"), ["Could not parse a product ID from the URL."])
         s.complete_target()
     return drive_run(script)
 

@@ -137,14 +137,14 @@ def test_malformed_url_null_name_and_numeric_timestamp_are_contained(tmp_path):
         exit_code = _run_orchestrator(tmp_path, notifier, ui)
 
     assert exit_code == EXIT_CODE_SUCCESS
-    ui.log_warning.assert_called_once_with(
+    ui.log_error.assert_called_once_with(
         "Unknown", messages.WARN_INVALID_URL, notes=messages.NOTE_CORRUPTED_TIMESTAMP)
     with open(config_path) as file:
         row = json.load(file)["products"][0]
     assert row["last_checked"] != 123
 
 
-def test_product_gone_is_a_warning_not_a_failure(tmp_path):
+def test_product_gone_is_a_red_row_without_failing_the_run(tmp_path):
     routes = {"/gone/1": [(404, None)]}
     with fake_store_server(routes) as netloc:
         with registry_sandbox(_fakestore_plugin(netloc)):
@@ -156,7 +156,7 @@ def test_product_gone_is_a_warning_not_a_failure(tmp_path):
             exit_code = _run_orchestrator(tmp_path, notifier, ui)
 
     assert exit_code == EXIT_CODE_SUCCESS
-    ui.log_warning.assert_called_once_with(
+    ui.log_error.assert_called_once_with(
         "Removed", messages.skipping_warning("ProductNotFoundError"),
         notes=[messages.not_found_detail(404)], attempt_notes=[])
     notifier.notify_low_price.assert_not_called()
@@ -199,7 +199,7 @@ def test_rate_limited_on_every_attempt_exits_17(tmp_path):
                        for i in range(1, MAX_RETRIES + 1)],
         extra_notes=[messages.NOTE_RATE_LIMIT_ABORTED,
                      messages.errors_log_pointer("fakestore")])
-    notifier.notify_errors.assert_called_once()
+    notifier.notify_errors.assert_not_called()
 
 
 def test_invalid_config_json_skips_target_and_exits_15(tmp_path):

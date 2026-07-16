@@ -396,13 +396,14 @@ as an unexpected fault.
 
 | Raise this | When | Retried? | `refresh_identity` between tries? | Terminal outcome |
 | :--- | :--- | :--- | :--- | :--- |
-| `ProductNotFoundError` | product removed / 404·410 | No | — | Item skipped — not a failure, not notified |
-| `ProductUnavailableError` | found, but no price | No | — | Item skipped — not a failure, not notified |
-| `InvalidURLError` | URL can't be parsed | No | — | Item skipped — not a failure, not notified |
-| `ScraperParseError` | response can't be parsed | Yes | Yes | Counted as a failure; traceback saved |
+| `ProductNotFoundError` | product removed / 404·410 | No | — | Red product row; run continues; not aggregated |
+| `ProductUnavailableError` | found, but no price | No | — | Red product row; run continues; not aggregated |
+| `InvalidURLError` | URL can't be parsed | No | — | Red product row; included in the error summary; run continues |
+| `ScraperParseError` | response can't be parsed | Yes | Yes | Counted and notified; final run status reports scrape failure |
 | `RateLimitError` | blocked / 401·403·429 | Yes | Yes | **Aborts the whole run for this store**; traceback saved |
 | `ServerError` | 5xx | Yes | **No** | Logged but **not** notified or counted (a real outage surfaces via stale-entry tracking) |
-| any other `Exception` | unexpected | Yes | Yes | Counted as a failure; traceback saved |
+| other `ScraperError` | modeled remote/HTTP failure | Yes | Yes | Counted and notified; service status remains successful |
+| any non-`ScraperError` exception | plugin/programming fault | Yes | Yes | Counted, traceback saved, and final run status reports scrape failure |
 
 Practical rules:
 

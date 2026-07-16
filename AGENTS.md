@@ -34,6 +34,10 @@ A test suite lives under `tests/` (`tests/unit/`, `tests/integration/`, the term
   - **`15`**: Indicates an issue with a plugin's products config file, e.g. `config/skroutz.json` (file missing, wrong permissions, or invalid JSON). Such a scraper is **skipped individually** (its failure surfaced as its `Config` row) — the other scrapers still run — and the run finishes with this code if any target's config failed to load. Since each systemd service runs a single plugin, a background run is effectively single-target, so this reproduces the prior behavior there.
   - **`16`**: Indicates an issue with the `.env` file configuration.
   - **`17`**: Indicates the scraper was blocked by the server due to rate limits.
+  - **`18`**: Indicates that a parser or unexpected scraper fault exhausted all retries. Modeled remote/server errors remain successful and surface through error/stale notifications.
+  - **`19`**: Indicates that scraped state could not be persisted through the atomic config save path.
+  - **`20`**: Indicates that at least one configured notification failed to deliver. `--status` presents this as a yellow notification warning; scraping continues.
+  - **`21`**: Indicates that a selected scraper could not start because its private plugin dependencies are missing.
   - **`42`**: Indicates that a specific scraper target did not start because another instance of it is already running (file lock timeout).
   - **`130`**: Indicates that the script was interrupted (e.g., via Ctrl+C or system termination).
 
