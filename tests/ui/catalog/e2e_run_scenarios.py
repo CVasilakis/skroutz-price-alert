@@ -82,3 +82,14 @@ def _():
             _URL.format(3): [ScrapeResult(price=55.0, currency="€")],
         },
     )
+
+
+@scenario(Surface.E2E_RUN, "mixed_unsafe_and_valid", "A null row is reported while a valid row completes", tags=("products", "combined"))
+def _():
+    return drive_orchestrated_run(
+        products=[
+            None,
+            {"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0},
+        ],
+        results_by_url={_URL.format(1): [ScrapeResult(price=320.0, currency="€")]},
+    )

@@ -1,10 +1,12 @@
-# border: blue
+# border: yellow
 
-╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
+╭────────────────────────── Fakestore Scraping ───────────────────────────╮
+│   🟡    Monitored Items       2 loaded, 1 misconfigured [1]             │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ⏳    Retrying (2/3)        ━━━━━━━━━━━━━━━━━━━━━          18.4s      │
+│   ✅    Sony WH-1000XM5       320.0 € (Target: 300.0 €)                 │
+│                                                                         │
+│   [1] Problematic items found at JSON index: 1.                         │
 ╰─────────────────────────────────────────────────────────────────────────╯

@@ -358,7 +358,7 @@ class ReminderService:
                 loaded = json.load(file)
         except OSError:
             return None, None, "unreadable"
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeError):
             return None, None, "corrupt"
 
         if not isinstance(loaded, dict):

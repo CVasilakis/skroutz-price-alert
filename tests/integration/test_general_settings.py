@@ -60,6 +60,13 @@ class TestResolveGeneralSettings(unittest.TestCase):
         self.assertIsNotNone(resolved.block_warning)
         self.assertEqual(resolved.value(KEY_REMINDER), DEFAULT_REMINDER)
 
+    def test_invalid_utf8_sets_warning_and_uses_defaults(self):
+        with open(general_config_path(self.cfg_dir), "wb") as file:
+            file.write(b"\xff")
+        resolved = resolve_general_settings(self.cfg_dir)
+        self.assertIn("could not be read", resolved.block_warning)
+        self.assertEqual(resolved.value(KEY_REMINDER), DEFAULT_REMINDER)
+
     def test_reminder_day_and_time_resolve(self):
         _write_general(self.cfg_dir, {
             "settings": {"reminder_day": "monday", "reminder_time": "9am"},

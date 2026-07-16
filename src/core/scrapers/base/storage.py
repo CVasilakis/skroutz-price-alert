@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import json
 import os
 import shutil
@@ -8,6 +9,7 @@ from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
 
 from core.scrapers.base.model import BaseTrackedItem
+from core.constants import TIMESTAMP_FORMAT
 from core.exceptions import StorageFileError
 from core.utils import parse_price, write_json_atomically
 
@@ -113,11 +115,12 @@ class BaseDataManager(ABC):
         pass
 
     @abstractmethod
-    def get_items(self) -> list[dict[str, Any]]:
-        """Returns the list of items as dictionaries from the loaded data.
+    def get_items(self) -> list[Any]:
+        """Returns the raw list of items from the loaded data.
 
         Returns:
-            list[dict[str, Any]]: The list of item data dictionaries.
+            list[Any]: Raw row values. A configuration boundary may contain malformed
+                non-object JSON values; callers must validate a row before parsing it.
         """
         pass
 
@@ -162,11 +165,11 @@ class BaseDataManager(ABC):
         return [i + 1 for i, item in enumerate(self.get_items()) if not self.is_valid_item(item)]
 
     @abstractmethod
-    def is_valid_item(self, item: dict[str, Any]) -> bool:
+    def is_valid_item(self, item: Any) -> bool:
         """Validates an individual item's data structure and content.
 
         Args:
-            item (dict[str, Any]): The item data dictionary to validate.
+            item: A raw stored row; non-object JSON values are invalid.
 
         Returns:
             bool: True if the item is valid, False otherwise.
@@ -174,11 +177,11 @@ class BaseDataManager(ABC):
         pass
 
     @abstractmethod
-    def is_scrapable_item(self, item: dict[str, Any]) -> bool:
+    def is_scrapable_item(self, item: Any) -> bool:
         """Checks if the item has a valid, properly formatted URL.
 
         Args:
-            item (dict[str, Any]): The item dictionary to check.
+            item: A raw stored row; non-object JSON values are not scrapable.
 
         Returns:
             bool: True if the item can be scraped, False otherwise.
@@ -194,16 +197,16 @@ class BaseDataManager(ABC):
     # Shared concrete helpers
     # ------------------------------------------------------------------
 
-    def has_valid_target_price(self, item: dict[str, Any]) -> bool:
+    def has_valid_target_price(self, item: Any) -> bool:
         """Checks if an item has a valid, non-negative ``target_price``.
 
         Args:
-            item (dict[str, Any]): The item dictionary to check.
+            item: A raw stored row; only mappings can carry a target price.
 
         Returns:
             bool: True if ``target_price`` exists and is a valid non-negative number.
         """
-        if "target_price" not in item:
+        if not isinstance(item, dict) or "target_price" not in item:
             return False
 
         price = parse_price(item.get("target_price"))
@@ -310,7 +313,10 @@ class JsonProductDataManager(BaseDataManager):
         """
         config_dir = os.path.dirname(self.filepath)
         if config_dir and not os.path.exists(config_dir):
-            os.makedirs(config_dir)
+            try:
+                os.makedirs(config_dir, exist_ok=True)
+            except OSError as e:
+                raise StorageFileError(f"Could not create {self._config_label} directory: {e}")
 
         if not os.path.exists(self.filepath) or not os.path.isfile(self.filepath):
             raise StorageFileError(f"The {self._config_label} file is missing or not a file")
@@ -321,14 +327,28 @@ class JsonProductDataManager(BaseDataManager):
         try:
             with open(self.filepath, 'r') as file:
                 data = json.load(file)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, UnicodeError, json.JSONDecodeError):
             raise StorageFileError(f"The {self._config_label} file contains invalid JSON format")
 
-        if not isinstance(data, dict) or not isinstance(data.get(self.ROOT_KEY), list):
-            raise StorageFileError(f"The {self._config_label} file contains invalid JSON format")
+        self._validate_document(data)
 
         self._data = data
         return self._data
+
+    def _validate_document(self, data: Any, *, while_saving: bool = False) -> None:
+        """Validates the fatal top-level JSON shape shared by load and save.
+
+        Individual list entries are deliberately not checked here: malformed rows are
+        recoverable and reported through ``get_faulty_indices``. Only a document that
+        cannot represent this manager's item collection is a target-level failure.
+        """
+        if isinstance(data, dict) and isinstance(data.get(self.ROOT_KEY), list):
+            return
+        if while_saving:
+            raise StorageFileError(
+                f"The {self._config_label} file changed to an invalid structure while saving"
+            )
+        raise StorageFileError(f"The {self._config_label} file contains invalid JSON format")
 
     def _get_clean_url(self, url: str) -> str:
         """Strips query parameters and fragments to return the clean base URL.
@@ -341,7 +361,10 @@ class JsonProductDataManager(BaseDataManager):
         """
         if not url:
             return ""
-        parsed = urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return ""
         return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
     # ------------------------------------------------------------------
@@ -411,8 +434,8 @@ class JsonProductDataManager(BaseDataManager):
         else:
             self._updates[key] = dict(updates)
 
-    def get_items(self) -> list[dict[str, Any]]:
-        """Returns the list of items as dictionaries.
+    def get_items(self) -> list[Any]:
+        """Returns the raw list of stored row values.
 
         Note:
             The config's top-level ``settings`` block is **not** read here. Settings are
@@ -424,11 +447,16 @@ class JsonProductDataManager(BaseDataManager):
         """
         return self._data.get(self.ROOT_KEY, [])
 
-    def _clean_products(self, products: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Removes duplicates based on URL rules and cleans URLs."""
+    def _clean_products(self, products: list[Any]) -> list[Any]:
+        """Cleans mapping rows while preserving malformed rows at their exact indices."""
         groups = defaultdict(list)
 
         for i, product in enumerate(products):
+            if not isinstance(product, dict):
+                # Every malformed row remains independently visible at its original
+                # index; repeated null/scalar rows must never be deduplicated away.
+                groups[("invalid-row", i)].append((i, product))
+                continue
             if "skip" not in product:
                 product["skip"] = False
 
@@ -457,7 +485,7 @@ class JsonProductDataManager(BaseDataManager):
         cleaned_products = []
         for i, product in enumerate(products):
             if i in items_to_keep:
-                if self.is_scrapable_item(product):
+                if isinstance(product, dict) and self.is_scrapable_item(product):
                     product["url"] = self._get_clean_url(str(product.get("url", "")))
                 cleaned_products.append(product)
 
@@ -499,18 +527,19 @@ class JsonProductDataManager(BaseDataManager):
         If the file is present but unreadable (``OSError``) this raises
         :class:`StorageFileError` — mirroring ``load`` — so the caller can report it
         instead of an unhandled error aborting the run. If it is present but contains
-        invalid JSON, the corrupt content is backed up to a sibling ``.corrupt`` file
-        and the in-memory snapshot is rewritten in its place.
+        invalid JSON or text encoding, the corrupt content is backed up to a sibling
+        ``.corrupt`` file and the in-memory snapshot is rewritten in its place. A valid
+        JSON document with the wrong top-level shape is preserved and rejected.
 
         Raises:
             StorageFileError: If the file cannot be read, or the atomic write fails.
         """
-        fresh_data: dict[str, Any] = {}
+        fresh_data: Any = {}
         if os.path.exists(self.filepath):
             try:
                 with open(self.filepath, 'r') as file:
                     fresh_data = json.load(file)
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, UnicodeError):
                 # The on-disk file became invalid JSON during the run. Preserve the
                 # corrupt bytes (best-effort) so the user's data is never silently
                 # lost, then self-heal by rewriting from the in-memory snapshot.
@@ -525,16 +554,19 @@ class JsonProductDataManager(BaseDataManager):
         else:
             fresh_data = self._data
 
-        if self.ROOT_KEY in fresh_data:
-            for product in fresh_data[self.ROOT_KEY]:
-                row_key = self._row_key(product)
+        self._validate_document(fresh_data, while_saving=True)
 
-                if row_key in self._updates:
-                    for key, value in self._updates[row_key].items():
-                        product[key] = value
+        for product in fresh_data[self.ROOT_KEY]:
+            if not isinstance(product, dict):
+                continue
+            row_key = self._row_key(product)
 
-            # We also need to clean duplicates when saving to ensure any user edits during scraping are handled.
-            fresh_data[self.ROOT_KEY] = self._clean_products(fresh_data[self.ROOT_KEY])
+            if row_key in self._updates:
+                for key, value in self._updates[row_key].items():
+                    product[key] = value
+
+        # We also need to clean duplicates when saving to ensure any user edits during scraping are handled.
+        fresh_data[self.ROOT_KEY] = self._clean_products(fresh_data[self.ROOT_KEY])
 
         self._data = fresh_data
         self._save_json_atomically(self._data)
@@ -543,16 +575,20 @@ class JsonProductDataManager(BaseDataManager):
         """Parses a dictionary into a ``MODEL`` instance."""
         return self.MODEL.from_dict(data)
 
-    def is_valid_item(self, item: dict[str, Any]) -> bool:
+    def is_valid_item(self, item: Any) -> bool:
         """Validates an item dictionary.
 
         Args:
-            item (dict[str, Any]): The item dictionary to validate.
+            item: A raw stored row; non-object JSON values are invalid.
 
         Returns:
             bool: True if the item has a name, a scrapable URL, and a valid target price.
         """
-        if "name" not in item:
+        if not isinstance(item, dict):
+            return False
+
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
             return False
 
         if not self.is_scrapable_item(item):
@@ -561,9 +597,27 @@ class JsonProductDataManager(BaseDataManager):
         if not self.has_valid_target_price(item):
             return False
 
+        if "skip" in item and not isinstance(item["skip"], bool):
+            return False
+
+        if "last_price" in item:
+            last_price = parse_price(item["last_price"])
+            if last_price is None or last_price < 0:
+                return False
+
+        if "last_checked" in item:
+            last_checked = item["last_checked"]
+            if not isinstance(last_checked, str):
+                return False
+            if last_checked:
+                try:
+                    datetime.datetime.strptime(last_checked, TIMESTAMP_FORMAT)
+                except ValueError:
+                    return False
+
         return True
 
-    def is_scrapable_item(self, item: dict[str, Any]) -> bool:
+    def is_scrapable_item(self, item: Any) -> bool:
         """Checks whether the item has a scrapable product URL.
 
         Composes the shared supported-domain check (inherited, driven by the
@@ -573,11 +627,13 @@ class JsonProductDataManager(BaseDataManager):
         "supported domain + path shape".
 
         Args:
-            item (dict[str, Any]): The item dictionary to check.
+            item: A raw stored row; non-object JSON values are not scrapable.
 
         Returns:
             bool: True if the URL is on a supported domain and its path matches.
         """
+        if not isinstance(item, dict):
+            return False
         url = item.get("url", "")
         return self._url_on_supported_domain(url) and self._matches_product_path(url)
 

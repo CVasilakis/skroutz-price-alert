@@ -7,10 +7,14 @@ key, with no parallel settings dataclass.
 """
 
 import unittest
+import os
+import shutil
+import tempfile
 
 from core.scrapers.base.settings import (
-    resolve_one,
+    resolve_one, resolve_all,
     SPEC_RETENTION, SPEC_NOTIFY, SPEC_INTERVAL,
+    BASE_SETTING_SPECS, KEY_RETENTION,
     STATUS_OK, STATUS_DEFAULT, STATUS_INVALID, STATUS_NOCFG,
     DEFAULT_LOG_RETENTION_DAYS,
 )
@@ -90,6 +94,20 @@ class TestResolveInterval(_ResolveCase):
         r = resolve_one(SPEC_INTERVAL, self._cfg({"execution_interval": "3h"}),
                         plugin=self.PLUGIN)
         self.assertEqual((r.value, r.status, r.raw), ("1h", STATUS_INVALID, "3h"))
+
+
+class TestSettingsReadErrors(unittest.TestCase):
+    def test_invalid_utf8_uses_defaults_and_sets_block_warning(self):
+        cfg_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, cfg_dir, ignore_errors=True)
+        path = os.path.join(cfg_dir, "x.json")
+        with open(path, "wb") as file:
+            file.write(b"\xff")
+
+        resolved = resolve_all(BASE_SETTING_SPECS, path, plugin=fake_plugin())
+
+        self.assertEqual(resolved.value(KEY_RETENTION), DEFAULT_LOG_RETENTION_DAYS)
+        self.assertIn("could not be read", resolved.block_warning)
 
 
 if __name__ == "__main__":

@@ -28,6 +28,7 @@ EXPECTED_COLORS = {
     "run__interrupt_during_scraping": "red",
     "run__config_faulty": "yellow",         # a faulty 'Config' row tints the panel yellow
     "run__config_failed_skip": "red",       # a failed 'Config' row (skipped target) -> red
+    "e2e-run__mixed_unsafe_and_valid": "yellow",
     "run__scraping_spinner": "blue",
     "run__sleeping_pacing": "blue",
     # STATUS
@@ -50,6 +51,7 @@ EXPECTED_COLORS = {
     "config__update_available": "yellow",
     "config__env_mixed": "yellow",
     "config__env_not_configured": "red",
+    "config__general_read_error": "yellow",
     "config__worst_case": "red",
     # SHELL (border derives from the exit code: 0 -> green, else red)
     "sh-install__systemctl_missing": "red",

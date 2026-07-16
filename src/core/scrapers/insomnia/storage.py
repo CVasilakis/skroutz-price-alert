@@ -1,3 +1,4 @@
+from typing import Any
 from urllib.parse import urlparse
 
 from core.scrapers.base.storage import JsonProductDataManager
@@ -55,7 +56,7 @@ class InsomniaDataManager(JsonProductDataManager):
         listing, include, exclude = split_search_url(url)
         return search_row_key(listing, include, exclude)
 
-    def is_valid_item(self, item: dict) -> bool:
+    def is_valid_item(self, item: Any) -> bool:
         """Validates a row: the base checks plus well-formed filter-terms fields.
 
         A ``title_include``/``title_exclude`` that is present but not a list of

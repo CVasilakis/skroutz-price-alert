@@ -108,13 +108,32 @@ class BaseTrackedItem:
         if target_price is None:
             target_price = -1.0  # sentinel: invalid value
 
+        raw_name = data.get('name', 'Unknown')
+        name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else 'Unknown'
+        raw_url = data.get('url', '')
+        url = raw_url if isinstance(raw_url, str) else ''
+        last_price = parse_price(data.get('last_price', 0.0))
+        if last_price is None or last_price < 0:
+            last_price = 0.0
+        raw_skip = data.get('skip', False)
+        skip = raw_skip if isinstance(raw_skip, bool) else False
+        raw_last_checked = data.get('last_checked', '')
+        if isinstance(raw_last_checked, str):
+            last_checked = raw_last_checked
+        elif raw_last_checked is None:
+            last_checked = ''
+        else:
+            # Keep malformed state visible to the timestamp-repair path while
+            # preserving the model's string contract for every downstream consumer.
+            last_checked = str(raw_last_checked)
+
         return {
-            'name': data.get('name', 'Unknown'),
-            'url': data.get('url', ''),
+            'name': name,
+            'url': url,
             'target_price': target_price,
-            'last_price': data.get('last_price', 0.0),
-            'skip': data.get('skip', False),
-            'last_checked': data.get('last_checked', ''),
+            'last_price': last_price,
+            'skip': skip,
+            'last_checked': last_checked,
         }
 
     @classmethod
@@ -127,6 +146,9 @@ class BaseTrackedItem:
               are stored as ``-1.0`` to signal invalidity.  The caller
               (typically the orchestrator) is responsible for detecting the
               sentinel and deciding how to proceed.
+            * Other malformed base fields are normalized to their safe typed
+              defaults so presentation and timestamp-repair code never receives
+              arbitrary JSON containers.
 
         Args:
             data (dict[str, Any]): The item data dictionary.

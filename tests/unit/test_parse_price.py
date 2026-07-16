@@ -42,6 +42,8 @@ class TestParsePrice(unittest.TestCase):
     INVALID = [
         None, True, False, "", "   ", "abc", "not-a-price",
         "€", "-", ",", ".", [1, 2], {"price": 5}, object(),
+        float("nan"), float("inf"), float("-inf"), "NaN", "Infinity",
+        10 ** 1000,
     ]
 
     def test_valid(self):

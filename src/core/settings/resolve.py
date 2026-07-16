@@ -95,7 +95,7 @@ def load_settings_block(config_path: str) -> tuple[Any | None, str | None]:
     try:
         with open(config_path, "r") as file:
             data = json.load(file)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None, "readerror"
     return (data.get("settings") if isinstance(data, dict) else None), None
 
@@ -184,16 +184,18 @@ def resolve_all(specs: list[SettingSpec], config_path: str, plugin: Any = None) 
 
 
 def _block_warning(block: Any, load_status: str | None) -> str | None:
-    """A one-line warning when the ``settings`` block is present but not an object.
+    """A one-line warning when settings could not be read or are not an object.
 
     On a clean read (``load_status`` is ``None``) the block may still be the wrong
     shape — the user wrote ``"settings": "1h"`` or a list/number instead of an object.
     :func:`resolve_spec` silently coerces that to ``{}`` (every setting falls back to its
     default), which would otherwise discard the user's whole settings intent with no
     signal. This returns the additive block-level message the render sites show once;
-    ``None`` for an absent, null, or well-formed (dict) block, or any non-clean read
-    (missing/corrupt config is surfaced elsewhere).
+    A read error also needs a warning because ``general.json`` has no separate storage
+    health row. Returns ``None`` for a missing config or an absent/null/well-formed block.
     """
+    if load_status == "readerror":
+        return "The settings file could not be read; using defaults"
     if load_status is not None or block is None or isinstance(block, dict):
         return None
     return "The settings section is misformatted; using defaults"

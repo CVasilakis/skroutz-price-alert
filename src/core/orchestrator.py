@@ -195,7 +195,7 @@ class ScrapingOrchestrator:
 
         try:
             timestamp = datetime.datetime.strptime(item.last_checked, TIMESTAMP_FORMAT)
-        except ValueError:
+        except (ValueError, TypeError):
             data_manager.update_item(
                 item.url,
                 last_price=item.last_price,
@@ -562,6 +562,12 @@ class ScrapingOrchestrator:
                     for row in data_manager.get_items():
                         if abort_target or self.interrupted:
                             break
+
+                        # Preflight has already reported non-object JSON entries by
+                        # index. They have no safe item model to render or scrape, so
+                        # leave them untouched and continue with the usable rows.
+                        if not isinstance(row, dict):
+                            continue
 
                         item, product_error, product_abort = self._process_product(row, data_manager)
                         if product_error:

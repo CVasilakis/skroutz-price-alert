@@ -40,6 +40,20 @@ class TestBaseFromDict(unittest.TestCase):
         item = BaseTrackedItem.from_dict({"target_price": "1.299,50 €"})
         self.assertEqual(item.target_price, 1299.50)
 
+    def test_unsafe_field_types_are_normalized_for_consumers(self):
+        item = BaseTrackedItem.from_dict({
+            "name": None,
+            "url": 123,
+            "last_price": {},
+            "skip": "false",
+            "last_checked": 42,
+        })
+        self.assertEqual(item.name, "Unknown")
+        self.assertEqual(item.url, "")
+        self.assertEqual(item.last_price, 0.0)
+        self.assertFalse(item.skip)
+        self.assertEqual(item.last_checked, "42")
+
 
 class TestSubclassComposition(unittest.TestCase):
     def test_subclass_reads_base_fields_and_its_own(self):

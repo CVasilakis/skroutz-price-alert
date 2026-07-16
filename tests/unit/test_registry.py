@@ -36,6 +36,10 @@ class TestRegisterValidationGate(unittest.TestCase):
         assert plugin is not None, "expected the fake plugin to route its domain"
         self.assertEqual(plugin.get_name(), "fakestore")
 
+    def test_malformed_url_returns_no_plugin(self):
+        ScraperRegistry.register(_fake_plugin())
+        self.assertIsNone(ScraperRegistry.plugin_for_url("https://["))
+
     def test_non_plugin_instance_is_rejected(self):
         # cast() forges the wrong type on purpose: the gate must reject it at runtime.
         with self.assertRaises(PluginDiscoveryError):

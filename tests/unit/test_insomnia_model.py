@@ -9,10 +9,12 @@ for rows that share one listing URL. All import-light — no transport library.
 
 import unittest
 
+from core.settings import STATUS_INVALID, resolve_spec
 from core.scrapers.insomnia.model import (
     AdvertSearch, build_search_url, split_search_url, search_row_key,
     parse_terms, is_valid_terms_field,
 )
+from core.scrapers.insomnia.plugin import SPEC_MIN_ADVERT_PRICE
 
 LISTING = "https://www.insomnia.gr/classifieds/category/174-google/"
 
@@ -113,6 +115,24 @@ class TestAdvertSearchFromDict(unittest.TestCase):
         # The sentinel rule lives in _base_field_kwargs; composing it must not drift.
         item = AdvertSearch.from_dict({"name": "X", "url": LISTING, "target_price": "abc"})
         self.assertEqual(item.target_price, -1.0)
+
+    def test_non_string_url_with_terms_is_safe(self):
+        item = AdvertSearch.from_dict({
+            "name": "X", "url": 123, "target_price": 100,
+            "title_include": ["Pixel"],
+        })
+        self.assertEqual(item.url, "?title_include=Pixel")
+        self.assertEqual(item.title_include, ["Pixel"])
+
+
+class TestMinAdvertPriceSetting(unittest.TestCase):
+    def test_non_finite_values_are_invalid(self):
+        for raw in (float("nan"), float("inf"), float("-inf"), 10 ** 1000):
+            with self.subTest(raw=raw):
+                resolved = resolve_spec(
+                    SPEC_MIN_ADVERT_PRICE, {"min_advert_price": raw}, None,
+                )
+                self.assertEqual(resolved.status, STATUS_INVALID)
 
 
 if __name__ == "__main__":

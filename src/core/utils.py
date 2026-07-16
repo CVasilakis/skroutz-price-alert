@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import math
 import signal
 import subprocess
 from dotenv import load_dotenv
@@ -44,7 +45,7 @@ def parse_price(raw_value) -> float | None:
     leading sign, the right-most ``.``/``,`` is treated as the decimal separator and
     every other separator is dropped as a thousands grouping. A value with a single
     separator is therefore read as a decimal (``"1,234"`` -> ``1.234``), matching the
-    previous behavior. Returns None when the value cannot be parsed into a number.
+    previous behavior. Returns None when the value cannot be parsed into a finite number.
 
     Args:
         raw_value: The raw price value (str, int, float, or None).
@@ -56,7 +57,11 @@ def parse_price(raw_value) -> float | None:
         return None
 
     if isinstance(raw_value, (int, float)):
-        return float(raw_value)
+        try:
+            value = float(raw_value)
+        except OverflowError:
+            return None
+        return value if math.isfinite(value) else None
 
     if not isinstance(raw_value, str):
         return None
@@ -78,8 +83,9 @@ def parse_price(raw_value) -> float | None:
         number = f"{integer_part}.{fractional_part}"
 
     try:
-        return float(f"{sign}{number}")
-    except ValueError:
+        value = float(f"{sign}{number}")
+        return value if math.isfinite(value) else None
+    except (ValueError, OverflowError):
         return None
 
 def is_valid_apprise_url(url: str) -> bool:
@@ -140,7 +146,10 @@ def check_env_file() -> None:
     # instead of the modeled EnvFileError (clean exit 16) this function promises.
     if not os.path.isfile(env_path) or not os.access(env_path, os.R_OK):
         raise EnvFileError("No .env file found or unreadable")
-    load_dotenv(dotenv_path=env_path)
+    try:
+        load_dotenv(dotenv_path=env_path)
+    except (OSError, UnicodeError) as e:
+        raise EnvFileError(f"The .env file is unreadable or not valid UTF-8: {e}") from None
 
     notification_urls = os.environ.get("NOTIFICATION_URLS", "").strip()
     if not notification_urls:

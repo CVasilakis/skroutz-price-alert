@@ -222,7 +222,8 @@ def drive_config(version_state: str = "uptodate",
                  valid_count: int = 0, invalid_count: int = 0,
                  env_error: str = "", reminder_raw: object = None,
                  reminder_day_raw: object = None, reminder_time_raw: object = None,
-                 general_block_raw: object = None) -> BuildResult:
+                 general_block_raw: object = None,
+                 general_load_status: str | None = None) -> BuildResult:
     """Builds the Configuration Check panel (global checks only), patching its seams.
 
     Per-scraper products-config health is no longer on this panel — it now leads each
@@ -246,6 +247,8 @@ def drive_config(version_state: str = "uptodate",
             (e.g. a string, for the malformed-block case where each defaulted row cites
             the shared footnote); overrides the per-key raws above. ``None`` builds a
             well-formed block from them.
+        general_load_status (str | None): the settings file-read status; ``"readerror"``
+            exercises the unreadable/undecodable-file fallback and shared warning.
     """
     panel = StatusPanelBuilder("Configuration Check")
 
@@ -273,8 +276,8 @@ def drive_config(version_state: str = "uptodate",
             KEY_REMINDER_TIME: reminder_time_raw,
         }
         return ResolvedSettings(
-            [(spec, resolve_spec(spec, block, None)) for spec in GENERAL_SETTING_SPECS],
-            block_warning=_block_warning(block, None),
+            [(spec, resolve_spec(spec, block, general_load_status)) for spec in GENERAL_SETTING_SPECS],
+            block_warning=_block_warning(block, general_load_status),
         )
 
     with mock.patch.object(config_check, "check_for_updates", check_for_updates), \

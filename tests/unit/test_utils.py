@@ -75,6 +75,13 @@ class TestCheckEnvFile(_EnvFileCase):
         self._write_env(f"NOTIFICATION_URLS=not-a-url, {VALID_URL}\n")
         check_env_file()  # must not raise
 
+    def test_invalid_utf8_raises_env_file_error(self):
+        path = os.path.join(self.base_dir, ".env")
+        with open(path, "wb") as file:
+            file.write(b"\xff")
+        with self.assertRaisesRegex(EnvFileError, "not valid UTF-8"):
+            check_env_file()
+
 
 class TestIsValidAppriseUrl(unittest.TestCase):
     def test_valid_url(self):

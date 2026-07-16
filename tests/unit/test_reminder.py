@@ -335,6 +335,19 @@ class TestUnusableState(_LockedDownCase):
         self.assertEqual(_read_general(self.cfg_dir),
                          {LAST_REMINDER_FIELD: SAT.strftime(TIMESTAMP_FORMAT)})
 
+    def test_invalid_utf8_is_backed_up_and_rebuilt(self):
+        path = os.path.join(self.cfg_dir, "general.json")
+        with open(path, "wb") as file:
+            file.write(b"\xff")
+        service, notifier, _, _ = _make_service(self.cfg_dir, SAT)
+        service.run_once()
+
+        notifier.notify_reminder.assert_not_called()
+        with open(path + ".corrupt", "rb") as file:
+            self.assertEqual(file.read(), b"\xff")
+        self.assertEqual(_read_general(self.cfg_dir),
+                         {LAST_REMINDER_FIELD: SAT.strftime(TIMESTAMP_FORMAT)})
+
 
 class TestGates(unittest.TestCase):
     def setUp(self):

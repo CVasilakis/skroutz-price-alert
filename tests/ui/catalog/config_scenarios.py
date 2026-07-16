@@ -56,6 +56,11 @@ def _():
     return drive_config("uptodate", valid_count=2, general_block_raw="1 month")
 
 
+@scenario(Surface.CONFIG, "general_read_error", "general.json cannot be decoded", tags=("reminder", "error"))
+def _():
+    return drive_config("uptodate", valid_count=2, general_load_status="readerror")
+
+
 @scenario(Surface.CONFIG, "env_mixed", "Some notification URLs are invalid", tags=("error",))
 def _():
     return drive_config("uptodate", valid_count=1, invalid_count=2)

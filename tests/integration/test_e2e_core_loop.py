@@ -98,6 +98,52 @@ def test_price_drop_notifies_and_writes_back(tmp_path):
         pass
 
 
+def test_mixed_non_object_row_is_reported_preserved_and_does_not_block_valid_row(tmp_path):
+    routes = {"/drop/1": [(200, {"price": 79.0, "currency": "€"})]}
+    with fake_store_server(routes) as netloc:
+        with registry_sandbox(_fakestore_plugin(netloc)):
+            url = f"http://{netloc}/drop/1"
+            config_path = _write_config(tmp_path, [
+                None,
+                {"name": "Widget", "url": url, "target_price": 100.0},
+            ])
+            notifier, ui = mock_notifier(has_services=True), mock_ui()
+
+            exit_code = _run_orchestrator(tmp_path, notifier, ui)
+
+    assert exit_code == EXIT_CODE_SUCCESS
+    config_arg = ui.start_target.call_args.args[4]
+    assert config_arg.value == "2 loaded, [yellow]1 misconfigured[/yellow]"
+    assert "JSON index: 1" in config_arg.footnote
+    notifier.notify_low_price.assert_called_once()
+    with open(config_path) as file:
+        rows = json.load(file)["products"]
+    assert rows[0] is None
+    assert rows[1]["last_price"] == 79.0
+
+
+def test_malformed_url_null_name_and_numeric_timestamp_are_contained(tmp_path):
+    plugin = fake_plugin(
+        name="fakestore", domains=("fake-store.example",), config="fakestore.json",
+        client_class=FakeStoreClient, storage_class=FakeStoreDataManager,
+    )
+    with registry_sandbox(plugin):
+        config_path = _write_config(tmp_path, [
+            {"name": None, "url": "https://[", "target_price": 10,
+             "last_checked": 123},
+        ])
+        notifier, ui = mock_notifier(), mock_ui()
+
+        exit_code = _run_orchestrator(tmp_path, notifier, ui)
+
+    assert exit_code == EXIT_CODE_SUCCESS
+    ui.log_warning.assert_called_once_with(
+        "Unknown", messages.WARN_INVALID_URL, notes=messages.NOTE_CORRUPTED_TIMESTAMP)
+    with open(config_path) as file:
+        row = json.load(file)["products"][0]
+    assert row["last_checked"] != 123
+
+
 def test_product_gone_is_a_warning_not_a_failure(tmp_path):
     routes = {"/gone/1": [(404, None)]}
     with fake_store_server(routes) as netloc:

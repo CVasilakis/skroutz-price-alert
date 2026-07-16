@@ -157,6 +157,9 @@ class BasePlugin(ABC):
         """
         if not isinstance(url, str) or not url:
             return False
-        domain = urlparse(url).netloc.lower()
+        try:
+            domain = urlparse(url).netloc.lower()
+        except ValueError:
+            return False
         return any(domain == d or domain.endswith("." + d)
                    for d in (raw.strip().lower() for raw in self.get_supported_domains()))

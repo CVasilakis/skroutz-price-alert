@@ -1,3 +1,5 @@
+import math
+
 from core.scrapers.base.plugin import BasePlugin
 from core.scrapers.base.client import BaseScraperClient
 from core.scrapers.base.storage import BaseDataManager
@@ -12,7 +14,7 @@ SETTING_MIN_ADVERT_PRICE = "min_advert_price"
 def _normalize_min_advert_price(raw: object) -> float | int | None:
     """Validates the ``min_advert_price`` setting value.
 
-    Accepts a non-negative number, written as a JSON number or a numeric
+    Accepts a finite non-negative number, written as a JSON number or a numeric
     string. Returns None for anything else (bools included — JSON ``true``
     must not read as 1€).
 
@@ -25,13 +27,17 @@ def _normalize_min_advert_price(raw: object) -> float | int | None:
     if isinstance(raw, bool):
         return None
     if isinstance(raw, (int, float)):
-        return raw if raw >= 0 else None
+        try:
+            value = float(raw)
+        except OverflowError:
+            return None
+        return raw if math.isfinite(value) and raw >= 0 else None
     if isinstance(raw, str):
         try:
             value = float(raw.replace("€", "").strip())
         except ValueError:
             return None
-        return value if value >= 0 else None
+        return value if math.isfinite(value) and value >= 0 else None
     return None
 
 

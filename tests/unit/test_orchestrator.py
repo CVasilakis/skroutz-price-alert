@@ -445,6 +445,13 @@ class TestTimestampRepair(unittest.TestCase):
             item.url, last_price=9.5, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
         self.assertEqual(orch._stale_items, [])
 
+    def test_non_string_timestamp_is_repaired_in_place(self):
+        note, dm, orch, item = self._check(123)
+        self.assertEqual(note, messages.NOTE_CORRUPTED_TIMESTAMP)
+        dm.update_item.assert_called_once_with(
+            item.url, last_price=9.5, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
+        self.assertEqual(orch._stale_items, [])
+
     def test_stale_timestamp_is_flagged_and_recorded(self):
         stale = (NOW - datetime.timedelta(hours=OLD_ENTRY_HOURS + 1)).strftime(TIMESTAMP_FORMAT)
         note, dm, orch, item = self._check(stale)
