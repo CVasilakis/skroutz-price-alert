@@ -14,8 +14,8 @@ import unittest
 from unittest import mock
 
 from core.status import (
-    get_installed_plugin_units, get_systemd_properties, get_systemd_user_dir,
-    read_timer_oncalendar,
+    SYSTEMCTL_QUERY_TIMEOUT_SECONDS, get_installed_plugin_units,
+    get_systemd_properties, get_systemd_user_dir, read_timer_oncalendar,
 )
 
 
@@ -88,10 +88,20 @@ class TestGetSystemdProperties(_UnitDirCase):
 
     def test_parses_key_value_output(self):
         self._write_unit("skroutz-scraper.timer", "[Timer]\nOnCalendar=hourly\n")
-        with mock.patch.object(subprocess, "check_output",
-                               return_value=b"ActiveState=active\nResult=success\n"):
+        with mock.patch.object(
+            subprocess, "check_output",
+            return_value=b"ActiveState=active\nResult=success\n",
+        ) as check:
             self.assertEqual(self._props(),
                              {"ActiveState": "active", "Result": "success"})
+        check.assert_called_once_with(
+            [
+                "systemctl", "--user", "show", "skroutz-scraper.timer",
+                "--property=ActiveState,Result",
+            ],
+            stderr=subprocess.DEVNULL,
+            timeout=SYSTEMCTL_QUERY_TIMEOUT_SECONDS,
+        )
 
     def test_missing_or_empty_unit_file_skips_the_query(self):
         # No unit on disk (or an empty file): systemctl is never even invoked.
@@ -105,6 +115,14 @@ class TestGetSystemdProperties(_UnitDirCase):
         self._write_unit("skroutz-scraper.timer", "[Timer]\n")
         with mock.patch.object(subprocess, "check_output",
                                side_effect=subprocess.CalledProcessError(1, "systemctl")):
+            self.assertEqual(self._props(), {})
+
+    def test_systemctl_timeout_degrades_to_empty(self):
+        self._write_unit("skroutz-scraper.timer", "[Timer]\n")
+        with mock.patch.object(
+            subprocess, "check_output",
+            side_effect=subprocess.TimeoutExpired("systemctl", 10),
+        ):
             self.assertEqual(self._props(), {})
 
     def test_empty_output_degrades_to_empty(self):

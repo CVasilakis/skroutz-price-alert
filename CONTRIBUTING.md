@@ -127,7 +127,8 @@ All base classes live in `src/core/scrapers/base/`.
 
 > **HTTP scrapers should extend `HttpScraperClient`**, not `BaseScraperClient`
 > directly. It hands you a `tls_client` session with rotating browser fingerprints,
-> a header-profile pool, and the canonical HTTP-status → exception mapping
+> a bounded `get()` hook with an explicit whole-request deadline, a header-profile
+> pool, and the canonical HTTP-status → exception mapping
 > (`raise_for_status`) for free.
 
 ---
@@ -222,8 +223,10 @@ class AcmeClient(HttpScraperClient):
         # (Build your real request URL however the store requires.)
         request_url = product_url
 
-        # 2) Fetch with the inherited TLS session + current header profile.
-        response = self.session.get(request_url, headers=self.current_headers)
+        # 2) Fetch through the inherited bounded hook + current header profile.
+        #    Never call self.session.get() directly: get() owns the explicit
+        #    whole-request deadline shared by every HTTP plugin.
+        response = self.get(request_url, headers=self.current_headers)
 
         # 3) Map the HTTP status to the modeled exception the orchestrator expects
         #    (404/410 -> not found, 401/403/429 -> rate limit, 5xx -> server, ...).

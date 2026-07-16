@@ -89,7 +89,7 @@ class InsomniaClient(HttpScraperClient):
         if not urlparse(listing_url).path.startswith("/classifieds/"):
             raise InvalidURLError(f"Not an insomnia classifieds URL: {listing_url}")
 
-        response = self.session.get(listing_url, headers=self.current_headers)
+        response = self.get(listing_url, headers=self.current_headers)
 
         # Maps the HTTP status to the modeled exception the orchestrator's retry/abort
         # policy is keyed on (404/410, 401/403/429, 5xx, ...). See HttpScraperClient.
@@ -141,7 +141,12 @@ class InsomniaClient(HttpScraperClient):
             heading = advert.find("h4")
             title_tag = heading.find("a") if isinstance(heading, Tag) else None
             price_tag = advert.find(_PRICE_SELECTOR[0], class_=_PRICE_SELECTOR[1])
-            if not isinstance(title_tag, Tag) or price_tag is None:
+            # Check None explicitly before the runtime type guard: this keeps the
+            # optional-member contract visible to static analyzers even in a
+            # core-only environment where the private bs4 dependency is absent.
+            if title_tag is None or price_tag is None:
+                raise ScraperParseError("Advert card without a title link or price element (markup change?)")
+            if not isinstance(title_tag, Tag) or not isinstance(price_tag, Tag):
                 raise ScraperParseError("Advert card without a title link or price element (markup change?)")
 
             price_text = price_tag.get_text(strip=True)

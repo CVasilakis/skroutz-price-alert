@@ -1,16 +1,17 @@
 """Unit tests for the shared HTTP scraper client.
 
-Covers the pure HTTP-status -> modeled-exception mapping (``raise_for_status``,
-the table the orchestrator's ErrorPolicy is keyed on) and identity rotation
-(``refresh_identity``). ``tls_client`` is patched, so no real session or network
-is involved. The module imports ``tls_client`` at top (a per-plugin transport
-dep), so the whole suite skips cleanly on a core-only install.
+Covers the bounded request hook, the pure HTTP-status -> modeled-exception mapping
+(``raise_for_status``, the table the orchestrator's ErrorPolicy is keyed on), and
+identity rotation (``refresh_identity``). ``tls_client`` is patched, so no real
+session or network is involved. The module imports ``tls_client`` at top (a
+per-plugin transport dep), so the whole suite skips cleanly on a core-only install.
 
 Note: the retry/back-off loop is NOT here — it lives in the orchestrator and is
 covered by test_orchestrator.py.
 """
 
 import unittest
+from typing import cast
 from unittest import mock
 
 from core.exceptions import (
@@ -36,6 +37,41 @@ def _make_client():
     """Builds a concrete client with tls_client.Session patched inert."""
     with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
         return _ConcreteClient()
+
+
+@unittest.skipUnless(_HAS_TLS, "tls_client not installed")
+class TestBoundedGet(unittest.TestCase):
+    def test_forwards_request_with_explicit_whole_request_deadline(self):
+        client = _make_client()
+        session = cast(mock.Mock, client.session)
+        response = mock.sentinel.response
+        session.get.return_value = response
+        headers = {"User-Agent": "bounded"}
+
+        result = client.get("https://example.test/product", headers=headers)
+
+        self.assertIs(result, response)
+        session.get.assert_called_once_with(
+            "https://example.test/product",
+            headers=headers,
+            timeout_seconds=30,
+        )
+
+    def test_subclass_can_override_the_deadline(self):
+        class SlowClient(_ConcreteClient):
+            REQUEST_TIMEOUT_SECONDS = 45
+
+        with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
+            client = SlowClient()
+        session = cast(mock.Mock, client.session)
+
+        client.get("https://example.test/slow")
+
+        session.get.assert_called_once_with(
+            "https://example.test/slow",
+            headers=None,
+            timeout_seconds=45,
+        )
 
 
 @unittest.skipUnless(_HAS_TLS, "tls_client not installed")

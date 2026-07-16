@@ -2,6 +2,7 @@ import random
 from typing import TYPE_CHECKING
 
 import tls_client
+from tls_client.response import Response
 
 from core import messages
 from core.scrapers.base.client import BaseScraperClient
@@ -17,6 +18,7 @@ class HttpScraperClient(BaseScraperClient):
     Owns the transport boilerplate every HTTP scraper would otherwise copy:
         * a ``tls_client`` session whose browser fingerprint is recreated on
           ``refresh_identity`` (called by the orchestrator between retries),
+        * a bounded ``get`` hook that applies an explicit whole-request deadline,
         * rotation over a pool of header profiles to vary the request identity, and
         * the canonical HTTP-status -> modeled-exception mapping
           (:meth:`raise_for_status`) that the orchestrator's ErrorPolicy table is
@@ -24,10 +26,10 @@ class HttpScraperClient(BaseScraperClient):
           re-deriving (and possibly mis-mapping) it.
 
     A subclass declares a non-empty ``HEADERS_POOL`` and implements
-    ``scrape_product``. A JSON-API store calls ``raise_for_status`` then decodes
-    JSON; an HTML store fetches with ``self.session`` / ``self.current_headers``,
-    calls ``raise_for_status``, and parses the markup itself — either way it gets
-    status mapping and identity rotation for free. Stores whose API uses
+    ``scrape_product``. A JSON-API store calls ``get`` / ``raise_for_status`` then
+    decodes JSON; an HTML store follows the same bounded fetch path and parses the
+    markup itself — either way it gets timeout enforcement, status mapping, and
+    identity rotation for free. Stores whose API uses
     non-standard status codes override the ``*_CODES`` class attributes (or
     :meth:`raise_for_status` entirely) rather than re-implementing the mapping.
     """
@@ -36,6 +38,9 @@ class HttpScraperClient(BaseScraperClient):
     HEADERS_POOL: list[dict[str, str]] = [{}]
     #: tls_client browser fingerprint identifier.
     TLS_CLIENT_IDENTIFIER: str = "chrome120"
+    #: Hard deadline for one complete request (connect, redirects, and body read).
+    #: A store with a documented need for a longer response may override this value.
+    REQUEST_TIMEOUT_SECONDS: int = 30
 
     #: HTTP status codes mapped to each modeled outcome (overridable per store).
     NOT_FOUND_CODES: tuple = (404, 410)
@@ -59,6 +64,28 @@ class HttpScraperClient(BaseScraperClient):
         return tls_client.Session(
             client_identifier=self.TLS_CLIENT_IDENTIFIER,  # type: ignore
             random_tls_extension_order=True,
+        )
+
+    def get(self, url: str, headers: dict[str, str] | None = None) -> Response:
+        """Performs a GET with the client's explicit whole-request deadline.
+
+        ``tls_client`` exposes one deadline for the complete request lifecycle,
+        rather than separate connect/read values. Keeping the deadline in this
+        shared hook makes every HTTP plugin bounded without relying on the
+        dependency's implicit default. Plugins must use this method instead of
+        calling ``self.session.get`` directly.
+
+        Args:
+            url (str): The URL to request.
+            headers (dict[str, str] | None): Request-specific headers.
+
+        Returns:
+            Response: The completed response.
+        """
+        return self.session.get(
+            url,
+            headers=headers,
+            timeout_seconds=self.REQUEST_TIMEOUT_SECONDS,
         )
 
     def get_current_headers(self) -> dict[str, str]:

@@ -9,6 +9,7 @@ the ``price=None`` no-match outcome, and the loud parse failure on foreign marku
 """
 
 import unittest
+from typing import cast
 from unittest import mock
 
 import pytest
@@ -69,10 +70,9 @@ class _FakeResponse:
 
 
 def _client(html=LISTING_HTML, status_code=200, min_advert_price=30):
-    """An InsomniaClient with the HTTP session replaced by a canned response."""
+    """An InsomniaClient whose inherited bounded GET hook returns canned HTML."""
     client = InsomniaClient(_settings(min_advert_price))
-    client.session = mock.Mock()
-    client.session.get.return_value = _FakeResponse(html, status_code)
+    client.get = mock.Mock(return_value=_FakeResponse(html, status_code))
     return client
 
 
@@ -88,7 +88,8 @@ class TestScrapeProduct(unittest.TestCase):
         self.assertEqual(result.price, 450.0)
         self.assertEqual(result.currency, "€")
         # The listing is fetched bare: the filter params never reach the site.
-        self.assertEqual(client.session.get.call_args[0][0], LISTING)
+        get_mock = cast(mock.Mock, client.get)
+        get_mock.assert_called_once_with(LISTING, headers=client.current_headers)
 
     def test_include_terms_must_all_match(self):
         client = _client()

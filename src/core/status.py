@@ -23,6 +23,10 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
+# ``systemctl show`` normally returns immediately, but it crosses a subprocess / user
+# bus boundary and must not be able to hang the one-shot ``--status`` command forever.
+SYSTEMCTL_QUERY_TIMEOUT_SECONDS = 10
+
 def get_systemd_user_dir() -> str:
     """Returns the systemd user unit directory, honoring ``XDG_CONFIG_HOME``.
 
@@ -97,12 +101,13 @@ def get_systemd_properties(unit: str, properties: str) -> dict:
     try:
         output = subprocess.check_output(
             ['systemctl', '--user', 'show', unit, f'--property={properties}'],
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
+            timeout=SYSTEMCTL_QUERY_TIMEOUT_SECONDS,
         ).decode('utf-8').strip()
         if not output:
             return {}
         return dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
-    except (subprocess.CalledProcessError, ValueError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         return {}
 
 def build_not_installed_panel(target: str) -> Panel:

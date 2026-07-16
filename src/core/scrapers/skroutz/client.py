@@ -114,7 +114,7 @@ class SkroutzClient(HttpScraperClient):
         parsed_referer = urlparse(headers.get('referer', 'https://www.skroutz.gr/'))
         headers['referer'] = parsed_referer._replace(netloc=domain).geturl()
 
-        response = self.session.get(api_link.strip(), headers=headers)
+        response = self.get(api_link.strip(), headers=headers)
 
         # Maps the HTTP status to the modeled exception the orchestrator's retry/abort
         # policy is keyed on (404/410, 401/403/429, 5xx, ...). See HttpScraperClient.
