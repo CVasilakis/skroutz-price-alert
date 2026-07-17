@@ -21,7 +21,7 @@ from core.constants import (
 from core.exceptions import RateLimitError, ServerError, ScraperError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
 from core.preflight import TargetLoad
 from core.ui.config_check import config_view
-from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
+from core.scrapers.base.model import BaseTrackedItem, ScrapeResult, validate_scrape_result
 from core.scrapers.base.storage import BaseDataManager
 from core.scrapers.base.settings import KEY_RETENTION, KEY_NOTIFY
 from core.scrapers.registry import ScraperRegistry
@@ -534,7 +534,7 @@ class ScrapingOrchestrator:
             try:
                 self.ui_strategy.start_scraping(item.name, attempt + 1, MAX_RETRIES)
                 try:
-                    result = scraper.scrape_product(item.url)
+                    result = validate_scrape_result(scraper.scrape_product(item.url))
                 finally:
                     self.ui_strategy.complete_scraping()
 
@@ -625,7 +625,7 @@ class ScrapingOrchestrator:
             if load is not None and load.error is not None:
                 self.ui_strategy.start_target(
                     target, self._current_logger, settings_view, settings.block_warning,
-                    config_view(0, (), load.error),
+                    config_view(0, (), load.error), settings.unknown_warning,
                 )
                 self.ui_strategy.complete_target()
                 outcome.products_error = True
@@ -640,7 +640,10 @@ class ScrapingOrchestrator:
                 # installed. Skip just this target with an actionable message
                 # (mirroring the client-instantiation handler below); other
                 # targets and the rest of the run proceed.
-                self.ui_strategy.start_target(target, self._current_logger, settings_view, settings.block_warning)
+                self.ui_strategy.start_target(
+                    target, self._current_logger, settings_view, settings.block_warning,
+                    settings_warning=settings.unknown_warning,
+                )
                 self.ui_strategy.log_error("System", str(e))
                 self.ui_strategy.complete_target()
                 outcome.dependency_error = True
@@ -653,6 +656,7 @@ class ScrapingOrchestrator:
             self.ui_strategy.start_target(
                 target, self._current_logger, settings_view, settings.block_warning,
                 config_view(data_manager.get_item_count(), data_manager.get_faulty_indices()),
+                settings.unknown_warning,
             )
 
             if data_manager.get_item_count() == 0:

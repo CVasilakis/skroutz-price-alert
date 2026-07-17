@@ -16,7 +16,7 @@ from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, KEY_INTERVAL
 from core.logger import setup_global_logging
 from core.ui.panel import StatusPanelBuilder
 from core.preflight import load_targets
-from core.ui.config_check import render_config_panel, config_view, add_config_row, add_setting_row, ConfigView
+from core.ui.config_check import render_config_panel, config_view, add_config_row, add_setting_row, add_unknown_settings_row, ConfigView
 from core.utils import install_interrupt_handler
 
 from rich.console import Console
@@ -181,6 +181,7 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     block_ref = service_panel.add_note_ref(resolved.block_warning) if resolved.block_warning else ""
     for view in resolved.views():
         add_setting_row(service_panel, view, block_ref)
+    add_unknown_settings_row(service_panel, resolved.unknown_warning)
     service_panel.add_separator()
 
     timer_active_val = timer_props.get("ActiveState") == "active"

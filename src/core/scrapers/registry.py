@@ -1,16 +1,20 @@
 import os
 import re
 import importlib
+import inspect
 import pkgutil
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import TYPE_CHECKING
 
 from core import messages
+from core.config_constants import GENERAL_CONFIG_FILENAME
 from core.exceptions import PluginDiscoveryError, PluginDependencyError
+from core.scrapers.base.url import normalize_domain
 from core.scrapers.base.settings import (
     SettingSpec, ResolvedSetting, ResolvedSettings,
-    resolve_one, resolve_all, oncalendar_for, canonical_for_oncalendar,
+    resolve_one, resolve_all, oncalendar_for,
     SUPPORTED_INTERVALS, BASE_SETTING_SPECS, KEY_INTERVAL, STATUS_OK,
 )
 
@@ -25,6 +29,59 @@ if TYPE_CHECKING:
 #: loops, so a plugin with one of these names would register fine yet its own
 #: '--<name>' flag could never reach it.
 RESERVED_PLUGIN_NAMES = frozenset({"help", "quiet", "ping", "status", "update"})
+
+
+@dataclass(frozen=True)
+class _PluginMetadata:
+    name: str
+    display_name: str
+    domains: tuple[str, ...]
+    config_filename: str
+    setting_specs: tuple[SettingSpec, ...]
+    default_interval: str
+    requirements_path: str | None
+
+
+def _make_frozen_plugin(original: "BasePlugin", metadata: _PluginMetadata) -> "BasePlugin":
+    from core.scrapers.base.plugin import BasePlugin
+
+    class FrozenPlugin(BasePlugin):
+        @staticmethod
+        def get_name() -> str:
+            return metadata.name
+
+        @staticmethod
+        def get_display_name() -> str:
+            return metadata.display_name
+
+        @staticmethod
+        def get_supported_domains() -> list[str]:
+            return list(metadata.domains)
+
+        @staticmethod
+        def get_config_filename() -> str:
+            return metadata.config_filename
+
+        @staticmethod
+        def get_client_class() -> 'type[BaseScraperClient]':
+            return original.get_client_class()
+
+        @staticmethod
+        def get_storage_class() -> 'type[BaseDataManager]':
+            return original.get_storage_class()
+
+        def get_setting_specs(self) -> list[SettingSpec]:
+            return list(metadata.setting_specs)
+
+        def get_default_interval(self) -> str:
+            return metadata.default_interval
+
+        def get_requirements_path(self) -> str | None:
+            return metadata.requirements_path
+
+    FrozenPlugin.__name__ = f"Frozen{type(original).__name__}"
+    FrozenPlugin.__module__ = type(original).__module__
+    return FrozenPlugin()
 
 
 class ScraperRegistry:
@@ -65,9 +122,23 @@ class ScraperRegistry:
             )
         if where is None:
             where = type(plugin).__module__
-        cls._validate_plugin_contract(where, plugin)
-        cls._check_domain_conflicts_for(plugin)
-        cls._plugins[plugin.get_name()] = plugin
+        frozen = cls._validate_plugin_contract(where, plugin)
+        name = frozen.get_name()
+        if name in cls._plugins:
+            raise PluginDiscoveryError(
+                f"Duplicate plugin name '{name}' (from '{where}'): another registered plugin "
+                "already uses it. Each plugin's get_name() must be unique."
+            )
+        cls._check_domain_conflicts_for(frozen)
+        filename = frozen.get_config_filename()
+        for owner, registered in cls._plugins.items():
+            existing = registered.get_config_filename()
+            if filename.casefold() == existing.casefold():
+                raise PluginDiscoveryError(
+                    f"Config filename conflict: plugins '{owner}' and '{name}' both use "
+                    f"'{filename}' (filenames are compared case-insensitively)."
+                )
+        cls._plugins[name] = frozen
 
     @classmethod
     def _reset(cls) -> None:
@@ -150,7 +221,7 @@ class ScraperRegistry:
         cls._discovered = True
 
     @classmethod
-    def _validate_plugin_contract(cls, where: str, plugin: 'BasePlugin') -> None:
+    def _validate_plugin_contract(cls, where: str, plugin: 'BasePlugin') -> 'BasePlugin':
         """Validates that a plugin being registered returns usable descriptor values.
 
         The :class:`BasePlugin` ABC only guarantees the descriptor methods *exist*;
@@ -172,7 +243,34 @@ class ScraperRegistry:
         Raises:
             PluginDiscoveryError: If any part of the descriptor contract is unmet.
         """
-        name = plugin.get_name()
+        from core.scrapers.base.plugin import BasePlugin
+
+        plugin_type = type(plugin)
+        if plugin_type.get_timer_directives is not BasePlugin.get_timer_directives:
+            raise PluginDiscoveryError(
+                f"Plugin '{where}' overrides deprecated get_timer_directives(). Replace it "
+                "with get_default_interval(); plugins may no longer provide a string-to-string "
+                "mapping, OnCalendar, or custom systemd directives, and the interval must use "
+                "the canonical cadences."
+            )
+        if plugin_type.get_requirements_path is not BasePlugin.get_requirements_path:
+            raise PluginDiscoveryError(
+                f"Plugin '{where}' overrides deprecated get_requirements_path(). Remove the "
+                "override and place dependencies in a requirements.txt beside plugin.py."
+            )
+
+        try:
+            # Every cheap hook is read exactly once. All later consumers use the wrapper.
+            name = plugin.get_name()
+            display_name = plugin.get_display_name()
+            raw_domains = plugin.get_supported_domains()
+            config_filename = plugin.get_config_filename()
+            raw_specs = plugin.get_setting_specs()
+            default_interval = plugin.get_default_interval()
+        except Exception as exc:
+            raise PluginDiscoveryError(
+                f"Plugin '{where}' failed while reading import-light metadata: {exc}"
+            ) from exc
         if not isinstance(name, str) or not name.strip():
             raise PluginDiscoveryError(f"Plugin '{where}' must return a non-empty string from get_name().")
         if not re.fullmatch(r"[A-Za-z0-9_]+", name):
@@ -193,19 +291,16 @@ class ScraperRegistry:
                 f"management scripts already use '--{name}' as a built-in flag, so this "
                 f"plugin's own '--{name}' flag could never be dispatched. Pick another name."
             )
-        if name in cls._plugins:
-            raise PluginDiscoveryError(
-                f"Duplicate plugin name '{name}' (from '{where}'): another registered plugin "
-                f"already uses it. Each plugin's get_name() must be unique."
-            )
-
-        display_name = plugin.get_display_name()
         if not isinstance(display_name, str) or not display_name.strip():
             raise PluginDiscoveryError(
                 f"Plugin '{name}' ({where}) must return a non-empty string from get_display_name()."
             )
 
-        config_filename = plugin.get_config_filename()
+        if isinstance(config_filename, str) and config_filename.casefold() == GENERAL_CONFIG_FILENAME.casefold():
+            raise PluginDiscoveryError(
+                f"Plugin '{name}' ({where}) cannot use reserved config filename "
+                f"'{config_filename}'; it belongs to project-wide general settings."
+            )
         if not isinstance(config_filename, str) or not re.fullmatch(
             r"[A-Za-z0-9][A-Za-z0-9._-]*\.json", config_filename
         ):
@@ -214,12 +309,22 @@ class ScraperRegistry:
                 f"{config_filename!r}: it must be a safe JSON basename using only letters, "
                 "digits, dots, underscores and hyphens (for example 'my_store.json')."
             )
-
-        domains = plugin.get_supported_domains()
-        if not isinstance(domains, (list, tuple)) or not domains:
+        if not isinstance(raw_domains, (list, tuple)) or not raw_domains:
             raise PluginDiscoveryError(f"Plugin '{name}' ({where}) must return a non-empty list from get_supported_domains().")
-        if any(not isinstance(d, str) or not d.strip() for d in domains):
-            raise PluginDiscoveryError(f"Plugin '{name}' ({where}) returned an empty or non-string entry in get_supported_domains().")
+        domains: list[str] = []
+        for raw_domain in raw_domains:
+            try:
+                domain = normalize_domain(raw_domain)
+            except ValueError as exc:
+                raise PluginDiscoveryError(
+                    f"Plugin '{name}' ({where}) returned invalid supported domain "
+                    f"{raw_domain!r}: {exc}. Declare hostnames/IPs only."
+                ) from exc
+            if domain in domains:
+                raise PluginDiscoveryError(
+                    f"Plugin '{name}' ({where}) declares duplicate normalized domain '{domain}'."
+                )
+            domains.append(domain)
 
         # The settings extension point is import-light (pure stdlib spec dataclasses), so
         # validate it here at discovery — unlike the client/storage classes, which are
@@ -228,12 +333,12 @@ class ScraperRegistry:
         # check the list shape and that every key is a non-empty, unique string (a key is
         # both the JSON field read and the lookup handle for the resolved value, so a blank
         # or duplicated key would silently shadow another setting).
-        specs = plugin.get_setting_specs()
+        specs = raw_specs
         if not isinstance(specs, (list, tuple)) or any(not isinstance(spec, SettingSpec) for spec in specs):
             raise PluginDiscoveryError(
                 f"Plugin '{name}' ({where}): get_setting_specs() must return a list of SettingSpec."
             )
-        seen_keys: set = set()
+        seen_keys: set[str] = set()
         for spec in specs:
             if not isinstance(spec.key, str) or not spec.key.strip():
                 raise PluginDiscoveryError(
@@ -245,44 +350,68 @@ class ScraperRegistry:
                     f"(built-in or custom) must have a unique key."
                 )
             seen_keys.add(spec.key)
+            if not isinstance(spec.label, str) or not spec.label.strip():
+                raise PluginDiscoveryError(
+                    f"Plugin '{name}' ({where}): setting '{spec.key}' must have a nonblank string label."
+                )
+            if not isinstance(spec.warning, str) or not spec.warning.strip():
+                raise PluginDiscoveryError(
+                    f"Plugin '{name}' ({where}): setting '{spec.key}' must have a nonblank string warning."
+                )
+            for field in ("normalize", "display", "is_unset"):
+                if not callable(getattr(spec, field)):
+                    raise PluginDiscoveryError(
+                        f"Plugin '{name}' ({where}): setting '{spec.key}' field '{field}' must be callable."
+                    )
+            if spec.default_factory is not None and not callable(spec.default_factory):
+                raise PluginDiscoveryError(
+                    f"Plugin '{name}' ({where}): setting '{spec.key}' default_factory must be callable or None."
+                )
 
-        # A plugin must EXTEND the base settings, not replace them: the framework reads
-        # its own built-ins through the strict accessor (the orchestrator's retention /
-        # notify gates, resolve_timer_directives' interval), which raises KeyError if a
-        # base key is absent. Enforce their presence here so "return [my_spec]" instead
-        # of "BASE_SETTING_SPECS + [my_spec]" fails loudly at discovery, not at runtime.
-        missing = {base.key for base in BASE_SETTING_SPECS} - seen_keys
-        if missing:
-            raise PluginDiscoveryError(
-                f"Plugin '{name}' ({where}): get_setting_specs() is missing the built-in "
-                f"setting(s) {sorted(missing)}. Extend, don't replace — return "
-                f"BASE_SETTING_SPECS + [your specs] so the framework's own settings stay present."
-            )
-
-        # The plugin's default schedule must be one of the canonical cadences the user
-        # vocabulary supports (SUPPORTED_INTERVALS), so the settings panel can always
-        # render it as a friendly key and an execution_interval override stays within one
-        # vocabulary. A non-canonical OnCalendar is rejected here rather than silently
-        # leaking raw systemd syntax into the Execution Interval row at display time.
-        directives = plugin.get_timer_directives()
-        if not isinstance(directives, dict) or any(
-            not isinstance(key, str)
-            or re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", key) is None
-            or not isinstance(value, str)
-            or any(char in value for char in "\t\r\n")
-            for key, value in (directives.items() if isinstance(directives, dict) else ())
+        if len(specs) < len(BASE_SETTING_SPECS) or any(
+            specs[index] is not base for index, base in enumerate(BASE_SETTING_SPECS)
         ):
             raise PluginDiscoveryError(
-                f"Plugin '{name}' ({where}): get_timer_directives() must return a string-to-string "
-                "mapping with systemd directive names and no tabs or newlines in values."
+                f"Plugin '{name}' ({where}): get_setting_specs() is missing or replaced the "
+                "exact BASE_SETTING_SPECS prefix in its declared order. Extend, don't replace — "
+                "return BASE_SETTING_SPECS + [your specs]."
             )
-        oncalendar = directives.get("OnCalendar") if isinstance(directives, dict) else None
-        if not oncalendar or canonical_for_oncalendar(oncalendar) is None:
+
+        if not isinstance(default_interval, str) or default_interval not in SUPPORTED_INTERVALS:
             raise PluginDiscoveryError(
-                f"Plugin '{name}' ({where}): get_timer_directives() must declare an OnCalendar "
-                f"that is one of the canonical cadences {sorted(SUPPORTED_INTERVALS.values())} "
-                f"(got {oncalendar!r})."
+                f"Plugin '{name}' ({where}): get_default_interval() must return one of "
+                f"{sorted(SUPPORTED_INTERVALS)} (got {default_interval!r})."
             )
+
+        try:
+            source = Path(inspect.getfile(plugin_type)).resolve()
+        except (TypeError, OSError) as exc:
+            raise PluginDiscoveryError(
+                f"Plugin '{name}' ({where}): could not locate plugin.py to discover requirements.txt: {exc}"
+            ) from exc
+        requirements = source.with_name("requirements.txt")
+        metadata = _PluginMetadata(
+            name=name,
+            display_name=display_name,
+            domains=tuple(domains),
+            config_filename=config_filename,
+            setting_specs=tuple(specs),
+            default_interval=default_interval,
+            requirements_path=str(requirements) if requirements.is_file() else None,
+        )
+        frozen = _make_frozen_plugin(plugin, metadata)
+        for spec in specs:
+            try:
+                displayed = spec.display(spec.default_for(frozen))
+            except Exception as exc:
+                raise PluginDiscoveryError(
+                    f"Plugin '{name}' ({where}): setting '{spec.key}' default/display failed: {exc}"
+                ) from exc
+            if not isinstance(displayed, str):
+                raise PluginDiscoveryError(
+                    f"Plugin '{name}' ({where}): setting '{spec.key}' display(default) must return a string."
+                )
+        return frozen
 
     @staticmethod
     def _resolve_bound_class(plugin: 'BasePlugin', getter_name: str, base: type) -> type:
@@ -357,13 +486,12 @@ class ScraperRegistry:
                 already claimed by a different registered plugin.
         """
         name = plugin.get_name()
-        for domain in plugin.get_supported_domains():
-            norm = domain.strip().lower()
+        for norm in plugin.get_supported_domains():
             for owner, registered in cls._plugins.items():
                 if owner == name:
                     continue
                 for existing in registered.get_supported_domains():
-                    existing_norm = existing.strip().lower()
+                    existing_norm = existing
                     if cls._domains_overlap(norm, existing_norm):
                         raise PluginDiscoveryError(
                             f"Domain conflict: plugin '{name}' claims '{norm}', which overlaps with "
@@ -398,6 +526,11 @@ class ScraperRegistry:
         if target not in cls._plugins:
             raise ValueError(f"Unsupported plugin: {target}")
         return cls._plugins[target]
+
+    @classmethod
+    def get_requirements_path(cls, target: str) -> str | None:
+        """Return the registry-computed colocated dependency path for a plugin."""
+        return cls.get_plugin(target).get_requirements_path()
 
     @staticmethod
     def _config_path(plugin: 'BasePlugin', config_dir: str) -> str:
@@ -467,20 +600,16 @@ class ScraperRegistry:
 
     @staticmethod
     def timer_directives_for(plugin: 'BasePlugin', interval: ResolvedSetting) -> dict[str, str]:
-        """Applies an already-resolved ``execution_interval`` to a plugin's directives.
+        """Translate an already-resolved interval to framework-owned timer metadata.
 
         The single boundary where the settings layer's user-facing vocabulary becomes a
-        systemd schedule: starts from the plugin's declared directives and overrides
-        ``OnCalendar`` only when the interval resolved to a supported cadence (translating
-        the canonical key to its systemd expression). When the interval is unset/invalid,
-        the plugin's declared ``OnCalendar`` default is kept. Takes the resolved interval
+        systemd schedule. When the interval is unset/invalid, the plugin's validated
+        canonical default is used. Takes the resolved interval
         rather than reading the config, so a caller that already holds it (``--status``,
         which consumes this directly) reuses its one read instead of re-resolving.
         """
-        directives = dict(plugin.get_timer_directives())
-        if interval.status == STATUS_OK:
-            directives["OnCalendar"] = oncalendar_for(interval.value)
-        return directives
+        canonical = interval.value if interval.status == STATUS_OK else plugin.get_default_interval()
+        return {"OnCalendar": oncalendar_for(canonical)}
 
     @classmethod
     def resolve_timer_directives(cls, target: str, config_dir: str) -> dict[str, str]:

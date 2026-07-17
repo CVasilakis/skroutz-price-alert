@@ -21,6 +21,7 @@ from core.notifier import Notifier
 from core.scrapers.base.client import BaseScraperClient
 from core.scrapers.base.plugin import BasePlugin
 from core.scrapers.base.storage import BaseDataManager
+from core.scrapers.base.settings import canonical_for_oncalendar
 from core.scrapers.registry import ScraperRegistry
 from core.ui.tui import ExecutionStrategy
 
@@ -69,7 +70,16 @@ def fake_plugin(name="fakestore", domains=("fake-store.example",), config="fakes
     if specs is not None:
         _Fake.get_setting_specs = lambda self: specs
     if directives is not None:
-        _Fake.get_timer_directives = lambda self: directives
+        # The production contract now exposes only a canonical domain interval. Keep
+        # legacy malformed-directive fixtures useful while translating the former
+        # valid {"OnCalendar": ...} shorthand to the replacement hook.
+        canonical = (canonical_for_oncalendar(directives.get("OnCalendar"))
+                     if isinstance(directives, dict) and set(directives) == {"OnCalendar"}
+                     else None)
+        if canonical is not None:
+            _Fake.get_default_interval = lambda self: canonical
+        else:
+            _Fake.get_timer_directives = lambda self: directives
     return _Fake()
 
 

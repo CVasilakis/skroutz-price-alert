@@ -81,6 +81,12 @@ def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 
 
+@scenario(Surface.STATUS, "service_unknown_keys", "Unknown setting keys are ignored and surfaced", tags=("settings",))
+def _():
+    resolved = resolved_settings(unknown_keys=("future_option", "typo_key"))
+    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
+
+
 # --- Products-config ('Config' row) variants -----------------------------------------
 # The healthy 'Config' row is exercised by every scenario above (drive_service defaults to
 # a clean load); these cover the faulty / failed / unavailable variants.

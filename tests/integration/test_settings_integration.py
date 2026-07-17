@@ -79,6 +79,24 @@ class TestResolvedSettingsAccessor(_SkroutzConfigCase):
         labels = [v.label for v in resolved.views()]
         self.assertEqual(labels, ["Execution Interval", "Log Retention", "Notify On Errors"])
 
+    def test_unknown_keys_are_sorted_ignored_and_known_values_survive(self):
+        resolved = resolve_all(
+            BASE_SETTING_SPECS,
+            self._cfg_path({"z_future": 1, "log_retention_days": 10, "a_typo": True}),
+            fake_plugin(),
+        )
+        self.assertEqual(resolved.value(KEY_RETENTION), 10)
+        self.assertEqual(resolved.unknown_keys, ("a_typo", "z_future"))
+        self.assertEqual(
+            resolved.unknown_warning,
+            "Unknown setting key(s) ignored: a_typo, z_future",
+        )
+
+    def test_malformed_block_takes_precedence_over_unknown_key_detection(self):
+        resolved = resolve_all(BASE_SETTING_SPECS, self._cfg_path(["future"]), fake_plugin())
+        self.assertIsNotNone(resolved.block_warning)
+        self.assertEqual(resolved.unknown_keys, ())
+
 
 class TestTimerDirectiveTranslation(_SandboxedSkroutzCase):
     """resolve_timer_directives owns the canonical-key -> OnCalendar translation."""

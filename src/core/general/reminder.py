@@ -202,6 +202,8 @@ class ReminderService:
         resolved = resolve_general_settings(self.config_dir)
         if resolved.block_warning:
             self._log.warning(f"🟡 config/general.json: {resolved.block_warning}.")
+        if resolved.unknown_warning:
+            self._log.warning(f"🟡 config/general.json: {resolved.unknown_warning}.")
         for spec in GENERAL_SETTING_SPECS:
             if resolved.status(spec.key) == STATUS_INVALID:
                 self._log.warning(f"🟡 config/general.json: {spec.warning}")

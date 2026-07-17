@@ -155,10 +155,13 @@ class ResolvedSettings:
     :meth:`views` is flagged :attr:`SettingView.block_malformed`, and the render sites
     register the warning once as a shared footnote that each defaulted row references —
     distinct from a per-setting invalid *value*, which each view footnotes itself.
+    For a well-formed block it also records sorted :attr:`unknown_keys`; those values
+    are ignored while :attr:`unknown_warning` supplies shared presentation wording.
     """
 
     def __init__(self, pairs: list[tuple["SettingSpec", ResolvedSetting]],
-                 block_warning: str | None = None) -> None:
+                 block_warning: str | None = None,
+                 unknown_keys: tuple[str, ...] = ()) -> None:
         """Stores the resolved pairs and indexes them by spec key.
 
         Args:
@@ -168,6 +171,7 @@ class ResolvedSettings:
                 present but not an object (so it was ignored and every setting fell back
                 to its default), else ``None``. Render sites register it once as a shared
                 footnote referenced by each defaulted (🟡) setting row.
+            unknown_keys: Sorted user keys that no supplied spec declares.
         """
         self._pairs = list(pairs)
         self._by_key = {spec.key: resolved for spec, resolved in self._pairs}
@@ -175,6 +179,13 @@ class ResolvedSettings:
         #: ``None``. Flags every :meth:`views` row :attr:`SettingView.block_malformed`,
         #: which still show their defaults but as a warning citing the shared footnote.
         self.block_warning = block_warning
+        self.unknown_keys = tuple(unknown_keys)
+
+    @property
+    def unknown_warning(self) -> str | None:
+        """A centrally worded warning for ignored unknown keys, if any."""
+        from core.settings.messages import unknown_keys_message
+        return unknown_keys_message(self.unknown_keys)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Returns the effective value for ``key``, or ``default`` if not present.

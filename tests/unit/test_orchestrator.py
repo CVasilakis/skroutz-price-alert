@@ -29,6 +29,7 @@ from core.exceptions import (
     ProductNotFoundError, InvalidURLError, ServerError, ScraperError,
     ScraperParseError, RateLimitError,
     StorageFileError, LockAcquisitionError, PluginDependencyError,
+    InvalidScrapeResultError,
 )
 from core.constants import (
     MAX_RETRIES, OLD_ENTRY_HOURS, TIMESTAMP_FORMAT,
@@ -321,6 +322,19 @@ class TestRunAttempts(unittest.TestCase):
             "Widget", "ScraperParseError",
             attempt_notes=self._attempts("ScraperParseError"), extra_notes=None)
         save_tb.assert_not_called()
+
+    def test_invalid_success_result_retries_without_notification_or_price_write(self):
+        scraper = mock_scraper()
+        scraper.scrape_product.return_value = ScrapeResult(price=True, currency="€")
+        notifier = mock_notifier(has_services=True)
+        ui, outcome, sleep, _ = self._run(scraper, notifier=notifier)
+
+        self.assertIsInstance(outcome.reported_error, InvalidScrapeResultError)
+        self.assertTrue(outcome.affects_scrape_status)
+        self.assertEqual(scraper.scrape_product.call_count, MAX_RETRIES)
+        self.assertEqual(sleep.call_count, MAX_RETRIES - 1)
+        notifier.notify_low_price.assert_not_called()
+        ui.log_price_result.assert_not_called()
 
     def test_unknown_error_uses_default_policy_and_saves_traceback(self):
         # An exception not in the policy table nor SKIP_ERRORS falls to the default

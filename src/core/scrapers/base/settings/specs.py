@@ -14,7 +14,7 @@ to call from the shell one-liners and ``--status``.
 from typing import Any
 
 from core.settings import SettingSpec, DEFAULT_LOG_RETENTION_DAYS, normalize_retention_days, normalize_bool
-from core.scrapers.base.settings.intervals import normalize_interval, canonical_for_oncalendar
+from core.scrapers.base.settings.intervals import normalize_interval
 from core.scrapers.base.settings.messages import (
     interval_warning_message, retention_warning_message, notify_errors_warning_message,
 )
@@ -31,19 +31,10 @@ KEY_NOTIFY = "notify_scraping_errors"
 def _interval_default(plugin: Any) -> str:
     """The display default for ``execution_interval``: the plugin's cadence as a key.
 
-    Folds the plugin's declared ``OnCalendar`` default back to the canonical interval key
-    the user recognizes (e.g. ``"hourly"`` -> ``"1h"``). Discovery now rejects any plugin
-    whose ``OnCalendar`` is not one of the canonical cadences (see
-    ``registry._validate_plugin_contract``), so for a registered plugin this always
-    resolves to a key; the ``or oncalendar`` fallback is defensive only — it covers
-    ``plugin=None`` (e.g. a unit test) and never leaks raw systemd syntax into the panel.
-    Used only for *display* of the default — the schedule itself is taken from the
-    plugin's directives at the timer boundary (``registry.resolve_timer_directives``).
+    Reads the plugin's validated canonical ``get_default_interval()`` value. Translation
+    to framework-owned systemd syntax happens only at the timer boundary.
     """
-    oncalendar = ""
-    if plugin is not None:
-        oncalendar = plugin.get_timer_directives().get("OnCalendar", "")
-    return canonical_for_oncalendar(oncalendar) or oncalendar
+    return plugin.get_default_interval() if plugin is not None else "1h"
 
 
 # The built-in settings shared by every scraper, in display order. A plugin returns this

@@ -73,7 +73,8 @@ class ExecutionStrategy(ABC):
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
                      block_warning: str | None = None,
-                     config_view: ConfigView | None = None) -> None:
+                     config_view: ConfigView | None = None,
+                     settings_warning: str | None = None) -> None:
         """Called when a new scraping target begins.
 
         Args:
@@ -90,6 +91,8 @@ class ExecutionStrategy(ABC):
             config_view (ConfigView | None): The target's products-config health,
                 rendered as the leading 'Config' row of the section (and logged once by the
                 silent strategy); ``None`` when unavailable (e.g. missing dependencies).
+            settings_warning (str | None): Presentation-ready warning for ignored
+                unknown setting keys.
         """
         pass
 
@@ -240,7 +243,8 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
                      block_warning: str | None = None,
-                     config_view: ConfigView | None = None) -> None:
+                     config_view: ConfigView | None = None,
+                     settings_warning: str | None = None) -> None:
         """Starts a new live display session for the given target."""
         if self.live:
             self.live.stop()
@@ -257,14 +261,17 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
 
         # Build the static settings section after resetting notes, so its invalid-value
         # footnotes take the first reference numbers, ahead of the scraping rows.
-        self.settings_rows = self._build_settings_rows(settings_view, block_warning, config_view)
+        self.settings_rows = self._build_settings_rows(
+            settings_view, block_warning, config_view, settings_warning
+        )
 
         self.live = Live(self._generate_panel(), refresh_per_second=10)
         self.live.start()
 
     def _build_settings_rows(self, settings_view: Sequence[SettingView],
                              block_warning: str | None = None,
-                             config_view: ConfigView | None = None) -> list[tuple]:
+                             config_view: ConfigView | None = None,
+                             settings_warning: str | None = None) -> list[tuple]:
         """Renders the products-config health + resolved settings into ``(icon, label, value)`` rows.
 
         The 'Config' row (products-config health) leads the section when ``config_view`` is
@@ -288,6 +295,9 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
                 default_note_ref=block_ref,
             )
             rows.append((view.icon, escape(view.label), value))
+        if settings_warning:
+            ref = self._build_note_refs(settings_warning)
+            rows.append(("🟡", "Settings / Unknown keys ignored", f"Ignored{ref}"))
         return rows
 
     @staticmethod
@@ -558,7 +568,8 @@ class SilentExecutionStrategy(ExecutionStrategy):
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
                      block_warning: str | None = None,
-                     config_view: ConfigView | None = None) -> None:
+                     config_view: ConfigView | None = None,
+                     settings_warning: str | None = None) -> None:
         """Sets the logger context and records the effective config + settings to the file log.
 
         Logging the products-config health and the resolved settings once at target start
@@ -577,6 +588,8 @@ class SilentExecutionStrategy(ExecutionStrategy):
                 target_logger.info(f"🗄️  Monitored Items: {value}")
         if block_warning:
             target_logger.warning(f"❗ Settings: {block_warning}")
+        if settings_warning:
+            target_logger.warning(f"❗ Settings / Unknown keys ignored: {settings_warning}")
         for view in settings_view:
             if view.has_warning:
                 target_logger.warning(f"❗ {view.label}: {view.display_value} ({view.footnote})")

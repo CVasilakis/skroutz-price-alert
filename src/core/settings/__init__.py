@@ -39,7 +39,7 @@ from core.settings.normalizers import (
     MIN_LOG_RETENTION_DAYS,
     MAX_LOG_RETENTION_DAYS,
 )
-from core.settings.messages import unsupported_value_message
+from core.settings.messages import unsupported_value_message, unknown_keys_message
 from core.settings.resolve import (
     SettingSpec,
     load_settings_block,
@@ -57,7 +57,7 @@ __all__ = [
     "fold_token", "alias_form", "normalize_retention_days", "normalize_bool",
     "DEFAULT_LOG_RETENTION_DAYS", "MIN_LOG_RETENTION_DAYS", "MAX_LOG_RETENTION_DAYS",
     # messages
-    "unsupported_value_message",
+    "unsupported_value_message", "unknown_keys_message",
     # resolve
     "SettingSpec", "load_settings_block", "resolve_spec", "resolve_one", "resolve_all",
     "setting_view",

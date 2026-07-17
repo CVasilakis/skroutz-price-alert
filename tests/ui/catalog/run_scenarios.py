@@ -23,6 +23,7 @@ from ui.catalog.inputs import (
 )
 from ui.harness.drivers import drive_run
 from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, STATUS_INVALID
+from core.settings.messages import unknown_keys_message
 
 LOGGER = stub_logger()
 
@@ -45,10 +46,11 @@ def _attempts(*error_types: str) -> list[str]:
     return [messages.attempt_note(i + 1, t) for i, t in enumerate(error_types)]
 
 
-def _start(s, settings=None, block_warning=None, target="skroutz", config=_CONFIG_OK):
+def _start(s, settings=None, block_warning=None, target="skroutz", config=_CONFIG_OK,
+           settings_warning=None):
     """Opens a target with a realistic 'Config' row + settings section (defaults unless overridden)."""
     s.start_target(target, LOGGER, views_all_default() if settings is None else settings,
-                   block_warning, config)
+                   block_warning, config, settings_warning)
 
 
 # --- Single-attempt price outcomes --------------------------------------------------
@@ -591,6 +593,16 @@ def _():
 def _():
     def script(s):
         _start(s, settings=views_malformed_block(), block_warning=malformed_block_warning())
+        s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
+        s.complete_target()
+    return drive_run(script)
+
+
+@scenario(Surface.RUN, "settings_unknown_keys", "Unknown setting keys are ignored and surfaced", tags=("settings",))
+def _():
+    def script(s):
+        warning = unknown_keys_message(("future_option", "typo_key"))
+        _start(s, settings=views_all_ok(), settings_warning=warning)
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
     return drive_run(script)

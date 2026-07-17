@@ -118,10 +118,10 @@ class TestPluginTimerBlock(unittest.TestCase):
         self.assertNotIn("RandomizedDelaySec", block)
         self.assertNotIn("Persistent", block)
 
-    def test_preserves_values_with_spaces_and_multiple_directives(self):
+    def test_preserves_oncalendar_with_spaces_and_drops_plugin_injection(self):
         self.assertEqual(
             self._block_for("amazon"),
-            "OnCalendar=*-*-* 00/2:00:00\nAccuracySec=1m",
+            "OnCalendar=*-*-* 00/2:00:00",
         )
 
     def test_unknown_plugin_yields_empty_block(self):
@@ -154,6 +154,7 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         timer_text = (self.unit_dir / "foo-scraper.timer").read_text()
         self.assertIn("RandomizedDelaySec=180s", timer_text)
         self.assertIn("Persistent=true", timer_text)
+        self.assertIn("Unit=foo-scraper.service", timer_text)
         # read_timer_block normalizes them away, mirroring plugin_timer_block.
         read = run_sh('read_timer_block foo', xdg_config_home=self.tmp)
         self.assertEqual(read.stdout, "OnCalendar=hourly")

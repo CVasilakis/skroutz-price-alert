@@ -122,6 +122,7 @@ def resolved_settings(
     retention: _Triple = (7, STATUS_OK, 7),
     notify: _Triple = (True, STATUS_OK, True),
     block_warning: str | None = None,
+    unknown_keys: tuple[str, ...] = (),
 ) -> ResolvedSettings:
     """A ``ResolvedSettings`` for ``--status``, built from synthetic ``(value, status, raw)``."""
     pairs = [
@@ -129,7 +130,7 @@ def resolved_settings(
         (SPEC_RETENTION, ResolvedSetting(*retention)),
         (SPEC_NOTIFY, ResolvedSetting(*notify)),
     ]
-    return ResolvedSettings(pairs, block_warning=block_warning)
+    return ResolvedSettings(pairs, block_warning=block_warning, unknown_keys=unknown_keys)
 
 
 # --- systemd property dicts (the STATUS systemd rows) -------------------------------

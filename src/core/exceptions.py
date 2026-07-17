@@ -14,6 +14,10 @@ class ScraperParseError(ScraperError):
     """Raised when the scraper fails to parse the response data."""
     pass
 
+class InvalidScrapeResultError(ScraperParseError):
+    """Raised when a scraper returns a value that violates ScrapeResult invariants."""
+    pass
+
 class ProductNotFoundError(ScraperError):
     """Raised when a product is not found or has been removed."""
     pass

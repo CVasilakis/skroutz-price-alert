@@ -180,7 +180,16 @@ def resolve_all(specs: list[SettingSpec], config_path: str, plugin: Any = None) 
     """
     block, load_status = load_settings_block(config_path)
     pairs = [(spec, resolve_spec(spec, block, load_status, plugin)) for spec in specs]
-    return ResolvedSettings(pairs, block_warning=_block_warning(block, load_status))
+    known = {spec.key for spec in specs}
+    unknown_keys = (
+        tuple(sorted(key for key in block if key not in known))
+        if load_status is None and isinstance(block, dict) else ()
+    )
+    return ResolvedSettings(
+        pairs,
+        block_warning=_block_warning(block, load_status),
+        unknown_keys=unknown_keys,
+    )
 
 
 def _block_warning(block: Any, load_status: str | None) -> str | None:

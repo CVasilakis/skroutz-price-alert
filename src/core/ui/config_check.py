@@ -122,6 +122,14 @@ def _append_general_rows(panel: StatusPanelBuilder) -> None:
     block_ref = panel.add_note_ref(resolved.block_warning) if resolved.block_warning else ""
     for view in resolved.views():
         add_setting_row(panel, view, block_ref)
+    add_unknown_settings_row(panel, resolved.unknown_warning)
+
+
+def add_unknown_settings_row(panel: StatusPanelBuilder, warning: str | None) -> None:
+    """Append the shared yellow row for ignored unknown setting keys."""
+    if warning:
+        ref = panel.add_note_ref(warning)
+        panel.add_row("🟡", "Settings / Unknown keys ignored", f"Ignored{ref}")
 
 
 def _append_env_row(panel: StatusPanelBuilder) -> None:

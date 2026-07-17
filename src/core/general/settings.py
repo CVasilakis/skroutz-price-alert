@@ -13,6 +13,7 @@ vocabulary, so it is safe to import from ``--status`` and the config panel.
 
 import os
 
+from core.config_constants import GENERAL_CONFIG_FILENAME
 from core.settings import ResolvedSettings, SettingSpec, resolve_all, unsupported_value_message
 from core.general.vocab import (
     DEFAULT_REMINDER, DEFAULT_REMINDER_DAY, DEFAULT_REMINDER_TIME,
@@ -21,7 +22,6 @@ from core.general.vocab import (
 )
 
 
-GENERAL_CONFIG_FILENAME = "general.json"
 
 # The JSON keys of the general settings in general.json's ``settings`` block. Exported so
 # framework code references them by name instead of a string literal.

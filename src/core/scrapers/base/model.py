@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
+import math
 from typing import Any, TypeVar
 
+from core.exceptions import InvalidScrapeResultError
+from core.scrapers.base.url import is_absolute_http_url
 from core.utils import parse_price
 
 T = TypeVar('T', bound='BaseTrackedItem')
@@ -48,6 +51,55 @@ class ScrapeResult:
     currency: str
     matches: list[AdvertMatch] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def _valid_price(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise InvalidScrapeResultError(f"{field} must be a number")
+    try:
+        normalized = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise InvalidScrapeResultError(f"{field} must be a finite number") from exc
+    if not math.isfinite(normalized) or normalized < 0:
+        raise InvalidScrapeResultError(f"{field} must be finite and non-negative")
+    return normalized
+
+
+def validate_scrape_result(value: object) -> ScrapeResult:
+    """Validate and normalize one scraper's successful return value."""
+    if not isinstance(value, ScrapeResult):
+        raise InvalidScrapeResultError("scrape_product() must return a ScrapeResult")
+    if not isinstance(value.currency, str) or not value.currency.strip():
+        raise InvalidScrapeResultError("currency must be a nonblank string")
+    if not isinstance(value.metadata, dict):
+        raise InvalidScrapeResultError("metadata must be a dictionary")
+    if not isinstance(value.matches, list):
+        raise InvalidScrapeResultError("matches must be a list")
+
+    normalized_matches: list[AdvertMatch] = []
+    for index, match in enumerate(value.matches, start=1):
+        if not isinstance(match, AdvertMatch):
+            raise InvalidScrapeResultError(f"matches[{index}] must be an AdvertMatch")
+        if not isinstance(match.title, str) or not match.title.strip():
+            raise InvalidScrapeResultError(f"matches[{index}].title must be nonblank")
+        price = _valid_price(match.price, f"matches[{index}].price")
+        if not is_absolute_http_url(match.url):
+            raise InvalidScrapeResultError(f"matches[{index}].url must be an absolute HTTP(S) URL")
+        normalized_matches.append(AdvertMatch(match.title, price, match.url))
+
+    if value.price is None:
+        if normalized_matches:
+            raise InvalidScrapeResultError("price may be None only when matches is empty")
+        normalized_price = None
+    else:
+        normalized_price = _valid_price(value.price, "price")
+    if normalized_matches:
+        cheapest = min(match.price for match in normalized_matches)
+        if normalized_price != cheapest:
+            raise InvalidScrapeResultError("price must equal the cheapest advert match")
+
+    # Normalize integer prices without mutating plugin-owned match objects in place.
+    return ScrapeResult(normalized_price, value.currency, normalized_matches, dict(value.metadata))
 
 
 @dataclass

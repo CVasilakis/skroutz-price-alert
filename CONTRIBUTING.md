@@ -141,8 +141,8 @@ All base classes live in `src/core/scrapers/base/`.
 | :--- | :--- | :--- |
 | **Machine name** (`get_name`) | `[A-Za-z0-9_]+` only — no hyphens/dots/spaces. Unique. Becomes the `--<name>` CLI flag and the `<name>-scraper` systemd unit. | `acme` |
 | **Display name** | Any non-empty string (used in logs/notifications). | `Acme` |
-| **Supported domains** | Non-empty list of bare hosts. **Must not overlap** any other plugin's domains (equal or subdomain-suffix). | `["acme.com"]` |
-| **Config filename** | A safe JSON basename matching `[A-Za-z0-9][A-Za-z0-9._-]*\.json`; no paths, spaces or control characters. | `acme.json` |
+| **Supported domains** | Non-empty list of hostnames/IPs only: no scheme, path, credentials, or port. DNS names are IDNA-normalized and URL ports are ignored while routing. **Must not overlap** any other plugin's domains. | `["acme.com"]` |
+| **Config filename** | A safe JSON basename matching `[A-Za-z0-9][A-Za-z0-9._-]*\.json`; no paths, spaces or control characters, no case-insensitive collision, and never `general.json`. | `acme.json` |
 
 ### Step 1 — Create the package
 
@@ -411,6 +411,12 @@ Practical rules:
   scraper additionally fills `matches=[…]` and may return `price=None` for a
   checked-but-nothing-matched result — see
   [Listing-type stores](#listing-type-stores-classifieds-searches).)
+- Successful results are validated before business logic. Currency and advert titles
+  must be nonblank; metadata must be a dictionary; matches must be a list of
+  `AdvertMatch`; every price must be numeric (not boolean), finite, and non-negative;
+  advert links must be absolute HTTP(S) URLs. With matches, `price` must equal the
+  cheapest match; `price=None` is valid only for an empty match list. Violations are
+  retried as `InvalidScrapeResultError` and never update `last_price` or send a price alert.
 - **Use `parse_price()`** (`from core.utils import parse_price`) for any price string — it
   handles currency symbols and EU/US digit grouping and returns `None` on failure
   (map that `None` to `ScraperParseError`).
@@ -427,16 +433,20 @@ These are all opt-in; skip them unless you need them.
 
 ### Run on a non-hourly default schedule
 
-Override `get_timer_directives()` in your plugin to set the **default** systemd
-cadence (users can still override it per-config via `execution_interval`).
-`RandomizedDelaySec` and `Persistent` are framework-managed and ignored if returned.
-Directive names must use letters/digits and values must not contain tabs or newlines;
-discovery validates this machine-readable shell/systemd boundary.
+Override `get_default_interval()` with a canonical interval key to set the default
+cadence (users can still override it via `execution_interval`). The framework alone
+renders `OnCalendar`, the matching timer `Unit`, `RandomizedDelaySec=180s`, and
+`Persistent=true`; plugins cannot inject systemd directives.
 
 ```python
-def get_timer_directives(self) -> dict:
-    return {"OnCalendar": "*-*-* 00/4:00:00"}   # every 4 hours instead of hourly
+def get_default_interval(self) -> str:
+    return "4h"
 ```
+
+Migration is intentionally fail-fast: discovery rejects plugins that override the old
+`get_timer_directives()` or `get_requirements_path()` hooks. Replace the former with
+`get_default_interval()` and place private dependencies in the colocated
+`scrapers/<plugin>/requirements.txt`, whose path the registry computes.
 
 ### Add a store-specific setting
 
@@ -445,8 +455,9 @@ Every scraper inherits the shared settings (`execution_interval`,
 single `SettingSpec`: its JSON `key`, a `normalize` (raw value → effective value, or
 `None` when unsupported), a `display` formatter, an invalid-value `warning`, and a
 `default`. To add your own, declare a spec and return `BASE_SETTING_SPECS + [it]` from
-`get_setting_specs()` — there is no settings dataclass to subclass and no `from_dict` to
-write:
+`get_setting_specs()` — the exact shared `BASE_SETTING_SPECS` objects, in their declared
+order, must remain the prefix; custom specs only extend it. There is no settings dataclass
+to subclass and no `from_dict` to write:
 
 ```python
 # in plugin.py (import-light — stdlib only, like the rest of the descriptor)
@@ -471,6 +482,9 @@ class AcmePlugin(BasePlugin):
 The new setting now resolves, validates, and renders in `--status` and the scraping
 panel automatically — no base/framework file changes — and discovery rejects a blank or
 duplicate `key` at startup.
+
+Unknown keys in a well-formed user `settings` object are intentionally non-fatal: they
+are ignored, sorted, and surfaced once in the relevant panel/background startup log.
 
 For a real in-tree example see `SPEC_MIN_ADVERT_PRICE` in `scrapers/insomnia/plugin.py`
 (a numeric floor with a bool-rejecting normalizer and a "disabled" display for 0).
@@ -610,8 +624,10 @@ package — so run any command, e.g. `./scripts/run.sh --status`, to surface it)
 - the package exposes a module-level `plugin` that is a `BasePlugin` instance;
 - `get_name()` matches `[A-Za-z0-9_]+`, is non-empty and **unique**;
 - `get_display_name()` is non-empty and `get_config_filename()` is a safe `.json` basename;
-- `get_supported_domains()` is a non-empty list of non-empty strings;
-- timer directives are a safe string-to-string mapping with a canonical `OnCalendar`;
+- `get_supported_domains()` is a non-empty list of normalized, non-overlapping hostnames/IPs;
+- `get_default_interval()` is one of the supported canonical interval keys;
+- every settings spec satisfies its callable/default/display contract and the base prefix is exact;
+- dependency metadata comes only from a colocated `requirements.txt`;
 - **no two plugins claim overlapping domains**;
 - `get_client_class()` / `get_storage_class()` return the right subclasses (checked
   at first use; a missing dependency surfaces as `PluginDependencyError` pointing at
@@ -673,11 +689,13 @@ package — so run any command, e.g. `./scripts/run.sh --status`, to surface it)
 [ ]              — every failure raises a modeled ScraperError subclass
 [ ]              — prices parsed via utils.parse_price
 [ ] storage.py   — JsonProductDataManager subclass with MODEL, ROOT_KEY, _matches_product_path
-[ ] plugin.py    — all 6 required methods; client/storage imported INSIDE the getters (import-light)
+[ ] plugin.py    — all 6 required methods; optional get_default_interval(); deferred class imports
 [ ] __init__.py  — `plugin = <Name>Plugin()`
 [ ] requirements.txt — added if you use non-core libs (tls-client for HTTP; your HTML parser)
 [ ] config/<name>.json.example — matches get_config_filename(); has settings + a sample product
-[ ] get_name() is [A-Za-z0-9_]+, unique; domains don't overlap another plugin
+[ ] get_name() is [A-Za-z0-9_]+, unique; domains are host-only and don't overlap
+[ ] custom settings extend the exact BASE_SETTING_SPECS prefix
+[ ] ScrapeResult obeys the runtime currency/metadata/match/price/URL invariants
 [ ] listing-type store? — ScrapeResult carries matches / price=None, the
     _row_key/_update_key hooks are overridden, and the first example row is filterless
 [ ] ./install.sh --<name> succeeds

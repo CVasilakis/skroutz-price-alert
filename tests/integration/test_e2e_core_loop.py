@@ -40,8 +40,8 @@ from support import fake_plugin, mock_notifier, mock_ui, registry_sandbox
 
 
 def _fakestore_plugin(netloc):
-    """The fake store bound to the live server's netloc (domain match includes the port)."""
-    return fake_plugin(name="fakestore", domains=(netloc,), config="fakestore.json",
+    """The fake store declares a host only; request URLs retain the random port."""
+    return fake_plugin(name="fakestore", domains=(netloc.rsplit(":", 1)[0],), config="fakestore.json",
                        client_class=FakeStoreClient, storage_class=FakeStoreDataManager)
 
 
@@ -283,13 +283,14 @@ def test_multi_target_rate_limit_does_not_stop_healthy_target(tmp_path):
         # Two plugins on the same live server: domain overlap is rejected by the
         # registry, so the second store routes through a distinct loopback name.
         with fake_store_server(routes) as netloc2:
-            limited = fake_plugin(name="limitedstore", domains=(netloc2,),
+            limited_port = netloc2.rsplit(":", 1)[1]
+            limited = fake_plugin(name="limitedstore", domains=("localhost",),
                                   config="limitedstore.json",
                                   client_class=FakeStoreClient,
                                   storage_class=FakeStoreDataManager)
             with registry_sandbox(limited, _fakestore_plugin(netloc)):
                 _write_config(tmp_path, [
-                    {"name": "Blocked", "url": f"http://{netloc2}/blocked/1", "target_price": 50.0},
+                    {"name": "Blocked", "url": f"http://localhost:{limited_port}/blocked/1", "target_price": 50.0},
                 ], filename="limitedstore.json")
                 healthy_path = _write_config(tmp_path, [
                     {"name": "Steady", "url": f"http://{netloc}/ok/1", "target_price": 100.0},

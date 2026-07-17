@@ -10,6 +10,7 @@ transport library loads.
 """
 
 import contextlib
+import os
 import types
 import unittest
 from typing import cast
@@ -18,6 +19,7 @@ from unittest import mock
 from core.exceptions import PluginDiscoveryError
 from core.scrapers.base.plugin import BasePlugin
 from core.scrapers.registry import RESERVED_PLUGIN_NAMES, ScraperRegistry
+from core.scrapers.base.settings import BASE_SETTING_SPECS
 
 from support import fake_plugin as _fake_plugin, registry_sandbox
 
@@ -86,6 +88,24 @@ class TestRegisterValidationGate(unittest.TestCase):
             "custom-feed.v2.json",
         )
 
+    def test_general_config_filename_is_reserved_case_insensitively(self):
+        for filename in ("general.json", "GENERAL.JSON", "General.Json"):
+            with self.subTest(filename=filename), self.assertRaises(PluginDiscoveryError):
+                ScraperRegistry.register(_fake_plugin(config=filename))
+
+    def test_config_filename_collision_is_case_insensitive_and_names_both_plugins(self):
+        ScraperRegistry.register(_fake_plugin(
+            name="first", domains=("first.example",), config="Feed.json"
+        ))
+        with self.assertRaises(PluginDiscoveryError) as ctx:
+            ScraperRegistry.register(_fake_plugin(
+                name="second", domains=("second.example",), config="feed.json"
+            ))
+        message = str(ctx.exception)
+        self.assertIn("first", message)
+        self.assertIn("second", message)
+        self.assertIn("feed.json", message.lower())
+
     def test_equal_domain_conflict_is_rejected(self):
         ScraperRegistry.register(_fake_plugin(name="first"))
         with self.assertRaises(PluginDiscoveryError) as ctx:
@@ -142,6 +162,54 @@ class TestRegisterValidationGate(unittest.TestCase):
         plugin = ScraperRegistry.plugin_for_url("https://capstore.example/item/1")
         assert plugin is not None, "a non-normalized declared domain must still route"
         self.assertEqual(plugin.get_name(), "fakestore")
+
+    def test_registration_freezes_cheap_metadata_and_defensively_copies_lists(self):
+        domains = ["Store.Example."]
+        specs = list(BASE_SETTING_SPECS)
+        source = _fake_plugin(domains=domains, specs=specs)
+        ScraperRegistry.register(source)
+        frozen = ScraperRegistry.get_plugin("fakestore")
+
+        domains[:] = ["mutated.example"]
+        specs.clear()
+        returned_domains = frozen.get_supported_domains()
+        returned_domains.append("caller.example")
+        returned_specs = frozen.get_setting_specs()
+        returned_specs.clear()
+
+        self.assertEqual(frozen.get_supported_domains(), ["store.example"])
+        self.assertEqual(frozen.get_setting_specs(), BASE_SETTING_SPECS)
+        self.assertIsNotNone(ScraperRegistry.plugin_for_url("https://store.example/p"))
+        self.assertIsNone(ScraperRegistry.plugin_for_url("https://mutated.example/p"))
+
+    def test_normalized_duplicate_domain_within_plugin_is_rejected(self):
+        with self.assertRaises(PluginDiscoveryError) as ctx:
+            ScraperRegistry.register(_fake_plugin(domains=("EXAMPLE.com", "example.com.")))
+        self.assertIn("duplicate normalized domain", str(ctx.exception))
+
+    def test_legacy_metadata_hooks_are_rejected_with_migration_guidance(self):
+        class LegacyTimer(type(_fake_plugin())):
+            def get_timer_directives(self):
+                return {"OnCalendar": "daily"}
+
+        class LegacyRequirements(type(_fake_plugin())):
+            def get_requirements_path(self):
+                return "/tmp/arbitrary.txt"
+
+        for plugin, expected in ((LegacyTimer(), "get_default_interval"),
+                                 (LegacyRequirements(), "beside plugin.py")):
+            with self.subTest(expected=expected), self.assertRaises(PluginDiscoveryError) as ctx:
+                ScraperRegistry.register(plugin)
+            self.assertIn(expected, str(ctx.exception))
+
+    def test_requirements_path_is_computed_from_plugin_source(self):
+        from core.scrapers.skroutz import plugin as skroutz
+
+        ScraperRegistry.register(skroutz)
+        path = ScraperRegistry.get_requirements_path("skroutz")
+        self.assertEqual(path, os.path.realpath(
+            os.path.join(os.path.dirname(__file__), "../../src/core/scrapers/skroutz/requirements.txt")
+        ))
 
 
 class TestDiscoverPackageShape(unittest.TestCase):

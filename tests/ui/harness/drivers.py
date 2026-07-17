@@ -223,7 +223,8 @@ def drive_config(version_state: str = "uptodate",
                  env_error: str = "", reminder_raw: object = None,
                  reminder_day_raw: object = None, reminder_time_raw: object = None,
                  general_block_raw: object = None,
-                 general_load_status: str | None = None) -> BuildResult:
+                 general_load_status: str | None = None,
+                 general_unknown_keys: tuple[str, ...] = ()) -> BuildResult:
     """Builds the Configuration Check panel (global checks only), patching its seams.
 
     Per-scraper products-config health is no longer on this panel — it now leads each
@@ -278,6 +279,7 @@ def drive_config(version_state: str = "uptodate",
         return ResolvedSettings(
             [(spec, resolve_spec(spec, block, general_load_status)) for spec in GENERAL_SETTING_SPECS],
             block_warning=_block_warning(block, general_load_status),
+            unknown_keys=general_unknown_keys if isinstance(block, dict) and general_load_status is None else (),
         )
 
     with mock.patch.object(config_check, "check_for_updates", check_for_updates), \

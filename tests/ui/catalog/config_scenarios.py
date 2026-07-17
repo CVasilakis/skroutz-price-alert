@@ -61,6 +61,12 @@ def _():
     return drive_config("uptodate", valid_count=2, general_load_status="readerror")
 
 
+@scenario(Surface.CONFIG, "general_unknown_keys", "Unknown general setting keys are ignored and surfaced", tags=("settings",))
+def _():
+    return drive_config("uptodate", valid_count=2,
+                        general_unknown_keys=("future_option", "typo_key"))
+
+
 @scenario(Surface.CONFIG, "env_mixed", "Some notification URLs are invalid", tags=("error",))
 def _():
     return drive_config("uptodate", valid_count=1, invalid_count=2)

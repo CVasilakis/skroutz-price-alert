@@ -26,3 +26,10 @@ def unsupported_value_message(key: str, default_display: str | None = None) -> s
     if default_display is None:
         return f"Unsupported {key} value. Using the default."
     return f"Unsupported {key} value. Using the default ({default_display})."
+
+
+def unknown_keys_message(keys: tuple[str, ...]) -> str | None:
+    """Return the shared warning for ignored unknown setting keys."""
+    if not keys:
+        return None
+    return f"Unknown setting key(s) ignored: {', '.join(keys)}"

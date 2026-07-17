@@ -1,0 +1,13 @@
+# border: yellow
+
+╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+│   ✅    Monitored Items                    5 loaded                     │
+│   ✅    Execution Interval                 2h                           │
+│   ✅    Log Retention                      14 days                      │
+│   ✅    Notify On Errors                   false                        │
+│   🟡    Settings / Unknown keys ignored    Ignored [1]                  │
+│ ─────────────────────────────────────────────────────────────────────── │
+│   ✅    Sony WH-1000XM5                    320.0 € (Target: 300.0 €)    │
+│                                                                         │
+│   [1] Unknown setting key(s) ignored: future_option, typo_key.          │
+╰─────────────────────────────────────────────────────────────────────────╯

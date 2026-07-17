@@ -105,7 +105,7 @@ PY
 
 # list_plugin_requirements: print "<plugin><TAB><abs_requirements_path>" for every
 # registered plugin that ships its own requirements.txt (one pair per line),
-# reusing plugin.get_requirements_path(). Plugins with no extra dependencies are
+# using the registry-computed colocated path. Plugins with no extra dependencies are
 # omitted. The path is absolute, so it installs regardless of cwd. Same venv
 # requirement as list_plugins.
 list_plugin_requirements() {
@@ -113,7 +113,7 @@ list_plugin_requirements() {
     PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
 from core.scrapers.registry import ScraperRegistry
 for target in ScraperRegistry.registered_targets():
-    path = ScraperRegistry.get_plugin(target).get_requirements_path()
+    path = ScraperRegistry.get_requirements_path(target)
     if path:
         print(f"{target}\t{path}")
 PY
@@ -122,9 +122,8 @@ PY
 # list_plugin_timer_directives: print "<plugin><TAB><Key>=<Value>" for every
 # systemd [Timer] directive of every registered plugin (one per line). The value
 # is the plugin's *effective* cadence: ScraperRegistry.resolve_timer_directives()
-# starts from plugin.get_timer_directives() and overrides OnCalendar with the
-# user's config "settings.execution_interval" when it is set and valid (otherwise
-# the plugin default). The plugin name is machine-readable (no whitespace), so a
+# translates the user's config "settings.execution_interval" when it is set and
+# valid (otherwise the plugin's canonical default). The plugin name is machine-readable, so a
 # literal tab cleanly separates it from the directive, whose value may itself
 # contain spaces (e.g. an OnCalendar like "*-*-* 00/2:00:00"). Same venv
 # requirement as list_plugins.
@@ -508,13 +507,12 @@ restart_timer_one() {
 # render the same per-plugin unit pair, so the unit format lives here in exactly
 # one place.
 
-# plugin_timer_block <plugin> <all_directives>: print <plugin>'s [Timer] *trigger*
-# directives, one "Key=Value" per line (no trailing newline, so the value is safe
+# plugin_timer_block <plugin> <all_directives>: print <plugin>'s framework-resolved
+# OnCalendar line (no trailing newline, so the value is safe
 # to capture with $(...)). <all_directives> is the tab-separated
-# "<plugin>\t<Key>=<Value>" stream from list_plugin_timer_directives, captured once
-# by the caller. RandomizedDelaySec and Persistent are framework-managed (appended
-# by write_plugin_units), so any a plugin tries to set are dropped here. Prints
-# nothing when the plugin declares no trigger directives.
+# "<plugin>\tOnCalendar=<Value>" stream, captured once by the caller. Every other
+# directive is ignored defensively; the renderer owns Unit, RandomizedDelaySec, and
+# Persistent. Prints nothing when the stream has no schedule for the plugin.
 plugin_timer_block() {
     _ptb_plugin="$1"
     _ptb_all="$2"
@@ -526,9 +524,7 @@ plugin_timer_block() {
     for _ptb_line in $_ptb_all; do
         [ "${_ptb_line%%"$_ptb_tab"*}" = "$_ptb_plugin" ] || continue
         _ptb_directive="${_ptb_line#*"$_ptb_tab"}"
-        case "$_ptb_directive" in
-            RandomizedDelaySec=*|Persistent=*) continue ;;
-        esac
+        case "$_ptb_directive" in OnCalendar=*) ;; *) continue ;; esac
         if [ -z "$_ptb_block" ]; then
             _ptb_block="$_ptb_directive"
         else
@@ -570,6 +566,7 @@ Description=Run $_rpt_plugin scraper
 
 [Timer]
 $_rpt_block
+Unit=$_rpt_plugin-scraper.service
 RandomizedDelaySec=180s
 Persistent=true
 
@@ -604,7 +601,8 @@ write_plugin_timer_unit() {
 # <plugin>-scraper.{service,timer} unit files in SYSTEMD_USER_DIR. <timer_block> is
 # the plugin's [Timer] trigger directives (from plugin_timer_block); the
 # framework-managed RandomizedDelaySec/Persistent are appended identically for every
-# plugin, and the [Service] dispatches identically through run.sh. Requires BASE_DIR
+# plugin (including the explicit Unit link), and the [Service] dispatches identically
+# through run.sh. Requires BASE_DIR
 # (the repository root). Returns non-zero if either file was not written.
 write_plugin_units() {
     _wpu_plugin="$1"
@@ -661,7 +659,7 @@ write_plugin_units() {
 # read_timer_block <plugin>: print the installed <plugin>-scraper.timer's [Timer]
 # *trigger* directives in the same normalized form as plugin_timer_block (one
 # "Key=Value" per line, no trailing newline, with the framework-managed
-# RandomizedDelaySec/Persistent and the section headers removed), or nothing if the
+# Unit/RandomizedDelaySec/Persistent and the section headers removed), or nothing if the
 # unit file is absent. Lets schedule.sh tell whether a re-resolved cadence actually
 # differs from what is already on disk, so an unchanged interval is a true no-op.
 read_timer_block() {
@@ -677,7 +675,7 @@ read_timer_block() {
         [ "$_rtb_in_timer" -eq 1 ] || continue
         [ -n "$_rtb_line" ] || continue
         case "$_rtb_line" in
-            RandomizedDelaySec=*|Persistent=*) continue ;;
+            Unit=*|RandomizedDelaySec=*|Persistent=*) continue ;;
         esac
         if [ -z "$_rtb_block" ]; then
             _rtb_block="$_rtb_line"
