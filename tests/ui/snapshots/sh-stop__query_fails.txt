@@ -1,0 +1,8 @@
+# border: red
+# exit: 1
+
+Error: Could not query ActiveState for skroutz-scraper.service.
+
+[skroutz] Error: Could not determine whether the service is running.
+
+One or more scraper services could not be stopped.

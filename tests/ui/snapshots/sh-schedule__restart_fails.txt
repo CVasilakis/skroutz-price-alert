@@ -1,0 +1,10 @@
+# border: red
+# exit: 1
+
+[skroutz] Updating the timer schedule to match the configured interval...
+[skroutz] Timer unit updated.
+Error: Failed to restart skroutz-scraper.timer.
+[skroutz] Error: The active timer could not be re-armed.
+
+Timer files written but not fully activated: skroutz
+One or more timer schedules could not be applied.

@@ -199,10 +199,21 @@ class ScraperRegistry:
                 f"already uses it. Each plugin's get_name() must be unique."
             )
 
-        for getter_name, value in (("get_display_name", plugin.get_display_name()),
-                                   ("get_config_filename", plugin.get_config_filename())):
-            if not isinstance(value, str) or not value.strip():
-                raise PluginDiscoveryError(f"Plugin '{name}' ({where}) must return a non-empty string from {getter_name}().")
+        display_name = plugin.get_display_name()
+        if not isinstance(display_name, str) or not display_name.strip():
+            raise PluginDiscoveryError(
+                f"Plugin '{name}' ({where}) must return a non-empty string from get_display_name()."
+            )
+
+        config_filename = plugin.get_config_filename()
+        if not isinstance(config_filename, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]*\.json", config_filename
+        ):
+            raise PluginDiscoveryError(
+                f"Plugin '{name}' ({where}) returned an invalid get_config_filename() value "
+                f"{config_filename!r}: it must be a safe JSON basename using only letters, "
+                "digits, dots, underscores and hyphens (for example 'my_store.json')."
+            )
 
         domains = plugin.get_supported_domains()
         if not isinstance(domains, (list, tuple)) or not domains:
@@ -254,6 +265,17 @@ class ScraperRegistry:
         # vocabulary. A non-canonical OnCalendar is rejected here rather than silently
         # leaking raw systemd syntax into the Execution Interval row at display time.
         directives = plugin.get_timer_directives()
+        if not isinstance(directives, dict) or any(
+            not isinstance(key, str)
+            or re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", key) is None
+            or not isinstance(value, str)
+            or any(char in value for char in "\t\r\n")
+            for key, value in (directives.items() if isinstance(directives, dict) else ())
+        ):
+            raise PluginDiscoveryError(
+                f"Plugin '{name}' ({where}): get_timer_directives() must return a string-to-string "
+                "mapping with systemd directive names and no tabs or newlines in values."
+            )
         oncalendar = directives.get("OnCalendar") if isinstance(directives, dict) else None
         if not oncalendar or canonical_for_oncalendar(oncalendar) is None:
             raise PluginDiscoveryError(

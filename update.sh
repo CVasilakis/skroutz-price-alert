@@ -85,9 +85,17 @@ main() {
     # Ensure no scraper is actively running while we change the files out from
     # under it. Glob the installed services (also catches an orphaned service
     # whose timer is gone).
+    STOP_FAILED=0
     for plugin in $(list_installed_plugins service); do
-        systemctl --user stop "$(unit_name "$plugin" service)" 2>/dev/null || true
+        if ! stop_one "$plugin"; then
+            printf "%b\n" "${RED}Error: Could not safely stop the '$plugin' scraper before updating.${NC}"
+            STOP_FAILED=1
+        fi
     done
+    if [ "$STOP_FAILED" -ne 0 ]; then
+        printf "%b\n" "${RED}Update aborted before changing project files.${NC}\n"
+        exit 1
+    fi
 
     if ! git checkout -f main --quiet; then
         printf "%b\n" "\n${RED}Error: Failed to checkout 'main' branch. Update aborted.${NC}\n"

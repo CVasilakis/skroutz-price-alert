@@ -55,3 +55,9 @@ _case("enable_success", "An installed but dormant timer is armed.",
 
 _case("enable_fails", "systemctl enable --now fails.",
       world=replace(WORLD_INSTALLED, systemctl_fail=("enable",)), tags=("error",))
+
+_case("enable_noop_detected", "A zero exit without an enabled/active timer fails verification.",
+      world=replace(WORLD_INSTALLED, systemctl_noop=("enable",)), tags=("error",))
+
+_case("query_fails", "A failed timer-state query is not treated as a dormant timer.",
+      world=replace(WORLD_INSTALLED, systemctl_fail=("show",)), tags=("error",))

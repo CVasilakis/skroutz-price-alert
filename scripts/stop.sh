@@ -95,16 +95,30 @@ fi
 # ------------------------------------------------------------------------------
 # For Type=oneshot services, the state is 'activating' while the script is running.
 
+FAILED=0
 for plugin in $PLUGINS; do
-    state="$(service_state "$plugin")"
-    if [ "$state" = "active" ] || [ "$state" = "activating" ]; then
-        printf "%b\n" "\n${CYAN}[$plugin] Stopping active background execution...${NC}"
-        stop_one "$plugin"
-        printf "%b\n" "${GREEN}[$plugin] Active background execution stopped successfully.${NC}"
-    else
+    if ! state="$(service_state "$plugin")"; then
+        printf "%b\n" "\n${RED}[$plugin] Error: Could not determine whether the service is running.${NC}"
+        FAILED=1
+        continue
+    fi
+    if state_is_stopped "$state"; then
         printf "%b\n" "\n${GREEN}[$plugin] No active background execution detected. Nothing to stop.${NC}"
+    else
+        printf "%b\n" "\n${CYAN}[$plugin] Stopping active background execution...${NC}"
+        if stop_one "$plugin"; then
+            printf "%b\n" "${GREEN}[$plugin] Active background execution stopped successfully.${NC}"
+        else
+            printf "%b\n" "${RED}[$plugin] Error: Active background execution could not be stopped.${NC}"
+            FAILED=1
+        fi
     fi
 done
+
+if [ "$FAILED" -ne 0 ]; then
+    printf "%b\n" "\n${RED}One or more scraper services could not be stopped.${NC}\n"
+    exit 1
+fi
 
 printf "%b\n" "\nTo disable future background executions, run: ${CYAN}./scripts/disable.sh${NC}"
 printf "%b\n" "To completely remove the application, run: ${CYAN}./scripts/uninstall.sh${NC}\n"

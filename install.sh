@@ -199,13 +199,17 @@ fi
 # requirements of the plugin(s) being provisioned are installed, so an install
 # that skips a heavy scraper never pulls that scraper's dependencies.
 
-PLUGIN_REQS="$(list_plugin_requirements || true)"
+if ! PLUGIN_REQS="$(list_plugin_requirements)"; then
+    printf "%b\n" "${RED}Error: Failed to read per-plugin dependency metadata.${NC}\n"
+    exit 1
+fi
 OLD_IFS="$IFS"
 IFS='
 '
+PAIR_TAB="$(printf '\t')"
 for pair in $PLUGIN_REQS; do
-    req_name="${pair%% *}"
-    req_path="${pair#* }"
+    req_name="${pair%%"$PAIR_TAB"*}"
+    req_path="${pair#*"$PAIR_TAB"}"
     plugin_in_list "$req_name" $PLUGINS || continue
 
     printf "%b\n" "${CYAN}Installing dependencies for the '$req_name' scraper...${NC}"
@@ -229,9 +233,12 @@ mkdir -p "$SYSTEMD_USER_DIR"
 # plugin.get_timer_directives(), resolved against the user's
 # settings.execution_interval (see list_plugin_timer_directives). RandomizedDelaySec
 # and Persistent are framework-managed and the [Service] dispatches identically
-# through run.sh; the shared write_plugin_units helper renders both unit files so
-# install.sh and schedule.sh stay byte-identical. Fetched once, then filtered per plugin.
-ALL_TIMER_DIRECTIVES="$(list_plugin_timer_directives || true)"
+# through run.sh; shared renderers keep install.sh's timer output byte-identical to
+# schedule.sh's timer-only replacement. Fetched once, then filtered per plugin.
+if ! ALL_TIMER_DIRECTIVES="$(list_plugin_timer_directives)"; then
+    printf "%b\n" "${RED}Error: Failed to resolve plugin timer directives.${NC}\n"
+    exit 1
+fi
 
 for plugin in $PLUGINS; do
     timer_block="$(plugin_timer_block "$plugin" "$ALL_TIMER_DIRECTIVES")"
@@ -247,14 +254,22 @@ for plugin in $PLUGINS; do
     fi
 done
 
-systemctl --user daemon-reload
+if ! systemctl --user daemon-reload; then
+    printf "%b\n" "${RED}Error: Failed to reload the systemd user manager.${NC}\n"
+    exit 1
+fi
 
+ENABLE_FAILED=0
 for plugin in $PLUGINS; do
     if ! enable_one "$plugin"; then
         printf "%b\n" "${RED}Error: Failed to enable the timer for '$plugin'.${NC}\n"
-        exit 1
+        ENABLE_FAILED=1
     fi
 done
+if [ "$ENABLE_FAILED" -ne 0 ]; then
+    printf "%b\n" "${RED}Error: One or more plugin timers could not be enabled.${NC}\n"
+    exit 1
+fi
 
 if command -v loginctl >/dev/null 2>&1; then
     # $USER is conventionally exported but not guaranteed (clean env, some
@@ -279,13 +294,16 @@ printf "%b\n" "${GREEN}Systemd timer(s) configured successfully.${NC}"
 # descriptor, so this stays correct as plugins are added.
 
 MISSING_CONFIGS=""
-CONFIG_PAIRS="$(list_plugin_configs || true)"
+if ! CONFIG_PAIRS="$(list_plugin_configs)"; then
+    printf "%b\n" "${RED}Error: Failed to read plugin configuration metadata.${NC}\n"
+    exit 1
+fi
 OLD_IFS="$IFS"
 IFS='
 '
 for pair in $CONFIG_PAIRS; do
-    pair_name="${pair%% *}"
-    pair_cfg="${pair#* }"
+    pair_name="${pair%%"$PAIR_TAB"*}"
+    pair_cfg="${pair#*"$PAIR_TAB"}"
     plugin_in_list "$pair_name" $PLUGINS || continue
     [ -f "config/$pair_cfg" ] || MISSING_CONFIGS="$MISSING_CONFIGS $pair_cfg"
 done

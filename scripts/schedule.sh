@@ -54,20 +54,7 @@ print_help() {
 # status_of <plugin> <status_stream>: print the interval-resolution status for a
 # plugin from the "<plugin><TAB><status>" stream captured from list_interval_status.
 status_of() {
-    _so_plugin="$1"
-    _so_all="$2"
-    _so_tab="$(printf '\t')"
-    _so_old_ifs="$IFS"
-    IFS='
-'
-    for _so_line in $_so_all; do
-        if [ "${_so_line%%"$_so_tab"*}" = "$_so_plugin" ]; then
-            IFS="$_so_old_ifs"
-            printf '%s' "${_so_line#*"$_so_tab"}"
-            return 0
-        fi
-    done
-    IFS="$_so_old_ifs"
+    plugin_stream_value "$1" "$2"
 }
 
 # ------------------------------------------------------------------------------
@@ -166,19 +153,34 @@ fi
 # schedule actually moved. A missing config or an unsupported value leaves the timer
 # untouched (keeping the previously-applied schedule, or the default).
 
-ALL_TIMER_DIRECTIVES="$(list_plugin_timer_directives || true)"
-INTERVAL_STATUS="$(list_interval_status || true)"
-# The registry is readable at this point (guarded above), so this is non-empty.
-SUPPORTED_INTERVAL_KEYS="$(list_supported_intervals || true)"
+if ! ALL_TIMER_DIRECTIVES="$(list_plugin_timer_directives)" || \
+   ! INTERVAL_STATUS="$(list_interval_status)" || \
+   ! SUPPORTED_INTERVAL_KEYS="$(list_supported_intervals)" || \
+   ! CONFIG_PAIRS="$(list_plugin_configs)"; then
+    printf "%b\n" "${RED}Error: Failed to resolve plugin scheduling metadata.${NC}\n"
+    exit 1
+fi
 
 CHANGED=""
+ACTIVE_CHANGED=""
+INACTIVE_CHANGED=""
+FAILED=0
 for plugin in $PLUGINS; do
-    status="$(status_of "$plugin" "$INTERVAL_STATUS")"
+    if ! status="$(status_of "$plugin" "$INTERVAL_STATUS")"; then
+        printf "%b\n" "\n${RED}[$plugin] Could not resolve execution_interval status; skipping.${NC}"
+        FAILED=1
+        continue
+    fi
 
     case "$status" in
         nocfg)
+            if ! config_filename="$(plugin_stream_value "$plugin" "$CONFIG_PAIRS")"; then
+                printf "%b\n" "\n${RED}[$plugin] Could not resolve its config filename; skipping.${NC}"
+                FAILED=1
+                continue
+            fi
             printf "%b\n" "\n${YELLOW}[$plugin] No config file found; leaving its timer unchanged.${NC}"
-            printf "%b\n" "Create it by copying ${CYAN}config/$plugin.json.example${NC} to ${CYAN}config/$plugin.json${NC}."
+            printf "%b\n" "Create it by copying ${CYAN}config/$config_filename.example${NC} to ${CYAN}config/$config_filename${NC}."
             continue
             ;;
         invalid)
@@ -191,6 +193,7 @@ for plugin in $PLUGINS; do
     new_block="$(plugin_timer_block "$plugin" "$ALL_TIMER_DIRECTIVES")"
     if [ -z "$new_block" ]; then
         printf "%b\n" "\n${RED}[$plugin] Declares no [Timer] directives; skipping.${NC}"
+        FAILED=1
         continue
     fi
 
@@ -199,28 +202,75 @@ for plugin in $PLUGINS; do
         continue
     fi
 
+    if ! prior_active="$(timer_is_active "$plugin")"; then
+        printf "%b\n" "\n${RED}[$plugin] Could not determine the timer's active state; skipping.${NC}"
+        FAILED=1
+        continue
+    fi
+    if [ "$prior_active" = "active" ]; then
+        ACTIVE_CHANGED="$ACTIVE_CHANGED $plugin"
+    elif state_is_stopped "$prior_active"; then
+        INACTIVE_CHANGED="$INACTIVE_CHANGED $plugin"
+    else
+        printf "%b\n" "\n${RED}[$plugin] Timer is in unexpected state '$prior_active'; skipping.${NC}"
+        FAILED=1
+        continue
+    fi
+
     printf "%b\n" "\n${CYAN}[$plugin] Updating the timer schedule to match the configured interval...${NC}"
-    if write_plugin_units "$plugin" "$new_block"; then
+    if write_plugin_timer_unit "$plugin" "$new_block"; then
         CHANGED="$CHANGED $plugin"
-        printf "%b\n" "${GREEN}[$plugin] Timer schedule updated.${NC}"
+        printf "%b\n" "${GREEN}[$plugin] Timer unit updated.${NC}"
     else
         printf "%b\n" "${RED}[$plugin] Error: Failed to write the systemd timer unit.${NC}"
-        exit 1
+        FAILED=1
     fi
 done
 
 # ------------------------------------------------------------------------------
 # RELOAD AND RESTART CHANGED TIMERS
 # ------------------------------------------------------------------------------
-# daemon-reload makes systemd read the rewritten unit files; try-restart re-arms an
-# *active* timer so it recomputes its next elapse from the new schedule, while
-# leaving a disabled timer alone (it picks up the new file when re-enabled).
+# daemon-reload makes systemd read the rewritten unit files; timers that were
+# active before the change are restarted and verified so they recompute their next
+# elapse, while inactive timers remain stopped until explicitly enabled.
 
 if [ -n "$CHANGED" ]; then
-    systemctl --user daemon-reload
-    for plugin in $CHANGED; do
-        systemctl --user try-restart "$(unit_name "$plugin" timer)" 2>/dev/null || true
-    done
+    if systemctl --user daemon-reload; then
+        for plugin in $ACTIVE_CHANGED; do
+            if ! plugin_in_list "$plugin" $CHANGED; then
+                continue
+            fi
+            if ! restart_timer_one "$plugin"; then
+                printf "%b\n" "${RED}[$plugin] Error: The active timer could not be re-armed.${NC}"
+                FAILED=1
+            fi
+        done
+        for plugin in $INACTIVE_CHANGED; do
+            if ! plugin_in_list "$plugin" $CHANGED; then
+                continue
+            fi
+            if ! inactive_state="$(timer_is_active "$plugin")"; then
+                printf "%b\n" "${RED}[$plugin] Error: Could not verify the inactive timer after reload.${NC}"
+                FAILED=1
+            elif ! state_is_stopped "$inactive_state"; then
+                printf "%b\n" "${RED}[$plugin] Error: Timer unexpectedly became '$inactive_state'.${NC}"
+                FAILED=1
+            fi
+        done
+    else
+        printf "%b\n" "${RED}Error: Failed to reload the systemd user manager; updated files remain on disk.${NC}"
+        FAILED=1
+    fi
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+    [ -z "$CHANGED" ] || \
+        printf "%b\n" "\n${YELLOW}Timer files written but not fully activated:${NC}${CYAN}$(printf ' %s' $CHANGED)${NC}"
+    printf "%b\n" "${RED}One or more timer schedules could not be applied.${NC}\n"
+    exit 1
+fi
+
+if [ -n "$CHANGED" ]; then
     printf "%b\n" "\n${GREEN}Done. Updated:${NC}${CYAN}$(printf ' %s' $CHANGED)${NC}\n"
 else
     printf "%b\n" "\n${GREEN}All timers already match their configured intervals. Nothing changed.${NC}\n"

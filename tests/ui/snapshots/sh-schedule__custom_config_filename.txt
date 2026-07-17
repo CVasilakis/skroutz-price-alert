@@ -1,0 +1,7 @@
+# border: green
+# exit: 0
+
+[future_store] No config file found; leaving its timer unchanged.
+Create it by copying config/custom-feed.json.example to config/custom-feed.json.
+
+All timers already match their configured intervals. Nothing changed.

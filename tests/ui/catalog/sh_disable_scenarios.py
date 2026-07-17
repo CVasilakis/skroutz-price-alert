@@ -14,6 +14,7 @@ from ui.catalog.shell_inputs import (
     WORLD_HEALTHY,
     WORLD_INSTALLED,
     WORLD_ORPHAN,
+    ShellWorld,
     shell_case,
 )
 
@@ -45,6 +46,19 @@ _case("already_disabled", "The timer and service are already fully stopped.",
 
 _case("disable_success", "An enabled and active timer is stopped and disabled.",
       world=WORLD_HEALTHY)
+
+_case("disable_fails", "A rejected disable request is reported and returns nonzero.",
+      world=replace(WORLD_HEALTHY, systemctl_fail=("disable",)), tags=("error",))
+
+_case("disable_noop_detected", "A no-op disable cannot satisfy the enabled-state postcondition.",
+      world=replace(WORLD_HEALTHY, systemctl_noop=("disable",)), tags=("error",))
+
+_case("query_fails", "A failed state query is not mistaken for an already-disabled pair.",
+      world=replace(WORLD_HEALTHY, systemctl_fail=("show",)), tags=("error",))
+
+_case("service_only_pair", "A running service remains manageable when its timer file is missing.",
+      world=ShellWorld(plugins=(), installed_services=("ghost",),
+                       activating_services=("ghost",)), tags=("orphan",))
 
 _case("orphan_by_name", "An orphan's still-armed timer is disabled by explicit --<target>.",
       "--ghost",

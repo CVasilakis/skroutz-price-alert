@@ -91,7 +91,7 @@ for target in ScraperRegistry.registered_targets():
 PY
 }
 
-# list_plugin_configs: print "<plugin> <config_filename>" for every registered
+# list_plugin_configs: print "<plugin><TAB><config_filename>" for every registered
 # plugin (one pair per line), reusing plugin.get_config_filename(). Same venv
 # requirement as list_plugins.
 list_plugin_configs() {
@@ -99,11 +99,11 @@ list_plugin_configs() {
     PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
 from core.scrapers.registry import ScraperRegistry
 for target in ScraperRegistry.registered_targets():
-    print(target, ScraperRegistry.get_plugin(target).get_config_filename())
+    print(f"{target}\t{ScraperRegistry.get_plugin(target).get_config_filename()}")
 PY
 }
 
-# list_plugin_requirements: print "<plugin> <abs_requirements_path>" for every
+# list_plugin_requirements: print "<plugin><TAB><abs_requirements_path>" for every
 # registered plugin that ships its own requirements.txt (one pair per line),
 # reusing plugin.get_requirements_path(). Plugins with no extra dependencies are
 # omitted. The path is absolute, so it installs regardless of cwd. Same venv
@@ -115,7 +115,7 @@ from core.scrapers.registry import ScraperRegistry
 for target in ScraperRegistry.registered_targets():
     path = ScraperRegistry.get_plugin(target).get_requirements_path()
     if path:
-        print(target, path)
+        print(f"{target}\t{path}")
 PY
 }
 
@@ -211,6 +211,42 @@ list_installed_plugins() {
     done
 }
 
+# list_installed_targets: print the de-duplicated union of installed timer and
+# service units. Teardown commands use this so a partially-installed pair (for
+# example, a service whose timer file is gone) remains manageable.
+list_installed_targets() {
+    _lit_seen=" "
+    for _lit_target in $(list_installed_plugins timer) $(list_installed_plugins service); do
+        case "$_lit_seen" in
+            *" $_lit_target "*) ;;
+            *)
+                _lit_seen="$_lit_seen$_lit_target "
+                printf '%s\n' "$_lit_target"
+                ;;
+        esac
+    done
+}
+
+# plugin_stream_value <plugin> <tab-separated-stream>: print the value paired
+# with a plugin. Returns 1 when the stream has no row for that plugin.
+plugin_stream_value() {
+    _psv_plugin="$1"
+    _psv_all="$2"
+    _psv_tab="$(printf '\t')"
+    _psv_old_ifs="$IFS"
+    IFS='
+'
+    for _psv_line in $_psv_all; do
+        if [ "${_psv_line%%"$_psv_tab"*}" = "$_psv_plugin" ]; then
+            IFS="$_psv_old_ifs"
+            printf '%s' "${_psv_line#*"$_psv_tab"}"
+            return 0
+        fi
+    done
+    IFS="$_psv_old_ifs"
+    return 1
+}
+
 # known_targets <suffix>: print every plugin a teardown command may act on - the
 # union of registered plugins and installed "<plugin>-scraper.<suffix>" units -
 # one per line, de-duplicated, preserving first-seen order. It is the validation
@@ -229,6 +265,21 @@ known_targets() {
     done
 }
 
+# known_targets_all: registered plugins plus every installed unit half. Commands
+# that operate on both timer and service units use this broader validation/help set.
+known_targets_all() {
+    _kta_seen=" "
+    for _kta_target in $(list_plugins) $(list_installed_targets); do
+        case "$_kta_seen" in
+            *" $_kta_target "*) ;;
+            *)
+                _kta_seen="$_kta_seen$_kta_target "
+                printf '%s\n' "$_kta_target"
+                ;;
+        esac
+    done
+}
+
 # is_known_target <plugin> <suffix>: succeed if <plugin> is a registered plugin
 # OR has an installed "<plugin>-scraper.<suffix>" unit. The membership test for
 # the teardown commands (disable/stop/uninstall): they only need a unit to act
@@ -238,49 +289,216 @@ is_known_target() {
     plugin_in_list "$1" $(known_targets "$2")
 }
 
+is_known_target_any() {
+    plugin_in_list "$1" $(known_targets_all)
+}
+
 # ------------------------------------------------------------------------------
 # SYSTEMD UNIT STATE QUERIES
 # ------------------------------------------------------------------------------
 
-# timer_is_enabled <plugin> / timer_is_active <plugin>: echo the systemctl verdict
-# ("enabled"/"active"/"" etc.) for that plugin's timer.
+# systemd_property <unit> <property>: print one property from `systemctl show`.
+# A failed bus/query or malformed response is an error, never an empty state. Using
+# shell parameter expansion rather than a pipeline preserves systemctl's status in
+# strictly POSIX sh (there is intentionally no non-POSIX `pipefail`).
+systemd_property() {
+    _sdp_unit="$1"
+    _sdp_property="$2"
+    if ! _sdp_output="$(systemctl --user show -p "$_sdp_property" "$_sdp_unit")"; then
+        printf '%s\n' "Error: Could not query $_sdp_property for $_sdp_unit." >&2
+        return 1
+    fi
+    case "$_sdp_output" in
+        "$_sdp_property="*) printf '%s' "${_sdp_output#*=}" ;;
+        *)
+            printf '%s\n' "Error: systemctl returned an invalid $_sdp_property response for $_sdp_unit." >&2
+            return 1
+            ;;
+    esac
+}
+
+# State predicates used by both actions and their callers.
+state_is_stopped() {
+    case "$1" in inactive|failed) return 0 ;; *) return 1 ;; esac
+}
+
+timer_state_is_disabled() {
+    case "$1" in
+        disabled|masked|masked-runtime|static|indirect|generated|transient|linked|linked-runtime|alias)
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+# plugin_is_disabled <plugin>: 0 if the pair already meets disable_one's
+# postcondition, 1 if work is required, 2 if the state could not be queried.
+plugin_is_disabled() {
+    _pid_plugin="$1"
+    _pid_timer="$(unit_name "$_pid_plugin" timer)"
+    _pid_service="$(unit_name "$_pid_plugin" service)"
+    if ! _pid_timer_load="$(systemd_property "$_pid_timer" LoadState)" || \
+       ! _pid_service_load="$(systemd_property "$_pid_service" LoadState)"; then
+        return 2
+    fi
+
+    if [ "$_pid_timer_load" != "not-found" ]; then
+        if ! _pid_timer_active="$(systemd_property "$_pid_timer" ActiveState)" || \
+           ! _pid_timer_enabled="$(systemd_property "$_pid_timer" UnitFileState)"; then
+            return 2
+        fi
+        state_is_stopped "$_pid_timer_active" && \
+            timer_state_is_disabled "$_pid_timer_enabled" || return 1
+    fi
+    if [ "$_pid_service_load" != "not-found" ]; then
+        if ! _pid_service_active="$(systemd_property "$_pid_service" ActiveState)"; then
+            return 2
+        fi
+        state_is_stopped "$_pid_service_active" || return 1
+    fi
+    return 0
+}
+
+# Query the state properties the framework owns. LoadState=not-found is returned
+# as a normal value; callers decide whether absence is benign for their operation.
 timer_is_enabled() {
-    systemctl --user is-enabled "$(unit_name "$1" timer)" 2>/dev/null || true
+    systemd_property "$(unit_name "$1" timer)" UnitFileState
 }
 timer_is_active() {
-    systemctl --user is-active "$(unit_name "$1" timer)" 2>/dev/null || true
+    systemd_property "$(unit_name "$1" timer)" ActiveState
 }
 
 # service_state <plugin>: echo the ActiveState of that plugin's service
-# (e.g. "active", "activating", "inactive", "").
+# (e.g. "active", "activating", "inactive"). Query errors stay errors.
 service_state() {
-    systemctl --user show -p ActiveState "$(unit_name "$1" service)" 2>/dev/null | cut -d= -f2
+    systemd_property "$(unit_name "$1" service)" ActiveState
 }
 
 # ------------------------------------------------------------------------------
 # SYSTEMD UNIT ACTIONS (per plugin)
 # ------------------------------------------------------------------------------
 
-# enable_one <plugin>: enable + start the plugin's timer. Returns systemctl's code.
+# enable_one <plugin>: enable + start the timer and verify the final state.
 enable_one() {
-    systemctl --user enable --now "$(unit_name "$1" timer)" >/dev/null 2>&1
+    _eo_plugin="$1"
+    _eo_timer="$(unit_name "$_eo_plugin" timer)"
+    if ! systemctl --user enable --now "$_eo_timer" >/dev/null; then
+        printf '%s\n' "Error: Failed to enable and start $_eo_timer." >&2
+        return 1
+    fi
+    if ! _eo_load="$(systemd_property "$_eo_timer" LoadState)" || \
+       ! _eo_enabled="$(systemd_property "$_eo_timer" UnitFileState)" || \
+       ! _eo_active="$(systemd_property "$_eo_timer" ActiveState)"; then
+        return 1
+    fi
+    if [ "$_eo_load" != "loaded" ] || [ "$_eo_enabled" != "enabled" ] || \
+       [ "$_eo_active" != "active" ]; then
+        printf '%s\n' "Error: $_eo_timer did not become loaded, enabled, and active." >&2
+        return 1
+    fi
 }
 
-# stop_one <plugin>: stop the plugin's (oneshot) service, aborting a running scrape.
+# stop_one <plugin>: stop the service and verify it is no longer running. A unit
+# that is genuinely absent is already stopped; query/transport failures are fatal.
 stop_one() {
-    systemctl --user stop "$(unit_name "$1" service)" 2>/dev/null || true
+    _so_plugin="$1"
+    _so_service="$(unit_name "$_so_plugin" service)"
+    if ! _so_load="$(systemd_property "$_so_service" LoadState)"; then
+        return 1
+    fi
+    [ "$_so_load" = "not-found" ] && return 0
+    if ! systemctl --user stop "$_so_service" >/dev/null; then
+        printf '%s\n' "Error: Failed to stop $_so_service." >&2
+        return 1
+    fi
+    if ! _so_state="$(systemd_property "$_so_service" ActiveState)"; then
+        return 1
+    fi
+    if ! state_is_stopped "$_so_state"; then
+        printf '%s\n' "Error: $_so_service is still $_so_state after the stop request." >&2
+        return 1
+    fi
 }
 
-# disable_one <plugin>: stop + disable the plugin's timer and service and clear any
-# failed state. Mirrors the original single-plugin disable sequence.
+# disable_one <plugin>: make the timer/service pair unable to run, then verify the
+# postcondition. All independent cleanup actions are attempted so one failure does
+# not prevent another unit from being made safe; any failure makes the result fail.
 disable_one() {
-    _tmr="$(unit_name "$1" timer)"
-    _svc="$(unit_name "$1" service)"
-    systemctl --user stop    "$_tmr" 2>/dev/null || true
-    systemctl --user disable "$_tmr" 2>/dev/null || true
-    systemctl --user stop    "$_svc" 2>/dev/null || true
-    systemctl --user disable "$_svc" 2>/dev/null || true
-    systemctl --user reset-failed "$_svc" "$_tmr" 2>/dev/null || true
+    _do_plugin="$1"
+    _do_timer="$(unit_name "$_do_plugin" timer)"
+    _do_service="$(unit_name "$_do_plugin" service)"
+    _do_failed=0
+
+    if ! _do_timer_load="$(systemd_property "$_do_timer" LoadState)"; then
+        _do_failed=1
+        _do_timer_load="query-failed"
+    fi
+    if ! _do_service_load="$(systemd_property "$_do_service" LoadState)"; then
+        _do_failed=1
+        _do_service_load="query-failed"
+    fi
+
+    if [ "$_do_timer_load" != "not-found" ] && [ "$_do_timer_load" != "query-failed" ]; then
+        if ! systemctl --user stop "$_do_timer" >/dev/null; then
+            printf '%s\n' "Error: Failed to stop $_do_timer." >&2
+            _do_failed=1
+        fi
+        if ! systemctl --user disable "$_do_timer" >/dev/null; then
+            printf '%s\n' "Error: Failed to disable $_do_timer." >&2
+            _do_failed=1
+        fi
+        if ! systemctl --user reset-failed "$_do_timer" >/dev/null; then
+            printf '%s\n' "Error: Failed to clear the failed state of $_do_timer." >&2
+            _do_failed=1
+        fi
+    fi
+    if [ "$_do_service_load" != "not-found" ] && [ "$_do_service_load" != "query-failed" ]; then
+        if ! systemctl --user stop "$_do_service" >/dev/null; then
+            printf '%s\n' "Error: Failed to stop $_do_service." >&2
+            _do_failed=1
+        fi
+        if ! systemctl --user reset-failed "$_do_service" >/dev/null; then
+            printf '%s\n' "Error: Failed to clear the failed state of $_do_service." >&2
+            _do_failed=1
+        fi
+    fi
+
+    if [ "$_do_timer_load" != "not-found" ] && [ "$_do_timer_load" != "query-failed" ]; then
+        if ! _do_timer_active="$(systemd_property "$_do_timer" ActiveState)" || \
+           ! _do_timer_enabled="$(systemd_property "$_do_timer" UnitFileState)"; then
+            _do_failed=1
+        elif ! state_is_stopped "$_do_timer_active" || \
+             ! timer_state_is_disabled "$_do_timer_enabled"; then
+            printf '%s\n' "Error: $_do_timer is not fully stopped and disabled." >&2
+            _do_failed=1
+        fi
+    fi
+    if [ "$_do_service_load" != "not-found" ] && [ "$_do_service_load" != "query-failed" ]; then
+        if ! _do_service_active="$(systemd_property "$_do_service" ActiveState)"; then
+            _do_failed=1
+        elif ! state_is_stopped "$_do_service_active"; then
+            printf '%s\n' "Error: $_do_service is still $_do_service_active." >&2
+            _do_failed=1
+        fi
+    fi
+    [ "$_do_failed" -eq 0 ]
+}
+
+# restart_timer_one <plugin>: re-arm a timer known to have been active before a
+# unit-file update, then verify it returned to the active state.
+restart_timer_one() {
+    _rto_timer="$(unit_name "$1" timer)"
+    if ! systemctl --user restart "$_rto_timer" >/dev/null; then
+        printf '%s\n' "Error: Failed to restart $_rto_timer." >&2
+        return 1
+    fi
+    if ! _rto_state="$(systemd_property "$_rto_timer" ActiveState)"; then
+        return 1
+    fi
+    if [ "$_rto_state" != "active" ]; then
+        printf '%s\n' "Error: $_rto_timer is $_rto_state after restart." >&2
+        return 1
+    fi
 }
 
 # ------------------------------------------------------------------------------
@@ -322,7 +540,67 @@ $_ptb_directive"
     printf '%s' "$_ptb_block"
 }
 
-# write_plugin_units <plugin> <timer_block>: (over)write the plugin's
+# render_plugin_service <plugin> <path> / render_plugin_timer <plugin> <block> <path>:
+# render complete unit files and explicitly preserve redirection failures even when
+# the caller invokes these functions from an `if` condition.
+render_plugin_service() {
+    _rps_plugin="$1"
+    _rps_path="$2"
+    if ! cat > "$_rps_path" << EOF
+[Unit]
+Description=Scrooge Alert notification task for $_rps_plugin
+
+[Service]
+Type=oneshot
+WorkingDirectory=$BASE_DIR
+ExecStart="$BASE_DIR/scripts/run.sh" --quiet --$_rps_plugin
+EOF
+    then
+        return 1
+    fi
+}
+
+render_plugin_timer() {
+    _rpt_plugin="$1"
+    _rpt_block="$2"
+    _rpt_path="$3"
+    if ! cat > "$_rpt_path" << EOF
+[Unit]
+Description=Run $_rpt_plugin scraper
+
+[Timer]
+$_rpt_block
+RandomizedDelaySec=180s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    then
+        return 1
+    fi
+}
+
+# write_plugin_timer_unit <plugin> <timer_block>: atomically replace only the timer
+# unit. schedule.sh uses this so changing cadence never rewrites the service half.
+write_plugin_timer_unit() {
+    _wpt_plugin="$1"
+    _wpt_block="$2"
+    _wpt_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpt_plugin" timer)"
+    _wpt_tmp="$_wpt_file.tmp.$$"
+    [ ! -e "$_wpt_tmp" ] || return 1
+    if ! render_plugin_timer "$_wpt_plugin" "$_wpt_block" "$_wpt_tmp"; then
+        rm -f "$_wpt_tmp"
+        return 1
+    fi
+    if ! mv "$_wpt_tmp" "$_wpt_file"; then
+        rm -f "$_wpt_tmp"
+        return 1
+    fi
+    [ -f "$_wpt_file" ] && [ "$(read_timer_block "$_wpt_plugin")" = "$_wpt_block" ]
+}
+
+# write_plugin_units <plugin> <timer_block>: transactionally replace the plugin's
 # <plugin>-scraper.{service,timer} unit files in SYSTEMD_USER_DIR. <timer_block> is
 # the plugin's [Timer] trigger directives (from plugin_timer_block); the
 # framework-managed RandomizedDelaySec/Persistent are appended identically for every
@@ -334,30 +612,50 @@ write_plugin_units() {
     _wpu_service_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpu_plugin" service)"
     _wpu_timer_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpu_plugin" timer)"
 
-    cat > "$_wpu_service_file" << EOF
-[Unit]
-Description=Scrooge Alert notification task for $_wpu_plugin
+    _wpu_service_tmp="$_wpu_service_file.tmp.$$"
+    _wpu_timer_tmp="$_wpu_timer_file.tmp.$$"
+    _wpu_service_backup="$_wpu_service_file.backup.$$"
+    _wpu_timer_backup="$_wpu_timer_file.backup.$$"
+    _wpu_service_existed=0
+    _wpu_timer_existed=0
 
-[Service]
-Type=oneshot
-WorkingDirectory=$BASE_DIR
-ExecStart="$BASE_DIR/scripts/run.sh" --quiet --$_wpu_plugin
-EOF
-
-    cat > "$_wpu_timer_file" << EOF
-[Unit]
-Description=Run $_wpu_plugin scraper
-
-[Timer]
-$_wpu_block
-RandomizedDelaySec=180s
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    [ -f "$_wpu_service_file" ] && [ -f "$_wpu_timer_file" ]
+    [ ! -e "$_wpu_service_tmp" ] && [ ! -e "$_wpu_timer_tmp" ] && \
+        [ ! -e "$_wpu_service_backup" ] && [ ! -e "$_wpu_timer_backup" ] || return 1
+    if ! render_plugin_service "$_wpu_plugin" "$_wpu_service_tmp" || \
+       ! render_plugin_timer "$_wpu_plugin" "$_wpu_block" "$_wpu_timer_tmp"; then
+        rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp"
+        return 1
+    fi
+    if [ -e "$_wpu_service_file" ]; then
+        _wpu_service_existed=1
+        if ! cp -p "$_wpu_service_file" "$_wpu_service_backup"; then
+            rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp"
+            return 1
+        fi
+    fi
+    if [ -e "$_wpu_timer_file" ]; then
+        _wpu_timer_existed=1
+        if ! cp -p "$_wpu_timer_file" "$_wpu_timer_backup"; then
+            rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp" "$_wpu_service_backup"
+            return 1
+        fi
+    fi
+    if ! mv "$_wpu_service_tmp" "$_wpu_service_file"; then
+        rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp" "$_wpu_service_backup" "$_wpu_timer_backup"
+        return 1
+    fi
+    if ! mv "$_wpu_timer_tmp" "$_wpu_timer_file"; then
+        if [ "$_wpu_service_existed" -eq 1 ]; then
+            mv "$_wpu_service_backup" "$_wpu_service_file" || return 1
+        else
+            rm -f "$_wpu_service_file"
+        fi
+        rm -f "$_wpu_timer_tmp" "$_wpu_service_backup" "$_wpu_timer_backup"
+        return 1
+    fi
+    rm -f "$_wpu_service_backup" "$_wpu_timer_backup"
+    [ -f "$_wpu_service_file" ] && [ -f "$_wpu_timer_file" ] && \
+        [ "$(read_timer_block "$_wpu_plugin")" = "$_wpu_block" ]
 }
 
 # read_timer_block <plugin>: print the installed <plugin>-scraper.timer's [Timer]

@@ -9,6 +9,7 @@ plus the plain-text panel) against a committed file in ``snapshots/``. Set
 
 import os
 import unittest
+from unittest import mock
 
 from ui.catalog import ALL_SCENARIOS
 from ui.catalog._base import Surface
@@ -51,6 +52,24 @@ class TestNoTextOutsidePanels(unittest.TestCase):
                     stray, [],
                     f"'{sc.snapshot_key}' printed text outside a panel: {stray}",
                 )
+
+
+class TestSnapshotRenderingDeterminism(unittest.TestCase):
+    """Ambient terminal preferences must not change committed snapshot text."""
+
+    def test_no_color_environment_does_not_change_progress_bar_glyphs(self):
+        scenario = next(
+            sc for sc in ALL_SCENARIOS if sc.snapshot_key == "run__sleeping_pacing"
+        )
+
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NO_COLOR", None)
+            normal = snapshot_body(scenario.build())
+
+        with mock.patch.dict(os.environ, {"NO_COLOR": "1"}):
+            no_color_host = snapshot_body(scenario.build())
+
+        self.assertEqual(no_color_host, normal)
 
 
 class TestUISnapshots(unittest.TestCase):

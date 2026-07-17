@@ -99,14 +99,32 @@ if [ -n "$SELECTED" ]; then
         fi
     done
 
+    TEARDOWN_FAILED=0
+    for sel in $SELECTED; do
+        printf "%b\n" "\n${CYAN}Stopping and disabling '$sel'...${NC}"
+        if ! disable_one "$sel"; then
+            printf "%b\n" "${RED}Error: '$sel' could not be made safe for removal.${NC}"
+            TEARDOWN_FAILED=1
+        fi
+    done
+    if [ "$TEARDOWN_FAILED" -ne 0 ]; then
+        printf "%b\n" "${RED}No unit files were removed.${NC}\n"
+        exit 1
+    fi
+
     for sel in $SELECTED; do
         printf "%b\n" "\n${CYAN}Removing systemd units for '$sel'...${NC}"
-        disable_one "$sel"
-        rm -f "$SYSTEMD_USER_DIR/$(unit_name "$sel" timer)"
-        rm -f "$SYSTEMD_USER_DIR/$(unit_name "$sel" service)"
+        if ! rm -f "$SYSTEMD_USER_DIR/$(unit_name "$sel" timer)" \
+                    "$SYSTEMD_USER_DIR/$(unit_name "$sel" service)"; then
+            printf "%b\n" "${RED}Error: Failed to remove '$sel' unit files.${NC}\n"
+            exit 1
+        fi
         printf "%b\n" "${GREEN}Removed '$sel' scraper units.${NC}"
     done
-    systemctl --user daemon-reload
+    if ! systemctl --user daemon-reload; then
+        printf "%b\n" "${RED}Error: Failed to reload the systemd user manager.${NC}\n"
+        exit 1
+    fi
 
     printf "%b\n" "The virtual environment and any other targets were left intact.\n"
     exit 0
@@ -121,18 +139,32 @@ fi
 
 printf "%b\n" "\n${CYAN}Disabling and removing Systemd Timer(s) and Service(s)...${NC}"
 
-for plugin in $(list_installed_plugins timer); do
-    disable_one "$plugin"
-    rm -f "$SYSTEMD_USER_DIR/$(unit_name "$plugin" timer)"
+INSTALLED_TARGETS="$(list_installed_targets)"
+TEARDOWN_FAILED=0
+for plugin in $INSTALLED_TARGETS; do
+    if ! disable_one "$plugin"; then
+        printf "%b\n" "${RED}Error: '$plugin' could not be made safe for removal.${NC}"
+        TEARDOWN_FAILED=1
+    fi
 done
+if [ "$TEARDOWN_FAILED" -ne 0 ]; then
+    printf "%b\n" "${RED}No unit files or Python environment were removed.${NC}\n"
+    exit 1
+fi
 
-for plugin in $(list_installed_plugins service); do
-    systemctl --user stop "$(unit_name "$plugin" service)" 2>/dev/null || true
-    rm -f "$SYSTEMD_USER_DIR/$(unit_name "$plugin" service)"
+for plugin in $INSTALLED_TARGETS; do
+    if ! rm -f "$SYSTEMD_USER_DIR/$(unit_name "$plugin" timer)" \
+                "$SYSTEMD_USER_DIR/$(unit_name "$plugin" service)"; then
+        printf "%b\n" "${RED}Error: Failed to remove '$plugin' unit files.${NC}\n"
+        exit 1
+    fi
 done
 
 # Reload systemd daemon to apply changes
-systemctl --user daemon-reload
+if ! systemctl --user daemon-reload; then
+    printf "%b\n" "${RED}Error: Failed to reload the systemd user manager.${NC}\n"
+    exit 1
+fi
 
 printf "%b\n" "${GREEN}Systemd configurations removed successfully.${NC}"
 

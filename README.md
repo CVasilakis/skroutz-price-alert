@@ -405,7 +405,7 @@ Re-enables and starts the background schedule (systemd timer) for the installed 
 | `--<target>` | Enable only the specified target's scraper. You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is enabled. |
 
 #### Set Execution Interval
-Applies each scraper's configured `execution_interval` (from the `settings` block of its `config/<target>.json`) to the installed systemd timer. Run it whenever you change an interval:
+Applies each scraper's configured `execution_interval` (from the `settings` block of the config filename declared by that plugin) to the installed systemd timer. Run it whenever you change an interval:
 
 ```
 ./scripts/schedule.sh [-h] [--<target> ...]

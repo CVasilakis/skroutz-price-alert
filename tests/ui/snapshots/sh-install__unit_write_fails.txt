@@ -5,8 +5,6 @@ Updating python packages in existing virtual environment...
 Python virtual environment successfully updated.
 
 Setting up Systemd timer(s)...
-<BASE_DIR>/install.sh: <line>: cannot create <BASE_DIR>/xdg/systemd/user/skroutz-scraper.service:
-Permission denied
-<BASE_DIR>/install.sh: <line>: cannot create <BASE_DIR>/xdg/systemd/user/skroutz-scraper.timer:
-Permission denied
+<BASE_DIR>/install.sh: <line>: cannot create
+<BASE_DIR>/xdg/systemd/user/skroutz-scraper.service.tmp.<PID>: Permission denied
 Error: Failed to create systemd configuration files for 'skroutz'.

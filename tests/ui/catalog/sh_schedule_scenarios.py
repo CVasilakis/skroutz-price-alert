@@ -65,6 +65,13 @@ _case("nothing_installed", "No installed scrapers at all.",
 _case("no_config", "The scraper's config file is missing - timer left unchanged.",
       world=replace(WORLD_INSTALLED, interval_status={"skroutz": "nocfg"}))
 
+_case("custom_config_filename", "Missing-config guidance uses descriptor metadata, not the target name.",
+      world=ShellWorld(
+          plugins=("future_store",), configs={"future_store": "custom-feed.json"},
+          installed_timers=("future_store",), installed_services=("future_store",),
+          interval_status={"future_store": "nocfg"},
+      ))
+
 _case("invalid_interval", "The config sets an unsupported interval - timer left unchanged.",
       world=replace(WORLD_INSTALLED, interval_status={"skroutz": "invalid"}))
 
@@ -77,8 +84,13 @@ _case("already_matches", "The installed timer already matches the configured int
 _case("updated", "The cadence changed - the timer unit is rewritten and re-armed.",
       world=_CHANGED)
 
-# write_plugin_units verifies the files EXIST after writing, so a failed overwrite
-# of a seeded pair goes unnoticed - the failure needs a unit that must be *created*
-# (here: an installed timer whose service half is missing) in an unwritable dir.
+_case("restart_fails", "An active changed timer cannot be re-armed; the desired file is retained.",
+      world=replace(_CHANGED, enabled_timers=("skroutz",), active_timers=("skroutz",),
+                    systemctl_fail=("restart",)), tags=("error",))
+
+_case("daemon_reload_fails", "The desired file remains on disk when daemon-reload fails.",
+      world=replace(_CHANGED, systemctl_fail=("daemon-reload",)), tags=("error",))
+
+# Atomic timer replacement must fail cleanly when its staging file cannot be created.
 _case("write_fails", "The systemd user dir is unwritable while applying a new cadence.",
       world=replace(_CHANGED, installed_services=(), unit_dir_readonly=True), tags=("error",))

@@ -1,0 +1,8 @@
+# border: red
+# exit: 1
+
+Error: Could not query UnitFileState for skroutz-scraper.timer.
+
+[skroutz] Error: Could not determine the timer state.
+
+One or more background schedules could not be enabled.

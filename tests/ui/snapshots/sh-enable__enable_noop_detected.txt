@@ -2,7 +2,7 @@
 # exit: 1
 
 [skroutz] Enabling and starting background schedule (timer)...
-Error: Failed to enable and start skroutz-scraper.timer.
+Error: skroutz-scraper.timer did not become loaded, enabled, and active.
 [skroutz] Error: Failed to enable the timer!
 Try running ./install.sh to fix the issue.
 

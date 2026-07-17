@@ -1,0 +1,8 @@
+# border: red
+# exit: 1
+
+[skroutz] Stopping active background execution...
+Error: skroutz-scraper.service is still activating after the stop request.
+[skroutz] Error: Active background execution could not be stopped.
+
+One or more scraper services could not be stopped.

@@ -1,6 +1,5 @@
-# border: green
-# exit: 0
+# border: red
+# exit: 1
 
 [skroutz] Declares no [Timer] directives; skipping.
-
-All timers already match their configured intervals. Nothing changed.
+One or more timer schedules could not be applied.

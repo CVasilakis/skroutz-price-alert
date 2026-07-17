@@ -7,6 +7,8 @@ gallery uses the same :func:`paint` to render with full color to a live console.
 Determinism notes:
 * The console width is fixed and >= the 75-char panel width, so footnote wrapping inside
   the panel is reproduced exactly while the surrounding width never shifts.
+* Color is explicitly enabled even when the developer exports ``NO_COLOR``; Rich's
+  progress bar otherwise changes its *text glyphs*, not merely its ANSI styling.
 * ``get_time`` is pinned so the scraping-row ``Spinner`` renders a stable first frame.
 * Trailing whitespace is stripped per line so console-width padding never leaks into the
   golden files.
@@ -31,6 +33,7 @@ def make_recording_console() -> Console:
         file=io.StringIO(),  # capture-only: record without echoing to stdout
         force_terminal=True,
         color_system="truecolor",
+        no_color=False,
         width=CONSOLE_WIDTH,
     )
     # Pin the clock so the scraping Spinner ("dots") renders a deterministic frame.

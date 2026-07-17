@@ -67,6 +67,25 @@ class TestRegisterValidationGate(unittest.TestCase):
                 self.assertIn("reserved", str(ctx.exception))
                 self.assertNotIn(name, ScraperRegistry._plugins)
 
+    def test_unsafe_config_filenames_are_rejected(self):
+        for filename in ("../escape.json", "nested/store.json", "two words.json",
+                         "store.txt", "store.json\nother"):
+            with self.subTest(filename=filename):
+                with self.assertRaises(PluginDiscoveryError) as ctx:
+                    ScraperRegistry.register(
+                        _fake_plugin(name="badconfig", config=filename)
+                    )
+                self.assertIn("safe JSON basename", str(ctx.exception))
+
+    def test_custom_safe_config_filename_is_accepted(self):
+        ScraperRegistry.register(
+            _fake_plugin(config="custom-feed.v2.json")
+        )
+        self.assertEqual(
+            ScraperRegistry.get_plugin("fakestore").get_config_filename(),
+            "custom-feed.v2.json",
+        )
+
     def test_equal_domain_conflict_is_rejected(self):
         ScraperRegistry.register(_fake_plugin(name="first"))
         with self.assertRaises(PluginDiscoveryError) as ctx:
@@ -94,6 +113,21 @@ class TestRegisterValidationGate(unittest.TestCase):
                 _fake_plugin(directives={"OnCalendar": "*-*-* 03:00:00"})
             )
         self.assertIn("canonical cadences", str(ctx.exception))
+
+    def test_unsafe_timer_directives_are_rejected(self):
+        invalid = (
+            {"OnCalendar": "hourly", "Bad-Key": "x"},
+            {"OnCalendar": "hourly", "AccuracySec": "1m\nPersistent=false"},
+            {"OnCalendar": "hourly", "AccuracySec": 60},
+            [("OnCalendar", "hourly")],
+        )
+        for directives in invalid:
+            with self.subTest(directives=directives):
+                with self.assertRaises(PluginDiscoveryError) as ctx:
+                    ScraperRegistry.register(
+                        _fake_plugin(name="badtimer", directives=directives)
+                    )
+                self.assertIn("string-to-string mapping", str(ctx.exception))
 
     def test_rejected_plugin_is_not_registered(self):
         with self.assertRaises(PluginDiscoveryError):

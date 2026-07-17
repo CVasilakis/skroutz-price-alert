@@ -85,6 +85,13 @@ class TestNamingHelpers(unittest.TestCase):
     def test_plugin_in_list_with_empty_list(self):
         self.assertEqual(run_sh('plugin_in_list z').returncode, 1)
 
+    def test_plugin_stream_value_preserves_spaces(self):
+        result = run_sh(
+            'rows="$(printf \'foo\\tcustom feed.json\\nbar\\tother.json\')"\n'
+            'plugin_stream_value foo "$rows"'
+        )
+        self.assertEqual(result.stdout, "custom feed.json")
+
 
 class TestPluginTimerBlock(unittest.TestCase):
     """The tab-separated "<plugin>\\t<Key>=<Value>" stream -> per-plugin [Timer] block."""
@@ -160,6 +167,38 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         read = run_sh('read_timer_block ghost', xdg_config_home=self.tmp)
         self.assertEqual((read.returncode, read.stdout), (0, ""))
 
+    def test_failed_render_does_not_masquerade_as_success_when_old_files_exist(self):
+        self.assertEqual(self._write("foo", "OnCalendar=hourly").returncode, 0)
+        service = self.unit_dir / "foo-scraper.service"
+        timer = self.unit_dir / "foo-scraper.timer"
+        old_service = service.read_text()
+        old_timer = timer.read_text()
+
+        failed = run_sh(
+            'render_plugin_service() { return 1; }\n'
+            'write_plugin_units foo "OnCalendar=daily"',
+            xdg_config_home=self.tmp,
+        )
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(service.read_text(), old_service)
+        self.assertEqual(timer.read_text(), old_timer)
+
+    def test_timer_only_update_does_not_rewrite_service(self):
+        self.assertEqual(self._write("foo", "OnCalendar=hourly").returncode, 0)
+        service = self.unit_dir / "foo-scraper.service"
+        service.write_text(service.read_text() + "# preserved\n")
+
+        updated = run_sh(
+            'write_plugin_timer_unit foo "OnCalendar=daily"',
+            xdg_config_home=self.tmp,
+        )
+        self.assertEqual(updated.returncode, 0)
+        self.assertTrue(service.read_text().endswith("# preserved\n"))
+        self.assertEqual(
+            run_sh('read_timer_block foo', xdg_config_home=self.tmp).stdout,
+            "OnCalendar=daily",
+        )
+
 
 class TestKnownTargets(unittest.TestCase):
     """The teardown validation set: registered ∪ installed, de-duplicated."""
@@ -182,6 +221,16 @@ class TestKnownTargets(unittest.TestCase):
 
     def test_typo_is_rejected(self):
         self.assertEqual(run_sh(self.STUBS + 'is_known_target skrutz timer').returncode, 1)
+
+    def test_installed_target_union_includes_service_only_unit(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        unit_dir = tmp / "systemd" / "user"
+        unit_dir.mkdir(parents=True)
+        (unit_dir / "timeronly-scraper.timer").touch()
+        (unit_dir / "serviceonly-scraper.service").touch()
+        result = run_sh('list_installed_targets', xdg_config_home=tmp)
+        self.assertEqual(result.stdout.split(), ["timeronly", "serviceonly"])
 
 
 class TestRegistryDiagnose(unittest.TestCase):
@@ -254,7 +303,7 @@ class TestRealRegistryBridge(unittest.TestCase):
 
     def test_list_plugin_configs_pairs_names_with_filenames(self):
         result = run_sh('list_plugin_configs')
-        pairs = dict(line.split(" ", 1) for line in result.stdout.splitlines())
+        pairs = dict(line.split("\t", 1) for line in result.stdout.splitlines())
         self.assertEqual(pairs.get("skroutz"), "skroutz.json")
 
     def test_list_plugin_timer_directives_feeds_plugin_timer_block(self):

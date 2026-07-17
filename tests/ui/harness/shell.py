@@ -58,7 +58,7 @@ _SCRIPT_FILES = (
 # sandbox-only, so these symlinks plus the shims are the entire command universe a
 # script can reach — the host's genuine systemctl/python3 (or any unshimmed
 # external) can never leak in.
-_REAL_TOOLS = ("dirname", "cut", "cat", "chmod", "mkdir", "rm", "cp", "id")
+_REAL_TOOLS = ("dirname", "cut", "cat", "chmod", "mkdir", "rm", "cp", "mv", "id")
 
 
 @dataclass(frozen=True)
@@ -87,12 +87,14 @@ class ShellWorld:
         installed_blocks: plugin -> the on-disk timer's [Timer] trigger block;
             default OnCalendar=hourly (i.e. matching the default resolved cadence).
         unit_dir_readonly: Make SYSTEMD_USER_DIR and the seeded unit files
-            unwritable, so write_plugin_units fails on create and overwrite alike.
+            unwritable, so atomic unit staging fails.
 
     systemctl / loginctl behavior:
         enabled_timers / active_timers: Plugins whose timer reports enabled / active.
         active_services / activating_services: Plugins whose service ActiveState.
         systemctl_fail: Verbs that exit 1 (e.g. ("enable",)).
+        systemctl_noop: Mutating verbs that return success without changing state,
+            exercising production postcondition checks.
         linger: The Linger= answer ("yes"/"no"); linger_enable_fails: enable-linger fails.
 
     git (update.sh): git_branch, git_dirty, git_fail (("checkout"|"fetch"|"reset", ...)).
@@ -127,6 +129,7 @@ class ShellWorld:
     active_services: tuple[str, ...] = ()
     activating_services: tuple[str, ...] = ()
     systemctl_fail: tuple[str, ...] = ()
+    systemctl_noop: tuple[str, ...] = ()
     linger: str = "yes"
     linger_enable_fails: bool = False
 
@@ -145,8 +148,8 @@ class ShellWorld:
 # ------------------------------------------------------------------------------
 
 _SYSTEMCTL_SHIM = """#!/bin/sh
-# systemctl stand-in: state queries answered from FAKE_* membership lists,
-# mutating verbs silent (failable via FAKE_SYSTEMCTL_FAIL).
+# Stateful systemctl stand-in. Unit files live in the sandbox's real user-unit
+# directory; mutable enabled/active markers live under FAKE_SYSTEMD_STATE_DIR.
 [ "${1:-}" = "--user" ] && shift
 verb="${1:-}"
 [ $# -gt 0 ] && shift
@@ -157,11 +160,8 @@ stem() {
     _u="${_u%.service}"
     printf '%s' "${_u%-scraper}"
 }
-in_list() {
-    _n="$1"
-    shift
-    for _i in "$@"; do [ "$_i" = "$_n" ] && return 0; done
-    return 1
+marker() {
+    printf '%s/%s.%s' "$FAKE_SYSTEMD_STATE_DIR" "$1" "$(stem "$2")"
 }
 
 case " ${FAKE_SYSTEMCTL_FAIL:-} " in
@@ -169,29 +169,63 @@ case " ${FAKE_SYSTEMCTL_FAIL:-} " in
 esac
 
 case "$verb" in
-    is-enabled)
-        if in_list "$(stem "$1")" ${FAKE_ENABLED_TIMERS:-}; then
-            echo enabled
-        else
-            echo disabled
-            exit 1
-        fi ;;
-    is-active)
-        if in_list "$(stem "$1")" ${FAKE_ACTIVE_TIMERS:-}; then
-            echo active
-        else
-            echo inactive
-            exit 3
-        fi ;;
     show)
         # invoked as: show -p ActiveState <unit>
-        if in_list "$(stem "$3")" ${FAKE_ACTIVE_SERVICES:-}; then
-            echo "ActiveState=active"
-        elif in_list "$(stem "$3")" ${FAKE_ACTIVATING_SERVICES:-}; then
-            echo "ActiveState=activating"
-        else
-            echo "ActiveState=inactive"
-        fi ;;
+        property="$2"
+        unit="$3"
+        case "$property" in
+            LoadState)
+                if [ -e "$XDG_CONFIG_HOME/systemd/user/$unit" ]; then
+                    echo "LoadState=loaded"
+                else
+                    echo "LoadState=not-found"
+                fi ;;
+            UnitFileState)
+                if [ -e "$(marker enabled "$unit")" ]; then
+                    echo "UnitFileState=enabled"
+                else
+                    echo "UnitFileState=disabled"
+                fi ;;
+            ActiveState)
+                case "$unit" in
+                    *.timer)
+                        if [ -e "$(marker timer_active "$unit")" ]; then
+                            echo "ActiveState=active"
+                        else
+                            echo "ActiveState=inactive"
+                        fi ;;
+                    *.service)
+                        if [ -e "$(marker service_active "$unit")" ]; then
+                            echo "ActiveState=active"
+                        elif [ -e "$(marker service_activating "$unit")" ]; then
+                            echo "ActiveState=activating"
+                        else
+                            echo "ActiveState=inactive"
+                        fi ;;
+                esac ;;
+        esac ;;
+    enable)
+        for unit in "$@"; do :; done
+        case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
+        : > "$(marker enabled "$unit")"
+        : > "$(marker timer_active "$unit")" ;;
+    stop)
+        unit="$1"
+        case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
+        case "$unit" in
+            *.timer) rm -f "$(marker timer_active "$unit")" ;;
+            *.service)
+                rm -f "$(marker service_active "$unit")" \
+                      "$(marker service_activating "$unit")" ;;
+        esac ;;
+    disable)
+        unit="$1"
+        case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
+        rm -f "$(marker enabled "$unit")" ;;
+    restart)
+        unit="$1"
+        case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
+        : > "$(marker timer_active "$unit")" ;;
 esac
 exit 0
 """
@@ -300,7 +334,7 @@ exit 0
 # ------------------------------------------------------------------------------
 
 def _unit_text_timer(plugin: str, block: str) -> str:
-    """A <plugin>-scraper.timer in the exact shape write_plugin_units renders, so
+    """A <plugin>-scraper.timer in the exact shape the shared timer renderer emits, so
     read_timer_block round-trips and schedule.sh's changed/unchanged compare works."""
     return (
         "[Unit]\n"
@@ -396,12 +430,22 @@ def _build_sandbox(world: ShellWorld) -> Path:
     for plugin in world.installed_services:
         (unit_dir / f"{plugin}-scraper.service").write_text(_unit_text_service(plugin, sandbox))
     if world.unit_dir_readonly:
-        # Both are needed: a readonly dir only blocks *creating* units, while
-        # `cat > existing-unit` (write_plugin_units overwriting a seeded file)
-        # needs the file itself to be unwritable.
+        # Keep both the directory and seeded files readonly so every unit-writing
+        # implementation is exercised under a genuinely unwritable destination.
         for unit in unit_dir.iterdir():
             unit.chmod(0o444)
         unit_dir.chmod(0o555)
+
+    state_dir = sandbox / "systemd-state"
+    state_dir.mkdir()
+    for plugin in world.enabled_timers:
+        (state_dir / f"enabled.{plugin}").touch()
+    for plugin in world.active_timers:
+        (state_dir / f"timer_active.{plugin}").touch()
+    for plugin in world.active_services:
+        (state_dir / f"service_active.{plugin}").touch()
+    for plugin in world.activating_services:
+        (state_dir / f"service_activating.{plugin}").touch()
 
     return sandbox
 
@@ -428,8 +472,8 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         # force them on so the transcript matches what a terminal user sees.
         "CLICOLOR_FORCE": "1",
         "FAKE_PLUGINS": " ".join(plugins),
-        "FAKE_PLUGIN_CONFIGS": "\n".join(f"{p} {c}" for p, c in configs.items()),
-        "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p} {r}" for p, r in (world.requirements or {}).items()),
+        "FAKE_PLUGIN_CONFIGS": "\n".join(f"{p}\t{c}" for p, c in configs.items()),
+        "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p}\t{r}" for p, r in (world.requirements or {}).items()),
         "FAKE_TIMER_DIRECTIVES": "\n".join(f"{p}\t{d}" for p, ds in directives.items() for d in ds),
         "FAKE_INTERVAL_STATUS": "\n".join(f"{p}\t{s}" for p, s in interval_status.items()),
         "FAKE_SUPPORTED_INTERVALS": world.supported_intervals,
@@ -443,6 +487,8 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_ACTIVE_SERVICES": " ".join(world.active_services),
         "FAKE_ACTIVATING_SERVICES": " ".join(world.activating_services),
         "FAKE_SYSTEMCTL_FAIL": " ".join(world.systemctl_fail),
+        "FAKE_SYSTEMCTL_NOOP": " ".join(world.systemctl_noop),
+        "FAKE_SYSTEMD_STATE_DIR": str(sandbox / "systemd-state"),
         "FAKE_LINGER": world.linger,
         "FAKE_LINGER_ENABLE_FAILS": "1" if world.linger_enable_fails else "0",
         "FAKE_GIT_BRANCH": world.git_branch,
@@ -489,6 +535,7 @@ def drive_shell(script: str, *args: str,
         _cleanup(sandbox)
 
     transcript = proc.stdout.replace(str(sandbox), "<BASE_DIR>").replace("\r", "")
+    transcript = re.sub(r"\.(tmp|backup)\.\d+", r".\1.<PID>", transcript)
     # sh's own diagnostics (e.g. a failed redirect in the readonly-unit-dir scenarios)
     # carry a script line number that drifts with every script edit - pin it.
     transcript = re.sub(r"\.sh: (?:line )?\d+:", ".sh: <line>:", transcript)

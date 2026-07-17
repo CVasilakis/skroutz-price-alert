@@ -35,3 +35,7 @@ _case("full_teardown", "No flags: every unit removed and the venv deleted.",
 
 _case("full_teardown_no_venv", "Full teardown when the venv is already gone.",
       world=replace(WORLD_INSTALLED, venv=False))
+
+_case("teardown_fails_safely", "A running service that cannot stop prevents all removal.",
+      world=replace(WORLD_INSTALLED, activating_services=("skroutz",),
+                    systemctl_fail=("stop",)), tags=("error",))

@@ -131,8 +131,15 @@ fi
 # ENABLING SERVICE(S)
 # ------------------------------------------------------------------------------
 
+FAILED=0
 for plugin in $PLUGINS; do
-    if [ "$(timer_is_enabled "$plugin")" = "enabled" ] && [ "$(timer_is_active "$plugin")" = "active" ]; then
+    if ! timer_enabled="$(timer_is_enabled "$plugin")" || \
+       ! timer_active="$(timer_is_active "$plugin")"; then
+        printf "%b\n" "\n${RED}[$plugin] Error: Could not determine the timer state.${NC}"
+        FAILED=1
+        continue
+    fi
+    if [ "$timer_enabled" = "enabled" ] && [ "$timer_active" = "active" ]; then
         printf "%b\n" "\n${GREEN}[$plugin] Timer is already enabled and active. Nothing to do.${NC}"
         continue
     fi
@@ -142,10 +149,15 @@ for plugin in $PLUGINS; do
         printf "%b\n" "${GREEN}[$plugin] Background execution enabled successfully.${NC}"
     else
         printf "%b\n" "${RED}[$plugin] Error: Failed to enable the timer!${NC}"
-        printf "%b\n" "${RED}Try running ./install.sh to fix the issue.${NC}\n"
-        exit 1
+        printf "%b\n" "${RED}Try running ./install.sh to fix the issue.${NC}"
+        FAILED=1
     fi
 done
+
+if [ "$FAILED" -ne 0 ]; then
+    printf "%b\n" "\n${RED}One or more background schedules could not be enabled.${NC}\n"
+    exit 1
+fi
 
 printf "%b\n" "\nTo disable background execution, run: ${CYAN}./scripts/disable.sh${NC}"
 printf "%b\n" "To completely remove the application, run: ${CYAN}./scripts/uninstall.sh${NC}\n"

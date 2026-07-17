@@ -29,6 +29,10 @@ _case("invalid_argument", "Any argument other than -h/--help is rejected.",
 _case("no_systemctl", "A systemd-less host is refused before the destructive git reset.",
       world=replace(_BASE, tools="no-systemctl"), tags=("error",))
 
+_case("stop_fails_before_git", "A scraper that cannot stop aborts before checkout/reset.",
+      world=replace(_BASE, activating_services=("skroutz",),
+                    systemctl_fail=("stop",)), tags=("error",))
+
 _case("dirty_declined", "Uncommitted changes detected; the user answers no.",
       world=replace(_BASE, git_dirty=True), stdin="n\n", tags=("error",))
 

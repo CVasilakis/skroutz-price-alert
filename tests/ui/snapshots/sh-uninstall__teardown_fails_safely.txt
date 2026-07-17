@@ -1,0 +1,9 @@
+# border: red
+# exit: 1
+
+Disabling and removing Systemd Timer(s) and Service(s)...
+Error: Failed to stop skroutz-scraper.timer.
+Error: Failed to stop skroutz-scraper.service.
+Error: skroutz-scraper.service is still activating.
+Error: 'skroutz' could not be made safe for removal.
+No unit files or Python environment were removed.

@@ -55,7 +55,12 @@ class BasePlugin(ABC):
     @staticmethod
     @abstractmethod
     def get_config_filename() -> str:
-        """Returns the JSON config filename (e.g. 'skroutz.json')."""
+        """Returns the safe JSON config basename (e.g. ``'skroutz.json'``).
+
+        Discovery accepts only letters, digits, dots, underscores and hyphens,
+        with a ``.json`` suffix. Paths, whitespace and control characters are
+        rejected because this value crosses filesystem and shell-script boundaries.
+        """
         ...
 
     @staticmethod
@@ -107,6 +112,11 @@ class BasePlugin(ABC):
         (``registry._validate_plugin_contract``) so the settings panel can always render
         the effective cadence as a friendly key and a user's ``execution_interval``
         override stays within one vocabulary.
+
+        All keys must be systemd-style alphanumeric directive names and all values
+        strings without tabs or newlines. Discovery enforces this because the
+        descriptor is transported to the POSIX management scripts as tab-separated
+        records before being rendered into a unit file.
 
         Returns:
             dict[str, str]: ``[Timer]`` trigger ``key -> value`` directives. Must

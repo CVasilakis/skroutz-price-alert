@@ -5,7 +5,7 @@ Updating python packages in existing virtual environment...
 Python virtual environment successfully updated.
 
 Setting up Systemd timer(s)...
-Error: Failed to enable and start skroutz-scraper.timer.
+Error: skroutz-scraper.timer did not become loaded, enabled, and active.
 Error: Failed to enable the timer for 'skroutz'.
 
 Error: One or more plugin timers could not be enabled.

@@ -74,6 +74,9 @@ _case("unit_write_fails", "The systemd user dir is unwritable, so unit rendering
 _case("enable_fails", "systemctl enable --now fails after the units are written.",
       world=ShellWorld(systemctl_fail=("enable",)), tags=("error",))
 
+_case("enable_noop_detected", "A successful enable without the required final state fails.",
+      world=ShellWorld(systemctl_noop=("enable",)), tags=("error",))
+
 _case("linger_warning", "Lingering is off and enable-linger fails - non-fatal warning.",
       world=replace(_CONFIGURED, linger="no", linger_enable_fails=True))
 

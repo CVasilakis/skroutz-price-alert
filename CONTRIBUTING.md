@@ -142,7 +142,7 @@ All base classes live in `src/core/scrapers/base/`.
 | **Machine name** (`get_name`) | `[A-Za-z0-9_]+` only — no hyphens/dots/spaces. Unique. Becomes the `--<name>` CLI flag and the `<name>-scraper` systemd unit. | `acme` |
 | **Display name** | Any non-empty string (used in logs/notifications). | `Acme` |
 | **Supported domains** | Non-empty list of bare hosts. **Must not overlap** any other plugin's domains (equal or subdomain-suffix). | `["acme.com"]` |
-| **Config filename** | The JSON file under `config/`. | `acme.json` |
+| **Config filename** | A safe JSON basename matching `[A-Za-z0-9][A-Za-z0-9._-]*\.json`; no paths, spaces or control characters. | `acme.json` |
 
 ### Step 1 — Create the package
 
@@ -430,6 +430,8 @@ These are all opt-in; skip them unless you need them.
 Override `get_timer_directives()` in your plugin to set the **default** systemd
 cadence (users can still override it per-config via `execution_interval`).
 `RandomizedDelaySec` and `Persistent` are framework-managed and ignored if returned.
+Directive names must use letters/digits and values must not contain tabs or newlines;
+discovery validates this machine-readable shell/systemd boundary.
 
 ```python
 def get_timer_directives(self) -> dict:
@@ -607,8 +609,9 @@ package — so run any command, e.g. `./scripts/run.sh --status`, to surface it)
 
 - the package exposes a module-level `plugin` that is a `BasePlugin` instance;
 - `get_name()` matches `[A-Za-z0-9_]+`, is non-empty and **unique**;
-- `get_display_name()` and `get_config_filename()` are non-empty strings;
+- `get_display_name()` is non-empty and `get_config_filename()` is a safe `.json` basename;
 - `get_supported_domains()` is a non-empty list of non-empty strings;
+- timer directives are a safe string-to-string mapping with a canonical `OnCalendar`;
 - **no two plugins claim overlapping domains**;
 - `get_client_class()` / `get_storage_class()` return the right subclasses (checked
   at first use; a missing dependency surfaces as `PluginDependencyError` pointing at

@@ -3,7 +3,6 @@
 
 [skroutz] Updating the timer schedule to match the configured interval...
 <BASE_DIR>/scripts/schedule.sh: <line>: cannot create
-<BASE_DIR>/xdg/systemd/user/skroutz-scraper.service: Permission denied
-<BASE_DIR>/scripts/schedule.sh: <line>: cannot create
-<BASE_DIR>/xdg/systemd/user/skroutz-scraper.timer: Permission denied
+<BASE_DIR>/xdg/systemd/user/skroutz-scraper.timer.tmp.<PID>: Permission denied
 [skroutz] Error: Failed to write the systemd timer unit.
+One or more timer schedules could not be applied.

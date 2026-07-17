@@ -31,7 +31,7 @@ print_help() {
     printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    for plugin in $(known_targets timer); do
+    for plugin in $(known_targets_all); do
         printf '  --%-15s Disable only the %s scraper\n' "$plugin" "$plugin"
     done
     printf '\n'
@@ -64,22 +64,22 @@ if [ -n "$SELECTED" ]; then
     # orphan leftover) is disabled. A name that is only registered (no timer on
     # disk) has nothing to disable - tell the user it is not installed instead of
     # acting as if there were a unit. A name in neither set is a typo: reject it.
-    INSTALLED="$(list_installed_plugins timer)"
+    INSTALLED="$(list_installed_targets)"
     PLUGINS=""
     for sel in $SELECTED; do
         if plugin_in_list "$sel" $INSTALLED; then
             PLUGINS="$PLUGINS $sel"
-        elif is_known_target "$sel" timer; then
+        elif is_known_target_any "$sel"; then
             printf "%b\n" "\n${YELLOW}[$sel] is registered but not installed - nothing to disable.${NC}"
             printf "%b\n" "Install it first with: ${CYAN}./install.sh --$sel${NC}"
         else
             printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
-            printf "%b\n" "Available targets: ${CYAN}$(printf '%s ' $(known_targets timer))${NC}"
+            printf "%b\n" "Available targets: ${CYAN}$(printf '%s ' $(known_targets_all))${NC}"
             exit 1
         fi
     done
 else
-    PLUGINS="$(list_installed_plugins timer)"
+    PLUGINS="$(list_installed_targets)"
 fi
 
 if [ -z "$PLUGINS" ]; then
@@ -96,21 +96,33 @@ fi
 # is never "enabled". Work is only needed when the timer is enabled/active or the
 # service is currently executing.
 
+FAILED=0
 for plugin in $PLUGINS; do
-    timer_enabled="$(timer_is_enabled "$plugin")"
-    timer_active="$(timer_is_active "$plugin")"
-    svc_state="$(service_state "$plugin")"
-
-    if [ "$timer_enabled" != "enabled" ] && [ "$timer_active" != "active" ] && \
-       [ "$svc_state" != "active" ] && [ "$svc_state" != "activating" ]; then
+    if plugin_is_disabled "$plugin"; then
         printf "%b\n" "\n${GREEN}[$plugin] Background service and timer are already disabled. Nothing to do.${NC}"
+        continue
+    else
+        disabled_state=$?
+    fi
+    if [ "$disabled_state" -eq 2 ]; then
+        printf "%b\n" "\n${RED}[$plugin] Error: Could not determine the service and timer state.${NC}"
+        FAILED=1
         continue
     fi
 
     printf "%b\n" "\n${CYAN}[$plugin] Stopping and disabling background schedule (timer)...${NC}"
-    disable_one "$plugin"
-    printf "%b\n" "${GREEN}[$plugin] Background execution disabled successfully.${NC}"
+    if disable_one "$plugin"; then
+        printf "%b\n" "${GREEN}[$plugin] Background execution disabled successfully.${NC}"
+    else
+        printf "%b\n" "${RED}[$plugin] Error: Background execution was not fully disabled.${NC}"
+        FAILED=1
+    fi
 done
+
+if [ "$FAILED" -ne 0 ]; then
+    printf "%b\n" "\n${RED}One or more background schedules could not be disabled.${NC}\n"
+    exit 1
+fi
 
 printf "%b\n" "\nTo re-enable background execution, run: ${CYAN}./scripts/enable.sh${NC}"
 printf "%b\n" "To completely remove the application, run: ${CYAN}./scripts/uninstall.sh${NC}\n"
