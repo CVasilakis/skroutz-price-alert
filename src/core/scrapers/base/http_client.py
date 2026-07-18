@@ -26,7 +26,7 @@ class HttpScraperClient(BaseScraperClient):
           re-deriving (and possibly mis-mapping) it.
 
     A subclass declares a non-empty ``HEADERS_POOL`` and implements
-    ``scrape_product``. A JSON-API store calls ``get`` / ``raise_for_status`` then
+    ``scrape``. A JSON-API store calls ``get`` / ``raise_for_status`` then
     decodes JSON; an HTML store follows the same bounded fetch path and parses the
     markup itself — either way it gets timeout enforcement, status mapping, and
     identity rotation for free. Stores whose API uses

@@ -21,8 +21,8 @@ from unittest import mock
 
 from core import messages, orchestrator
 from core.orchestrator import ScrapingOrchestrator, RunOutcome
-from core.scrapers.base.model import AdvertMatch, BaseTrackedItem, ScrapeResult
-from core.scrapers.base.plugin import BasePlugin
+from core.scrapers.base.model import OfferMatch, BaseTrackedItem, ListingResult, PriceResult
+from core.scrapers.base.plugin import RegisteredPlugin
 from core.scrapers.base.settings import ResolvedSettings, KEY_RETENTION, KEY_NOTIFY
 from core.ui.tui import PriceOutcome
 from core.exceptions import (
@@ -75,7 +75,7 @@ class TestPriceOutcome(unittest.TestCase):
     def _call(self, item, price, notifier, ui):
         dm = mock_data_manager()
         orch = _make_orch(notifier=notifier, ui=ui)
-        orch._handle_successful_scrape(item, ScrapeResult(price=price, currency="€"), dm)
+        orch._handle_successful_scrape(item, PriceResult(price=price, currency="€"), dm)
         return dm
 
     def test_drop_notifies_when_services_configured(self):
@@ -90,7 +90,7 @@ class TestPriceOutcome(unittest.TestCase):
             notes=[messages.NOTE_NOTIFIED_OK], attempt_notes=None)
         # The new price is always persisted.
         dm.update_item.assert_called_once_with(
-            "https://x/s/1/p.html", last_price=8.0, last_checked=mock.ANY)
+            mock.ANY, last_price=8.0, last_checked=mock.ANY)
 
     def test_drop_reports_failed_delivery(self):
         notifier = mock_notifier(has_services=True, delivery_ok=False)
@@ -133,7 +133,7 @@ class TestPriceOutcome(unittest.TestCase):
         dm = mock_data_manager()
         orch = _make_orch(notifier=notifier, ui=ui)
         orch._handle_successful_scrape(
-            _item(target_price=0.0), ScrapeResult(price=5.0, currency="€"), dm,
+            _item(target_price=0.0), PriceResult(price=5.0, currency="€"), dm,
             original_invalid_price="abc")
         ui.log_price_result.assert_called_once_with(
             "Widget", 5.0, "€", 0.0, PriceOutcome.NO_TARGET,
@@ -145,7 +145,7 @@ class TestPriceOutcome(unittest.TestCase):
         dm = mock_data_manager()
         orch = _make_orch(notifier=notifier, ui=ui)
         orch._handle_successful_scrape(
-            _item(target_price=0.0), ScrapeResult(price=5.0, currency="€"), dm,
+            _item(target_price=0.0), PriceResult(price=5.0, currency="€"), dm,
             missing_target_price=True)
         ui.log_price_result.assert_called_once_with(
             "Widget", 5.0, "€", 0.0, PriceOutcome.NO_TARGET,
@@ -166,22 +166,22 @@ class TestListingOutcomes(unittest.TestCase):
     def test_no_match_refreshes_timestamp_only_and_never_alerts(self):
         notifier = mock_notifier(has_services=True)
         ui = mock_ui()
-        dm = self._call(_item(target_price=10.0), ScrapeResult(price=None, currency="€"), notifier, ui)
+        dm = self._call(_item(target_price=10.0), ListingResult(currency="€"), notifier, ui)
         notifier.notify_low_price.assert_not_called()
         ui.log_price_result.assert_called_once_with(
             "Widget", None, "€", 10.0, PriceOutcome.NO_MATCH, notes=[], attempt_notes=None)
         # last_checked refreshes (the row never goes stale) but last_price is untouched.
         dm.update_item.assert_called_once_with(
-            "https://x/s/1/p.html", last_checked=NOW.strftime(TIMESTAMP_FORMAT))
+            mock.ANY, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
 
     def test_each_match_below_target_gets_its_own_push(self):
         notifier = mock_notifier(has_services=True, delivery_ok=True)
         ui = mock_ui()
-        result = ScrapeResult(price=6.0, currency="€", matches=[
-            AdvertMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
-            AdvertMatch("Mid ad", 8.0, "https://x/classifieds/ad-2/"),
-            AdvertMatch("Pricey ad", 12.0, "https://x/classifieds/ad-3/"),
-        ])
+        result = ListingResult(currency="€", offers=(
+            OfferMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
+            OfferMatch("Mid ad", 8.0, "https://x/classifieds/ad-2/"),
+            OfferMatch("Pricey ad", 12.0, "https://x/classifieds/ad-3/"),
+        ))
         dm = self._call(_item(target_price=10.0), result, notifier, ui)
 
         # One push per advert below target, each linking to that advert.
@@ -196,16 +196,16 @@ class TestListingOutcomes(unittest.TestCase):
             attempt_notes=None)
         # The cheapest match's price is persisted as the row's last_price.
         dm.update_item.assert_called_once_with(
-            "https://x/s/1/p.html", last_price=6.0, last_checked=mock.ANY)
+            mock.ANY, last_price=6.0, last_checked=mock.ANY)
 
     def test_partial_delivery_failure_is_footnoted(self):
         notifier = mock_notifier(has_services=True)
         notifier.notify_low_price.side_effect = [True, False]
         ui = mock_ui()
-        result = ScrapeResult(price=6.0, currency="€", matches=[
-            AdvertMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
-            AdvertMatch("Mid ad", 8.0, "https://x/classifieds/ad-2/"),
-        ])
+        result = ListingResult(currency="€", offers=(
+            OfferMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
+            OfferMatch("Mid ad", 8.0, "https://x/classifieds/ad-2/"),
+        ))
         self._call(_item(target_price=10.0), result, notifier, ui)
         ui.log_price_result.assert_called_once_with(
             "Widget", 6.0, "€", 10.0, PriceOutcome.DROP,
@@ -215,23 +215,23 @@ class TestListingOutcomes(unittest.TestCase):
     def test_matches_at_or_above_target_is_ok_without_pushes(self):
         notifier = mock_notifier(has_services=True)
         ui = mock_ui()
-        result = ScrapeResult(price=12.0, currency="€", matches=[
-            AdvertMatch("Pricey ad", 12.0, "https://x/classifieds/ad-3/"),
-        ])
+        result = ListingResult(currency="€", offers=(
+            OfferMatch("Pricey ad", 12.0, "https://x/classifieds/ad-3/"),
+        ))
         dm = self._call(_item(target_price=10.0), result, notifier, ui)
         notifier.notify_low_price.assert_not_called()
         ui.log_price_result.assert_called_once_with(
             "Widget", 12.0, "€", 10.0, PriceOutcome.OK,
             notes=[messages.advert_matches_note(1, 0)], attempt_notes=None)
         dm.update_item.assert_called_once_with(
-            "https://x/s/1/p.html", last_price=12.0, last_checked=mock.ANY)
+            mock.ANY, last_price=12.0, last_checked=mock.ANY)
 
     def test_matches_without_target_is_no_target_outcome(self):
         notifier = mock_notifier(has_services=True)
         ui = mock_ui()
-        result = ScrapeResult(price=5.0, currency="€", matches=[
-            AdvertMatch("Some ad", 5.0, "https://x/classifieds/ad-1/"),
-        ])
+        result = ListingResult(currency="€", offers=(
+            OfferMatch("Some ad", 5.0, "https://x/classifieds/ad-1/"),
+        ))
         self._call(_item(target_price=0.0), result, notifier, ui)
         notifier.notify_low_price.assert_not_called()
         ui.log_price_result.assert_called_once_with(
@@ -241,9 +241,9 @@ class TestListingOutcomes(unittest.TestCase):
     def test_matches_below_target_without_services_notes_none(self):
         notifier = mock_notifier(has_services=False)
         ui = mock_ui()
-        result = ScrapeResult(price=6.0, currency="€", matches=[
-            AdvertMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
-        ])
+        result = ListingResult(currency="€", offers=(
+            OfferMatch("Cheap ad", 6.0, "https://x/classifieds/ad-1/"),
+        ))
         self._call(_item(target_price=10.0), result, notifier, ui)
         notifier.notify_low_price.assert_not_called()
         ui.log_price_result.assert_called_once_with(
@@ -260,7 +260,7 @@ class TestRunAttempts(unittest.TestCase):
     def _run(self, scraper, item=None, notifier=None, logger=None):
         item = item or _item(target_price=5.0)
         registry = mock_registry()
-        registry.get_scraper.return_value = scraper
+        registry.get_client.return_value = scraper
         ui = mock_ui()
         orch = _make_orch(notifier=notifier or mock_notifier(), ui=ui, registry=registry)
         orch._current_target = "skroutz"
@@ -278,26 +278,26 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_success_first_try_no_retry_no_sleep(self):
         scraper = mock_scraper()
-        scraper.scrape_product.return_value = ScrapeResult(price=8.0, currency="€")
+        scraper.scrape.return_value = PriceResult(price=8.0, currency="€")
         ui, outcome, sleep, _ = self._run(scraper, notifier=mock_notifier())
 
         self.assertIsNone(outcome.reported_error)
         self.assertFalse(outcome.abort_target)
         sleep.assert_not_called()
-        scraper.scrape_product.assert_called_once()
+        scraper.scrape.assert_called_once()
         scraper.refresh_identity.assert_not_called()
         ui.log_price_result.assert_called_once_with(
             "Widget", 8.0, "€", 5.0, PriceOutcome.OK, notes=[], attempt_notes=[])
 
     def test_skip_error_is_red_but_not_reported(self):
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = ProductNotFoundError("gone")
+        scraper.scrape.side_effect = ProductNotFoundError("gone")
         ui, outcome, sleep, _ = self._run(scraper)
 
         self.assertIsNone(outcome.reported_error)
         self.assertFalse(outcome.abort_target)
         # Terminal for the item: one attempt, no retry, no back-off.
-        scraper.scrape_product.assert_called_once()
+        scraper.scrape.assert_called_once()
         sleep.assert_not_called()
         ui.log_error.assert_called_once_with(
             "Widget", messages.skipping_warning("ProductNotFoundError"),
@@ -305,7 +305,7 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_parse_error_exhausts_retries_and_counts_as_failure(self):
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = ScraperParseError("bad html")
+        scraper.scrape.side_effect = ScraperParseError("bad html")
         logger = mock.Mock()
         ui, outcome, sleep, save_tb = self._run(scraper, logger=logger)
 
@@ -313,7 +313,7 @@ class TestRunAttempts(unittest.TestCase):
         self.assertIsInstance(outcome.reported_error, ScraperParseError)
         self.assertTrue(outcome.affects_scrape_status)
         self.assertFalse(outcome.abort_target)
-        self.assertEqual(scraper.scrape_product.call_count, MAX_RETRIES)
+        self.assertEqual(scraper.scrape.call_count, MAX_RETRIES)
         # Refresh + sleep happen between attempts, not after the last one.
         self.assertEqual(sleep.call_count, MAX_RETRIES - 1)
         self.assertEqual(scraper.refresh_identity.call_count, MAX_RETRIES - 1)
@@ -325,13 +325,13 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_invalid_success_result_retries_without_notification_or_price_write(self):
         scraper = mock_scraper()
-        scraper.scrape_product.return_value = ScrapeResult(price=True, currency="€")
+        scraper.scrape.return_value = PriceResult(price=True, currency="€")
         notifier = mock_notifier(has_services=True)
         ui, outcome, sleep, _ = self._run(scraper, notifier=notifier)
 
         self.assertIsInstance(outcome.reported_error, InvalidScrapeResultError)
         self.assertTrue(outcome.affects_scrape_status)
-        self.assertEqual(scraper.scrape_product.call_count, MAX_RETRIES)
+        self.assertEqual(scraper.scrape.call_count, MAX_RETRIES)
         self.assertEqual(sleep.call_count, MAX_RETRIES - 1)
         notifier.notify_low_price.assert_not_called()
         ui.log_price_result.assert_not_called()
@@ -340,7 +340,7 @@ class TestRunAttempts(unittest.TestCase):
         # An exception not in the policy table nor SKIP_ERRORS falls to the default
         # policy: counted as a failure, and a traceback is saved when a logger exists.
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = RuntimeError("boom")
+        scraper.scrape.side_effect = RuntimeError("boom")
         logger = mock.Mock()
         ui, outcome, sleep, save_tb = self._run(scraper, logger=logger)
 
@@ -356,13 +356,13 @@ class TestRunAttempts(unittest.TestCase):
     def test_default_policy_skips_traceback_without_logger(self):
         # Same default policy, but no logger -> the save_traceback branch is guarded.
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = RuntimeError("boom")
+        scraper.scrape.side_effect = RuntimeError("boom")
         ui, outcome, sleep, save_tb = self._run(scraper, logger=None)
         save_tb.assert_not_called()
 
     def test_server_error_retries_without_refresh_and_not_counted(self):
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = ServerError("503")
+        scraper.scrape.side_effect = ServerError("503")
         ui, outcome, sleep, save_tb = self._run(scraper)
 
         # ServerError policy: not counted as failure -> None; identity not rotated;
@@ -377,7 +377,7 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_generic_scraper_error_is_reported_but_does_not_affect_status(self):
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = ScraperError("empty response")
+        scraper.scrape.side_effect = ScraperError("empty response")
 
         _, outcome, _, _ = self._run(scraper)
 
@@ -386,7 +386,7 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_invalid_url_error_is_red_and_reported_without_affecting_status(self):
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = InvalidURLError("bad product id")
+        scraper.scrape.side_effect = InvalidURLError("bad product id")
 
         ui, outcome, sleep, _ = self._run(scraper)
 
@@ -400,7 +400,7 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_rate_limit_aborts_the_run(self):
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = RateLimitError("429")
+        scraper.scrape.side_effect = RateLimitError("429")
         ui, outcome, sleep, _ = self._run(scraper)
 
         self.assertIsInstance(outcome.reported_error, RateLimitError)
@@ -412,14 +412,14 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_retry_then_success_records_retries_used(self):
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = [
+        scraper.scrape.side_effect = [
             ScraperParseError("transient"),
-            ScrapeResult(price=8.0, currency="€"),
+            PriceResult(price=8.0, currency="€"),
         ]
         ui, outcome, sleep, _ = self._run(scraper, notifier=mock_notifier())
 
         self.assertIsNone(outcome.reported_error)
-        self.assertEqual(scraper.scrape_product.call_count, 2)
+        self.assertEqual(scraper.scrape.call_count, 2)
         self.assertEqual(sleep.call_count, 1)
         self.assertEqual(scraper.refresh_identity.call_count, 1)
         # The success row surfaces that it recovered on attempt 2, with the
@@ -431,14 +431,14 @@ class TestRunAttempts(unittest.TestCase):
 
     def test_notification_exception_does_not_retry_the_successful_scrape(self):
         scraper = mock_scraper()
-        scraper.scrape_product.return_value = ScrapeResult(price=1.0, currency="€")
+        scraper.scrape.return_value = PriceResult(price=1.0, currency="€")
         notifier = mock_notifier(has_services=True)
         notifier.notify_low_price.side_effect = RuntimeError("transport crashed")
 
         ui, outcome, sleep, _ = self._run(scraper, notifier=notifier)
 
         self.assertTrue(outcome.notification_failed)
-        scraper.scrape_product.assert_called_once()
+        scraper.scrape.assert_called_once()
         sleep.assert_not_called()
         ui.log_price_result.assert_called_once_with(
             "Widget", 1.0, "€", 5.0, PriceOutcome.DROP,
@@ -450,11 +450,11 @@ class TestRunAttempts(unittest.TestCase):
 # --- Group C: run()'s save-failure reporting -----------------------------------
 
 class TestSaveFailureMessage(unittest.TestCase):
-    """A failed save names the plugin's *declared* config filename, not <target>.json."""
+    """A failed save names the plugin's derived config filename."""
 
     def test_save_error_names_plugin_config_filename(self):
-        plugin = mock.create_autospec(BasePlugin, instance=True)
-        plugin.get_config_filename.return_value = "custom-name.json"
+        plugin = mock.Mock(spec=RegisteredPlugin)
+        plugin.config_filename = "skroutz.json"
 
         settings = mock.create_autospec(ResolvedSettings, instance=True)
         settings.views.return_value = []
@@ -483,7 +483,7 @@ class TestSaveFailureMessage(unittest.TestCase):
 
         self.assertEqual(exit_code, EXIT_CODE_STORAGE_ERROR)
         ui.log_error.assert_called_once_with(
-            "Storage", messages.save_failed("custom-name.json"), "disk full")
+            "Storage", messages.save_failed("skroutz.json"), "disk full")
 
 
 # --- Group D: timestamp staleness / repair --------------------------------------
@@ -507,14 +507,14 @@ class TestTimestampRepair(unittest.TestCase):
         self.assertEqual(note, messages.NOTE_CORRUPTED_TIMESTAMP)
         # The repair write keeps the stored price and stamps the current time.
         dm.update_item.assert_called_once_with(
-            item.url, last_price=9.5, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
+            item, last_price=9.5, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
         self.assertEqual(orch._stale_items, [])
 
     def test_non_string_timestamp_is_repaired_in_place(self):
         note, dm, orch, item = self._check(123)
         self.assertEqual(note, messages.NOTE_CORRUPTED_TIMESTAMP)
         dm.update_item.assert_called_once_with(
-            item.url, last_price=9.5, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
+            item, last_price=9.5, last_checked=NOW.strftime(TIMESTAMP_FORMAT))
         self.assertEqual(orch._stale_items, [])
 
     def test_stale_timestamp_is_flagged_and_recorded(self):
@@ -554,8 +554,8 @@ def _wired_target(rows, item=None, notify=True, config_filename="skroutz.json"):
     the logger, the notify gate); the manager serves ``rows`` and parses every row
     to ``item`` (a skip item by default, the cheapest way through the loop).
     """
-    plugin = mock.create_autospec(BasePlugin, instance=True)
-    plugin.get_config_filename.return_value = config_filename
+    plugin = mock.Mock(spec=RegisteredPlugin)
+    plugin.config_filename = config_filename
 
     settings = mock.create_autospec(ResolvedSettings, instance=True)
     settings.views.return_value = []
@@ -607,10 +607,10 @@ class TestRunExitCodes(unittest.TestCase):
             # The real handler runs mid-scrape (as a signal would), so the loop
             # must discard the completed result and stop before any write.
             orch.signal_handler(signal_module.SIGINT, None)
-            return ScrapeResult(price=1.0, currency="€")
+            return PriceResult(price=1.0, currency="€")
 
-        scraper.scrape_product.side_effect = interrupt_then_succeed
-        registry.get_scraper.return_value = scraper
+        scraper.scrape.side_effect = interrupt_then_succeed
+        registry.get_client.return_value = scraper
 
         with _run_patches(orch):
             exit_code = orch.run()
@@ -630,8 +630,8 @@ class TestRunExitCodes(unittest.TestCase):
         product_row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
         registry, _, _ = _wired_target([product_row], item=_item(target_price=5.0))
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = RateLimitError("429")
-        registry.get_scraper.return_value = scraper
+        scraper.scrape.side_effect = RateLimitError("429")
+        registry.get_client.return_value = scraper
         notifier = mock_notifier(has_services=True)
         orch = _make_orch(
             notifier=notifier, registry=registry, targets=["broken", "limited"],
@@ -643,7 +643,7 @@ class TestRunExitCodes(unittest.TestCase):
 
         self.assertEqual(exit_code, EXIT_CODE_PRODUCTS_ERROR)
         # The healthy target still ran (and its failures were still notified).
-        scraper.scrape_product.assert_called()
+        scraper.scrape.assert_called()
         notifier.notify_errors.assert_called_once()
 
     def test_all_targets_locked_exits_42(self):
@@ -720,8 +720,8 @@ class TestRunExitCodes(unittest.TestCase):
         row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
         registry, manager, _ = _wired_target([row], item=_item(target_price=5.0))
         scraper = mock_scraper()
-        scraper.scrape_product.return_value = ScrapeResult(price=1.0, currency="€")
-        registry.get_scraper.return_value = scraper
+        scraper.scrape.return_value = PriceResult(price=1.0, currency="€")
+        registry.get_client.return_value = scraper
         notifier = mock_notifier(has_services=True, delivery_ok=False)
         orch = _make_orch(registry=registry, notifier=notifier)
 
@@ -735,15 +735,14 @@ class TestRunExitCodes(unittest.TestCase):
         row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
         registry, manager, _ = _wired_target([row], item=_item(target_price=5.0))
         scraper = mock_scraper()
-        scraper.scrape_product.return_value = ScrapeResult(
-            price=1.0,
+        scraper.scrape.return_value = ListingResult(
             currency="€",
-            matches=[
-                AdvertMatch("First", 1.0, "https://x/ad/1"),
-                AdvertMatch("Second", 2.0, "https://x/ad/2"),
-            ],
+            offers=(
+                OfferMatch("First", 1.0, "https://x/ad/1"),
+                OfferMatch("Second", 2.0, "https://x/ad/2"),
+            ),
         )
-        registry.get_scraper.return_value = scraper
+        registry.get_client.return_value = scraper
         notifier = mock_notifier(has_services=True)
         notifier.notify_low_price.side_effect = [True, False]
         orch = _make_orch(registry=registry, notifier=notifier)
@@ -764,8 +763,8 @@ class TestRunNotificationGates(unittest.TestCase):
         item = _item(target_price=5.0, last_checked=last_checked)
         registry, manager, _ = _wired_target([product_row], item=item, notify=notify)
         scraper = mock_scraper()
-        scraper.scrape_product.side_effect = ScraperParseError("bad html")
-        registry.get_scraper.return_value = scraper
+        scraper.scrape.side_effect = ScraperParseError("bad html")
+        registry.get_client.return_value = scraper
         notifier = mock_notifier(has_services=True)
         orch = _make_orch(notifier=notifier, registry=registry)
         with _run_patches(orch):
@@ -869,7 +868,7 @@ class TestRunDependencySkips(unittest.TestCase):
     def test_scraper_dependency_error_skips_only_that_target(self):
         product_row = {"name": "Widget", "url": "https://x/s/1/p.html", "target_price": 5}
         registry, manager, _ = _wired_target([product_row], item=_item(target_price=5.0))
-        registry.get_scraper.side_effect = PluginDependencyError("client deps missing")
+        registry.get_client.side_effect = PluginDependencyError("client deps missing")
         ui = mock_ui()
         orch = _make_orch(ui=ui, registry=registry)
 

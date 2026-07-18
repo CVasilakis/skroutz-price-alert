@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-from core.scrapers.base.model import ScrapeResult
+from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
 
 if TYPE_CHECKING:
     from core.scrapers.base.settings import ResolvedSettings
@@ -10,8 +10,8 @@ class BaseScraperClient(ABC):
 
     Error-handling contract (this is what drives the orchestrator's
     retry / abort / notify behavior):
-        ``scrape_product`` communicates its outcome purely through the exception
-        it raises. The orchestrator branches on the exception *type*:
+        ``scrape`` returns a typed success result or raises a modeled exception.
+        The orchestrator branches on the exception *type*:
 
         * ``ProductNotFoundError`` / ``ProductUnavailableError`` /
           ``InvalidURLError`` — terminal for this item, NO retry; the item is
@@ -32,8 +32,8 @@ class BaseScraperClient(ABC):
         A successful call must return a :class:`ScrapeResult`. To plug a new
         store into the retry machinery, raise these exceptions accordingly.
 
-        Every failure MUST be raised as a :class:`ScraperError` subclass (see
-        ``exceptions.py``). Raising any other exception type is treated as an
+        Expected remote and parsing failures should use a :class:`ScraperError`
+        subclass (see ``exceptions.py``). Any other exception type is treated as an
         unexpected fault: the orchestrator falls back to its default retry policy
         (retried, counted as a failure, traceback saved). When a store-specific
         parsing step can fail (e.g. coercing a price string to ``float``), wrap it
@@ -42,7 +42,7 @@ class BaseScraperClient(ABC):
     Settings access:
         The registry passes this client's target settings to the constructor (a
         :class:`~core.scrapers.base.settings.ResolvedSettings`), so a store-specific knob
-        declared in the plugin's ``get_setting_specs`` is readable from ``__init__``
+        declared in the plugin definition is readable from ``__init__``
         onward — including during session/transport setup — e.g.
         ``self.settings.get("region")``. A subclass that overrides ``__init__`` must
         accept ``settings`` and forward it via ``super().__init__(settings)``.
@@ -62,11 +62,11 @@ class BaseScraperClient(ABC):
         self.settings = settings
 
     @abstractmethod
-    def scrape_product(self, product_url: str) -> ScrapeResult:
-        """Scrapes the product page to find the current price.
+    def scrape(self, item: BaseTrackedItem) -> ScrapeResult:
+        """Scrape one fully parsed tracked item.
 
         Args:
-            product_url (str): The URL of the product to scrape.
+            item (BaseTrackedItem): The product or listing search to scrape.
 
         Returns:
             ScrapeResult: The result of the scrape.
@@ -82,7 +82,7 @@ class BaseScraperClient(ABC):
 
         See the class docstring for how each exception drives retry/abort/notify behavior.
         """
-        pass
+        ...
 
     def refresh_identity(self) -> None:
         """Resets headers, sessions, or cookies before a retry to evade blocks.

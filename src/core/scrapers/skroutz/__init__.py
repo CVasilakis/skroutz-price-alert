@@ -1,3 +1,1 @@
-from .plugin import SkroutzPlugin
-
-plugin = SkroutzPlugin()
+"""Skroutz scraper plugin package."""

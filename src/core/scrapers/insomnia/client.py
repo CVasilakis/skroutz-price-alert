@@ -4,10 +4,10 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 
 from core.scrapers.base.http_client import HttpScraperClient
-from core.scrapers.base.model import ScrapeResult, AdvertMatch
+from core.scrapers.base.model import BaseTrackedItem, ListingResult, OfferMatch
 from core.exceptions import ScraperParseError, InvalidURLError
 from core.utils import parse_price
-from core.scrapers.insomnia.model import split_search_url
+from core.scrapers.insomnia.model import AdvertSearch
 from core.scrapers.insomnia.plugin import SETTING_MIN_ADVERT_PRICE
 
 # Headers impersonating a real browser fetching an HTML page. The scraper
@@ -56,26 +56,24 @@ class InsomniaClient(HttpScraperClient):
     """Client scraping insomnia.gr classifieds listing pages.
 
     One scrape fetches a listing page, walks its advert cards, and returns every
-    advert that passes the row's title filters (transported on the virtual
-    search URL) and the ``min_advert_price`` floor — each one an
-    :class:`AdvertMatch` candidate for its own price-drop alert. Inherits the
+    advert that passes the tracked row's title filters and the
+    ``min_advert_price`` floor — each one an :class:`OfferMatch` candidate for
+    its own price-drop alert. Inherits the
     TLS session, header-pool rotation, and HTTP-status-to-exception mapping
     from :class:`HttpScraperClient`.
     """
 
     HEADERS_POOL = _HEADERS_POOL
 
-    def scrape_product(self, product_url: str) -> ScrapeResult:
+    def scrape(self, item: BaseTrackedItem) -> ListingResult:
         """Scrapes an insomnia classifieds listing for adverts matching the search.
 
         Args:
-            product_url (str): The row's virtual search URL (listing URL plus
-                the filter terms as query parameters).
+            item (BaseTrackedItem): The parsed listing-search row, including filters.
 
         Returns:
-            ScrapeResult: Every matching advert (cheapest first) with ``price``
-            set to the cheapest match, or ``price=None`` when the listing was
-            checked fine but no advert matched.
+            ListingResult: Every matching offer, cheapest first; an empty tuple
+            means the listing was checked successfully but no offer matched.
 
         Raises:
             InvalidURLError: If the URL is not a classifieds page.
@@ -84,7 +82,11 @@ class InsomniaClient(HttpScraperClient):
             ServerError: For server-side HTTP errors (5xx).
             ScraperParseError: If the page does not look like a classifieds listing.
         """
-        listing_url, include, exclude = split_search_url(product_url)
+        if not isinstance(item, AdvertSearch):
+            raise InvalidURLError("InsomniaClient requires an AdvertSearch item")
+        listing_url = item.url
+        include = item.title_include
+        exclude = item.title_exclude
 
         if not urlparse(listing_url).path.startswith("/classifieds/"):
             raise InvalidURLError(f"Not an insomnia classifieds URL: {listing_url}")
@@ -97,13 +99,9 @@ class InsomniaClient(HttpScraperClient):
 
         matches = self._parse_adverts(response.text or "", listing_url, include, exclude)
         matches.sort(key=lambda match: match.price)
-        return ScrapeResult(
-            price=matches[0].price if matches else None,
-            currency=_CURRENCY,
-            matches=matches,
-        )
+        return ListingResult(currency=_CURRENCY, offers=tuple(matches))
 
-    def _parse_adverts(self, html: str, listing_url: str, include: list[str], exclude: list[str]) -> list[AdvertMatch]:
+    def _parse_adverts(self, html: str, listing_url: str, include: list[str], exclude: list[str]) -> list[OfferMatch]:
         """Extracts the adverts matching the search from a listing page.
 
         Args:
@@ -113,7 +111,7 @@ class InsomniaClient(HttpScraperClient):
             exclude (list[str]): Title terms that must all be absent.
 
         Returns:
-            list[AdvertMatch]: The matching adverts (unordered).
+            list[OfferMatch]: The matching offers (unordered).
 
         Raises:
             ScraperParseError: If no advert cards are present at all — a markup
@@ -168,6 +166,6 @@ class InsomniaClient(HttpScraperClient):
             if any(term.casefold() in folded for term in exclude):
                 continue
 
-            matches.append(AdvertMatch(title=title, price=price,
-                                       url=urljoin(listing_url, str(title_tag.get("href", "")))))
+            matches.append(OfferMatch(title=title, price=price,
+                                      url=urljoin(listing_url, str(title_tag.get("href", "")))))
         return matches

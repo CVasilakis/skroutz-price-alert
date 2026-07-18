@@ -67,9 +67,8 @@ class ShellWorld:
 
     Registry answers (served by the venv responder):
         plugins: Registered plugin names, in registry order.
-        configs: plugin -> config filename; default ``{p: f"{p}.json"}``.
         requirements: plugin -> absolute requirements path (plugins with none omitted).
-        timer_directives: plugin -> resolved [Timer] trigger lines; default OnCalendar=hourly.
+        schedules: plugin -> resolved OnCalendar value; default hourly.
         interval_status: plugin -> ok|default|invalid|nocfg; default ok.
         supported_intervals: The one-line cadence vocabulary shown in help text.
         discovery_error: When set, the registry is unreadable: list_plugins prints
@@ -106,9 +105,8 @@ class ShellWorld:
     """
 
     plugins: tuple[str, ...] = ("skroutz",)
-    configs: dict[str, str] | None = None
     requirements: dict[str, str] | None = None
-    timer_directives: dict[str, tuple[str, ...]] | None = None
+    schedules: dict[str, str] | None = None
     interval_status: dict[str, str] | None = None
     supported_intervals: str = "15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h"
     discovery_error: str | None = None
@@ -266,24 +264,20 @@ esac
 exit 0
 """
 
-# The marker substrings the venv responder below matches to recognize each inline
-# Python program common.sh pipes to `venv/bin/python3 -`. Guard-tested in
-# tests/shell/test_common_sh.py: every marker must still appear both in
-# scripts/lib/common.sh and in the shim's case patterns, so a reword of a heredoc
-# there fails loudly instead of the shim silently answering nothing.
+# Registry CLI invocations recognized by the venv responder. Guard-tested against
+# common.sh so the snapshot harness cannot silently drift from the shell bridge.
 VENV_RESPONDER_MARKERS: tuple[str, ...] = (
-    "get_requirements_path",
-    "get_config_filename",
-    "resolve_timer_directives",
-    "resolve_value",
-    "SUPPORTED_INTERVALS",
-    "discovery succeeded on retry",
-    "registered_targets",
+    "plugins --view targets",
+    "plugins --view examples",
+    "plugins --view requirements",
+    "schedules --view calendar",
+    "schedules --view status",
+    "intervals",
+    "diagnose",
 )
 
-# The venv responder. common.sh pipes each helper's python program to
-# `venv/bin/python3 -` on stdin; every program carries a marker string unique to
-# that snippet, matched MOST SPECIFIC FIRST (several share `registered_targets`).
+# The venv responder implements the small machine-readable registry CLI used by
+# common.sh, plus pip failure injection and run.sh's final dispatch marker.
 _VENV_PYTHON_SHIM = """#!/bin/sh
 # venv python responder: canned registry answers, pip failure injection, and a
 # dispatch marker for run.sh's final exec.
@@ -291,35 +285,33 @@ case "${1:-}" in
     -m)
         shift
         case "$*" in
+            "core.scrapers.cli plugins --view targets")
+                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                for _p in ${FAKE_PLUGINS:-}; do printf '%s\\n' "$_p"; done ;;
+            "core.scrapers.cli plugins --view examples")
+                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                [ -n "${FAKE_PLUGIN_EXAMPLES:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_EXAMPLES" ;;
+            "core.scrapers.cli plugins --view requirements")
+                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                [ -n "${FAKE_PLUGIN_REQUIREMENTS:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_REQUIREMENTS" ;;
+            "core.scrapers.cli schedules --view calendar"*)
+                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                [ -n "${FAKE_SCHEDULES:-}" ] && printf '%s\\n' "$FAKE_SCHEDULES" ;;
+            "core.scrapers.cli schedules --view status"*)
+                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                [ -n "${FAKE_INTERVAL_STATUS:-}" ] && printf '%s\\n' "$FAKE_INTERVAL_STATUS" ;;
+            "core.scrapers.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
+            "core.scrapers.cli diagnose")
+                if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
+                    printf '  %s\\n' "$FAKE_DISCOVERY_ERROR"
+                    exit 1
+                fi
+                _n=0
+                for _p in ${FAKE_PLUGINS:-}; do _n=$((_n + 1)); done
+                printf '  (discovery succeeded on retry: %s scraper(s) registered)\\n' "$_n" ;;
             *" -r requirements.txt") [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r /"*)               [ "${FAKE_PIP_FAIL:-}" = "plugin" ] && exit 1 ;;
             *" pip")                 [ "${FAKE_PIP_FAIL:-}" = "upgrade" ] && exit 1 ;;
-        esac ;;
-    -)
-        _prog="$(cat)"
-        case "$_prog" in
-            *get_requirements_path*)
-                [ -n "${FAKE_PLUGIN_REQUIREMENTS:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_REQUIREMENTS" ;;
-            *get_config_filename*)
-                [ -n "${FAKE_PLUGIN_CONFIGS:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_CONFIGS" ;;
-            *resolve_timer_directives*)
-                [ -n "${FAKE_TIMER_DIRECTIVES:-}" ] && printf '%s\\n' "$FAKE_TIMER_DIRECTIVES" ;;
-            *resolve_value*)
-                [ -n "${FAKE_INTERVAL_STATUS:-}" ] && printf '%s\\n' "$FAKE_INTERVAL_STATUS" ;;
-            *SUPPORTED_INTERVALS*)
-                printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
-            *"discovery succeeded on retry"*)
-                # the registry_diagnose snippet (also contains registered_targets)
-                if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
-                    printf '  %s\\n' "$FAKE_DISCOVERY_ERROR"
-                else
-                    _n=0
-                    for _p in ${FAKE_PLUGINS:-}; do _n=$((_n + 1)); done
-                    printf '  (discovery succeeded on retry: %s scraper(s) registered)\\n' "$_n"
-                fi ;;
-            *registered_targets*)
-                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
-                for _p in ${FAKE_PLUGINS:-}; do printf '%s\\n' "$_p"; done ;;
         esac ;;
     *)
         # run.sh's final exec: leave a marker line the golden can lock.
@@ -453,9 +445,7 @@ def _build_sandbox(world: ShellWorld) -> Path:
 def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
     """The complete child environment - built from scratch, never inherited."""
     plugins = world.plugins
-    configs = world.configs if world.configs is not None else {p: f"{p}.json" for p in plugins}
-    directives = (world.timer_directives if world.timer_directives is not None
-                  else {p: ("OnCalendar=hourly",) for p in plugins})
+    schedules = world.schedules if world.schedules is not None else {p: "hourly" for p in plugins}
     interval_status = (world.interval_status if world.interval_status is not None
                        else {p: "ok" for p in plugins})
 
@@ -472,9 +462,11 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         # force them on so the transcript matches what a terminal user sees.
         "CLICOLOR_FORCE": "1",
         "FAKE_PLUGINS": " ".join(plugins),
-        "FAKE_PLUGIN_CONFIGS": "\n".join(f"{p}\t{c}" for p, c in configs.items()),
+        "FAKE_PLUGIN_EXAMPLES": "\n".join(
+            f"{p}\t{sandbox}/src/core/scrapers/{p}/config.example.json" for p in plugins
+        ),
         "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p}\t{r}" for p, r in (world.requirements or {}).items()),
-        "FAKE_TIMER_DIRECTIVES": "\n".join(f"{p}\t{d}" for p, ds in directives.items() for d in ds),
+        "FAKE_SCHEDULES": "\n".join(f"{p}\t{calendar}" for p, calendar in schedules.items()),
         "FAKE_INTERVAL_STATUS": "\n".join(f"{p}\t{s}" for p, s in interval_status.items()),
         "FAKE_SUPPORTED_INTERVALS": world.supported_intervals,
         "FAKE_DISCOVERY_ERROR": world.discovery_error or "",

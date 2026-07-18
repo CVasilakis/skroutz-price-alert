@@ -4,6 +4,7 @@ These cases belong to the base backend rather than either concrete store: every 
 plugin inherits the same document-shape, row-validation, cleanup, and save-merge rules.
 """
 
+import contextlib
 import json
 import os
 import tempfile
@@ -11,7 +12,8 @@ import unittest
 
 from core.exceptions import StorageFileError
 from core.scrapers.base.storage import JsonProductDataManager
-from support import fake_plugin
+from core.scrapers.registry import ScraperRegistry
+from support import fake_plugin, registry_sandbox
 
 
 URL = "https://store.example/p/1"
@@ -27,7 +29,10 @@ class JsonStorageCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.path = os.path.join(self.tmp.name, "store.json")
-        self.plugin = fake_plugin(domains=("store.example",))
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(registry_sandbox(fake_plugin(domains=("store.example",))))
+        self.plugin = ScraperRegistry.get_plugin("fakestore")
 
     def _write(self, data) -> None:
         with open(self.path, "w") as file:
@@ -101,7 +106,7 @@ class TestRowBoundary(JsonStorageCase):
 
         self.assertEqual(item.name, "Unknown")
         self.assertEqual(item.url, "")
-        self.assertEqual(item.target_price, -1.0)
+        self.assertEqual(item.target_price, 0.0)
         self.assertEqual(item.last_price, 0.0)
         self.assertFalse(item.skip)
         self.assertEqual(item.last_checked, "42")
@@ -112,7 +117,7 @@ class TestSaveBoundary(JsonStorageCase):
         manager = self._load([
             {"name": "Good", "url": URL, "target_price": 10},
         ])
-        manager.update_item(URL, last_price=5.0)
+        manager.update_item(manager.parse_item(manager.get_items()[0]), last_price=5.0)
         with open(self.path, "w") as file:
             file.write("null")
 
@@ -125,7 +130,7 @@ class TestSaveBoundary(JsonStorageCase):
         manager = self._load([
             {"name": "Good", "url": URL, "target_price": 10},
         ])
-        manager.update_item(URL, last_price=5.0)
+        manager.update_item(manager.parse_item(manager.get_items()[0]), last_price=5.0)
         with open(self.path, "wb") as file:
             file.write(b"\xff")
 

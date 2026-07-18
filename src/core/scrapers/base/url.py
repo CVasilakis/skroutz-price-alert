@@ -66,6 +66,21 @@ def is_absolute_http_url(value: object) -> bool:
     return url_host(value) is not None
 
 
+def clean_url(value: object) -> str:
+    """Return an absolute URL without query parameters or a fragment.
+
+    Invalid or non-string values return an empty string. This is the canonical URL
+    representation used by item identity and JSON cleanup.
+    """
+    if not isinstance(value, str) or not value:
+        return ""
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return ""
+    return f"{parts.scheme}://{parts.netloc}{parts.path}"
+
+
 def host_matches_domain(host: str, domain: str) -> bool:
     """Match a host to a domain on a DNS label boundary (IPs match exactly)."""
     try:

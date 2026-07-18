@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from core.scrapers.base.storage import JsonProductDataManager
 from core.scrapers.insomnia.model import (
     AdvertSearch, INCLUDE_PARAM, EXCLUDE_PARAM,
-    parse_terms, is_valid_terms_field, search_row_key, split_search_url,
+    is_valid_terms_field,
 )
 
 
@@ -37,24 +37,6 @@ class InsomniaDataManager(JsonProductDataManager):
             bool: True if the path is under ``/classifieds/``.
         """
         return urlparse(url).path.startswith("/classifieds/")
-
-    def _row_key(self, product: dict) -> str:
-        """Returns a stored row's identity: its clean listing URL plus its terms."""
-        return search_row_key(
-            str(product.get("url", "")),
-            parse_terms(product.get(INCLUDE_PARAM)),
-            parse_terms(product.get(EXCLUDE_PARAM)),
-        )
-
-    def _update_key(self, url: str) -> str:
-        """Returns the row identity encoded in an item's virtual search URL.
-
-        Decodes the terms that ``AdvertSearch.from_dict`` folded into the URL
-        and rebuilds the same canonical key as :meth:`_row_key`, so cached
-        updates land on exactly the row they were scraped for.
-        """
-        listing, include, exclude = split_search_url(url)
-        return search_row_key(listing, include, exclude)
 
     def is_valid_item(self, item: Any) -> bool:
         """Validates a row: the base checks plus well-formed filter-terms fields.

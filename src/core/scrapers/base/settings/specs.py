@@ -2,10 +2,9 @@
 
 These are the settings every scraper shares (``execution_interval``, ``log_retention_days``,
 ``notify_scraping_errors``). They are declared here as specs over the generic engine in
-:mod:`core.settings`; a plugin exposes a store-specific setting by returning
-``BASE_SETTING_SPECS + [its specs]`` from ``BasePlugin.get_setting_specs`` (the single
-extension point) - with no new ``Resolved*`` type, registry passthrough or config-check
-block.
+:mod:`core.settings`; a plugin declares only its store-specific specs and the registry
+prepends these framework specs. No parallel ``Resolved*`` type or config-check branch
+is required.
 
 Import-light: builds on the stdlib-only engine and interval vocabulary, so it stays safe
 to call from the shell one-liners and ``--status``.
@@ -31,22 +30,20 @@ KEY_NOTIFY = "notify_scraping_errors"
 def _interval_default(plugin: Any) -> str:
     """The display default for ``execution_interval``: the plugin's cadence as a key.
 
-    Reads the plugin's validated canonical ``get_default_interval()`` value. Translation
+    Reads the plugin's validated canonical ``default_interval`` value. Translation
     to framework-owned systemd syntax happens only at the timer boundary.
     """
-    return plugin.get_default_interval() if plugin is not None else "1h"
+    return plugin.default_interval if plugin is not None else "1h"
 
 
-# The built-in settings shared by every scraper, in display order. A plugin returns this
-# (optionally extended) from ``BasePlugin.get_setting_specs``; the registry and the
-# settings panel iterate whatever it returns, so a per-scraper setting needs no framework
-# change.
+# The built-in settings shared by every scraper, in display order. The registry prepends
+# them to the plugin's custom specs, so a per-scraper setting needs no framework change.
 SPEC_INTERVAL = SettingSpec(
     key=KEY_INTERVAL,
     label="Execution Interval",
     # The settings layer speaks the user's vocabulary: the effective value is the
     # canonical interval key (e.g. "1h"). Translation to a systemd OnCalendar happens at
-    # the timer boundary (registry.resolve_timer_directives), not here.
+    # the timer boundary (registry.resolve_schedule), not here.
     normalize=normalize_interval,
     display=lambda canonical: canonical,
     warning=interval_warning_message(),
@@ -72,4 +69,4 @@ SPEC_NOTIFY = SettingSpec(
     default=True,  # default ON: notifications enabled unless explicitly disabled
 )
 
-BASE_SETTING_SPECS: list[SettingSpec] = [SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY]
+BASE_SETTING_SPECS: tuple[SettingSpec, ...] = (SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY)

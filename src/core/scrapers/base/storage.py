@@ -6,15 +6,15 @@ import shutil
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlparse
 
 from core.scrapers.base.model import BaseTrackedItem
+from core.scrapers.base.url import clean_url
 from core.constants import TIMESTAMP_FORMAT
 from core.exceptions import StorageFileError
 from core.utils import parse_price, write_json_atomically
 
 if TYPE_CHECKING:
-    from core.scrapers.base.plugin import BasePlugin
+    from core.scrapers.base.plugin import RegisteredPlugin
     from core.scrapers.base.settings import ResolvedSettings
 
 
@@ -22,16 +22,16 @@ class BaseDataManager(ABC):
     """Abstract base class for storing the items one scraper tracks.
 
     This is the *storage backend* contract, not a fully generic key-value store: it
-    models a **product identified by a URL and carrying a ``target_price``**, which is
-    this application's only domain. That assumption is baked into the shared helpers —
+    models a **tracked row carrying a URL, stable identity, and ``target_price``**, which
+    is this application's domain. That assumption is baked into the shared helpers —
     ``has_valid_target_price``, ``is_scrapable_item`` and ``_url_on_supported_domain``
     are about product URLs and target prices — so a subclass inherits those semantics;
     it does not get a blank slate.
 
     Subclasses must call ``super().__init__(filepath, plugin, settings)`` in their
     ``__init__`` and use ``self.filepath`` for all file operations. The manager
-    is given its owning :class:`BasePlugin` so that domain matching resolves
-    through ``plugin.get_supported_domains()`` (the single source of truth)
+    is given its owning registered plugin so that domain matching resolves
+    through the registered plugin's normalized ``domains`` (the single source of truth)
     rather than importing a concrete plugin, and its target's resolved
     ``self.settings`` so a store-specific setting is readable at scrape time
     (e.g. ``self.settings.get("region")``) without extra plumbing. Both are
@@ -44,15 +44,15 @@ class BaseDataManager(ABC):
         atomic save, dedup) and leaves only ``_matches_product_path`` (the
         store-specific URL-path rule) abstract. Subclass this class directly only for
         a non-file backend (a database or remote API) — and even then you are still
-        implementing the same product-over-URL contract, just against a different store.
+        implementing the same tracked-item contract, just against a different store.
     """
-    def __init__(self, filepath: str, plugin: "BasePlugin | None" = None,
+    def __init__(self, filepath: str, plugin: "RegisteredPlugin | None" = None,
                  settings: "ResolvedSettings | None" = None) -> None:
         """Initializes the data manager.
 
         Args:
             filepath (str): The path to the storage file.
-            plugin (BasePlugin | None): The owning plugin, used to resolve the
+            plugin (RegisteredPlugin | None): The owning plugin, used to resolve the
                 supported domains for URL matching. Injected by the registry.
             settings (ResolvedSettings | None): The target's resolved settings,
                 injected by the registry so a subclass can read a store-specific
@@ -100,8 +100,8 @@ class BaseDataManager(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def update_item(self, url: str, **updates: Any) -> None:
-        """Caches field updates for an item identified by its URL.
+    def update_item(self, item: BaseTrackedItem, **updates: Any) -> None:
+        """Cache field updates for a parsed item.
 
         Updates are not written to persistent storage until ``save``
         is called. Any keyword argument is accepted so that each
@@ -109,7 +109,7 @@ class BaseDataManager(ABC):
         ``stock_status``, ``shipping_cost``).
 
         Args:
-            url (str): The URL of the item.
+            item (BaseTrackedItem): The item whose state is being updated.
             **updates: Arbitrary field updates to cache for the item.
         """
         pass
@@ -260,13 +260,13 @@ class JsonProductDataManager(BaseDataManager):
     #: The top-level JSON key whose value is the list of item dictionaries.
     ROOT_KEY: str = "products"
 
-    def __init__(self, filepath: str, plugin: "BasePlugin | None" = None,
+    def __init__(self, filepath: str, plugin: "RegisteredPlugin | None" = None,
                  settings: "ResolvedSettings | None" = None) -> None:
         """Initializes the manager with the JSON file path.
 
         Args:
             filepath (str): The path to the JSON storage/config file.
-            plugin (BasePlugin | None): The owning plugin (see BaseDataManager).
+            plugin (RegisteredPlugin | None): The owning plugin (see BaseDataManager).
             settings (ResolvedSettings | None): The target's resolved settings
                 (see BaseDataManager); injected by the registry.
         """
@@ -350,62 +350,8 @@ class JsonProductDataManager(BaseDataManager):
             )
         raise StorageFileError(f"The {self._config_label} file contains invalid JSON format")
 
-    def _get_clean_url(self, url: str) -> str:
-        """Strips query parameters and fragments to return the clean base URL.
-
-        Args:
-            url (str): The raw URL to clean.
-
-        Returns:
-            str: The sanitized base URL.
-        """
-        if not url:
-            return ""
-        try:
-            parsed = urlparse(url)
-        except ValueError:
-            return ""
-        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-
-    # ------------------------------------------------------------------
-    # Row identity
-    # ------------------------------------------------------------------
-    # A row's identity decides which rows are duplicates (dedup grouping) and
-    # which stored row a cached update lands on (save merge). For classic
-    # product scrapers the clean URL *is* the identity, so the defaults below
-    # change nothing for them. A listing-type scraper, where several rows
-    # legitimately share one listing URL and differ only in their filter
-    # fields, overrides both hooks with the same composite key so that
-    # grouping (computed from the stored dict) and update caching (computed
-    # from the item's URL) can never disagree.
-
-    def _row_key(self, product: dict[str, Any]) -> str:
-        """Returns the identity of a stored row, used for dedup and save-merge.
-
-        Args:
-            product (dict[str, Any]): The raw stored row.
-
-        Returns:
-            str: The row's identity key (default: the clean URL).
-        """
-        return self._get_clean_url(str(product.get("url", "")))
-
-    def _update_key(self, url: str) -> str:
-        """Returns the identity key for an ``update_item`` URL.
-
-        Must produce the same key as :meth:`_row_key` does for the row the URL
-        was parsed from, so cached updates land on the right stored row.
-
-        Args:
-            url (str): The URL passed to ``update_item`` (an item's ``url``).
-
-        Returns:
-            str: The update cache key (default: the clean URL).
-        """
-        return self._get_clean_url(url)
-
-    def update_item(self, url: str, **updates: Any) -> None:
-        """Caches updates for an item, keyed by its row identity (``_update_key``).
+    def update_item(self, item: BaseTrackedItem, **updates: Any) -> None:
+        """Cache updates using the model's single stable identity key.
 
         Every update key must name a field of :attr:`MODEL` (the store's
         :class:`BaseTrackedItem` subclass). A key that does not is a programming error -
@@ -413,13 +359,18 @@ class JsonProductDataManager(BaseDataManager):
         ``from_dict`` read - so it is rejected loudly here rather than written as junk.
 
         Args:
-            url (str): The URL of the item to update.
+            item (BaseTrackedItem): The parsed item to update.
             **updates: Field updates (e.g. ``last_price=12.5``,
                 ``last_checked="11-06-2026 01:00:00"``); each key must be a ``MODEL`` field.
 
         Raises:
+            TypeError: If the item is not an instance of this manager's model.
             ValueError: If an update key is not a field of ``MODEL``.
         """
+        if type(item) is not self.MODEL:
+            raise TypeError(
+                f"update_item requires {self.MODEL.__name__}, got {type(item).__name__}."
+            )
         allowed = {field.name for field in dataclasses.fields(self.MODEL)}
         unknown = [key for key in updates if key not in allowed]
         if unknown:
@@ -428,7 +379,7 @@ class JsonProductDataManager(BaseDataManager):
                 f"valid fields are {sorted(allowed)}."
             )
 
-        key = self._update_key(url)
+        key = item.identity_key()
         if key in self._updates:
             self._updates[key].update(updates)
         else:
@@ -462,11 +413,11 @@ class JsonProductDataManager(BaseDataManager):
 
             url = str(product.get("url", ""))
             # Group by row identity if scrapable, otherwise fallback to string representation of raw url
-            row_key = self._row_key(product) if self.is_scrapable_item(product) else url
+            row_key = self.parse_item(product).identity_key() if self.is_scrapable_item(product) else url
             groups[row_key].append((i, product))
 
         items_to_keep = set()
-        for clean_url, group in groups.items():
+        for _identity, group in groups.items():
             if len(group) == 1:
                 items_to_keep.add(group[0][0])
                 continue
@@ -486,7 +437,7 @@ class JsonProductDataManager(BaseDataManager):
         for i, product in enumerate(products):
             if i in items_to_keep:
                 if isinstance(product, dict) and self.is_scrapable_item(product):
-                    product["url"] = self._get_clean_url(str(product.get("url", "")))
+                    product["url"] = clean_url(product.get("url", ""))
                 cleaned_products.append(product)
 
         return cleaned_products
@@ -559,7 +510,7 @@ class JsonProductDataManager(BaseDataManager):
         for product in fresh_data[self.ROOT_KEY]:
             if not isinstance(product, dict):
                 continue
-            row_key = self._row_key(product)
+            row_key = self.parse_item(product).identity_key()
 
             if row_key in self._updates:
                 for key, value in self._updates[row_key].items():

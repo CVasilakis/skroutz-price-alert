@@ -50,7 +50,7 @@ class TestReservedFlagNames(unittest.TestCase):
         for script in SCRIPTS:
             claimed |= builtin_flags_of(script)
         self.assertEqual(
-            claimed, set(RESERVED_PLUGIN_NAMES),
+            claimed | {"general"}, set(RESERVED_PLUGIN_NAMES),
             "RESERVED_PLUGIN_NAMES (registry.py) and the scripts' built-in '--<flag>' "
             "case branches have drifted apart. Add the new name to whichever side is "
             "missing it - an unreserved built-in flag silently shadows any plugin "

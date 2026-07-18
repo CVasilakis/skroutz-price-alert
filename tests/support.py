@@ -13,78 +13,54 @@ import contextlib
 import json
 import os
 import shutil
+import sys
 import tempfile
+from dataclasses import dataclass
 from unittest import mock
 
 from core.general import general_config_path
 from core.notifier import Notifier
 from core.scrapers.base.client import BaseScraperClient
-from core.scrapers.base.plugin import BasePlugin
+from core.scrapers.base.plugin import ClassRef, PluginDefinition, RegisteredPlugin
 from core.scrapers.base.storage import BaseDataManager
-from core.scrapers.base.settings import canonical_for_oncalendar
 from core.scrapers.registry import ScraperRegistry
 from core.ui.tui import ExecutionStrategy
 
 
-def fake_plugin(name="fakestore", domains=("fake-store.example",), config="fakestore.json",
-                display_name="Fake Store", specs=None, directives=None,
-                client_class=None, storage_class=None) -> BasePlugin:
-    """Builds a minimal import-light plugin descriptor for tests.
+@dataclass(frozen=True)
+class PluginFixture:
+    target: str
+    definition: PluginDefinition
 
-    By default the class getters *raise*, proving that registration and the other
-    import-light paths never resolve them; pass ``client_class``/``storage_class``
-    to make the plugin instantiable (e.g. for orchestrator-level tests). ``specs``
-    and ``directives`` override :meth:`BasePlugin.get_setting_specs` /
-    :meth:`BasePlugin.get_timer_directives` when given, so validation-gate tests
-    can feed the registry malformed values.
-    """
-    class _Fake(BasePlugin):
-        @staticmethod
-        def get_name():
-            return name
+    @property
+    def default_interval(self):
+        return self.definition.default_interval
 
-        @staticmethod
-        def get_display_name():
-            return display_name
+def _class_ref(bound_class, fallback: str) -> ClassRef:
+    if bound_class is None:
+        return ClassRef("support", fallback)
+    module = sys.modules[bound_class.__module__]
+    setattr(module, bound_class.__name__, bound_class)
+    return ClassRef(bound_class.__module__, bound_class.__name__)
 
-        @staticmethod
-        def get_supported_domains():
-            return list(domains)
 
-        @staticmethod
-        def get_config_filename():
-            return config
-
-        @staticmethod
-        def get_client_class():
-            if client_class is None:  # pragma: no cover - import-light guard
-                raise AssertionError("client class resolved unexpectedly")
-            return client_class
-
-        @staticmethod
-        def get_storage_class():
-            if storage_class is None:  # pragma: no cover - import-light guard
-                raise AssertionError("storage class resolved unexpectedly")
-            return storage_class
-
-    if specs is not None:
-        _Fake.get_setting_specs = lambda self: specs
-    if directives is not None:
-        # The production contract now exposes only a canonical domain interval. Keep
-        # legacy malformed-directive fixtures useful while translating the former
-        # valid {"OnCalendar": ...} shorthand to the replacement hook.
-        canonical = (canonical_for_oncalendar(directives.get("OnCalendar"))
-                     if isinstance(directives, dict) and set(directives) == {"OnCalendar"}
-                     else None)
-        if canonical is not None:
-            _Fake.get_default_interval = lambda self: canonical
-        else:
-            _Fake.get_timer_directives = lambda self: directives
-    return _Fake()
+def fake_plugin(name="fakestore", domains=("fake-store.example",),
+                display_name="Fake Store", specs=None,
+                client_class=None, storage_class=None, default_interval="1h") -> PluginFixture:
+    """Build an import-light plugin fixture for tests."""
+    definition = PluginDefinition(
+        display_name=display_name,
+        domains=tuple(domains),
+        client=_class_ref(client_class, "MissingFakeClient"),
+        storage=_class_ref(storage_class, "MissingFakeStorage"),
+        default_interval=default_interval,
+        setting_specs=tuple(specs or ()),
+    )
+    return PluginFixture(name, definition)
 
 
 @contextlib.contextmanager
-def registry_sandbox(*plugins: BasePlugin, frozen: bool = True):
+def registry_sandbox(*plugins: PluginFixture | RegisteredPlugin, frozen: bool = True):
     """Snapshots the process-wide plugin registry and yields a clean, isolated one.
 
     Resets ``ScraperRegistry`` (the test-only ``_reset`` hook), registers the given
@@ -103,7 +79,10 @@ def registry_sandbox(*plugins: BasePlugin, frozen: bool = True):
     ScraperRegistry._reset()
     try:
         for plugin in plugins:
-            ScraperRegistry.register(plugin)
+            if isinstance(plugin, PluginFixture):
+                ScraperRegistry.register(plugin.definition, target=plugin.target)
+            else:
+                ScraperRegistry._plugins[plugin.target] = plugin
         if frozen:
             ScraperRegistry._discovered = True
         yield ScraperRegistry

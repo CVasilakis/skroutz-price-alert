@@ -1,3 +1,1 @@
-from .plugin import InsomniaPlugin
-
-plugin = InsomniaPlugin()
+"""Insomnia scraper plugin package."""

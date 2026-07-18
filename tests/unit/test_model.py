@@ -1,10 +1,4 @@
-"""Unit tests for the tracked-item read-side parsing (``from_dict``).
-
-Covers the base parsing contract (defaults, the invalid ``target_price``
-sentinel) and — the reason ``_base_field_kwargs`` exists — that a store adding
-its own fields composes the base parsing instead of re-implementing it, so the
-sentinel rule can never drift between stores.
-"""
+"""Unit tests for tracked-item parsing and plugin-owned identity."""
 
 import unittest
 from dataclasses import dataclass
@@ -18,8 +12,11 @@ class _SkuItem(BaseTrackedItem):
     sku: str = ""
 
     @classmethod
-    def from_dict(cls, data):
-        return cls(**cls._base_field_kwargs(data), sku=data.get("sku", ""))
+    def parse_extra_fields(cls, data):
+        return {"sku": data.get("sku", "")}
+
+    def identity_key(self):
+        return f"{super().identity_key()}|{self.sku}"
 
 
 class TestBaseFromDict(unittest.TestCase):
@@ -32,9 +29,9 @@ class TestBaseFromDict(unittest.TestCase):
         self.assertFalse(item.skip)
         self.assertEqual(item.last_checked, "")
 
-    def test_invalid_target_price_becomes_sentinel(self):
+    def test_invalid_target_price_uses_safe_default(self):
         item = BaseTrackedItem.from_dict({"target_price": "not-a-price"})
-        self.assertEqual(item.target_price, -1.0)
+        self.assertEqual(item.target_price, 0.0)
 
     def test_string_target_price_is_parsed(self):
         item = BaseTrackedItem.from_dict({"target_price": "1.299,50 €"})
@@ -68,12 +65,14 @@ class TestSubclassComposition(unittest.TestCase):
         self.assertEqual(item.target_price, 25.0)
         self.assertEqual(item.sku, "SKU-42")
 
-    def test_subclass_inherits_target_price_sentinel(self):
-        # The sentinel rule flows through _base_field_kwargs — the subclass did not
-        # (and must not) re-implement it.
+    def test_subclass_inherits_base_normalization(self):
         item = _SkuItem.from_dict({"target_price": None, "sku": "SKU-42"})
-        self.assertEqual(item.target_price, -1.0)
+        self.assertEqual(item.target_price, 0.0)
         self.assertEqual(item.sku, "SKU-42")
+
+    def test_subclass_extends_identity_in_one_place(self):
+        item = _SkuItem.from_dict({"url": "https://store.example/p/1#fragment", "sku": "SKU-42"})
+        self.assertEqual(item.identity_key(), "https://store.example/p/1|SKU-42")
 
 
 if __name__ == "__main__":

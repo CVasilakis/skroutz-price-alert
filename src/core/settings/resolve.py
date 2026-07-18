@@ -18,7 +18,7 @@ one-liners, ``--status``, and the reminder service.
 import json
 import os
 from dataclasses import dataclass
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from core.settings.model import (
@@ -34,8 +34,8 @@ class SettingSpec:
     One spec fully describes how a setting is read, validated, defaulted and displayed,
     so the generic machinery (:func:`resolve_spec`, :func:`setting_view`) needs no
     per-setting code. The built-in scraper settings live in ``BASE_SETTING_SPECS``; a
-    plugin adds its own by returning ``BASE_SETTING_SPECS + [extra]`` from
-    ``BasePlugin.get_setting_specs``; the project-wide settings live in
+    plugin declares only its custom specs and the registry prepends framework specs;
+    the project-wide settings live in
     ``GENERAL_SETTING_SPECS`` - all resolved by this same machinery.
 
     Attributes:
@@ -50,7 +50,7 @@ class SettingSpec:
         default (Any): The effective fallback when the value is unset/invalid/missing.
         default_factory (Callable | None): A plugin-aware default, used instead of
             ``default`` when set (e.g. ``execution_interval`` defaults to the plugin's
-            own cadence). Receives the owning ``BasePlugin``.
+            own cadence). Receives the owning registered plugin record.
         is_unset (Callable): Predicate for "the user did not set this" (default:
             ``is None``). ``execution_interval`` uses ``not value`` so an empty string
             counts as unset (default) rather than invalid.
@@ -160,7 +160,7 @@ def resolve_one(spec: SettingSpec, config_path: str, plugin: Any = None) -> Reso
     return resolve_spec(spec, block, load_status, plugin)
 
 
-def resolve_all(specs: list[SettingSpec], config_path: str, plugin: Any = None) -> ResolvedSettings:
+def resolve_all(specs: Sequence[SettingSpec], config_path: str, plugin: Any = None) -> ResolvedSettings:
     """Resolves every spec against a config file in a single read.
 
     The single entry point for a target's whole settings set: it reads the config file
@@ -171,7 +171,7 @@ def resolve_all(specs: list[SettingSpec], config_path: str, plugin: Any = None) 
     resolution.
 
     Args:
-        specs (list[SettingSpec]): The settings to resolve, in display order.
+        specs (Sequence[SettingSpec]): The settings to resolve, in display order.
         config_path (str): Absolute path to the JSON config file.
         plugin (Any): The owning plugin, for plugin-aware defaults.
 

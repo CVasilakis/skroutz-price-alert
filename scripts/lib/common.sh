@@ -82,25 +82,17 @@ plugin_in_list() {
 # which load lazily only when a scrape actually runs. Returns non-zero (printing
 # nothing) if the venv is unavailable, so callers can fall back to
 # list_installed_plugins.
-list_plugins() {
+registry_cli() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from core.scrapers.registry import ScraperRegistry
-for target in ScraperRegistry.registered_targets():
-    print(target)
-PY
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" -m core.scrapers.cli "$@"
 }
 
-# list_plugin_configs: print "<plugin><TAB><config_filename>" for every registered
-# plugin (one pair per line), reusing plugin.get_config_filename(). Same venv
-# requirement as list_plugins.
-list_plugin_configs() {
-    [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from core.scrapers.registry import ScraperRegistry
-for target in ScraperRegistry.registered_targets():
-    print(f"{target}\t{ScraperRegistry.get_plugin(target).get_config_filename()}")
-PY
+list_plugins() {
+    registry_cli plugins --view targets 2>/dev/null
+}
+
+list_plugin_examples() {
+    registry_cli plugins --view examples 2>/dev/null
 }
 
 # list_plugin_requirements: print "<plugin><TAB><abs_requirements_path>" for every
@@ -109,33 +101,14 @@ PY
 # omitted. The path is absolute, so it installs regardless of cwd. Same venv
 # requirement as list_plugins.
 list_plugin_requirements() {
-    [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from core.scrapers.registry import ScraperRegistry
-for target in ScraperRegistry.registered_targets():
-    path = ScraperRegistry.get_requirements_path(target)
-    if path:
-        print(f"{target}\t{path}")
-PY
+    registry_cli plugins --view requirements 2>/dev/null
 }
 
-# list_plugin_timer_directives: print "<plugin><TAB><Key>=<Value>" for every
-# systemd [Timer] directive of every registered plugin (one per line). The value
-# is the plugin's *effective* cadence: ScraperRegistry.resolve_timer_directives()
-# translates the user's config "settings.execution_interval" when it is set and
-# valid (otherwise the plugin's canonical default). The plugin name is machine-readable, so a
-# literal tab cleanly separates it from the directive, whose value may itself
-# contain spaces (e.g. an OnCalendar like "*-*-* 00/2:00:00"). Same venv
-# requirement as list_plugins.
-list_plugin_timer_directives() {
-    [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from core.constants import CONFIG_DIR
-from core.scrapers.registry import ScraperRegistry
-for target in ScraperRegistry.registered_targets():
-    for key, value in ScraperRegistry.resolve_timer_directives(target, CONFIG_DIR).items():
-        print(f"{target}\t{key}={value}")
-PY
+# list_plugin_schedules: print "<plugin><TAB><OnCalendar value>" for every
+# registered plugin. The registry resolves the user's execution_interval and owns
+# its translation to systemd syntax; plugins cannot inject timer directives.
+list_plugin_schedules() {
+    registry_cli schedules --view calendar --config-dir "$BASE_DIR/config" 2>/dev/null
 }
 
 # list_interval_status: print "<plugin><TAB><status>" for every registered plugin
@@ -147,14 +120,7 @@ PY
 # schedule.sh uses this to decide whether to apply, warn, or skip a plugin's timer.
 # Same venv requirement as list_plugins.
 list_interval_status() {
-    [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from core.constants import CONFIG_DIR
-from core.scrapers.registry import ScraperRegistry
-from core.scrapers.base.settings import KEY_INTERVAL
-for target in ScraperRegistry.registered_targets():
-    print(f"{target}\t{ScraperRegistry.resolve_value(target, KEY_INTERVAL, CONFIG_DIR).status}")
-PY
+    registry_cli schedules --view status --config-dir "$BASE_DIR/config" 2>/dev/null
 }
 
 # list_supported_intervals: print the canonical execution_interval keys as one
@@ -162,11 +128,7 @@ PY
 # vocabulary (SUPPORTED_INTERVALS) so user-facing help text never drifts from the
 # code. Same venv requirement as list_plugins.
 list_supported_intervals() {
-    [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - 2>/dev/null <<'PY'
-from core.scrapers.base.settings import SUPPORTED_INTERVALS
-print(", ".join(SUPPORTED_INTERVALS))
-PY
+    registry_cli intervals 2>/dev/null
 }
 
 # registry_diagnose: explain on stderr WHY plugin enumeration printed nothing,
@@ -184,15 +146,7 @@ registry_diagnose() {
         return 1
     fi
     printf "%b\n" "${RED}Error: Scraper plugin discovery failed:${NC}" >&2
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" - >&2 <<'PY'
-try:
-    from core.scrapers.registry import ScraperRegistry
-    targets = ScraperRegistry.registered_targets()
-except Exception as e:
-    print(f"  {type(e).__name__}: {e}")
-else:
-    print(f"  (discovery succeeded on retry: {len(targets)} scraper(s) registered)")
-PY
+    registry_cli diagnose >&2 || :
     printf "%b\n" "Fix (or remove) the offending plugin package under ${CYAN}src/core/scrapers/${NC}, then retry." >&2
     return 1
 }
@@ -507,36 +461,7 @@ restart_timer_one() {
 # render the same per-plugin unit pair, so the unit format lives here in exactly
 # one place.
 
-# plugin_timer_block <plugin> <all_directives>: print <plugin>'s framework-resolved
-# OnCalendar line (no trailing newline, so the value is safe
-# to capture with $(...)). <all_directives> is the tab-separated
-# "<plugin>\tOnCalendar=<Value>" stream, captured once by the caller. Every other
-# directive is ignored defensively; the renderer owns Unit, RandomizedDelaySec, and
-# Persistent. Prints nothing when the stream has no schedule for the plugin.
-plugin_timer_block() {
-    _ptb_plugin="$1"
-    _ptb_all="$2"
-    _ptb_tab="$(printf '\t')"
-    _ptb_block=""
-    _ptb_old_ifs="$IFS"
-    IFS='
-'
-    for _ptb_line in $_ptb_all; do
-        [ "${_ptb_line%%"$_ptb_tab"*}" = "$_ptb_plugin" ] || continue
-        _ptb_directive="${_ptb_line#*"$_ptb_tab"}"
-        case "$_ptb_directive" in OnCalendar=*) ;; *) continue ;; esac
-        if [ -z "$_ptb_block" ]; then
-            _ptb_block="$_ptb_directive"
-        else
-            _ptb_block="$_ptb_block
-$_ptb_directive"
-        fi
-    done
-    IFS="$_ptb_old_ifs"
-    printf '%s' "$_ptb_block"
-}
-
-# render_plugin_service <plugin> <path> / render_plugin_timer <plugin> <block> <path>:
+# render_plugin_service <plugin> <path> / render_plugin_timer <plugin> <OnCalendar> <path>:
 # render complete unit files and explicitly preserve redirection failures even when
 # the caller invokes these functions from an `if` condition.
 render_plugin_service() {
@@ -558,14 +483,14 @@ EOF
 
 render_plugin_timer() {
     _rpt_plugin="$1"
-    _rpt_block="$2"
+    _rpt_calendar="$2"
     _rpt_path="$3"
     if ! cat > "$_rpt_path" << EOF
 [Unit]
 Description=Run $_rpt_plugin scraper
 
 [Timer]
-$_rpt_block
+OnCalendar=$_rpt_calendar
 Unit=$_rpt_plugin-scraper.service
 RandomizedDelaySec=180s
 Persistent=true
@@ -578,15 +503,15 @@ EOF
     fi
 }
 
-# write_plugin_timer_unit <plugin> <timer_block>: atomically replace only the timer
+# write_plugin_timer_unit <plugin> <OnCalendar>: atomically replace only the timer
 # unit. schedule.sh uses this so changing cadence never rewrites the service half.
 write_plugin_timer_unit() {
     _wpt_plugin="$1"
-    _wpt_block="$2"
+    _wpt_calendar="$2"
     _wpt_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpt_plugin" timer)"
     _wpt_tmp="$_wpt_file.tmp.$$"
     [ ! -e "$_wpt_tmp" ] || return 1
-    if ! render_plugin_timer "$_wpt_plugin" "$_wpt_block" "$_wpt_tmp"; then
+    if ! render_plugin_timer "$_wpt_plugin" "$_wpt_calendar" "$_wpt_tmp"; then
         rm -f "$_wpt_tmp"
         return 1
     fi
@@ -594,19 +519,16 @@ write_plugin_timer_unit() {
         rm -f "$_wpt_tmp"
         return 1
     fi
-    [ -f "$_wpt_file" ] && [ "$(read_timer_block "$_wpt_plugin")" = "$_wpt_block" ]
+    [ -f "$_wpt_file" ] && [ "$(read_timer_oncalendar "$_wpt_plugin")" = "$_wpt_calendar" ]
 }
 
-# write_plugin_units <plugin> <timer_block>: transactionally replace the plugin's
-# <plugin>-scraper.{service,timer} unit files in SYSTEMD_USER_DIR. <timer_block> is
-# the plugin's [Timer] trigger directives (from plugin_timer_block); the
-# framework-managed RandomizedDelaySec/Persistent are appended identically for every
-# plugin (including the explicit Unit link), and the [Service] dispatches identically
-# through run.sh. Requires BASE_DIR
+# write_plugin_units <plugin> <OnCalendar>: transactionally replace the plugin's
+# <plugin>-scraper.{service,timer} unit files in SYSTEMD_USER_DIR. The framework
+# owns every other timer key and the service dispatch. Requires BASE_DIR
 # (the repository root). Returns non-zero if either file was not written.
 write_plugin_units() {
     _wpu_plugin="$1"
-    _wpu_block="$2"
+    _wpu_calendar="$2"
     _wpu_service_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpu_plugin" service)"
     _wpu_timer_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpu_plugin" timer)"
 
@@ -620,7 +542,7 @@ write_plugin_units() {
     [ ! -e "$_wpu_service_tmp" ] && [ ! -e "$_wpu_timer_tmp" ] && \
         [ ! -e "$_wpu_service_backup" ] && [ ! -e "$_wpu_timer_backup" ] || return 1
     if ! render_plugin_service "$_wpu_plugin" "$_wpu_service_tmp" || \
-       ! render_plugin_timer "$_wpu_plugin" "$_wpu_block" "$_wpu_timer_tmp"; then
+       ! render_plugin_timer "$_wpu_plugin" "$_wpu_calendar" "$_wpu_timer_tmp"; then
         rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp"
         return 1
     fi
@@ -653,36 +575,17 @@ write_plugin_units() {
     fi
     rm -f "$_wpu_service_backup" "$_wpu_timer_backup"
     [ -f "$_wpu_service_file" ] && [ -f "$_wpu_timer_file" ] && \
-        [ "$(read_timer_block "$_wpu_plugin")" = "$_wpu_block" ]
+        [ "$(read_timer_oncalendar "$_wpu_plugin")" = "$_wpu_calendar" ]
 }
 
-# read_timer_block <plugin>: print the installed <plugin>-scraper.timer's [Timer]
-# *trigger* directives in the same normalized form as plugin_timer_block (one
-# "Key=Value" per line, no trailing newline, with the framework-managed
-# Unit/RandomizedDelaySec/Persistent and the section headers removed), or nothing if the
-# unit file is absent. Lets schedule.sh tell whether a re-resolved cadence actually
-# differs from what is already on disk, so an unchanged interval is a true no-op.
-read_timer_block() {
-    _rtb_file="$SYSTEMD_USER_DIR/$(unit_name "$1" timer)"
-    [ -f "$_rtb_file" ] || return 0
-    _rtb_in_timer=0
-    _rtb_block=""
-    while IFS= read -r _rtb_line; do
-        case "$_rtb_line" in
-            "[Timer]") _rtb_in_timer=1; continue ;;
-            "["*"]") _rtb_in_timer=0; continue ;;
+# read_timer_oncalendar <plugin>: print the installed timer's framework-owned
+# OnCalendar value, or nothing when the unit/value is absent.
+read_timer_oncalendar() {
+    _rto_file="$SYSTEMD_USER_DIR/$(unit_name "$1" timer)"
+    [ -f "$_rto_file" ] || return 0
+    while IFS= read -r _rto_line; do
+        case "$_rto_line" in
+            OnCalendar=*) printf '%s' "${_rto_line#OnCalendar=}"; return 0 ;;
         esac
-        [ "$_rtb_in_timer" -eq 1 ] || continue
-        [ -n "$_rtb_line" ] || continue
-        case "$_rtb_line" in
-            Unit=*|RandomizedDelaySec=*|Persistent=*) continue ;;
-        esac
-        if [ -z "$_rtb_block" ]; then
-            _rtb_block="$_rtb_line"
-        else
-            _rtb_block="$_rtb_block
-$_rtb_line"
-        fi
-    done < "$_rtb_file"
-    printf '%s' "$_rtb_block"
+    done < "$_rto_file"
 }

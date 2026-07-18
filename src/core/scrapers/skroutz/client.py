@@ -3,7 +3,7 @@ import json
 from urllib.parse import urlparse
 
 from core.scrapers.base.http_client import HttpScraperClient
-from core.scrapers.base.model import ScrapeResult
+from core.scrapers.base.model import BaseTrackedItem, PriceResult
 from core.exceptions import ScraperParseError, ProductUnavailableError, InvalidURLError
 from core.utils import parse_price
 
@@ -80,14 +80,14 @@ class SkroutzClient(HttpScraperClient):
 
     HEADERS_POOL = _HEADERS_POOL
 
-    def scrape_product(self, product_url: str) -> ScrapeResult:
+    def scrape(self, item: BaseTrackedItem) -> PriceResult:
         """Scrapes the Skroutz API for the current price of a product.
 
         Args:
-            product_url (str): The Skroutz URL of the product.
+            item (BaseTrackedItem): The parsed tracked product.
 
         Returns:
-            ScrapeResult: The scraped price and currency.
+            PriceResult: The scraped price and currency.
 
         Raises:
             ProductNotFoundError: If the product is not found.
@@ -98,6 +98,7 @@ class SkroutzClient(HttpScraperClient):
             ServerError: For server-side HTTP errors (5xx).
             ScraperParseError: If the API response cannot be decoded as JSON.
         """
+        product_url = item.url
         parsed_url = urlparse(product_url)
         domain = parsed_url.netloc
         match = re.search(r'/s/(\d+)', parsed_url.path)
@@ -135,4 +136,4 @@ class SkroutzClient(HttpScraperClient):
         if price is None:
             raise ScraperParseError(f"Could not parse price from value: {response_data['price_min']!r}")
 
-        return ScrapeResult(price=price, currency=_currency_for_domain(domain))
+        return PriceResult(price=price, currency=_currency_for_domain(domain))

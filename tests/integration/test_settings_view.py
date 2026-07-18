@@ -105,7 +105,7 @@ class TestPerScraperSetting(_ViewCase):
         self.assertEqual(setting_view(_SPEC_PAGES, resolved).footnote, _SPEC_PAGES.warning)
 
     def test_extended_spec_list_covers_base_plus_custom(self):
-        specs = BASE_SETTING_SPECS + [_SPEC_PAGES]
+        specs = BASE_SETTING_SPECS + (_SPEC_PAGES,)
         labels = [s.label for s in specs]
         self.assertIn("Execution Interval", labels)
         self.assertIn("Max Pages", labels)
@@ -115,10 +115,11 @@ class TestRegistryResolveSettings(unittest.TestCase):
     """resolve_all_settings().views() against the real skroutz plugin, in a sandbox."""
 
     def setUp(self):
-        from core.scrapers.skroutz import plugin as skroutz_plugin
+        from core.scrapers.skroutz.plugin import PLUGIN
+        from support import PluginFixture
         stack = contextlib.ExitStack()
         self.addCleanup(stack.close)
-        stack.enter_context(registry_sandbox(skroutz_plugin))
+        stack.enter_context(registry_sandbox(PluginFixture("skroutz", PLUGIN)))
 
     def test_one_view_per_builtin_setting(self):
         from core.scrapers.registry import ScraperRegistry

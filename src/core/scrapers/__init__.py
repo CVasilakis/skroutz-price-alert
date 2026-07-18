@@ -6,6 +6,6 @@ lazily and idempotently. Importing this package therefore has no registration
 side effects, and a populated registry never depends on a caller remembering to
 import it first.
 
-Each plugin sub-package must expose a module-level ``plugin`` attribute (a
-:class:`BasePlugin` instance) in its ``__init__.py``.
+Each plugin package exposes a module-level ``PLUGIN`` definition in ``plugin.py``.
+Its package ``__init__`` remains import-light and has no registration side effect.
 """

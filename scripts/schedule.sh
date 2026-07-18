@@ -51,12 +51,6 @@ print_help() {
     printf '\n'
 }
 
-# status_of <plugin> <status_stream>: print the interval-resolution status for a
-# plugin from the "<plugin><TAB><status>" stream captured from list_interval_status.
-status_of() {
-    plugin_stream_value "$1" "$2"
-}
-
 # ------------------------------------------------------------------------------
 # TARGET RESOLUTION
 # ------------------------------------------------------------------------------
@@ -146,17 +140,16 @@ fi
 # ------------------------------------------------------------------------------
 # APPLYING INTERVALS
 # ------------------------------------------------------------------------------
-# Each plugin's effective [Timer] directives already fold in its configured interval
-# (list_plugin_timer_directives is config-aware). We compare the resolved block
-# against the installed timer's current block and rewrite only when it changed, so an
+# Each plugin's effective schedule already folds in its configured interval. We
+# compare the resolved OnCalendar value against the installed timer and rewrite only when it changed, so an
 # unchanged cadence is a true no-op and an active timer is restarted only when its
 # schedule actually moved. A missing config or an unsupported value leaves the timer
 # untouched (keeping the previously-applied schedule, or the default).
 
-if ! ALL_TIMER_DIRECTIVES="$(list_plugin_timer_directives)" || \
+if ! ALL_SCHEDULES="$(list_plugin_schedules)" || \
    ! INTERVAL_STATUS="$(list_interval_status)" || \
    ! SUPPORTED_INTERVAL_KEYS="$(list_supported_intervals)" || \
-   ! CONFIG_PAIRS="$(list_plugin_configs)"; then
+   ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
     printf "%b\n" "${RED}Error: Failed to resolve plugin scheduling metadata.${NC}\n"
     exit 1
 fi
@@ -166,7 +159,7 @@ ACTIVE_CHANGED=""
 INACTIVE_CHANGED=""
 FAILED=0
 for plugin in $PLUGINS; do
-    if ! status="$(status_of "$plugin" "$INTERVAL_STATUS")"; then
+    if ! status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")"; then
         printf "%b\n" "\n${RED}[$plugin] Could not resolve execution_interval status; skipping.${NC}"
         FAILED=1
         continue
@@ -174,13 +167,10 @@ for plugin in $PLUGINS; do
 
     case "$status" in
         nocfg)
-            if ! config_filename="$(plugin_stream_value "$plugin" "$CONFIG_PAIRS")"; then
-                printf "%b\n" "\n${RED}[$plugin] Could not resolve its config filename; skipping.${NC}"
-                FAILED=1
-                continue
-            fi
             printf "%b\n" "\n${YELLOW}[$plugin] No config file found; leaving its timer unchanged.${NC}"
-            printf "%b\n" "Create it by copying ${CYAN}config/$config_filename.example${NC} to ${CYAN}config/$config_filename${NC}."
+            if example_path="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"; then
+                printf "%b\n" "Create it by copying ${CYAN}$example_path${NC} to ${CYAN}config/$plugin.json${NC}."
+            fi
             continue
             ;;
         invalid)
@@ -190,14 +180,14 @@ for plugin in $PLUGINS; do
             ;;
     esac
 
-    new_block="$(plugin_timer_block "$plugin" "$ALL_TIMER_DIRECTIVES")"
-    if [ -z "$new_block" ]; then
-        printf "%b\n" "\n${RED}[$plugin] Declares no [Timer] directives; skipping.${NC}"
+    new_calendar="$(plugin_stream_value "$plugin" "$ALL_SCHEDULES")"
+    if [ -z "$new_calendar" ]; then
+        printf "%b\n" "\n${RED}[$plugin] Has no resolved schedule; skipping.${NC}"
         FAILED=1
         continue
     fi
 
-    if [ "$new_block" = "$(read_timer_block "$plugin")" ]; then
+    if [ "$new_calendar" = "$(read_timer_oncalendar "$plugin")" ]; then
         printf "%b\n" "\n${GREEN}[$plugin] Timer already matches the configured interval. Nothing to do.${NC}"
         continue
     fi
@@ -218,7 +208,7 @@ for plugin in $PLUGINS; do
     fi
 
     printf "%b\n" "\n${CYAN}[$plugin] Updating the timer schedule to match the configured interval...${NC}"
-    if write_plugin_timer_unit "$plugin" "$new_block"; then
+    if write_plugin_timer_unit "$plugin" "$new_calendar"; then
         CHANGED="$CHANGED $plugin"
         printf "%b\n" "${GREEN}[$plugin] Timer unit updated.${NC}"
     else

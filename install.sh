@@ -229,26 +229,22 @@ printf "%b\n" "\n${CYAN}Setting up Systemd timer(s)...${NC}"
 
 mkdir -p "$SYSTEMD_USER_DIR"
 
-# Each plugin declares only its own [Timer] *trigger* (cadence) via
-# plugin.get_timer_directives(), resolved against the user's
-# settings.execution_interval (see list_plugin_timer_directives). RandomizedDelaySec
-# and Persistent are framework-managed and the [Service] dispatches identically
-# through run.sh; shared renderers keep install.sh's timer output byte-identical to
-# schedule.sh's timer-only replacement. Fetched once, then filtered per plugin.
-if ! ALL_TIMER_DIRECTIVES="$(list_plugin_timer_directives)"; then
-    printf "%b\n" "${RED}Error: Failed to resolve plugin timer directives.${NC}\n"
+# Resolve the one framework-owned OnCalendar value for each plugin. All other timer
+# metadata is rendered by the shared framework writer.
+if ! ALL_SCHEDULES="$(list_plugin_schedules)"; then
+    printf "%b\n" "${RED}Error: Failed to resolve plugin schedules.${NC}\n"
     exit 1
 fi
 
 for plugin in $PLUGINS; do
-    timer_block="$(plugin_timer_block "$plugin" "$ALL_TIMER_DIRECTIVES")"
+    on_calendar="$(plugin_stream_value "$plugin" "$ALL_SCHEDULES")"
 
-    if [ -z "$timer_block" ]; then
-        printf "%b\n" "${RED}Error: Target '$plugin' declares no [Timer] directives.${NC}\n"
+    if [ -z "$on_calendar" ]; then
+        printf "%b\n" "${RED}Error: Target '$plugin' has no resolved schedule.${NC}\n"
         exit 1
     fi
 
-    if ! write_plugin_units "$plugin" "$timer_block"; then
+    if ! write_plugin_units "$plugin" "$on_calendar"; then
         printf "%b\n" "${RED}Error: Failed to create systemd configuration files for '$plugin'.${NC}\n"
         exit 1
     fi
@@ -290,22 +286,18 @@ printf "%b\n" "${GREEN}Systemd timer(s) configured successfully.${NC}"
 # LAST CHECKS
 # ------------------------------------------------------------------------------
 # Report any plugin whose products config file is still missing (non-fatal), and
-# whether the shared .env is missing. Config filenames come from each plugin
-# descriptor, so this stays correct as plugins are added.
+# whether the shared .env is missing. Config filenames are derived from targets.
 
 MISSING_CONFIGS=""
-if ! CONFIG_PAIRS="$(list_plugin_configs)"; then
+if ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
     printf "%b\n" "${RED}Error: Failed to read plugin configuration metadata.${NC}\n"
     exit 1
 fi
 OLD_IFS="$IFS"
 IFS='
 '
-for pair in $CONFIG_PAIRS; do
-    pair_name="${pair%%"$PAIR_TAB"*}"
-    pair_cfg="${pair#*"$PAIR_TAB"}"
-    plugin_in_list "$pair_name" $PLUGINS || continue
-    [ -f "config/$pair_cfg" ] || MISSING_CONFIGS="$MISSING_CONFIGS $pair_cfg"
+for plugin in $PLUGINS; do
+    [ -f "config/$plugin.json" ] || MISSING_CONFIGS="$MISSING_CONFIGS $plugin"
 done
 IFS="$OLD_IFS"
 
@@ -315,8 +307,9 @@ ENV_MISSING=0
 if [ -n "$MISSING_CONFIGS" ] || [ "$ENV_MISSING" -eq 1 ]; then
     printf "%b\n" "\n${YELLOW}Note: Configuration required!${NC}"
 
-    for cfg in $MISSING_CONFIGS; do
-        printf "%b\n" "- Copy config/$cfg.example to config/$cfg"
+    for plugin in $MISSING_CONFIGS; do
+        example="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"
+        printf "%b\n" "- Copy $example to config/$plugin.json"
         printf "%b\n" "  and fill it with your desired products."
     done
 

@@ -19,10 +19,6 @@ SUPPORTED_INTERVALS: dict[str, str] = {
     "24h": "daily",
 }
 
-# Reverse of SUPPORTED_INTERVALS: a systemd OnCalendar expression back to its
-# canonical key, for displaying an effective interval the user can recognize.
-_ONCALENDAR_TO_CANONICAL: dict[str, str] = {v: k for k, v in SUPPORTED_INTERVALS.items()}
-
 # Canonical key -> total minutes. Any broad user spelling that resolves to a
 # supported number of minutes maps back to its canonical key through this table.
 _CANONICAL_MINUTES: dict[str, int] = {
@@ -89,20 +85,3 @@ def normalize_interval(raw: object) -> str | None:
 def oncalendar_for(canonical: str) -> str:
     """Returns the systemd ``OnCalendar`` expression for a canonical interval key."""
     return SUPPORTED_INTERVALS[canonical]
-
-
-def canonical_for_oncalendar(oncalendar: str) -> str | None:
-    """Returns the canonical interval key for a systemd ``OnCalendar`` expression.
-
-    The inverse of :func:`oncalendar_for`, used to display an effective schedule as a
-    key the user recognizes (e.g. ``"hourly"`` -> ``"1h"``). Returns ``None`` for an
-    expression that is not one of the supported cadences (e.g. a plugin's custom
-    default), so the caller can fall back to showing the raw expression.
-
-    Args:
-        oncalendar (str): A systemd ``OnCalendar`` expression.
-
-    Returns:
-        str | None: The canonical key, or ``None`` if not a supported cadence.
-    """
-    return _ONCALENDAR_TO_CANONICAL.get(oncalendar)

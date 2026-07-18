@@ -1,6 +1,6 @@
 """Tests for the insomnia client's listing parsing and filter semantics.
 
-Exercises ``scrape_product`` against fixture HTML mirroring the insomnia.gr
+Exercises ``scrape`` against fixture HTML mirroring the insomnia.gr
 classifieds markup (advert cards, the "Ζήτηση" want-to-buy marker, the
 "Επικοινωνία" no-price placeholder, EU-formatted prices) with the network
 mocked out. Pins the filter contract — ALL includes / ANY exclude,
@@ -20,7 +20,7 @@ pytest.importorskip("tls_client", reason="insomnia dependencies not installed")
 from core.exceptions import InvalidURLError, RateLimitError, ScraperParseError
 from core.settings import ResolvedSettings, resolve_spec
 from core.scrapers.insomnia.client import InsomniaClient
-from core.scrapers.insomnia.model import build_search_url
+from core.scrapers.insomnia.model import AdvertSearch
 from core.scrapers.insomnia.plugin import SPEC_MIN_ADVERT_PRICE
 
 LISTING = "https://www.insomnia.gr/classifieds/category/174-google/"
@@ -77,15 +77,21 @@ def _client(html=LISTING_HTML, status_code=200, min_advert_price=30):
 
 
 class TestScrapeProduct(unittest.TestCase):
+    @staticmethod
+    def _item(include=(), exclude=(), url=LISTING):
+        return AdvertSearch(
+            name="Search", url=url, target_price=500,
+            title_include=list(include), title_exclude=list(exclude),
+        )
+
     def test_filters_and_returns_the_matching_adverts_cheapest_first(self):
         client = _client()
-        result = client.scrape_product(build_search_url(LISTING, ["pixel 9"], ["9a"]))
+        result = client.scrape(self._item(["pixel 9"], ["9a"]))
 
         # 102 is excluded ("9a", case-insensitively), 103 is a Ζήτηση request,
         # 104 has no price, 105 is under the 30€ floor — 101 and 106 survive.
-        self.assertEqual([m.url.rsplit("/", 2)[-2] for m in result.matches],
+        self.assertEqual([m.url.rsplit("/", 2)[-2] for m in result.offers],
                          ["101-pixel-9", "106-pro"])
-        self.assertEqual(result.price, 450.0)
         self.assertEqual(result.currency, "€")
         # The listing is fetched bare: the filter params never reach the site.
         get_mock = cast(mock.Mock, client.get)
@@ -93,51 +99,50 @@ class TestScrapeProduct(unittest.TestCase):
 
     def test_include_terms_must_all_match(self):
         client = _client()
-        result = client.scrape_product(build_search_url(LISTING, ["Pixel 9", "512"], []))
-        self.assertEqual([m.title for m in result.matches], ["Google Pixel 9 Pro XL 512GB"])
+        result = client.scrape(self._item(["Pixel 9", "512"]))
+        self.assertEqual([m.title for m in result.offers], ["Google Pixel 9 Pro XL 512GB"])
 
     def test_eu_price_format_is_parsed(self):
         client = _client()
-        result = client.scrape_product(build_search_url(LISTING, ["512"], []))
-        self.assertEqual(result.price, 1234.56)
+        result = client.scrape(self._item(["512"]))
+        self.assertEqual(result.offers[0].price, 1234.56)
 
     def test_advert_links_resolve_against_the_listing_url(self):
         client = _client()
-        result = client.scrape_product(build_search_url(LISTING, ["512"], []))
-        self.assertEqual(result.matches[0].url,
+        result = client.scrape(self._item(["512"]))
+        self.assertEqual(result.offers[0].url,
                          "https://www.insomnia.gr/classifieds/ad/106-pro/")
 
     def test_no_matching_advert_is_a_priceless_success(self):
         client = _client()
-        result = client.scrape_product(build_search_url(LISTING, ["iPhone"], []))
-        self.assertIsNone(result.price)
-        self.assertEqual(result.matches, [])
+        result = client.scrape(self._item(["iPhone"]))
+        self.assertEqual(result.offers, ())
 
     def test_disabled_floor_keeps_bait_priced_adverts(self):
         client = _client(min_advert_price=0)
-        result = client.scrape_product(build_search_url(LISTING, ["ευκαιρία"], []))
-        self.assertEqual(result.price, 1.0)
+        result = client.scrape(self._item(["ευκαιρία"]))
+        self.assertEqual(result.offers[0].price, 1.0)
 
     def test_page_without_advert_cards_is_a_parse_error(self):
         client = _client(html="<html><body><p>maintenance</p></body></html>")
         with self.assertRaises(ScraperParseError):
-            client.scrape_product(LISTING)
+            client.scrape(self._item())
 
     def test_advert_card_without_price_element_is_a_parse_error(self):
         broken = '<li class="insAdvertsList"><h4><a href="/x/">Ad</a></h4></li>'
         client = _client(html=broken)
         with self.assertRaises(ScraperParseError):
-            client.scrape_product(LISTING)
+            client.scrape(self._item())
 
     def test_non_classifieds_url_is_invalid(self):
         client = _client()
         with self.assertRaises(InvalidURLError):
-            client.scrape_product("https://www.insomnia.gr/forums/topic/1/")
+            client.scrape(self._item(url="https://www.insomnia.gr/forums/topic/1/"))
 
     def test_http_status_maps_through_the_shared_contract(self):
         client = _client(status_code=429)
         with self.assertRaises(RateLimitError):
-            client.scrape_product(LISTING)
+            client.scrape(self._item())
 
 
 if __name__ == "__main__":

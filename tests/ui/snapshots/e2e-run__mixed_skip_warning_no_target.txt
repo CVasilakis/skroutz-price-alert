@@ -1,6 +1,6 @@
 # border: red
 
-╭────────────────────────── Fakestore Scraping ───────────────────────────╮
+╭────────────────────────── Fake Store Scraping ──────────────────────────╮
 │   🟡    Monitored Items       3 loaded, 1 misconfigured [1]             │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │

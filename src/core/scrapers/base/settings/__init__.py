@@ -14,7 +14,7 @@ map and the built-in ``BASE_SETTING_SPECS``) and re-exports the engine so that
 ``from core.scrapers.base.settings import X`` keeps working unchanged for both the engine
 names and the scraper names. It is imported by the plugin descriptors (and, transitively,
 by the lightweight shell one-liners and ``--status``), so it stays **import-light** -
-stdlib only, never a transport/parsing library - in line with the BasePlugin contract.
+stdlib only, never a transport/parsing library - in line with the descriptor contract.
 
 Layout (all submodules stdlib-only):
     * :mod:`core.settings` - the generic ``ResolvedSetting``/``SettingSpec``/resolver;
@@ -28,9 +28,8 @@ A setting is one ``SettingSpec``:
     normalizer, default, display formatter and warning). There is no parallel settings
     dataclass and no ``from_dict`` to override. Resolution reads the config's raw
     ``settings`` block by key, so adding a setting - built-in or per-scraper - is exactly
-    one spec. A scraper exposes a store-specific setting by returning
-    ``BASE_SETTING_SPECS + [its specs]`` from ``BasePlugin.get_setting_specs`` (the single
-    extension point) and reads its effective value at runtime through the ``self.settings``
+    one spec. A scraper declares only its store-specific specs in ``PluginDefinition``;
+    the registry prepends the framework specs and the plugin reads effective values through ``self.settings``
     accessor injected into its client and storage.
 
 Read-only by design:
@@ -70,7 +69,6 @@ from core.scrapers.base.settings.intervals import (
     SUPPORTED_INTERVALS,
     normalize_interval,
     oncalendar_for,
-    canonical_for_oncalendar,
 )
 from core.scrapers.base.settings.messages import (
     interval_warning_message,
@@ -97,7 +95,7 @@ __all__ = [
     "SettingSpec", "load_settings_block", "resolve_spec", "resolve_one", "resolve_all",
     "setting_view",
     # intervals
-    "SUPPORTED_INTERVALS", "normalize_interval", "oncalendar_for", "canonical_for_oncalendar",
+    "SUPPORTED_INTERVALS", "normalize_interval", "oncalendar_for",
     # messages
     "interval_warning_message", "retention_warning_message", "notify_errors_warning_message",
     # specs

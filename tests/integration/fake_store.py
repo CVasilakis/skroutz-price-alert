@@ -12,7 +12,7 @@ Use :func:`fake_store_server` to serve scripted responses and
 :func:`support.fake_plugin` (with :class:`FakeStoreClient` /
 :class:`FakeStoreDataManager`) inside a ``support.registry_sandbox`` to register
 the store. The plugin's domain must be built *after* the server binds, because
-``BasePlugin.matches_url`` compares the full netloc — including the port.
+the registered plugin's ``matches_url`` compares the full netloc — including the port.
 """
 
 import contextlib
@@ -27,22 +27,22 @@ from core.exceptions import (
     ProductNotFoundError, RateLimitError, ScraperError, ServerError,
 )
 from core.scrapers.base.client import BaseScraperClient
-from core.scrapers.base.model import BaseTrackedItem, ScrapeResult
+from core.scrapers.base.model import BaseTrackedItem, PriceResult
 from core.scrapers.base.storage import JsonProductDataManager
 
 
 class FakeStoreClient(BaseScraperClient):
     """A transport-light scraper client fetching JSON prices over plain urllib."""
 
-    def scrape_product(self, product_url: str) -> ScrapeResult:
+    def scrape(self, item: BaseTrackedItem) -> PriceResult:
         try:
-            with urllib.request.urlopen(product_url, timeout=5) as resp:
+            with urllib.request.urlopen(item.url, timeout=5) as resp:
                 status, body = resp.status, resp.read()
         except urllib.error.HTTPError as e:
             status, body = e.code, b""
         self._raise_for_status(status)
         data = json.loads(body)
-        return ScrapeResult(price=float(data["price"]), currency=data.get("currency", "€"))
+        return PriceResult(price=float(data["price"]), currency=data.get("currency", "€"))
 
     @staticmethod
     def _raise_for_status(status: int) -> None:

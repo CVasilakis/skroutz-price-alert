@@ -143,10 +143,10 @@ NOTIFICATION_URLS = tgram://<token>/<chat_id>, discord://<webhook_id>/<webhook_t
 
 ### File 2: Scraper Configuration (`config/<target>.json`)
 
-Each scraper reads a single JSON file in the `config/` directory (e.g., `config/skroutz.json` for Skroutz) that holds both its **settings** and the **products** it monitors. Copy the provided `config/skroutz.json.example` template to create your own:
+Each scraper reads a single JSON file in the `config/` directory (e.g., `config/skroutz.json` for Skroutz) that holds both its **settings** and the **products** it monitors. Example files live with their plugins, so a new plugin is self-contained. Copy the Skroutz template to create your own:
 
 ```sh
-cp config/skroutz.json.example config/skroutz.json
+cp src/core/scrapers/skroutz/config.example.json config/skroutz.json
 nano config/skroutz.json
 ```
 
@@ -405,7 +405,7 @@ Re-enables and starts the background schedule (systemd timer) for the installed 
 | `--<target>` | Enable only the specified target's scraper. You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is enabled. |
 
 #### Set Execution Interval
-Applies each scraper's configured `execution_interval` (from the `settings` block of the config filename declared by that plugin) to the installed systemd timer. Run it whenever you change an interval:
+Applies each scraper's configured `execution_interval` (from `config/<target>.json`) to the installed systemd timer. Run it whenever you change an interval:
 
 ```
 ./scripts/schedule.sh [-h] [--<target> ...]
@@ -615,6 +615,7 @@ To see all the undergoing feature requests or to request a new feature, please c
 ## 🤝 Contributing & Issues
 
 Contributions are always welcome! If you have an idea to make this project better, feel free to fork the repository and submit a pull request.
+To add a marketplace, follow [CONTRIBUTING.md](CONTRIBUTING.md): a scraper is one self-contained package, and adding it requires no registry, orchestrator, shell, or UI edits.
 If you encounter a bug or run into any issues, please [open an issue](https://github.com/CVasilakis/scrooge-alert/issues). To help me resolve it quickly, include as much detail as possible.
 
 ## 💝 Support & Donations

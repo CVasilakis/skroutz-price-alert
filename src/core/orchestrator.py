@@ -21,14 +21,16 @@ from core.constants import (
 from core.exceptions import RateLimitError, ServerError, ScraperError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
 from core.preflight import TargetLoad
 from core.ui.config_check import config_view
-from core.scrapers.base.model import BaseTrackedItem, ScrapeResult, validate_scrape_result
+from core.scrapers.base.model import (
+    BaseTrackedItem, ListingResult, PriceResult, ScrapeResult, validate_scrape_result,
+)
 from core.scrapers.base.storage import BaseDataManager
 from core.scrapers.base.settings import KEY_RETENTION, KEY_NOTIFY
 from core.scrapers.registry import ScraperRegistry
 from core.notifier import Notifier
 from core.logger import save_traceback, get_target_logger
 from core.ui.tui import ExecutionStrategy, SilentExecutionStrategy, Notes, PriceOutcome
-from core.utils import describe_signal
+from core.utils import describe_signal, parse_price
 
 
 def _utc_now() -> datetime.datetime:
@@ -43,7 +45,7 @@ def _utc_now() -> datetime.datetime:
 
 
 # --- Error handling policy -------------------------------------------------
-# scrape_product signals every outcome through the exception it raises. The
+# ``scrape`` signals failures through modeled exceptions. The
 # behavior for each retryable error — whether to refresh identity before
 # retrying, abort the whole target, count it as a notified failure, save a
 # traceback, and any extra footnotes — is declared here once instead of in a
@@ -258,7 +260,7 @@ class ScrapingOrchestrator:
             timestamp = datetime.datetime.strptime(item.last_checked, TIMESTAMP_FORMAT)
         except (ValueError, TypeError):
             data_manager.update_item(
-                item.url,
+                item,
                 last_price=item.last_price,
                 last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT)
             )
@@ -349,7 +351,7 @@ class ScrapingOrchestrator:
 
         Args:
             item (BaseTrackedItem): The product that was scraped.
-            result (ScrapeResult): The result containing the current price and currency.
+            result: A validated product-price or listing-search result.
             data_manager (BaseDataManager): The data manager responsible for saving the updates.
             original_invalid_price: The raw value from the config if the target price was
                 unparseable, or None if it was valid.
@@ -366,71 +368,74 @@ class ScrapingOrchestrator:
         elif missing_target_price:
             notes.append(messages.missing_target_price(result.currency))
 
-        if result.price is None:
+        if isinstance(result, ListingResult) and not result.offers:
             # A listing check that completed fine but matched no advert: refresh
             # the check timestamp (so the row never goes stale) without touching
             # last_price — there is no price — and send no alert.
             self.ui_strategy.log_price_result(item.name, None, result.currency, item.target_price, PriceOutcome.NO_MATCH, notes=notes, attempt_notes=attempt_notes)
-            data_manager.update_item(item.url, last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT))
+            data_manager.update_item(item, last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT))
             return False
 
         notification_failed = False
-        if result.matches:
+        if isinstance(result, ListingResult):
+            current_price = min(offer.price for offer in result.offers)
             outcome, notification_failed = self._notify_matching_adverts(item, result, notes)
-        elif result.price < item.target_price:
-            outcome = PriceOutcome.DROP
-            if self.notifier.has_services:
-                if self._try_notification(lambda: self.notifier.notify_low_price(
-                    item.name, item.target_price, result.price, item.url, result.currency
-                )):
-                    notes.append(messages.NOTE_NOTIFIED_OK)
-                else:
-                    notes.append(messages.NOTE_NOTIFIED_FAIL)
-                    notification_failed = True
-            else:
-                notes.append(messages.NOTE_NOTIFIED_NONE)
-        elif item.target_price == 0.0:
-            outcome = PriceOutcome.NO_TARGET
         else:
-            outcome = PriceOutcome.OK
+            current_price = result.price
+            if result.price < item.target_price:
+                outcome = PriceOutcome.DROP
+                if self.notifier.has_services:
+                    if self._try_notification(lambda: self.notifier.notify_low_price(
+                        item.name, item.target_price, result.price, item.url, result.currency
+                    )):
+                        notes.append(messages.NOTE_NOTIFIED_OK)
+                    else:
+                        notes.append(messages.NOTE_NOTIFIED_FAIL)
+                        notification_failed = True
+                else:
+                    notes.append(messages.NOTE_NOTIFIED_NONE)
+            elif item.target_price == 0.0:
+                outcome = PriceOutcome.NO_TARGET
+            else:
+                outcome = PriceOutcome.OK
 
         if notification_failed:
             self.ui_strategy.log_price_result(
-                item.name, result.price, result.currency, item.target_price, outcome,
+                item.name, current_price, result.currency, item.target_price, outcome,
                 notes=notes, attempt_notes=attempt_notes, delivery_failed=True,
             )
         else:
             self.ui_strategy.log_price_result(
-                item.name, result.price, result.currency, item.target_price, outcome,
+                item.name, current_price, result.currency, item.target_price, outcome,
                 notes=notes, attempt_notes=attempt_notes,
             )
 
         data_manager.update_item(
-            item.url,
-            last_price=result.price,
+            item,
+            last_price=current_price,
             last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT)
         )
         return notification_failed
 
-    def _notify_matching_adverts(self, item: BaseTrackedItem, result: ScrapeResult, notes: list[str]) -> tuple[PriceOutcome, bool]:
+    def _notify_matching_adverts(self, item: BaseTrackedItem, result: ListingResult, notes: list[str]) -> tuple[PriceOutcome, bool]:
         """Sends one price-drop push per matching advert below the target price.
 
         The listing-type counterpart of the single-price notification branch:
-        every advert in ``result.matches`` priced below the item's target gets its
+        every offer in ``result.offers`` priced below the item's target gets its
         own push, linking directly to that advert. The delivery outcome is
         summarized in the row notes rather than one note per advert.
 
         Args:
             item (BaseTrackedItem): The product row (a listing search) being processed.
-            result (ScrapeResult): The scrape result carrying the matched adverts.
+            result (ListingResult): The listing result carrying matched offers.
             notes (list): The row's notes accumulator (appended in place).
 
         Returns:
             PriceOutcome: DROP when any advert was below target, otherwise
                 NO_TARGET/OK mirroring the single-price outcome buckets.
         """
-        below = [m for m in result.matches if m.price < item.target_price]
-        notes.append(messages.advert_matches_note(len(result.matches), len(below)))
+        below = [offer for offer in result.offers if offer.price < item.target_price]
+        notes.append(messages.advert_matches_note(len(result.offers), len(below)))
 
         if not below:
             return (PriceOutcome.NO_TARGET if item.target_price == 0.0 else PriceOutcome.OK), False
@@ -453,16 +458,10 @@ class ScrapingOrchestrator:
         return PriceOutcome.DROP, notification_failed
 
     @staticmethod
-    def _normalize_target_price(item: BaseTrackedItem, row: dict[str, Any]) -> tuple[object | None, bool]:
-        """Detects and neutralizes a missing or invalid target price.
-
-        A negative sentinel target price (set by ``from_dict`` for unparseable input)
-        is reset to ``0.0`` in place so price comparisons are safe. The raw values are
-        returned rather than injected onto the item so the success handler can surface
-        them as footnotes.
+    def _target_price_issues(row: dict[str, Any]) -> tuple[object | None, bool]:
+        """Return the raw invalid value and whether the target field is missing.
 
         Args:
-            item (BaseTrackedItem): The parsed product (mutated in place when invalid).
             row (dict): The raw config row, used to recover the original raw value.
 
         Returns:
@@ -471,12 +470,10 @@ class ScrapingOrchestrator:
                 when the price was valid) and ``missing_target_price`` is True when the
                 field was absent entirely.
         """
-        missing_target_price = 'target_price' not in row
-        original_invalid_price = None
-        if item.target_price < 0:
-            original_invalid_price = row.get('target_price')
-            item.target_price = 0.0
-        return original_invalid_price, missing_target_price
+        if "target_price" not in row:
+            return None, True
+        parsed = parse_price(row.get("target_price"))
+        return (row.get("target_price") if parsed is None or parsed < 0 else None), False
 
     def _process_product(self, row: dict[str, Any], data_manager: BaseDataManager) -> ProductRunOutcome:
         """Processes a single product from the configuration, attempting to scrape it.
@@ -500,7 +497,7 @@ class ScrapingOrchestrator:
             self.ui_strategy.log_error(item.name, messages.WARN_INVALID_URL, notes=stale_note)
             return ProductRunOutcome(item, reported_error=error)
 
-        original_invalid_price, missing_target_price = self._normalize_target_price(item, row)
+        original_invalid_price, missing_target_price = self._target_price_issues(row)
 
         self._sleep_with_jitter(MIN_DELAY_SECONDS)
         if self.interrupted:
@@ -524,7 +521,7 @@ class ScrapingOrchestrator:
         Returns:
             ProductRunOutcome: The structured terminal or successful attempt outcome.
         """
-        scraper = self.registry.get_scraper(item.url)
+        scraper = self.registry.get_client(self._current_target)
         attempt_notes: list[str] = []
 
         for attempt in range(MAX_RETRIES):
@@ -534,7 +531,7 @@ class ScrapingOrchestrator:
             try:
                 self.ui_strategy.start_scraping(item.name, attempt + 1, MAX_RETRIES)
                 try:
-                    result = validate_scrape_result(scraper.scrape_product(item.url))
+                    result = validate_scrape_result(scraper.scrape(item))
                 finally:
                     self.ui_strategy.complete_scraping()
 
@@ -606,6 +603,9 @@ class ScrapingOrchestrator:
                 break
 
             self._current_target = target
+            plugin = self.registry.get_plugin(target)
+            display_name = getattr(plugin, "display_name", None)
+            target_label = display_name if isinstance(display_name, str) else target
             # Resolve this target's settings once for the whole run; the registry caches
             # the read and shares the very same accessor with the client and storage. The
             # logger, the start_target settings section, and the notify-on-errors gate
@@ -624,7 +624,7 @@ class ScrapingOrchestrator:
             load = self.loads_by_target.get(target)
             if load is not None and load.error is not None:
                 self.ui_strategy.start_target(
-                    target, self._current_logger, settings_view, settings.block_warning,
+                    target_label, self._current_logger, settings_view, settings.block_warning,
                     config_view(0, (), load.error), settings.unknown_warning,
                 )
                 self.ui_strategy.complete_target()
@@ -641,7 +641,7 @@ class ScrapingOrchestrator:
                 # (mirroring the client-instantiation handler below); other
                 # targets and the rest of the run proceed.
                 self.ui_strategy.start_target(
-                    target, self._current_logger, settings_view, settings.block_warning,
+                    target_label, self._current_logger, settings_view, settings.block_warning,
                     settings_warning=settings.unknown_warning,
                 )
                 self.ui_strategy.log_error("System", str(e))
@@ -654,7 +654,7 @@ class ScrapingOrchestrator:
             # The 'Config' row (products-config health) leads this scraper's panel, above
             # its settings section — built from the same loaded snapshot the run iterates.
             self.ui_strategy.start_target(
-                target, self._current_logger, settings_view, settings.block_warning,
+                target_label, self._current_logger, settings_view, settings.block_warning,
                 config_view(data_manager.get_item_count(), data_manager.get_faulty_indices()),
                 settings.unknown_warning,
             )
@@ -697,9 +697,8 @@ class ScrapingOrchestrator:
                         try:
                             data_manager.save()
                         except StorageFileError as e:
-                            # The config filename comes from the plugin descriptor (the
-                            # single source of truth) — it is not always <target>.json.
-                            config_filename = self.registry.get_plugin(target).get_config_filename()
+                            # The registry derives the config filename from the target.
+                            config_filename = self.registry.get_plugin(target).config_filename
                             self.ui_strategy.log_error("Storage", messages.save_failed(config_filename), str(e))
                             outcome.storage_error = True
 

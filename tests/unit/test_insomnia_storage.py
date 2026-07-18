@@ -14,7 +14,7 @@ import shutil
 import tempfile
 import unittest
 
-from core.scrapers.insomnia import plugin
+from core.scrapers.registry import ScraperRegistry
 from core.scrapers.insomnia.storage import InsomniaDataManager
 
 LISTING = "https://www.insomnia.gr/classifieds/category/174-google/"
@@ -33,7 +33,8 @@ class InsomniaStorageCase(unittest.TestCase):
     def _manager(self, products):
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp_dir, ignore_errors=True)
-        filepath = os.path.join(tmp_dir, plugin.get_config_filename())
+        plugin = ScraperRegistry.get_plugin("insomnia")
+        filepath = os.path.join(tmp_dir, plugin.config_filename)
         with open(filepath, "w") as f:
             json.dump({"products": products}, f)
         manager = InsomniaDataManager(filepath, plugin=plugin)
@@ -80,9 +81,9 @@ class TestWriteBackLandsOnTheRightRow(InsomniaStorageCase):
             _row("Pixel 256", include=["Pixel", "256"]),
         ])
         manager.clean_storage()
-        # The orchestrator updates by item.url — the virtual search URL from from_dict.
+        # The orchestrator updates with the parsed row, whose identity includes its filters.
         item = manager.parse_item(manager.get_items()[1])
-        manager.update_item(item.url, last_price=199.0, last_checked="01-01-2026 00:00:00")
+        manager.update_item(item, last_price=199.0, last_checked="01-01-2026 00:00:00")
         manager.save()
 
         with open(manager.filepath) as f:

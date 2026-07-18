@@ -26,7 +26,7 @@ LOGGER = stub_logger()
 
 def _run_script(s):
     """A minimal but realistic interactive run: open a target, scrape one product, finish."""
-    s.start_target("skroutz", LOGGER, views_all_ok(), None, config_ok())
+    s.start_target("Skroutz", LOGGER, views_all_ok(), None, config_ok())
     s.start_scraping("Sony WH-1000XM5", 1, 1)
     s.complete_scraping()
     s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP)

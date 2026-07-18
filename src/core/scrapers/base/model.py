@@ -3,14 +3,14 @@ import math
 from typing import Any, TypeVar
 
 from core.exceptions import InvalidScrapeResultError
-from core.scrapers.base.url import is_absolute_http_url
+from core.scrapers.base.url import clean_url, is_absolute_http_url
 from core.utils import parse_price
 
 T = TypeVar('T', bound='BaseTrackedItem')
 
 
-@dataclass
-class AdvertMatch:
+@dataclass(frozen=True)
+class OfferMatch:
     """One concrete offer found by a listing-type scrape.
 
     A classic product scrape resolves one URL to one price, but a listing-type
@@ -29,28 +29,25 @@ class AdvertMatch:
     url: str
 
 
-@dataclass
-class ScrapeResult:
-    """Represents the result of a successful price scrape.
+@dataclass(frozen=True)
+class PriceResult:
+    """A successful scrape that resolves one tracked product to one price."""
 
-    Attributes:
-        price: The scraped price as a float, or ``None`` for a listing-type
-            scrape that completed fine but matched no advert ("checked, nothing
-            to report"): the orchestrator refreshes ``last_checked`` without
-            touching ``last_price`` and sends no alert. Classic single-product
-            scrapers always set a float.
-        currency: The currency symbol (e.g. ``"€"``, ``"Lei"``).
-        matches: The independent offers found by a listing-type scrape, each a
-            candidate for its own price-drop alert. Empty for single-product
-            scrapers. When non-empty, ``price`` is the cheapest match's price.
-        metadata: Optional extra data returned by the scraper (e.g.
-            ``{"stock": "in_stock", "seller": "StoreName"}``).  Consumers
-            that only need ``price`` and ``currency`` can ignore this.
-    """
-    price: float | None
+    price: float
     currency: str
-    matches: list[AdvertMatch] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ListingResult:
+    """A successful listing search containing zero or more independent offers."""
+
+    currency: str
+    offers: tuple[OfferMatch, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+ScrapeResult = PriceResult | ListingResult
 
 
 def _valid_price(value: object, field: str) -> float:
@@ -67,39 +64,29 @@ def _valid_price(value: object, field: str) -> float:
 
 def validate_scrape_result(value: object) -> ScrapeResult:
     """Validate and normalize one scraper's successful return value."""
-    if not isinstance(value, ScrapeResult):
-        raise InvalidScrapeResultError("scrape_product() must return a ScrapeResult")
+    if not isinstance(value, (PriceResult, ListingResult)):
+        raise InvalidScrapeResultError("scrape() must return a PriceResult or ListingResult")
     if not isinstance(value.currency, str) or not value.currency.strip():
         raise InvalidScrapeResultError("currency must be a nonblank string")
     if not isinstance(value.metadata, dict):
         raise InvalidScrapeResultError("metadata must be a dictionary")
-    if not isinstance(value.matches, list):
-        raise InvalidScrapeResultError("matches must be a list")
 
-    normalized_matches: list[AdvertMatch] = []
-    for index, match in enumerate(value.matches, start=1):
-        if not isinstance(match, AdvertMatch):
-            raise InvalidScrapeResultError(f"matches[{index}] must be an AdvertMatch")
+    if isinstance(value, PriceResult):
+        return PriceResult(_valid_price(value.price, "price"), value.currency, dict(value.metadata))
+
+    if not isinstance(value.offers, tuple):
+        raise InvalidScrapeResultError("offers must be a tuple")
+    normalized_offers: list[OfferMatch] = []
+    for index, match in enumerate(value.offers, start=1):
+        if not isinstance(match, OfferMatch):
+            raise InvalidScrapeResultError(f"offers[{index}] must be an OfferMatch")
         if not isinstance(match.title, str) or not match.title.strip():
-            raise InvalidScrapeResultError(f"matches[{index}].title must be nonblank")
-        price = _valid_price(match.price, f"matches[{index}].price")
+            raise InvalidScrapeResultError(f"offers[{index}].title must be nonblank")
+        price = _valid_price(match.price, f"offers[{index}].price")
         if not is_absolute_http_url(match.url):
-            raise InvalidScrapeResultError(f"matches[{index}].url must be an absolute HTTP(S) URL")
-        normalized_matches.append(AdvertMatch(match.title, price, match.url))
-
-    if value.price is None:
-        if normalized_matches:
-            raise InvalidScrapeResultError("price may be None only when matches is empty")
-        normalized_price = None
-    else:
-        normalized_price = _valid_price(value.price, "price")
-    if normalized_matches:
-        cheapest = min(match.price for match in normalized_matches)
-        if normalized_price != cheapest:
-            raise InvalidScrapeResultError("price must equal the cheapest advert match")
-
-    # Normalize integer prices without mutating plugin-owned match objects in place.
-    return ScrapeResult(normalized_price, value.currency, normalized_matches, dict(value.metadata))
+            raise InvalidScrapeResultError(f"offers[{index}].url must be an absolute HTTP(S) URL")
+        normalized_offers.append(OfferMatch(match.title, price, match.url))
+    return ListingResult(value.currency, tuple(normalized_offers), dict(value.metadata))
 
 
 @dataclass
@@ -110,29 +97,14 @@ class BaseTrackedItem:
     human-readable name, a URL, a target price for alerting, the most
     recently scraped price, a skip flag, and a last-checked timestamp.
 
-    Read-side projection:
-        A tracked item is built from a stored row via ``from_dict`` purely for
-        reading (price comparison, notifications, stale checks). It is never
-        reserialized back to storage. Writes go through
-        ``BaseDataManager.update_item(url, **fields)``, which surgically merges
-        only the named fields into the stored row. This is deliberate: the config
-        file is co-authored by the user, so a full reserialization would clobber
-        unknown keys, coerce the user's original input, and persist the invalid
-        ``target_price`` sentinel (see ``from_dict``). Subclasses may add
-        store-specific fields and override ``from_dict`` to read them, composing the
-        base parsing via ``_base_field_kwargs`` instead of re-implementing it::
+    ``from_dict`` owns shared normalization and composes subclass fields through
+    ``parse_extra_fields``. ``identity_key`` is the one stable identity used for
+    deduplication and state write-back; a plugin with multiple logical rows per URL
+    overrides that method on its item model.
 
-            @classmethod
-            def from_dict(cls, data):
-                return cls(**cls._base_field_kwargs(data), sku=data.get('sku', ''))
-
-        To persist a machine-owned field, pass it to ``update_item`` — no ``to_dict``
-        is needed.
-
-        Item rows are the *only* place the application writes machine-owned state.
-        The config's top-level ``settings`` block is read-only user input — never
-        written back — so runtime state belongs here (on the item, via
-        ``update_item``), not in ``settings`` (see :mod:`core.scrapers.base.settings`).
+    Storage merges only explicitly updated machine fields into the original row,
+    preserving unknown user-authored keys. The top-level ``settings`` block remains
+    read-only; runtime state belongs on item rows.
     """
     name: str = "Unknown"
     url: str = ""
@@ -145,10 +117,8 @@ class BaseTrackedItem:
     def _base_field_kwargs(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Parses the shared base fields out of a stored row, as constructor kwargs.
 
-        The compositional half of ``from_dict``: a subclass adding store-specific
-        fields overrides ``from_dict`` and reuses this for the base fields (see the
-        class docstring) instead of re-implementing the parsing — in particular the
-        ``target_price`` sentinel rule, which must never drift between stores.
+        Subclasses do not override this method; they implement ``parse_extra_fields``
+        while this shared normalization remains authoritative.
 
         Args:
             data (dict[str, Any]): The item data dictionary.
@@ -157,8 +127,8 @@ class BaseTrackedItem:
             dict[str, Any]: One kwarg per base field, ready to pass to ``cls(...)``.
         """
         target_price = parse_price(data.get('target_price', 0.0))
-        if target_price is None:
-            target_price = -1.0  # sentinel: invalid value
+        if target_price is None or target_price < 0:
+            target_price = 0.0
 
         raw_name = data.get('name', 'Unknown')
         name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else 'Unknown'
@@ -189,15 +159,18 @@ class BaseTrackedItem:
         }
 
     @classmethod
+    def parse_extra_fields(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Parse subclass-owned fields while base normalization remains centralized."""
+        return {}
+
+    @classmethod
     def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """Creates an instance from a dictionary.
 
         Error-handling contract:
             * Missing keys fall back to the field defaults declared above.
-            * Invalid ``target_price`` values (non-numeric strings, None)
-              are stored as ``-1.0`` to signal invalidity.  The caller
-              (typically the orchestrator) is responsible for detecting the
-              sentinel and deciding how to proceed.
+            * Invalid ``target_price`` values become the safe non-alerting value ``0.0``;
+              the orchestrator reads the raw row separately when presenting warnings.
             * Other malformed base fields are normalized to their safe typed
               defaults so presentation and timestamp-repair code never receives
               arbitrary JSON containers.
@@ -209,4 +182,8 @@ class BaseTrackedItem:
             BaseTrackedItem: A new instance populated with data from the
             dictionary.
         """
-        return cls(**cls._base_field_kwargs(data))
+        return cls(**cls._base_field_kwargs(data), **cls.parse_extra_fields(data))
+
+    def identity_key(self) -> str:
+        """Return the stable key used for deduplication and state write-back."""
+        return clean_url(self.url)

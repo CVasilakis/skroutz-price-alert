@@ -65,8 +65,8 @@ _case("plugin_requirements_fail", "A plugin's own requirements.txt fails to inst
                     pip_fail="plugin"),
       tags=("error",))
 
-_case("no_timer_directives", "A target declares no [Timer] directives at all.",
-      world=ShellWorld(timer_directives={}), tags=("error",))
+_case("missing_schedule", "A target has no registry-resolved schedule.",
+      world=ShellWorld(schedules={}), tags=("error",))
 
 _case("unit_write_fails", "The systemd user dir is unwritable, so unit rendering fails.",
       world=ShellWorld(unit_dir_readonly=True), tags=("error",))

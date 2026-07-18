@@ -1,5 +1,5 @@
 """Integration tests for the settings wiring: single-read resolution, the
-``ResolvedSettings`` accessor, the timer-directive translation boundary, discovery-time
+``ResolvedSettings`` accessor, the schedule translation boundary, discovery-time
 spec validation, the per-target injection into client/storage, and the ``update_item``
 field guard.
 
@@ -22,10 +22,10 @@ from core.scrapers.base.settings import (
 )
 from core.scrapers.base.client import BaseScraperClient
 from core.scrapers.registry import ScraperRegistry
-from core.scrapers.skroutz import plugin as skroutz_plugin
-from core.exceptions import PluginDiscoveryError
+from core.scrapers.skroutz.plugin import PLUGIN as SKROUTZ_PLUGIN
+from core.exceptions import PluginValidationError
 
-from support import fake_plugin, registry_sandbox, write_settings_config
+from support import PluginFixture, fake_plugin, registry_sandbox, write_settings_config
 
 
 class _SkroutzConfigCase(unittest.TestCase):
@@ -44,7 +44,7 @@ class _SandboxedSkroutzCase(_SkroutzConfigCase):
     def setUp(self):
         stack = contextlib.ExitStack()
         self.addCleanup(stack.close)
-        stack.enter_context(registry_sandbox(skroutz_plugin))
+        stack.enter_context(registry_sandbox(PluginFixture("skroutz", SKROUTZ_PLUGIN)))
 
 
 class TestResolveAllSingleRead(_SkroutzConfigCase):
@@ -98,24 +98,23 @@ class TestResolvedSettingsAccessor(_SkroutzConfigCase):
         self.assertEqual(resolved.unknown_keys, ())
 
 
-class TestTimerDirectiveTranslation(_SandboxedSkroutzCase):
-    """resolve_timer_directives owns the canonical-key -> OnCalendar translation."""
+class TestScheduleTranslation(_SandboxedSkroutzCase):
+    """resolve_schedule owns the canonical-key -> OnCalendar translation."""
 
     def test_valid_interval_translates_to_oncalendar(self):
         cfg_dir = self._cfg_dir({"execution_interval": "2h"})
-        directives = ScraperRegistry.resolve_timer_directives("skroutz", cfg_dir)
-        self.assertEqual(directives["OnCalendar"], oncalendar_for("2h"))
+        schedule = ScraperRegistry.resolve_schedule("skroutz", cfg_dir)
+        self.assertEqual(schedule.on_calendar, oncalendar_for("2h"))
 
     def test_invalid_interval_falls_back_to_plugin_default(self):
         cfg_dir = self._cfg_dir({"execution_interval": "3h"})  # unsupported
-        directives = ScraperRegistry.resolve_timer_directives("skroutz", cfg_dir)
-        # Skroutz keeps the BasePlugin default cadence.
-        self.assertEqual(directives["OnCalendar"], "hourly")
+        schedule = ScraperRegistry.resolve_schedule("skroutz", cfg_dir)
+        self.assertEqual(schedule.on_calendar, "hourly")
 
     def test_unset_interval_falls_back_to_plugin_default(self):
         cfg_dir = self._cfg_dir({})
-        directives = ScraperRegistry.resolve_timer_directives("skroutz", cfg_dir)
-        self.assertEqual(directives["OnCalendar"], "hourly")
+        schedule = ScraperRegistry.resolve_schedule("skroutz", cfg_dir)
+        self.assertEqual(schedule.on_calendar, "hourly")
 
 
 # --- Discovery-time spec validation ---------------------------------------------
@@ -125,70 +124,67 @@ def _spec(key, label="X"):
                        display=str, warning="w", default=None)
 
 
-def _SpecPlugin(specs, directives=None):
-    """A plugin descriptor whose only interesting behavior is its setting specs.
-
-    Built on the shared ``support.fake_plugin`` factory; ``directives=None`` keeps
-    the canonical ``BasePlugin`` default cadence.
-    """
+def _SpecPlugin(specs=(), default_interval="1h"):
+    """A definition whose only interesting behavior is its custom settings."""
     return fake_plugin(name="specfake", domains=("specfake.example",),
-                       config="specfake.json", display_name="SpecFake",
-                       specs=specs, directives=directives)
+                       display_name="SpecFake",
+                       specs=specs, default_interval=default_interval)
+
+
+def _register(plugin):
+    ScraperRegistry.register(plugin.definition, target=plugin.target)
 
 
 class TestDiscoverySpecValidation(unittest.TestCase):
     def test_duplicate_keys_rejected(self):
         plugin = _SpecPlugin([_spec("dup", "A"), _spec("dup", "B")])
-        with self.assertRaises(PluginDiscoveryError) as ctx:
-            ScraperRegistry._validate_plugin_contract("specfake", plugin)
+        with registry_sandbox(), self.assertRaises(PluginValidationError) as ctx:
+            _register(plugin)
         self.assertIn("duplicate setting key", str(ctx.exception).lower())
 
     def test_empty_key_rejected(self):
         plugin = _SpecPlugin([_spec("  ")])
-        with self.assertRaises(PluginDiscoveryError):
-            ScraperRegistry._validate_plugin_contract("specfake", plugin)
+        with registry_sandbox(), self.assertRaises(PluginValidationError):
+            _register(plugin)
 
     def test_non_spec_entry_rejected(self):
         plugin = _SpecPlugin([_spec("ok"), "not a spec"])
-        with self.assertRaises(PluginDiscoveryError):
-            ScraperRegistry._validate_plugin_contract("specfake", plugin)
+        with registry_sandbox(), self.assertRaises(PluginValidationError):
+            _register(plugin)
 
-    def test_base_specs_pass(self):
-        plugin = _SpecPlugin(list(BASE_SETTING_SPECS))
-        # Should not raise.
-        ScraperRegistry._validate_plugin_contract("specfake", plugin)
+    def test_empty_custom_specs_gain_framework_specs(self):
+        plugin = _SpecPlugin()
+        with registry_sandbox():
+            _register(plugin)
+            registered = ScraperRegistry.get_plugin("specfake")
+            self.assertEqual(tuple(registered.setting_specs), tuple(BASE_SETTING_SPECS))
 
-    def test_missing_base_spec_rejected(self):
-        # A plugin that REPLACES instead of EXTENDS drops the base settings the
-        # framework reads with the strict accessor — rejected loudly at discovery.
+    def test_plugin_declares_only_custom_specs(self):
         plugin = _SpecPlugin([_spec("region")])
-        with self.assertRaises(PluginDiscoveryError) as ctx:
-            ScraperRegistry._validate_plugin_contract("specfake", plugin)
-        self.assertIn("missing", str(ctx.exception).lower())
+        with registry_sandbox():
+            _register(plugin)
+            keys = [spec.key for spec in ScraperRegistry.get_plugin("specfake").setting_specs]
+            self.assertEqual(keys[-1], "region")
 
-    def test_base_plus_custom_passes(self):
-        plugin = _SpecPlugin(list(BASE_SETTING_SPECS) + [_spec("region")])
-        # Extending the base set is the supported shape; should not raise.
-        ScraperRegistry._validate_plugin_contract("specfake", plugin)
+    def test_redeclaring_framework_spec_is_rejected(self):
+        plugin = _SpecPlugin([BASE_SETTING_SPECS[0]])
+        with registry_sandbox(), self.assertRaises(PluginValidationError):
+            _register(plugin)
 
 
 class TestDiscoveryCadenceValidation(unittest.TestCase):
-    """A plugin's default OnCalendar must be one of the canonical cadences."""
+    """A plugin declares one canonical default interval key."""
 
     def test_canonical_cadence_passes(self):
-        plugin = _SpecPlugin(list(BASE_SETTING_SPECS), {"OnCalendar": "daily"})
-        ScraperRegistry._validate_plugin_contract("specfake", plugin)  # no raise
+        plugin = _SpecPlugin(default_interval="24h")
+        with registry_sandbox():
+            _register(plugin)
 
     def test_non_canonical_cadence_rejected(self):
-        plugin = _SpecPlugin(list(BASE_SETTING_SPECS), {"OnCalendar": "*-*-* 03:00:00"})
-        with self.assertRaises(PluginDiscoveryError) as ctx:
-            ScraperRegistry._validate_plugin_contract("specfake", plugin)
-        self.assertIn("oncalendar", str(ctx.exception).lower())
-
-    def test_missing_oncalendar_rejected(self):
-        plugin = _SpecPlugin(list(BASE_SETTING_SPECS), {"OnBootSec": "5min"})
-        with self.assertRaises(PluginDiscoveryError):
-            ScraperRegistry._validate_plugin_contract("specfake", plugin)
+        plugin = _SpecPlugin(default_interval="*-*-* 03:00:00")
+        with registry_sandbox(), self.assertRaises(PluginValidationError) as ctx:
+            _register(plugin)
+        self.assertIn("default_interval", str(ctx.exception))
 
 
 class TestMalformedSettingsBlock(_SkroutzConfigCase):
@@ -223,7 +219,7 @@ class TestSettingsInjection(_SandboxedSkroutzCase):
             self.skipTest("tls_client not installed; client cannot be instantiated")
         registry = ScraperRegistry(self._cfg_dir({"execution_interval": "2h"}))
         try:
-            client = registry.get_scraper("https://www.skroutz.gr/s/123/product.html")
+            client = registry.get_client("skroutz")
             settings = client.settings
             assert isinstance(settings, ResolvedSettings)  # narrows the Optional
             self.assertEqual(settings.value(KEY_INTERVAL), "2h")
@@ -234,7 +230,7 @@ class TestSettingsInjection(_SandboxedSkroutzCase):
         # Settings arrive through the constructor (passed by the registry); a client
         # built without them — e.g. in a unit test — defaults to None.
         class _MinimalClient(BaseScraperClient):
-            def scrape_product(self, product_url):  # pragma: no cover - never called
+            def scrape(self, item):  # pragma: no cover - never called
                 raise NotImplementedError
 
         self.assertIsNone(_MinimalClient().settings)
@@ -250,7 +246,7 @@ class TestSettingsInjection(_SandboxedSkroutzCase):
                 super().__init__(settings)
                 seen_during_init.append(self.settings)
 
-            def scrape_product(self, product_url):  # pragma: no cover - never called
+            def scrape(self, item):  # pragma: no cover - never called
                 raise NotImplementedError
 
         _InitReadingClient(settings=sentinel)
@@ -261,12 +257,21 @@ class TestUpdateItemFieldGuard(_SandboxedSkroutzCase):
     def test_unknown_update_key_raises(self):
         registry = ScraperRegistry(self._cfg_dir({}))
         manager = registry.get_manager("skroutz")
-        url = "https://www.skroutz.gr/s/123/product.html"
+        item = manager.parse_item({"url": "https://www.skroutz.gr/s/123/product.html"})
         # A real MODEL field is accepted...
-        manager.update_item(url, last_price=12.5)
+        manager.update_item(item, last_price=12.5)
         # ...a typo'd field is rejected loudly instead of silently persisted.
         with self.assertRaises(ValueError):
-            manager.update_item(url, last_pirce=12.5)
+            manager.update_item(item, last_pirce=12.5)
+
+    def test_wrong_item_model_raises(self):
+        from core.scrapers.insomnia.model import AdvertSearch
+
+        registry = ScraperRegistry(self._cfg_dir({}))
+        manager = registry.get_manager("skroutz")
+        with self.assertRaises(TypeError):
+            manager.update_item(AdvertSearch(url="https://www.skroutz.gr/s/123/product.html"),
+                                last_price=12.5)
 
 
 if __name__ == "__main__":

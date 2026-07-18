@@ -34,7 +34,8 @@ def main() -> None:
     # Discover and register all scraper plugins (idempotent).
     registered_scrapers = ScraperRegistry.registered_targets()
     for scraper in registered_scrapers:
-        parser.add_argument(f'--{scraper}', action='store_true', help=f'Run the {scraper.capitalize()} scraper')
+        display_name = ScraperRegistry.get_plugin(scraper).display_name
+        parser.add_argument(f'--{scraper}', action='store_true', help=f'Run the {display_name} scraper')
 
     # Strict parsing: an unknown flag (e.g. a typo'd --<plugin>) must error out,
     # not be silently ignored — parse_known_args would fall through to running

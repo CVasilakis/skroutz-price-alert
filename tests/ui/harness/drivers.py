@@ -112,7 +112,7 @@ def drive_orchestrated_run(products: list[dict],
     Args:
         products: The config rows written to the temp ``fakestore.json``.
         results_by_url: ``url -> [outcome, ...]`` where each outcome is a
-            ``ScrapeResult`` or an exception instance to raise; consecutive attempts
+            ``PriceResult`` or an exception instance to raise; consecutive attempts
             consume the list and the last entry repeats.
         has_services / delivery_ok: The notifier double's gates (see
             ``support.mock_notifier``), controlling which notification note appears.
@@ -131,8 +131,8 @@ def drive_orchestrated_run(products: list[dict],
     scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
 
     class _ScriptedClient(BaseScraperClient):
-        def scrape_product(self, product_url):
-            script = scripts[product_url]
+        def scrape(self, item):
+            script = scripts[item.url]
             outcome = script.pop(0) if len(script) > 1 else script[0]
             if isinstance(outcome, Exception):
                 raise outcome

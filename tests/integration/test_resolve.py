@@ -68,7 +68,7 @@ class TestResolveNotify(_ResolveCase):
 
 
 class TestResolveInterval(_ResolveCase):
-    # support.fake_plugin keeps the BasePlugin default cadence ("hourly"), which is
+    # support.fake_plugin keeps the framework default cadence ("1h"), which is
     # exactly the plugin-aware default these tests need.
     PLUGIN = fake_plugin()
 

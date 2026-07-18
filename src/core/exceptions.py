@@ -15,7 +15,7 @@ class ScraperParseError(ScraperError):
     pass
 
 class InvalidScrapeResultError(ScraperParseError):
-    """Raised when a scraper returns a value that violates ScrapeResult invariants."""
+    """Raised when a scraper returns a value that violates result invariants."""
     pass
 
 class ProductNotFoundError(ScraperError):
@@ -46,15 +46,18 @@ class LockAcquisitionError(Exception):
     """Raised when a lock cannot be acquired because it is held by another process."""
     pass
 
-class PluginDiscoveryError(Exception):
-    """Raised when a scraper plugin package cannot be discovered or is malformed."""
+class PluginError(Exception):
+    """Base class for plugin discovery, validation, and dependency failures."""
     pass
 
-class PluginDependencyError(PluginDiscoveryError):
-    """Raised when a plugin's bound client/storage cannot be imported because its
-    dependencies are not installed (e.g. its requirements.txt was never installed).
+class PluginDiscoveryError(PluginError):
+    """Raised when a scraper plugin package cannot be discovered or imported."""
+    pass
 
-    Subclasses PluginDiscoveryError so existing discovery error handling still
-    catches it, while carrying a clearer, actionable message (which scraper, and
-    how to install its dependencies)."""
+class PluginValidationError(PluginError):
+    """Raised when a discovered plugin definition violates its contract."""
+    pass
+
+class PluginDependencyError(PluginError):
+    """Raised when a lazily loaded plugin dependency is not installed."""
     pass

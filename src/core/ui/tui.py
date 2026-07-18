@@ -438,7 +438,7 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
         else:
             panel_color = "blue"
 
-        return Panel(renderable, title=f"[bold]{self.target_name.capitalize()} Scraping[/bold]", border_style=panel_color, width=75)
+        return Panel(renderable, title=f"[bold]{self.target_name} Scraping[/bold]", border_style=panel_color, width=75)
 
     def log_result(self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
         """Logs a standard result directly into the rich table."""

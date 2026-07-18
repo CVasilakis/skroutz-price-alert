@@ -1,4 +1,4 @@
 # Dependencies only the insomnia scraper needs. Their `import` statements stay
-# behind the deferred get_client_class()/get_storage_class() calls (import-light contract).
+# behind the registry's lazy ClassRef bindings (import-light contract).
 tls-client
 beautifulsoup4

@@ -9,7 +9,7 @@ Enabling user lingering to allow timer to run when logged out...
 Systemd timer(s) configured successfully.
 
 Note: Configuration required!
-- Copy config/skroutz.json.example to config/skroutz.json
+- Copy <BASE_DIR>/src/core/scrapers/skroutz/config.example.json to config/skroutz.json
   and fill it with your desired products.
 - Copy .env.example to .env
   and configure your apprise notification URLs.

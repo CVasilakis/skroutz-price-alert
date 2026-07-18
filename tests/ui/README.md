@@ -314,7 +314,7 @@ orchestrator emits.
 
 **E2E_RUN closes the loop from the other end.** Where a RUN script hand-feeds the
 strategy, an `E2E_RUN` scenario (`e2e_run_scenarios.py`) gives `drive_orchestrated_run`
-only the config rows and each product's scrape outcomes (`ScrapeResult`s / exceptions);
+only the config rows and each product's scrape outcomes (price/listing results or exceptions);
 the *real* `ScrapingOrchestrator` then runs against a scripted client and a real JSON
 storage on a temp dir, and whatever notes it actually emits land on the captured panel.
 A change to the orchestrator's UI payloads (wording, ordering, which notes appear at

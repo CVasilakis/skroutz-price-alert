@@ -5,8 +5,9 @@ discoverable — no new test files needed. It guards the obligations the registr
 discovery-time validation deliberately does *not* check (because they would need
 file I/O or the plugin's deferred imports):
 
-* the ``config/<config filename>.example`` template exists (``install.sh`` and
+* the package-local ``config.example.json`` template exists (``install.sh`` and
   ``schedule.sh`` tell users to copy it),
+* the package carries store-specific contributor/user documentation,
 * that template actually loads through the plugin's real storage class, with no
   faulty rows, every row parseable, and a save round-trip that persists,
 * every example row's URL routes back to the owning plugin, and
@@ -25,7 +26,7 @@ import shutil
 
 import pytest
 
-from core.constants import CONFIG_DIR, TIMESTAMP_FORMAT
+from core.constants import TIMESTAMP_FORMAT
 from core.exceptions import PluginDependencyError
 from core.scrapers.base.client import BaseScraperClient
 from core.scrapers.registry import ScraperRegistry
@@ -45,15 +46,14 @@ def test_discovery_registered_at_least_one_plugin():
 
 
 def _example_path(target: str) -> str:
-    filename = ScraperRegistry.get_plugin(target).get_config_filename()
-    return os.path.join(CONFIG_DIR, filename + ".example")
+    return ScraperRegistry.get_plugin(target).example_config_path
 
 
 def _manager_on_example(target, tmp_path):
     """Copies the plugin's example config to a temp dir and loads it through the
     plugin's real storage class (skipping if its dependencies are not installed)."""
     plugin = ScraperRegistry.get_plugin(target)
-    shutil.copy(_example_path(target), tmp_path / plugin.get_config_filename())
+    shutil.copy(_example_path(target), tmp_path / plugin.config_filename)
     registry = ScraperRegistry(str(tmp_path))
     try:
         manager = registry.get_manager(target)
@@ -65,11 +65,22 @@ def _manager_on_example(target, tmp_path):
 
 @pytest.mark.parametrize("target", TARGETS)
 def test_ships_example_config(target):
-    filename = ScraperRegistry.get_plugin(target).get_config_filename()
+    plugin = ScraperRegistry.get_plugin(target)
+    filename = plugin.config_filename
     assert os.path.isfile(_example_path(target)), (
         f"Plugin '{target}' declares config '{filename}' but ships no "
-        f"config/{filename}.example template - install.sh and schedule.sh "
+        f"{plugin.package}/config.example.json template - install.sh and schedule.sh "
         f"tell users to copy it."
+    )
+
+
+@pytest.mark.parametrize("target", TARGETS)
+def test_ships_plugin_readme(target):
+    plugin = ScraperRegistry.get_plugin(target)
+    readme = os.path.join(plugin.source_dir, "README.md")
+    assert os.path.isfile(readme), (
+        f"Plugin '{target}' must document its URL shape, row fields, settings, and "
+        f"dependencies in {plugin.package}/README.md."
     )
 
 
@@ -95,9 +106,10 @@ def test_example_urls_route_back_to_the_plugin(target, tmp_path):
 @pytest.mark.parametrize("target", TARGETS)
 def test_example_config_round_trips_a_save(target, tmp_path):
     _, manager = _manager_on_example(target, tmp_path)
-    url = manager.get_items()[0]["url"]
+    item = manager.parse_item(manager.get_items()[0])
+    url = item.url
     stamp = datetime.datetime(2026, 1, 1).strftime(TIMESTAMP_FORMAT)
-    manager.update_item(url, last_price=123.45, last_checked=stamp)
+    manager.update_item(item, last_price=123.45, last_checked=stamp)
     manager.save()
 
     reloaded = ScraperRegistry(str(tmp_path)).get_manager(target)
@@ -109,11 +121,12 @@ def test_example_config_round_trips_a_save(target, tmp_path):
 
 @pytest.mark.parametrize("target", TARGETS)
 def test_client_class_resolves_to_the_base_contract(target):
-    plugin = ScraperRegistry.get_plugin(target)
+    registry = ScraperRegistry(os.devnull)
     try:
-        client_cls = plugin.get_client_class()
-    except ImportError as e:
-        pytest.skip(f"'{target}' dependencies not installed ({e})")
-    assert isinstance(client_cls, type) and issubclass(client_cls, BaseScraperClient), (
-        f"get_client_class() of '{target}' must return a BaseScraperClient subclass"
-    )
+        client = registry.get_client(target)
+    except PluginDependencyError as e:
+        pytest.skip(str(e))
+    try:
+        assert isinstance(client, BaseScraperClient)
+    finally:
+        registry.close_all()

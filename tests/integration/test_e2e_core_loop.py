@@ -41,7 +41,7 @@ from support import fake_plugin, mock_notifier, mock_ui, registry_sandbox
 
 def _fakestore_plugin(netloc):
     """The fake store declares a host only; request URLs retain the random port."""
-    return fake_plugin(name="fakestore", domains=(netloc.rsplit(":", 1)[0],), config="fakestore.json",
+    return fake_plugin(name="fakestore", domains=(netloc.rsplit(":", 1)[0],),
                        client_class=FakeStoreClient, storage_class=FakeStoreDataManager)
 
 
@@ -124,7 +124,7 @@ def test_mixed_non_object_row_is_reported_preserved_and_does_not_block_valid_row
 
 def test_malformed_url_null_name_and_numeric_timestamp_are_contained(tmp_path):
     plugin = fake_plugin(
-        name="fakestore", domains=("fake-store.example",), config="fakestore.json",
+        name="fakestore", domains=("fake-store.example",),
         client_class=FakeStoreClient, storage_class=FakeStoreDataManager,
     )
     with registry_sandbox(plugin):
@@ -241,7 +241,6 @@ def test_lock_held_by_another_instance_exits_42(tmp_path):
 def _broken_plugin():
     """A second registered store whose products config will fail to load."""
     return fake_plugin(name="brokenstore", domains=("broken.example",),
-                       config="brokenstore.json",
                        client_class=FakeStoreClient, storage_class=FakeStoreDataManager)
 
 
@@ -285,7 +284,6 @@ def test_multi_target_rate_limit_does_not_stop_healthy_target(tmp_path):
         with fake_store_server(routes) as netloc2:
             limited_port = netloc2.rsplit(":", 1)[1]
             limited = fake_plugin(name="limitedstore", domains=("localhost",),
-                                  config="limitedstore.json",
                                   client_class=FakeStoreClient,
                                   storage_class=FakeStoreDataManager)
             with registry_sandbox(limited, _fakestore_plugin(netloc)):

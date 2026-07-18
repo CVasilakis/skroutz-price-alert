@@ -74,11 +74,12 @@ class TestNotifyDelegation(unittest.TestCase):
 
 class TestExtractSite(unittest.TestCase):
     def test_prefers_plugin_display_name(self):
-        notifier, _ = _make_notifier("tgram://token/chat")
         plugin = mock.Mock()
-        plugin.get_display_name.return_value = "Skroutz"
-        with mock.patch("core.notifier.ScraperRegistry.plugin_for_url", return_value=plugin):
-            self.assertEqual(notifier._extract_site("https://www.skroutz.gr/s/1/p"), "Skroutz")
+        plugin.display_name = "Skroutz"
+        with mock.patch("core.notifier.apprise.Apprise"), \
+             mock.patch("core.notifier.is_valid_apprise_url", return_value=True):
+            notifier = Notifier("", plugin_for_url=lambda _url: plugin)
+        self.assertEqual(notifier._extract_site("https://www.skroutz.gr/s/1/p"), "Skroutz")
 
     def test_domain_fallback_strips_www_and_capitalizes(self):
         notifier, _ = _make_notifier("tgram://token/chat")

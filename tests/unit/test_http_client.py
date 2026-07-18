@@ -22,10 +22,10 @@ try:
     from core.scrapers.base.http_client import HttpScraperClient
 
     class _ConcreteClient(HttpScraperClient):
-        """Minimal concrete client (HttpScraperClient.scrape_product is abstract)."""
+        """Minimal concrete client (HttpScraperClient.scrape is abstract)."""
         HEADERS_POOL = [{"User-Agent": "test"}]
 
-        def scrape_product(self, product_url):  # never called in these tests
+        def scrape(self, item):  # never called in these tests
             raise NotImplementedError
 
     _HAS_TLS = True

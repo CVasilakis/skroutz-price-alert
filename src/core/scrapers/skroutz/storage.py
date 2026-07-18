@@ -1,8 +1,8 @@
 import re
 from urllib.parse import urlparse
 
+from core.scrapers.base.model import BaseTrackedItem
 from core.scrapers.base.storage import JsonProductDataManager
-from core.scrapers.skroutz.model import Product
 
 
 class SkroutzDataManager(JsonProductDataManager):
@@ -14,7 +14,7 @@ class SkroutzDataManager(JsonProductDataManager):
     domains come from the injected plugin, so they are never duplicated.
     """
 
-    MODEL = Product
+    MODEL = BaseTrackedItem
     ROOT_KEY = "products"
 
     def _matches_product_path(self, url: str) -> bool:
@@ -22,7 +22,7 @@ class SkroutzDataManager(JsonProductDataManager):
 
         The domain has already been confirmed supported by the base class, so this
         only needs to inspect the path. The rule is the same ``/s/<numeric-id>`` shape
-        the client parses (:meth:`SkroutzClient.scrape_product`), so "scrapable"
+        the client parses (:meth:`SkroutzClient.scrape`), so "scrapable"
         (storage) and "parseable" (client) agree: a non-product numeric URL (e.g.
         ``/c/123/foo.html``) is correctly rejected here rather than passing storage and
         then failing the client with ``InvalidURLError``.

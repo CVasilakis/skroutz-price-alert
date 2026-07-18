@@ -10,3 +10,5 @@ pytest-cov
 # Shell linting: provides a `shellcheck` binary in the venv so
 # tests/shell/test_shellcheck.py runs locally (it skips when absent).
 shellcheck-py
+# Static contract checking (reads [tool.pyright] from pyproject.toml).
+basedpyright

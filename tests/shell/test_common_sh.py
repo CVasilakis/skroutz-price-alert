@@ -93,83 +93,47 @@ class TestNamingHelpers(unittest.TestCase):
         self.assertEqual(result.stdout, "custom feed.json")
 
 
-class TestPluginTimerBlock(unittest.TestCase):
-    """The tab-separated "<plugin>\\t<Key>=<Value>" stream -> per-plugin [Timer] block."""
-
-    STREAM = (
-        r'skroutz\tOnCalendar=hourly'
-        r'\nskroutz\tRandomizedDelaySec=99'
-        r'\nskroutz\tPersistent=false'
-        r'\namazon\tOnCalendar=*-*-* 00/2:00:00'
-        r'\namazon\tAccuracySec=1m'
-    )
-
-    def _block_for(self, plugin):
-        return run_sh(
-            f'all="$(printf \'{self.STREAM}\')"\n'
-            f'plugin_timer_block {plugin} "$all"'
-        ).stdout
-
-    def test_selects_only_the_named_plugins_directives(self):
-        self.assertEqual(self._block_for("skroutz"), "OnCalendar=hourly")
-
-    def test_framework_managed_keys_are_dropped(self):
-        block = self._block_for("skroutz")
-        self.assertNotIn("RandomizedDelaySec", block)
-        self.assertNotIn("Persistent", block)
-
-    def test_preserves_oncalendar_with_spaces_and_drops_plugin_injection(self):
-        self.assertEqual(
-            self._block_for("amazon"),
-            "OnCalendar=*-*-* 00/2:00:00",
-        )
-
-    def test_unknown_plugin_yields_empty_block(self):
-        self.assertEqual(self._block_for("ghost"), "")
-
-
 class TestUnitFileRoundTrip(unittest.TestCase):
-    """write_plugin_units renders both units; read_timer_block recovers the trigger."""
+    """The unit writer accepts and recovers one framework-owned calendar value."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.unit_dir = self.tmp / "systemd" / "user"
 
-    def _write(self, plugin, block):
+    def _write(self, plugin, calendar):
         return run_sh(
             f'mkdir -p "$SYSTEMD_USER_DIR"\n'
-            f'write_plugin_units {plugin} "{block}"',
+            f'write_plugin_units {plugin} "{calendar}"',
             xdg_config_home=self.tmp,
         )
 
     def test_round_trip_recovers_the_trigger_block(self):
-        block = "OnCalendar=*-*-* 00/2:00:00"
-        self.assertEqual(self._write("foo", block).returncode, 0)
-        read = run_sh('read_timer_block foo', xdg_config_home=self.tmp)
-        self.assertEqual(read.stdout, block)
+        calendar = "*-*-* 00/2:00:00"
+        self.assertEqual(self._write("foo", calendar).returncode, 0)
+        read = run_sh('read_timer_oncalendar foo', xdg_config_home=self.tmp)
+        self.assertEqual(read.stdout, calendar)
 
     def test_framework_keys_are_appended_but_not_read_back(self):
-        self._write("foo", "OnCalendar=hourly")
+        self._write("foo", "hourly")
         timer_text = (self.unit_dir / "foo-scraper.timer").read_text()
         self.assertIn("RandomizedDelaySec=180s", timer_text)
         self.assertIn("Persistent=true", timer_text)
         self.assertIn("Unit=foo-scraper.service", timer_text)
-        # read_timer_block normalizes them away, mirroring plugin_timer_block.
-        read = run_sh('read_timer_block foo', xdg_config_home=self.tmp)
-        self.assertEqual(read.stdout, "OnCalendar=hourly")
+        read = run_sh('read_timer_oncalendar foo', xdg_config_home=self.tmp)
+        self.assertEqual(read.stdout, "hourly")
 
     def test_service_dispatches_through_run_sh(self):
-        self._write("foo", "OnCalendar=hourly")
+        self._write("foo", "hourly")
         service_text = (self.unit_dir / "foo-scraper.service").read_text()
         self.assertIn(f'ExecStart="{REPO_ROOT}/scripts/run.sh" --quiet --foo', service_text)
 
-    def test_read_timer_block_missing_unit_is_empty_success(self):
-        read = run_sh('read_timer_block ghost', xdg_config_home=self.tmp)
+    def test_read_timer_calendar_missing_unit_is_empty_success(self):
+        read = run_sh('read_timer_oncalendar ghost', xdg_config_home=self.tmp)
         self.assertEqual((read.returncode, read.stdout), (0, ""))
 
     def test_failed_render_does_not_masquerade_as_success_when_old_files_exist(self):
-        self.assertEqual(self._write("foo", "OnCalendar=hourly").returncode, 0)
+        self.assertEqual(self._write("foo", "hourly").returncode, 0)
         service = self.unit_dir / "foo-scraper.service"
         timer = self.unit_dir / "foo-scraper.timer"
         old_service = service.read_text()
@@ -177,7 +141,7 @@ class TestUnitFileRoundTrip(unittest.TestCase):
 
         failed = run_sh(
             'render_plugin_service() { return 1; }\n'
-            'write_plugin_units foo "OnCalendar=daily"',
+            'write_plugin_units foo "daily"',
             xdg_config_home=self.tmp,
         )
         self.assertNotEqual(failed.returncode, 0)
@@ -185,19 +149,19 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         self.assertEqual(timer.read_text(), old_timer)
 
     def test_timer_only_update_does_not_rewrite_service(self):
-        self.assertEqual(self._write("foo", "OnCalendar=hourly").returncode, 0)
+        self.assertEqual(self._write("foo", "hourly").returncode, 0)
         service = self.unit_dir / "foo-scraper.service"
         service.write_text(service.read_text() + "# preserved\n")
 
         updated = run_sh(
-            'write_plugin_timer_unit foo "OnCalendar=daily"',
+            'write_plugin_timer_unit foo "daily"',
             xdg_config_home=self.tmp,
         )
         self.assertEqual(updated.returncode, 0)
         self.assertTrue(service.read_text().endswith("# preserved\n"))
         self.assertEqual(
-            run_sh('read_timer_block foo', xdg_config_home=self.tmp).stdout,
-            "OnCalendar=daily",
+            run_sh('read_timer_oncalendar foo', xdg_config_home=self.tmp).stdout,
+            "daily",
         )
 
 
@@ -302,30 +266,21 @@ class TestRealRegistryBridge(unittest.TestCase):
         result = run_sh('list_plugins')
         self.assertIn("skroutz", result.stdout.split())
 
-    def test_list_plugin_configs_pairs_names_with_filenames(self):
-        result = run_sh('list_plugin_configs')
+    def test_list_plugin_examples_pairs_names_with_package_paths(self):
+        result = run_sh('list_plugin_examples')
         pairs = dict(line.split("\t", 1) for line in result.stdout.splitlines())
-        self.assertEqual(pairs.get("skroutz"), "skroutz.json")
+        self.assertTrue(pairs.get("skroutz", "").endswith("/skroutz/config.example.json"))
 
-    def test_list_plugin_timer_directives_feeds_plugin_timer_block(self):
-        # The stream itself is well-formed: "<plugin>\t<Key>=<Value>" per line.
-        result = run_sh('list_plugin_timer_directives')
+    def test_list_plugin_schedules_is_a_value_stream(self):
+        result = run_sh('list_plugin_schedules')
         lines = result.stdout.splitlines()
         self.assertTrue(lines)
         for line in lines:
-            plugin, tab, directive = line.partition("\t")
+            plugin, tab, calendar = line.partition("\t")
             self.assertEqual(tab, "\t", f"no tab separator in {line!r}")
             self.assertTrue(plugin)
-            self.assertIn("=", directive)
-        self.assertTrue(any(line.startswith("skroutz\tOnCalendar=") for line in lines))
-
-        # And the shell consumer parses that real stream end to end: the exact
-        # contract install.sh and schedule.sh rely on.
-        block = run_sh(
-            'all="$(list_plugin_timer_directives)"\n'
-            'plugin_timer_block skroutz "$all"'
-        )
-        self.assertTrue(block.stdout.startswith("OnCalendar="), block.stdout)
+            self.assertTrue(calendar)
+        self.assertTrue(any(line.startswith("skroutz\t") for line in lines))
 
     def test_list_interval_status_reports_a_known_status(self):
         result = run_sh('list_interval_status')

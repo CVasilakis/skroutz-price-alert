@@ -24,7 +24,7 @@ _case = shell_case(Surface.SH_SCHEDULE, "scripts/schedule.sh")
 
 #: The registry resolves a 2h cadence while the installed timer still runs hourly.
 _CHANGED = replace(WORLD_INSTALLED,
-                   timer_directives={"skroutz": ("OnCalendar=*-*-* 00/2:00:00",)})
+                   schedules={"skroutz": "*-*-* 00/2:00:00"})
 
 _case("help", "Usage text with the supported-interval vocabulary and per-installed flags.",
       "--help", world=WORLD_INSTALLED, tags=("help",))
@@ -65,18 +65,11 @@ _case("nothing_installed", "No installed scrapers at all.",
 _case("no_config", "The scraper's config file is missing - timer left unchanged.",
       world=replace(WORLD_INSTALLED, interval_status={"skroutz": "nocfg"}))
 
-_case("custom_config_filename", "Missing-config guidance uses descriptor metadata, not the target name.",
-      world=ShellWorld(
-          plugins=("future_store",), configs={"future_store": "custom-feed.json"},
-          installed_timers=("future_store",), installed_services=("future_store",),
-          interval_status={"future_store": "nocfg"},
-      ))
-
 _case("invalid_interval", "The config sets an unsupported interval - timer left unchanged.",
       world=replace(WORLD_INSTALLED, interval_status={"skroutz": "invalid"}))
 
-_case("no_timer_directives", "A scheduled target declares no [Timer] directives - skipped.",
-      world=replace(WORLD_INSTALLED, timer_directives={}), tags=("error",))
+_case("missing_schedule", "A scheduled target has no registry-resolved schedule - skipped.",
+      world=replace(WORLD_INSTALLED, schedules={}), tags=("error",))
 
 _case("already_matches", "The installed timer already matches the configured interval.",
       world=WORLD_INSTALLED)

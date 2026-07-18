@@ -14,6 +14,7 @@ import pytest
 pytest.importorskip("tls_client", reason="skroutz dependencies not installed")
 
 from core.exceptions import InvalidURLError
+from core.scrapers.base.model import BaseTrackedItem
 from core.scrapers.skroutz.client import SkroutzClient
 
 
@@ -42,9 +43,9 @@ class TestScrapeProduct(unittest.TestCase):
     def test_uses_bounded_get_hook_and_parses_price(self):
         client = _client()
 
-        result = client.scrape_product(
-            "https://www.skroutz.gr/s/123456/example-product.html"
-        )
+        result = client.scrape(BaseTrackedItem(
+            url="https://www.skroutz.gr/s/123456/example-product.html"
+        ))
 
         self.assertEqual(result.price, 1234.56)
         self.assertEqual(result.currency, "€")
@@ -66,7 +67,7 @@ class TestScrapeProduct(unittest.TestCase):
         client = _client()
 
         with self.assertRaises(InvalidURLError):
-            client.scrape_product("https://www.skroutz.gr/search?keyphrase=phone")
+            client.scrape(BaseTrackedItem(url="https://www.skroutz.gr/search?keyphrase=phone"))
 
         get_mock = cast(mock.Mock, client.get)
         get_mock.assert_not_called()

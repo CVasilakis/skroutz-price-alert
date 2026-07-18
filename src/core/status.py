@@ -110,7 +110,7 @@ def get_systemd_properties(unit: str, properties: str) -> dict:
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         return {}
 
-def build_not_installed_panel(target: str) -> Panel:
+def build_not_installed_panel(target: str, display_name: str | None = None) -> Panel:
     """Builds the red 'service not installed' panel for a registered-but-unprovisioned plugin.
 
     Rendered (as a raw ``Panel``, not via ``StatusPanelBuilder``) when neither the timer
@@ -126,7 +126,8 @@ def build_not_installed_panel(target: str) -> Panel:
     service_table.add_column("Icon", justify="center")
     service_table.add_column("Message", style="dim")
     service_table.add_row("❗", "Background service not installed.")
-    return Panel(service_table, title=f"[bold]{target.capitalize()} Service Status[/bold]", border_style="red", width=75)
+    label = display_name or target.capitalize()
+    return Panel(service_table, title=f"[bold]{label} Service Status[/bold]", border_style="red", width=75)
 
 def build_orphan_panel(name: str) -> StatusPanelBuilder:
     """Builds the red 'orphaned unit' panel for an installed unit whose plugin is gone.
@@ -145,7 +146,8 @@ def build_orphan_panel(name: str) -> StatusPanelBuilder:
 def build_service_panel(target: str, timer_props: dict, service_props: dict, resolved,
                         config_filename: str, expected_oncalendar: str,
                         active_oncalendar: str,
-                        config: ConfigView | None = None) -> StatusPanelBuilder:
+                        config: ConfigView | None = None,
+                        display_name: str | None = None) -> StatusPanelBuilder:
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
     Pure presentation given the systemd property dicts, the resolved settings, the
@@ -172,7 +174,7 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     Returns:
         StatusPanelBuilder: The populated Service Status panel.
     """
-    service_panel = StatusPanelBuilder(f"{target.capitalize()} Service Status")
+    service_panel = StatusPanelBuilder(f"{display_name or target.capitalize()} Service Status")
 
     # Settings section: the products-config health ('Config' row) leads, then each scraper's
     # settings (or its active default), then a separator, then the systemd status rows.
@@ -251,7 +253,7 @@ def main():
     registry = ScraperRegistry(CONFIG_DIR)
 
     # Discover targets via the plugin registry (single source of truth), not by
-    # scanning config filenames — a plugin's config name may differ from its name.
+    # scanning config filenames, so an unrelated JSON file cannot become a target.
     # registered_targets() triggers idempotent plugin discovery on first use.
     registered_scrapers = ScraperRegistry.registered_targets()
 
@@ -268,12 +270,13 @@ def main():
 
     # --- Systemd Service Panels ---
     for target in registered_scrapers:
+        plugin = ScraperRegistry.get_plugin(target)
         timer_props = get_systemd_properties(f'{target}-scraper.timer', 'ActiveState,NextElapseUSecRealtime')
         service_props = get_systemd_properties(f'{target}-scraper.service', 'ActiveState,Result,ExecMainStartTimestamp,ExecMainStatus')
 
         if not timer_props and not service_props:
             console.print()
-            console.print(build_not_installed_panel(target))
+            console.print(build_not_installed_panel(target, plugin.display_name))
             continue
 
         # Resolve once via the registry instance (its read is cached and reused for the
@@ -288,17 +291,18 @@ def main():
         expected_oncalendar = ""
         active_oncalendar = ""
         if interval.status in (STATUS_OK, STATUS_DEFAULT):
-            expected_oncalendar = ScraperRegistry.timer_directives_for(
-                ScraperRegistry.get_plugin(target), interval
-            ).get("OnCalendar", "")
+            expected_oncalendar = ScraperRegistry.expected_on_calendar(
+                plugin, interval
+            )
             active_oncalendar = read_timer_oncalendar(target)
 
-        config_filename = ScraperRegistry.get_plugin(target).get_config_filename()
+        config_filename = plugin.config_filename
         load = loads_by_target.get(target)
         service_panel = build_service_panel(
             target, timer_props, service_props, resolved,
             config_filename, expected_oncalendar, active_oncalendar,
             config_view(load.count, load.faulty_indices, load.error) if load else None,
+            plugin.display_name,
         )
 
         console.print()

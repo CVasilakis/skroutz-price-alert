@@ -3,7 +3,7 @@
 Plugin discovery imports every plugin's descriptor (``plugin.py`` + package
 ``__init__``) merely to enumerate scrapers (argparse flags, ``list_plugins``,
 ``--status``). That path must NOT pull in any transport/parsing library - those belong
-behind the deferred ``get_client_class`` / ``get_storage_class`` imports. This test runs
+behind the registry's lazy ``ClassRef`` imports. This test runs
 discovery in a fresh subprocess and enforces the contract two ways:
 
 1. A generic check: after importing the framework contracts (the registry and the base
@@ -51,7 +51,7 @@ third_party = sorted({
 if third_party:
     sys.stderr.write(
         "third-party modules imported during discovery (a plugin descriptor imports "
-        "them at module top instead of behind get_client_class/get_storage_class): "
+        "them at module top instead of behind lazy ClassRef bindings): "
         + ", ".join(third_party)
     )
     sys.exit(1)

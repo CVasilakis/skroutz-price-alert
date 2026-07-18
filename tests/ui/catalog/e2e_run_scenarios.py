@@ -15,7 +15,7 @@ deterministically (spinners, sleeps, interrupts, stale timestamps) stay in
 
 from core.exceptions import ProductNotFoundError, ScraperParseError, ServerError
 from core import messages
-from core.scrapers.base.model import ScrapeResult
+from core.scrapers.base.model import PriceResult
 
 from ui.catalog._base import scenario, Surface
 from ui.harness.drivers import drive_orchestrated_run
@@ -27,7 +27,7 @@ _URL = "https://fake-store.example/p/{}"
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
-        results_by_url={_URL.format(1): [ScrapeResult(price=248.0, currency="€")]},
+        results_by_url={_URL.format(1): [PriceResult(price=248.0, currency="€")]},
         has_services=True,
     )
 
@@ -36,7 +36,7 @@ def _():
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
-        results_by_url={_URL.format(1): [ScrapeResult(price=248.0, currency="€")]},
+        results_by_url={_URL.format(1): [PriceResult(price=248.0, currency="€")]},
         has_services=True, delivery_ok=False,
     )
 
@@ -45,7 +45,7 @@ def _():
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
-        results_by_url={_URL.format(1): [ScrapeResult(price=248.0, currency="€")]},
+        results_by_url={_URL.format(1): [PriceResult(price=248.0, currency="€")]},
         has_services=False,
     )
 
@@ -56,7 +56,7 @@ def _():
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
         results_by_url={_URL.format(1): [
             ServerError(messages.server_error_detail(503)),
-            ScrapeResult(price=320.0, currency="€"),
+            PriceResult(price=320.0, currency="€"),
         ]},
     )
 
@@ -79,7 +79,7 @@ def _():
         ],
         results_by_url={
             _URL.format(2): [ProductNotFoundError(messages.not_found_detail(404))],
-            _URL.format(3): [ScrapeResult(price=55.0, currency="€")],
+            _URL.format(3): [PriceResult(price=55.0, currency="€")],
         },
     )
 
@@ -91,5 +91,5 @@ def _():
             None,
             {"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0},
         ],
-        results_by_url={_URL.format(1): [ScrapeResult(price=320.0, currency="€")]},
+        results_by_url={_URL.format(1): [PriceResult(price=320.0, currency="€")]},
     )
