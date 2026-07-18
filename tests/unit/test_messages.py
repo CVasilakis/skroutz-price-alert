@@ -53,8 +53,6 @@ class TestMessageCatalog(unittest.TestCase):
         sample_args = {
             "stale_note": ("01-01-2026 00:00:00", 48),
             "succeeded_on_attempt": (2, 3),
-            "invalid_target_price": ("abc", "€"),
-            "missing_target_price": ("€",),
             "advert_matches_note": (3, 2),
             "advert_notified_ok": (2,),
             "advert_notified_fail": (1, 2),

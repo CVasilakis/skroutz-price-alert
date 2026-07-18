@@ -35,8 +35,8 @@ class InteractiveRunReporter(RunReporter):
         self.is_complete = False
 
     def start_target(self, target_name: str, target_logger: logging.Logger,
-                     settings_view: Sequence[SettingView] = (),
-                     config: ConfigOutcome | None = None) -> None:
+                     settings_view: Sequence[SettingView],
+                     config: ConfigOutcome) -> None:
         """Starts a new live display session for the given target."""
         if self.live:
             self.live.stop()
@@ -53,17 +53,14 @@ class InteractiveRunReporter(RunReporter):
 
         # Build the static settings section after resetting notes, so its invalid-value
         # footnotes take the first reference numbers, ahead of the scraping rows.
-        view = (
-            config_view(config.loaded_count, list(config.faulty_indices), config.error)
-            if config is not None else None
-        )
+        view = config_view(config.loaded_count, list(config.faulty_indices), config.error)
         self.settings_rows = self._build_settings_rows(settings_view, view)
 
         self.live = Live(self._generate_panel(), refresh_per_second=10)
         self.live.start()
 
     def _build_settings_rows(self, settings_view: Sequence[SettingView],
-                             config_view: ConfigView | None = None) -> list[tuple]:
+                             config_view: ConfigView) -> list[tuple]:
         """Renders the products-config health + resolved settings into ``(icon, label, value)`` rows.
 
         The 'Config' row (products-config health) leads the section when ``config_view`` is
@@ -72,9 +69,8 @@ class InteractiveRunReporter(RunReporter):
         the default it fell back to as ``🟡`` plus a footnote naming the problem. A
         """
         rows: list[tuple] = []
-        if config_view is not None:
-            refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
-            rows.append((config_view.icon, "Monitored Items", f"{config_view.value}{refs}"))
+        refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
+        rows.append((config_view.icon, "Monitored Items", f"{config_view.value}{refs}"))
         for view in settings_view:
             note_ref = self._build_note_refs(view.footnote) if view.has_warning else ""
             value = view.render_value(
@@ -222,7 +218,7 @@ class InteractiveRunReporter(RunReporter):
         else:
             panel_color = "blue"
 
-        return Panel(renderable, title=f"[bold]{self.target_name} Scraping[/bold]", border_style=panel_color, width=75)
+        return Panel(renderable, title=f"[bold]{escape(self.target_name)} Scraping[/bold]", border_style=panel_color, width=75)
 
     def log_result(self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
         """Logs a standard result directly into the rich table."""
@@ -236,15 +232,16 @@ class InteractiveRunReporter(RunReporter):
                          attempt_notes: Notes = None,
                          delivery_failed: bool = False) -> None:
         """Renders a price result row, coloring the price/target per the outcome."""
-        target_str = f"(Target: {target} {currency})"
+        safe_currency = escape(currency)
+        target_str = f"(Target: {target} {safe_currency})"
         if outcome == PriceOutcome.NO_MATCH or price is None:
             value = f"[dim]{messages.ROW_NO_MATCH}[/dim] {target_str}"
         elif outcome == PriceOutcome.DROP:
-            value = f"[bold green]{price} {currency}[/bold green] {target_str}"
+            value = f"[bold green]{price} {safe_currency}[/bold green] {target_str}"
         elif outcome == PriceOutcome.NO_TARGET:
-            value = f"{price} {currency} [yellow]{target_str}[/yellow]"
+            value = f"{price} {safe_currency} [yellow]{target_str}[/yellow]"
         else:
-            value = f"{price} {currency} {target_str}"
+            value = f"{price} {safe_currency} {target_str}"
         self.log_result(
             self._outcome_icon(outcome, delivery_failed), name, value,
             notes, attempt_notes,

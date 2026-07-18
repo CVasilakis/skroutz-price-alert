@@ -8,7 +8,10 @@
 # per-file sys.path juggling.
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
-addopts = "--cov=src/core --cov-report=term-missing:skip-covered --cov-fail-under=90"
+# Coverage is informational only. Keep the report, but do not add
+# --cov-fail-under (or coverage.py's fail_under): low coverage must never make
+# an otherwise successful test run fail.
+addopts = "--cov=src/core --cov-report=term-missing:skip-covered"
 
 [tool.coverage.run]
 # The underscore-prefixed package is a copyable contributor template, deliberately

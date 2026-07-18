@@ -133,6 +133,7 @@ TAG_VOCABULARY: dict[str, str] = {
     "system": "Locks, missing dependencies, missing prerequisites",
     "combined": "Several conditions in one panel",
     "layout": "Wrapping/truncation edge cases",
+    "synthetic": "Renderer-only stress input that production cannot emit as one event",
 }
 
 

@@ -87,6 +87,26 @@ registry_cli() {
     PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" -m core.scrapers.cli "$@"
 }
 
+# Acquire one immutable manifest snapshot for the current command. A failed
+# acquisition is cached too, so callers can run the explicit diagnostic retry
+# without every list projection independently re-running discovery.
+PLUGIN_MANIFEST_STATE=0
+PLUGIN_MANIFEST_DATA=''
+
+load_plugin_manifest() {
+    case "$PLUGIN_MANIFEST_STATE" in
+        1) return 0 ;;
+        2) return 1 ;;
+    esac
+    if PLUGIN_MANIFEST_DATA="$(registry_cli manifest --config-dir "$BASE_DIR/config" 2>/dev/null)"; then
+        PLUGIN_MANIFEST_STATE=1
+        return 0
+    fi
+    PLUGIN_MANIFEST_STATE=2
+    PLUGIN_MANIFEST_DATA=''
+    return 1
+}
+
 list_plugins() {
     plugin_manifest | awk -F '\t' '{ print $1 }'
 }
@@ -131,7 +151,8 @@ list_interval_status() {
 # Columns are target, display name, example config, optional requirements,
 # resolved OnCalendar, and interval status.
 plugin_manifest() {
-    registry_cli manifest --config-dir "$BASE_DIR/config" 2>/dev/null
+    load_plugin_manifest || return 1
+    [ -z "$PLUGIN_MANIFEST_DATA" ] || printf '%s\n' "$PLUGIN_MANIFEST_DATA"
 }
 
 # list_supported_intervals: print the canonical execution_interval keys as one

@@ -195,4 +195,9 @@ class StatusPanelBuilder:
 
         renderable = blocks[0] if len(blocks) == 1 else Group(*blocks)
 
-        console.print(Panel(renderable, title=f"[bold]{self.title}[/bold]", border_style=color, width=self.width))
+        console.print(Panel(
+            renderable,
+            title=f"[bold]{escape(self.title)}[/bold]",
+            border_style=color,
+            width=self.width,
+        ))

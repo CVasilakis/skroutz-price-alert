@@ -8,7 +8,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from core.exceptions import StateFileError
 from core.persistence import format_utc, parse_utc, write_json_atomically
@@ -40,8 +39,8 @@ class JsonStateRepository:
 
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self.path = str(path)
-        self._items: dict[str, dict[str, Any]] = {}
-        self._pending: dict[str, dict[str, Any]] = {}
+        self._items: dict[str, StateEntry] = {}
+        self._pending: dict[str, StateEntry] = {}
 
     def load(self) -> None:
         path = Path(self.path)
@@ -56,7 +55,7 @@ class JsonStateRepository:
             raise StateFileError(f"State file '{path}' is invalid or unreadable: {exc}") from exc
 
     @staticmethod
-    def _validate_document(document: object) -> dict[str, dict[str, Any]]:
+    def _validate_document(document: object) -> dict[str, StateEntry]:
         if not isinstance(document, dict):
             raise ValueError("top level must be an object")
         unknown = set(document) - STATE_TOP_KEYS
@@ -67,7 +66,7 @@ class JsonStateRepository:
         raw_items = document.get("items")
         if not isinstance(raw_items, dict):
             raise ValueError("items must be an object keyed by item ID")
-        result: dict[str, dict[str, Any]] = {}
+        result: dict[str, StateEntry] = {}
         for item_id, raw in raw_items.items():
             if not isinstance(item_id, str) or not item_id.strip():
                 raise ValueError("state item IDs must be nonblank strings")
@@ -79,33 +78,24 @@ class JsonStateRepository:
                     f"state for {item_id!r} has unknown keys: "
                     f"{', '.join(sorted(unknown_fields))}"
                 )
-            state: dict[str, Any] = {}
-            if "last_price" in raw:
-                state["last_price"] = _state_price(raw["last_price"])
-            if "last_checked" in raw:
-                state["last_checked"] = format_utc(parse_utc(raw["last_checked"]))
-            result[item_id] = state
+            price = _state_price(raw["last_price"]) if "last_price" in raw else None
+            checked = parse_utc(raw["last_checked"]) if "last_checked" in raw else None
+            result[item_id] = StateEntry(price, checked)
         return result
 
     def get(self, item_id: str) -> StateEntry:
-        state = self._pending.get(item_id, self._items.get(item_id, {}))
-        price = state.get("last_price")
-        checked = state.get("last_checked")
-        return StateEntry(
-            last_price=float(price) if price is not None else None,
-            last_checked=parse_utc(checked) if checked is not None else None,
-        )
+        return self._pending.get(item_id, self._items.get(item_id, StateEntry()))
 
     def record_priced_check(self, item_id: str, price: float, checked_at: datetime) -> None:
-        update = dict(self._pending.get(item_id, self._items.get(item_id, {})))
-        update["last_price"] = _state_price(price)
-        update["last_checked"] = format_utc(checked_at)
-        self._pending[item_id] = update
+        self._pending[item_id] = StateEntry(
+            _state_price(price), parse_utc(format_utc(checked_at))
+        )
 
     def record_no_price_check(self, item_id: str, checked_at: datetime) -> None:
-        update = dict(self._pending.get(item_id, self._items.get(item_id, {})))
-        update["last_checked"] = format_utc(checked_at)
-        self._pending[item_id] = update
+        current = self._pending.get(item_id, self._items.get(item_id, StateEntry()))
+        self._pending[item_id] = StateEntry(
+            current.last_price, parse_utc(format_utc(checked_at))
+        )
 
     @property
     def has_pending(self) -> bool:
@@ -115,7 +105,20 @@ class JsonStateRepository:
         if not self._pending:
             return
         merged = {**self._items, **self._pending}
-        document = {"schema_version": SCHEMA_VERSION, "items": merged}
+        serialized = {
+            item_id: {
+                **(
+                    {"last_price": entry.last_price}
+                    if entry.last_price is not None else {}
+                ),
+                **(
+                    {"last_checked": format_utc(entry.last_checked)}
+                    if entry.last_checked is not None else {}
+                ),
+            }
+            for item_id, entry in merged.items()
+        }
+        document = {"schema_version": SCHEMA_VERSION, "items": serialized}
         try:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             write_json_atomically(self.path, document)

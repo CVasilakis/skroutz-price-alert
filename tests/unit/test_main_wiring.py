@@ -23,7 +23,7 @@ class TestMainWiring(unittest.TestCase):
         with mock.patch.object(sys, "argv", ["main", "--quiet"]), \
              mock.patch("core.main.setup_global_logging", autospec=True), \
              mock.patch("core.main.PluginCatalog", autospec=True) as Catalog, \
-             mock.patch("core.main.ClientFactory", autospec=True), \
+             mock.patch("core.main.ClientLoader", autospec=True), \
              mock.patch("core.main.load_targets", autospec=True, return_value=[]), \
              mock.patch("core.main.preflight", autospec=True, return_value=None), \
              mock.patch("core.main.Notifier", autospec=True) as Notifier, \
@@ -50,7 +50,7 @@ class TestMainWiring(unittest.TestCase):
         with mock.patch.object(sys, "argv", ["main", "--quiet"]), \
              mock.patch("core.main.setup_global_logging", autospec=True), \
              mock.patch("core.main.PluginCatalog", autospec=True) as Catalog, \
-             mock.patch("core.main.ClientFactory", autospec=True), \
+             mock.patch("core.main.ClientLoader", autospec=True), \
              mock.patch("core.main.load_targets", autospec=True, return_value=[]), \
              mock.patch("core.main.preflight", autospec=True, return_value=3), \
              mock.patch("core.main.Notifier", autospec=True), \
@@ -68,7 +68,7 @@ class TestMainWiring(unittest.TestCase):
         with mock.patch.object(sys, "argv", ["main", "--skroutz"]), \
              mock.patch("core.main.setup_global_logging"), \
              mock.patch("core.main.PluginCatalog") as Catalog, \
-             mock.patch("core.main.ClientFactory") as ClientFactory, \
+             mock.patch("core.main.ClientLoader") as ClientLoader, \
              mock.patch("core.main.load_targets", return_value=[]) as load_targets, \
              mock.patch("core.main.preflight", return_value=None) as preflight, \
              mock.patch("core.main.install_interrupt_handler") as install_handler, \
@@ -91,7 +91,7 @@ class TestMainWiring(unittest.TestCase):
         preflight.assert_called_once_with(mock.ANY, ["skroutz"], quiet=False)
         install_handler.assert_called_once()
         Orchestrator.assert_called_once_with(
-            [], ClientFactory.return_value, mock.ANY, False, strategy_type.return_value
+            [], ClientLoader.return_value, mock.ANY, False, strategy_type.return_value
         )
 
 

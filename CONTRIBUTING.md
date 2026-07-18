@@ -8,11 +8,14 @@ systemd units.
 
 ## Package layout
 
-Every production plugin must contain:
+Application discovery requires the Python execution files:
 
 - `__init__.py` — empty and import-light;
 - `plugin.py` — the import-light descriptor;
 - `client.py` — exports the conventional `Client` class;
+
+The contributor verifier additionally requires:
+
 - `README.md` — store-specific behavior and configuration;
 - `config.example.json` — a strict, runnable example.
 
@@ -21,9 +24,11 @@ dependencies must never be imported by `plugin.py` or `__init__.py`.
 
 ## Descriptor contract
 
-`plugin.py` may import only the Python standard library and
-`core.scrapers.api`. The descriptor declares metadata; the framework derives
-`<package>.client:Client` and imports it only when that target runs.
+`plugin.py` and `__init__.py` must remain import-light. They may use the Python
+standard library, `core.scrapers.api`, and safe plugin-local helpers. The isolated
+contributor probe verifies actual import effects and rejects third-party or heavy
+framework imports instead of relying on a source-code allowlist. The framework
+derives `<package>.client:Client` and imports it only when that target runs.
 
 ```python
 from urllib.parse import SplitResult
@@ -44,16 +49,19 @@ PLUGIN = ScraperPlugin(
 ```
 
 Domains are hostnames or IP addresses only—no scheme, credentials, port, path,
-query, or fragment. Multiple adapters may support different page shapes on the
-same domain. The framework validates and canonicalizes an item's absolute
-credential-free HTTP(S) URL, verifies its host against this plugin's domains,
+query, or fragment. A declared DNS domain accepts that exact host and its
+subdomains; an IP declaration matches only that IP. Multiple adapters may support
+different page shapes on the same domain. The framework validates and canonicalizes
+an item's absolute credential-free HTTP(S) URL, verifies its host against this plugin's domains,
 then calls `accepts_url`. Queries are preserved; fragments are removed. The URL
 predicate must return a real `bool` and should inspect only the parsed page shape
 the client understands.
 
 `default_interval` defaults to `1h` and must use a supported canonical interval.
 `domains`, `item_fields`, and `settings` accept ordinary sequences and are
-compiled into immutable tuples.
+compiled into immutable tuples and lookup maps. Target, field, and setting keys
+must be snake_case. Contributor text must not contain control characters because
+the same catalog feeds terminal panels and a TSV shell bridge.
 
 ## Client and result contract
 
@@ -90,13 +98,14 @@ iterables are snapshotted to immutable tuples.
 
 Raise modeled exceptions from `core.scrapers.api`: `ProductNotFoundError`,
 `ProductUnavailableError`, `InvalidURLError`, `RateLimitError`, `ServerError`,
-`ScraperParseError`, or the base `ScraperError`. Their retry, identity refresh,
+`ScraperParseError`, or the base `ScraperError`. Their retry preparation,
 abort, traceback, notification, and exit-status policies are framework-owned.
 
 ## Custom item fields
 
 Declare a typed field once. Its decoder returns a canonical value or raises
-`TypeError`/`ValueError`; its default must pass that same decoder.
+`TypeError`/`ValueError`; its default must already be canonical
+(`decode(default) == default`). Compilation never rewrites declaration objects.
 
 ```python
 from core.scrapers.api import ItemField
@@ -141,6 +150,12 @@ errors. The framework adds `execution_interval`, `log_retention_days`, and
 
 ## Optional client helpers
 
+A basic client implements only `scrape()`. Override `prepare_retry()` to rotate
+or reset transport state before selected retries, `diagnostic_context()` to return
+a non-secret string mapping for traceback logs, and `close()` to release resources.
+The orchestrator creates one client per target and closes it in that target's
+`finally` block.
+
 HTTP clients may subclass the documented `core.scrapers.http.HttpScraperClient`
 for bounded requests, TLS identity rotation, clean shutdown, and standard HTTP
 status mapping. Use `core.scrapers.pricing.parse_price` for finite price parsing
@@ -151,19 +166,22 @@ therefore belong in `client.py`, never the descriptor.
 
 The example config is a strict JSON object containing `settings` and `items`.
 Every item needs a unique, stable `id`, `name`, accepted `url`, and non-negative
-`target_price`; `skip` and `metadata` are optional. Unknown keys are rejected.
+`target_price`; `skip` is optional. Unknown keys, including `metadata`, are rejected.
 User config is read-only. Schema-v1 machine state is owned by the framework in
 `state/<target>.json`.
 
 Put client-only dependencies in the colocated `requirements.txt`. A missing
 dependency must remain discoverable and produce the install hint
-`./install.sh --<target>` only when the client is constructed.
+`./install.sh --<target>` only when the client is constructed. Missing `client.py`,
+a missing or invalid `Client`, and plugin-internal import defects are validation
+errors, not dependency errors.
 
-Add focused parser tests for representative success payloads, malformed markup,
-no-price/unavailable cases, relevant status codes, URL shapes, field codecs, and
+Add one target-owned test module under `tests/plugins/<target>/` with focused parser
+tests for representative success payloads, malformed markup, no-price/unavailable
+cases, relevant status codes, URL shapes, field codecs, and
 custom setting codecs. The generic verifier already checks descriptor imports,
-package import weight, metadata, canonical defaults, conventional client typing,
-strict example loading, URL acceptance, dependency guidance, schema-v1 state
+actual isolated import effects, contributor files, canonical defaults, conventional
+client typing, strict example loading, URL acceptance, dependency guidance, schema-v1 state
 round trips, and clean client shutdown.
 
 Run the focused verifier and full acceptance suite:
@@ -174,6 +192,11 @@ Run the focused verifier and full acceptance suite:
 ./venv/bin/basedpyright src
 find . -type f -name '*.sh' -print0 | xargs -0 shellcheck
 ```
+
+Coverage is collected to show untested production lines, but its percentage is
+informational only. Do not add `--cov-fail-under`, `fail_under`, or another
+coverage threshold: an otherwise successful local or CI test run must never fail
+because of its coverage percentage.
 
 To prove the additive workflow itself, copy `_example`, rename its package, run
 its plugin check, and verify that no framework or management-script edit is

@@ -18,7 +18,6 @@ production place and is pinned by the snapshots.
 NOTE_NOTIFIED_OK = "Notification delivered to all valid apprise URL(s)."
 NOTE_NOTIFIED_FAIL = "Notification delivery failed for some apprise URL(s)."
 NOTE_NOTIFIED_NONE = "No notification sent (.env not configured)."
-NOTE_CORRUPTED_TIMESTAMP = "Corrupted timestamp! Updated to current time."
 
 
 def stale_note(last_checked: str, hours: int) -> str:
@@ -45,31 +44,6 @@ def succeeded_on_attempt(attempt: int, max_retries: int) -> str:
         str: The note wording.
     """
     return f"Succeeded on attempt {attempt}/{max_retries}"
-
-
-def invalid_target_price(raw: object, currency: str) -> str:
-    """The note surfacing an unparseable ``target_price`` config value.
-
-    Args:
-        raw: The raw config value that failed to parse (truncated for display).
-        currency (str): The currency symbol of the scraped price.
-
-    Returns:
-        str: The note wording.
-    """
-    return f"Invalid target price '{str(raw)[:15]}'. Defaulting to 0.0 {currency}"
-
-
-def missing_target_price(currency: str) -> str:
-    """The note surfacing a config row with no ``target_price`` field at all.
-
-    Args:
-        currency (str): The currency symbol of the scraped price.
-
-    Returns:
-        str: The note wording.
-    """
-    return f"Missing target price. Defaulting to 0.0 {currency}"
 
 
 # --- Listing-type (multi-advert) success rows (orchestrator) --------------------------
@@ -120,7 +94,6 @@ def advert_notified_fail(failed: int, total: int) -> str:
 # --- Skips, warnings, and failures (orchestrator) -------------------------------------
 
 NOTE_SKIP_FIELD = "The skip field was set to true in the configuration file."
-WARN_INVALID_URL = "Invalid URL. Skipping product..."
 WARN_STALE_NOTIFICATION_FAILED = "Failed to deliver the stale-products notification."
 WARN_ERROR_NOTIFICATION_FAILED = "Failed to deliver the scraping-errors notification."
 NOTE_RATE_LIMIT_ABORTED = "Rate limit reached; scraping aborted."

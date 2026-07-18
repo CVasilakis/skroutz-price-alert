@@ -23,8 +23,8 @@ class SettingSpec(Generic[T]):
     """One typed setting declaration.
 
     Contributors normally provide only ``key``, ``default``, and ``decode``.  The
-    compiler validates the declaration and canonicalizes ``default`` through the
-    decoder once.  Presentation hooks are optional for settings whose vocabulary
+    compiler validates that ``default`` is already canonical. Presentation hooks
+    are optional for settings whose vocabulary
     needs something more specific than the derived label, string display, and
     invalid-value warning.
     """
@@ -63,7 +63,6 @@ class SettingStatus(str, Enum):
 class ResolvedSetting(Generic[T]):
     value: T
     status: SettingStatus
-    raw: object = None
 
 
 @dataclass(frozen=True)

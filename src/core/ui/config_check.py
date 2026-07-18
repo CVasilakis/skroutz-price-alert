@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from collections.abc import Sequence
 
 from rich.console import Console
+from rich.markup import escape
 
 from core.constants import CONFIG_DIR, EXIT_CODE_ENV_ERROR
 from core.exceptions import ConfigFileError, EnvFileError, UpdateCheckError
@@ -84,8 +85,12 @@ def add_setting_row(panel: StatusPanelBuilder, view) -> None:
         view (SettingView): The resolved setting (label, display value, status, footnote).
     """
     note_ref = panel.add_note_ref(view.footnote) if view.has_warning else ""
-    value = view.render_value(note_ref, default_marker=" [dim](default)[/dim]")
-    panel.add_row(view.icon, view.label, value)
+    value = view.render_value(
+        note_ref,
+        default_marker=" [dim](default)[/dim]",
+        value_text=escape(view.display_value),
+    )
+    panel.add_row(view.icon, escape(view.label), value)
 
 
 def _append_version_row(panel: StatusPanelBuilder) -> None:

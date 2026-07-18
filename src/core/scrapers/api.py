@@ -158,14 +158,14 @@ class ScraperClient(ABC):
         """Return a result or raise one of the modeled scraper exceptions."""
         raise NotImplementedError
 
-    def refresh_identity(self) -> None:
-        """Rotate transport identity before a retry, when supported."""
+    def prepare_retry(self) -> None:
+        """Prepare transport state before a retry, when needed."""
 
     def close(self) -> None:
         """Release transport resources, when supported."""
 
-    def get_current_headers(self) -> dict[str, str]:
-        """Return active request headers for diagnostics."""
+    def diagnostic_context(self) -> Mapping[str, str]:
+        """Return non-secret context suitable for traceback logs."""
         return {}
 
 

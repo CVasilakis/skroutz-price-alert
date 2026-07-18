@@ -8,7 +8,7 @@ from unittest import mock
 from core.constants import EXIT_CODE_SUCCESS
 from core.orchestrator import ScrapingOrchestrator
 from core.preflight import load_targets
-from core.scrapers.registry import ClientFactory
+from core.scrapers.registry import ClientLoader
 from core.run import PriceOutcome
 from integration.fake_store import FakeStoreClient, fake_store_server
 from support import catalog_sandbox, fake_plugin, mock_notifier, mock_ui
@@ -31,19 +31,16 @@ def _write_config(config_dir, url, *, extra=None):
 
 
 def _run(catalog, config_dir, state_dir, notifier, ui):
-    factory = ClientFactory()
+    loader = ClientLoader()
     loads = load_targets([catalog.get("fakestore")], str(config_dir), str(state_dir))
     orchestrator = ScrapingOrchestrator(
-        loads, factory, notifier, quiet=True, reporter=ui, now_fn=lambda: NOW,
+        loads, loader, notifier, quiet=True, reporter=ui, now_fn=lambda: NOW,
     )
     logger = logging.getLogger("e2e")
     with mock.patch("core.execution.ItemExecutor.sleep_with_jitter"), \
          mock.patch("core.orchestrator.signal.signal"), \
          mock.patch("core.orchestrator.get_target_logger", return_value=logger):
-        try:
-            return orchestrator.run()
-        finally:
-            factory.close()
+        return orchestrator.run()
 
 
 def test_real_http_scrape_keeps_config_read_only_and_writes_state(tmp_path):

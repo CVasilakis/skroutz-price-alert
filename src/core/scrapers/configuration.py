@@ -11,12 +11,11 @@ from core.exceptions import ConfigFileError
 from core.persistence import read_json_object
 from core.scrapers.api import TrackedItem
 from core.scrapers.registry import RegisteredPlugin
-from core.scrapers.url import canonicalize_url, parsed_matches_domains, parse_url
 from core.settings import ResolvedSettings, resolve_settings
 
-TOP_LEVEL_KEYS = frozenset({"settings", "items", "metadata"})
+TOP_LEVEL_KEYS = frozenset({"settings", "items"})
 COMMON_ITEM_KEYS = frozenset({
-    "id", "name", "url", "target_price", "skip", "metadata",
+    "id", "name", "url", "target_price", "skip",
 })
 
 
@@ -64,9 +63,6 @@ class TargetConfigLoader:
                 f"Config file '{self.config_path}' has unknown top-level keys: "
                 f"{', '.join(sorted(unknown))}"
             )
-        metadata = document.get("metadata")
-        if metadata is not None and not isinstance(metadata, dict):
-            raise ConfigFileError("top-level metadata must be an object")
         if not isinstance(document.get("settings", {}), dict):
             raise ConfigFileError("settings must be an object")
         if not isinstance(document.get("items"), list):
@@ -112,21 +108,9 @@ class TargetConfigLoader:
         unknown = set(row) - COMMON_ITEM_KEYS - set(custom_by_key)
         if unknown:
             raise ValueError(f"unknown item keys: {', '.join(sorted(unknown))}")
-        metadata = row.get("metadata")
-        if metadata is not None and not isinstance(metadata, dict):
-            raise ValueError("metadata must be an object")
         item_id = _nonblank(row.get("id"), "id")
         name = _nonblank(row.get("name"), "name")
-        url = canonicalize_url(row.get("url"))
-        parsed = parse_url(url)
-        if not parsed_matches_domains(parsed, self.plugin.domains):
-            raise ValueError("URL host is not registered for this plugin")
-        try:
-            accepted = self.plugin.accepts_url(parsed)
-        except Exception as exc:
-            raise ValueError(f"plugin URL matcher failed: {exc}") from exc
-        if accepted is not True:
-            raise ValueError("URL path is not accepted by this plugin")
+        url = self.plugin.canonicalize_url(row.get("url"))
         target_price = _target_price(row.get("target_price"))
         skip = row.get("skip", False)
         if not isinstance(skip, bool):

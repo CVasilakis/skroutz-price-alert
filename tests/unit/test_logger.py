@@ -92,11 +92,11 @@ class TestSaveTraceback(_LoggerCase):
         target = self._target()
         self._trigger(target_name=target,
                       url="https://x/s/1/p.html",
-                      headers={"sec-ch-ua-platform": '"Windows"',
-                               "accept-language": "en-US"})
+                      diagnostic_context={"platform": '"Windows"',
+                                          "language": "en-US"})
         content = (Path(core.logger.LOGS_DIR) / target / "errors.txt").read_text()
         self.assertIn("URL: https://x/s/1/p.html", content)
-        self.assertIn('Header ID: Platform: "Windows", Lang: en-US', content)
+        self.assertIn('Diagnostic context: language: en-US, platform: "Windows"', content)
         self.assertIn("RuntimeError: boom", content)
         self.assertIn("UTC", content)
 

@@ -34,8 +34,8 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests
-        # Coverage is report-only (no threshold): the summary makes untested
-        # modules visible in the CI log without ever failing the build over it.
+        # Coverage is report-only: never add a percentage failure threshold here
+        # or in pyproject.toml. Test outcomes, not coverage totals, gate CI.
         run: pytest --cov=src/core --cov-report=term-missing:skip-covered
 
   shellcheck:

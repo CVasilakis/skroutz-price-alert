@@ -98,6 +98,27 @@ class TestNamingHelpers(unittest.TestCase):
         self.assertEqual(result.stdout, "custom feed.json")
 
 
+class TestManifestSnapshot(unittest.TestCase):
+    def test_all_manifest_projections_share_one_acquisition(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        counter = temp_dir / "calls"
+        script = (
+            f'registry_cli() {{ printf x >> "{counter}"; '
+            'printf \'alpha\\tAlpha Store\\t/example.json\\t/req.txt\\thourly\\tok\\n\'; }\n'
+            'load_plugin_manifest\n'
+            'list_plugins >/dev/null\n'
+            'plugin_display_name alpha >/dev/null\n'
+            'list_plugin_examples >/dev/null\n'
+            'list_plugin_requirements >/dev/null\n'
+            'list_plugin_schedules >/dev/null\n'
+            'list_interval_status >/dev/null\n'
+        )
+        result = run_sh(script)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(counter.read_text(), "x")
+
+
 class TestUnitFileRoundTrip(unittest.TestCase):
     """The unit writer accepts and recovers one framework-owned calendar value."""
 

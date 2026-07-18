@@ -14,6 +14,7 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 . "$SCRIPT_DIR/lib/common.sh"
 
 # Registered plugins (one --<plugin> flag is accepted per registered scraper).
+load_plugin_manifest || true
 PLUGINS="$(list_plugins || true)"
 
 # ==============================================================================

@@ -65,7 +65,7 @@ def test_run_outcome_exit_priority_and_skipped():
 
 def test_error_policies_preserve_retry_semantics():
     assert policy_for(RateLimitError()).abort
-    assert not policy_for(ServerError()).refresh_before_retry
+    assert not policy_for(ServerError()).prepare_before_retry
     assert policy_for(ScraperParseError()).affects_exit_status
     assert policy_for(RuntimeError()).save_traceback
 
@@ -128,7 +128,7 @@ def test_skipped_item_never_sleeps_or_scrapes():
     reporter.log_result.assert_called_once()
 
 
-def test_retry_refreshes_identity_then_succeeds():
+def test_retry_prepares_transport_then_succeeds():
     executor, _, reporter, state = _executor()
     executor.sleep_with_jitter = mock.Mock()
     executor.client.scrape.side_effect = [ScraperParseError("bad page"), PriceResult(12, "EUR")]
@@ -137,7 +137,7 @@ def test_retry_refreshes_identity_then_succeeds():
 
     assert outcome.reported_error is None
     assert executor.client.scrape.call_count == 2
-    executor.client.refresh_identity.assert_called_once()
+    executor.client.prepare_retry.assert_called_once()
     assert executor.sleep_with_jitter.call_count == 2
     reporter.log_attempt.assert_called_once()
     state.record_priced_check.assert_called_once_with("one", 12.0, NOW)
@@ -155,12 +155,12 @@ def test_unexpected_fault_exhausts_retries_and_affects_exit_status(monkeypatch):
     assert isinstance(outcome.reported_error, RuntimeError)
     assert outcome.affects_scrape_status
     assert executor.client.scrape.call_count == 3
-    assert executor.client.refresh_identity.call_count == 2
+    assert executor.client.prepare_retry.call_count == 2
     reporter.log_failure.assert_called_once()
     traceback.assert_called_once()
 
 
-def test_server_error_exhaustion_is_modeled_success_without_identity_refresh():
+def test_server_error_exhaustion_is_modeled_success_without_retry_preparation():
     executor, _, reporter, _ = _executor()
     executor.sleep_with_jitter = mock.Mock()
     executor.client.scrape.side_effect = ServerError("remote failure")
@@ -170,7 +170,7 @@ def test_server_error_exhaustion_is_modeled_success_without_identity_refresh():
     assert outcome.reported_error is None
     assert not outcome.affects_scrape_status
     assert not outcome.abort_target
-    executor.client.refresh_identity.assert_not_called()
+    executor.client.prepare_retry.assert_not_called()
     reporter.log_failure.assert_called_once()
 
 

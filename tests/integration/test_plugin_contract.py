@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import sys
@@ -7,15 +8,22 @@ import pytest
 
 from core.scrapers.api import ScraperClient
 from core.scrapers.check import check_plugin
-from core.scrapers.registry import ClientFactory, PluginCatalog
+from core.scrapers.registry import ClientLoader, PluginCatalog
 
 CATALOG = PluginCatalog.discover()
 
 
 @pytest.mark.parametrize("target", CATALOG.targets)
 def test_every_plugin_passes_contributor_verifier(target):
+    env = os.environ.copy()
+    # CI installs into setup-python's active interpreter without creating the
+    # repository-local venv used by normal contributor commands.
+    env["SCROOGE_PLUGIN_CHECK_PYTHON"] = sys.executable
     result = subprocess.run(
-        ["./scripts/plugin-check.sh", f"--{target}"], text=True, capture_output=True,
+        ["./scripts/plugin-check.sh", f"--{target}"],
+        text=True,
+        capture_output=True,
+        env=env,
     )
     assert result.returncode == 0, result.stderr
     assert "ok\tstate round-trip" in result.stdout
@@ -24,13 +32,13 @@ def test_every_plugin_passes_contributor_verifier(target):
 @pytest.mark.parametrize("target", CATALOG.targets)
 def test_client_binding_is_lazy_and_typed(target, tmp_path):
     plugin = CATALOG.get(target)
-    factory = ClientFactory()
+    loader = ClientLoader()
     from core.settings import resolve_settings
-    client = factory.create(plugin, resolve_settings(plugin.setting_specs, {}))
+    client = loader.load(plugin, resolve_settings(plugin.setting_specs, {}))
     try:
         assert isinstance(client, ScraperClient)
     finally:
-        factory.close()
+        client.close()
 
 
 def test_copyable_template_discovers_without_framework_edits(tmp_path, monkeypatch):

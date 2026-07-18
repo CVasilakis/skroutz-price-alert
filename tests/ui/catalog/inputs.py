@@ -45,12 +45,10 @@ def stub_logger() -> logging.Logger:
 # A view is built from the real spec + a synthetic ResolvedSetting, so its label, display
 # formatting and (for invalid) warning footnote are exactly what production produces.
 
-def _view(spec, value: Any, status: SettingStatus, raw: Any = None) -> SettingView:
-    return setting_view(spec, ResolvedSetting(value, status, raw))
+def _view(spec, value: Any, status: SettingStatus, _raw: Any = None) -> SettingView:
+    return setting_view(spec, ResolvedSetting(value, status))
 
 
-# ``raw`` is the user's raw config value (any type, or None when unset), matching
-# ``ResolvedSetting.raw: Any`` — annotated Any so an unset (None) raw is accepted.
 def interval_view(value: str = "1h", status: SettingStatus = STATUS_OK, raw: Any = "1h") -> SettingView:
     return _view(SPEC_INTERVAL, value, status, raw)
 
@@ -102,9 +100,9 @@ def resolved_settings(
 ) -> ResolvedSettings:
     """A ``ResolvedSettings`` for ``--status``, built from synthetic ``(value, status, raw)``."""
     pairs = [
-        (SPEC_INTERVAL, ResolvedSetting(*interval)),
-        (SPEC_RETENTION, ResolvedSetting(*retention)),
-        (SPEC_NOTIFY, ResolvedSetting(*notify)),
+        (SPEC_INTERVAL, ResolvedSetting(interval[0], interval[1])),
+        (SPEC_RETENTION, ResolvedSetting(retention[0], retention[1])),
+        (SPEC_NOTIFY, ResolvedSetting(notify[0], notify[1])),
     ]
     return ResolvedSettings(pairs)
 

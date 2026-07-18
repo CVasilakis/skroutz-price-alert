@@ -1,12 +1,15 @@
-# border: yellow
+# border: red
 
-╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
+╭────────────────────────── Fake Store Scraping ──────────────────────────╮
+│   ✅    Monitored Items       3 loaded                                  │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🟡    Generic Monitor       55.0 € (Target: 0.0 €) [1]                │
+│   ✅    Paused Product        Skipped [1]                               │
+│   ❗    Removed Product       Skipping (ProductNotFoundError) [2]       │
+│   🟡    Untargeted Product    55.0 € (Target: 0.0 €)                    │
 │                                                                         │
-│   [1] Invalid target price 'abc'. Defaulting to 0.0 €.                  │
+│   [1] The skip field was set to true in the configuration file.         │
+│   [2] Product not found or removed (HTTP 404).                          │
 ╰─────────────────────────────────────────────────────────────────────────╯

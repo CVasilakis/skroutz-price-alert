@@ -46,7 +46,7 @@ ERRORS_LOG_TOKEN = "<errors_log>"
 
 @dataclass(frozen=True)
 class ErrorPolicy:
-    refresh_before_retry: bool = True
+    prepare_before_retry: bool = True
     abort: bool = False
     counts_as_failure: bool = True
     affects_exit_status: bool = False
@@ -66,7 +66,7 @@ RETRY_POLICIES: tuple[tuple[type[Exception], ErrorPolicy], ...] = (
         save_traceback=True,
         extra_notes=(messages.NOTE_RATE_LIMIT_ABORTED, ERRORS_LOG_TOKEN),
     )),
-    (ServerError, ErrorPolicy(refresh_before_retry=False, counts_as_failure=False)),
+    (ServerError, ErrorPolicy(prepare_before_retry=False, counts_as_failure=False)),
     (ScraperParseError, ErrorPolicy(affects_exit_status=True)),
     (ScraperError, ErrorPolicy(save_traceback=True, extra_notes=(ERRORS_LOG_TOKEN,))),
 )
@@ -299,7 +299,7 @@ class ItemExecutor:
                             self.logger,
                             target_name=self.target,
                             url=item.url,
-                            headers=self.client.get_current_headers(),
+                            diagnostic_context=self.client.diagnostic_context(),
                             log_to_console=False,
                         )
                     return ItemRunOutcome(
@@ -309,8 +309,8 @@ class ItemExecutor:
                         abort_target=policy.abort,
                         rate_limited=isinstance(exc, RateLimitError),
                     )
-                if policy.refresh_before_retry:
-                    self.client.refresh_identity()
+                if policy.prepare_before_retry:
+                    self.client.prepare_retry()
                 self.sleep_with_jitter(MIN_DELAY_SECONDS, attempt, is_retry=True)
         return ItemRunOutcome(item)
 

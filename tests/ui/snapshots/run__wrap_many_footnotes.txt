@@ -11,8 +11,8 @@
 │                                                                         │
 │   [1] Attempt 1: ScraperParseError.                                     │
 │   [2] Attempt 2: ServerError.                                           │
-│   [3] Succeeded on attempt 3/3.                                         │
-│   [4] Notification delivered to all valid apprise URL(s).               │
-│   [5] Corrupted timestamp! Updated to current time.                     │
-│   [6] Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago).       │
+│   [3] Synthetic renderer note one.                                      │
+│   [4] Synthetic renderer note two.                                      │
+│   [5] Synthetic renderer note three.                                    │
+│   [6] Synthetic renderer note four.                                     │
 ╰─────────────────────────────────────────────────────────────────────────╯

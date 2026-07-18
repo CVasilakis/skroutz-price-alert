@@ -3,12 +3,7 @@
 from urllib.parse import SplitResult
 
 from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec
-
-
-def decode_sku(raw: object) -> str:
-    if not isinstance(raw, str) or not raw.strip():
-        raise ValueError("must be a nonblank string")
-    return raw.strip()
+from .helpers import decode_sku
 
 
 SKU = ItemField(key="sku", decode=decode_sku, default="unknown")

@@ -15,10 +15,10 @@ from core.execution import ItemExecutor
 from core.locks import acquire_lock
 from core.logger import get_target_logger, save_traceback
 from core.notifier import Notifier
-from core.preflight import TargetLoad
+from core.preflight import LoadFailureKind, TargetLoad
 from core.reporting import SilentRunReporter
 from core.run import ConfigOutcome, RunOutcome, RunReporter
-from core.scrapers.registry import ClientFactory, setting_spec
+from core.scrapers.registry import ClientLoader
 from core.scrapers.settings import KEY_NOTIFY, KEY_RETENTION
 from core.utils import describe_signal
 
@@ -33,14 +33,14 @@ class ScrapingOrchestrator:
     def __init__(
         self,
         target_loads: list[TargetLoad],
-        client_factory: ClientFactory,
+        client_loader: ClientLoader,
         notifier: Notifier,
         quiet: bool = False,
         reporter: RunReporter | None = None,
         now_fn: Callable[[], datetime.datetime] = _utc_now,
     ) -> None:
         self.target_loads = tuple(target_loads)
-        self.client_factory = client_factory
+        self.client_loader = client_loader
         self.notifier = notifier
         self.quiet = quiet
         self.reporter = reporter or SilentRunReporter()
@@ -71,9 +71,13 @@ class ScrapingOrchestrator:
         logger = get_target_logger(
             plugin.target,
             self.quiet,
-            load.settings[setting_spec(plugin, KEY_RETENTION)],
+            load.settings[plugin.setting(KEY_RETENTION)],
         )
-        config_error = load.error if load.error is not None and not load.state_error else None
+        config_error = (
+            load.failure.detail
+            if load.failure is not None and load.failure.kind is LoadFailureKind.CONFIG
+            else None
+        )
         self.reporter.start_target(
             plugin.display_name,
             logger,
@@ -94,12 +98,12 @@ class ScrapingOrchestrator:
             self._current_target = plugin.target
             self._current_logger = self._start_target(load)
 
-            if load.error is not None:
-                if load.state_error:
+            if load.failure is not None:
+                if load.failure.kind is LoadFailureKind.STATE:
                     self.reporter.log_error(
                         "Storage",
                         messages.state_load_failed(plugin.target),
-                        load.error,
+                        load.failure.detail,
                     )
                     outcome.storage_error = True
                 else:
@@ -113,44 +117,55 @@ class ScrapingOrchestrator:
 
             failed_items = []
             abort_target = False
+            executor: ItemExecutor | None = None
             try:
                 with acquire_lock(plugin.target):
-                    client = self.client_factory.create(plugin, load.settings)
-                    executor = ItemExecutor(
-                        target=plugin.target,
-                        display_name=plugin.display_name,
-                        client=client,
-                        state=load.state,
-                        notifier=self.notifier,
-                        reporter=self.reporter,
-                        logger=self._current_logger,
-                        interrupted=lambda: self.interrupted,
-                        now_fn=self.now_fn,
-                    )
-                    for item in load.items:
-                        if abort_target or self.interrupted:
-                            break
-                        item_outcome = executor.process(item)
-                        if item_outcome.reported_error:
-                            failed_items.append((item, item_outcome.reported_error))
-                        abort_target = abort_target or item_outcome.abort_target
-                        outcome.rate_limited |= item_outcome.rate_limited
-                        outcome.scrape_error |= item_outcome.affects_scrape_status
-                        outcome.notification_error |= item_outcome.notification_failed
-                    if load.state.has_pending:
-                        try:
-                            load.state.save()
-                        except StorageFileError as exc:
-                            self.reporter.log_error(
-                                "Storage",
-                                messages.state_save_failed(plugin.target),
-                                str(exc),
-                            )
-                            outcome.storage_error = True
+                    client = None
+                    try:
+                        client = self.client_loader.load(plugin, load.settings)
+                        executor = ItemExecutor(
+                            target=plugin.target,
+                            display_name=plugin.display_name,
+                            client=client,
+                            state=load.state,
+                            notifier=self.notifier,
+                            reporter=self.reporter,
+                            logger=self._current_logger,
+                            interrupted=lambda: self.interrupted,
+                            now_fn=self.now_fn,
+                        )
+                        for item in load.items:
+                            if abort_target or self.interrupted:
+                                break
+                            item_outcome = executor.process(item)
+                            if item_outcome.reported_error:
+                                failed_items.append((item, item_outcome.reported_error))
+                            abort_target = abort_target or item_outcome.abort_target
+                            outcome.rate_limited |= item_outcome.rate_limited
+                            outcome.scrape_error |= item_outcome.affects_scrape_status
+                            outcome.notification_error |= item_outcome.notification_failed
+                        if load.state.has_pending:
+                            try:
+                                load.state.save()
+                            except StorageFileError as exc:
+                                self.reporter.log_error(
+                                    "Storage",
+                                    messages.state_save_failed(plugin.target),
+                                    str(exc),
+                                )
+                                outcome.storage_error = True
+                    finally:
+                        if client is not None:
+                            client.close()
 
-                if not self.interrupted and executor.stale_items and self.notifier.has_services:
+                stale_items = executor.stale_items if executor is not None else []
+                if (
+                    not self.interrupted
+                    and stale_items
+                    and self.notifier.has_services
+                ):
                     delivered = self._try_notification(lambda: self.notifier.notify_old_entries(
-                        plugin.display_name, executor.stale_items, OLD_ENTRY_HOURS
+                        plugin.display_name, stale_items, OLD_ENTRY_HOURS
                     ))
                     if not delivered:
                         outcome.notification_error = True
@@ -158,7 +173,7 @@ class ScrapingOrchestrator:
                             "Notifications", messages.WARN_STALE_NOTIFICATION_FAILED
                         )
                 if not self.interrupted and failed_items:
-                    notify_errors = load.settings[setting_spec(plugin, KEY_NOTIFY)]
+                    notify_errors = load.settings[plugin.setting(KEY_NOTIFY)]
                     if notify_errors and self.notifier.has_services:
                         delivered = self._try_notification(lambda: self.notifier.notify_errors(
                             plugin.display_name, failed_items

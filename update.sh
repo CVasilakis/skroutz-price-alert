@@ -139,6 +139,7 @@ main() {
     # reprovision above, so the registry is readable here.
     NEW_SCRAPERS=""
     INSTALLED_NOW="$(list_installed_plugins timer)"
+    load_plugin_manifest || true
     for plugin in $(list_plugins 2>/dev/null || true); do
         plugin_in_list "$plugin" $INSTALLED_NOW || NEW_SCRAPERS="$NEW_SCRAPERS $plugin"
     done

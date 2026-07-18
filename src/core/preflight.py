@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from core.exceptions import ConfigFileError, StateFileError
@@ -11,7 +12,24 @@ from core.scrapers.api import TrackedItem
 from core.scrapers.configuration import RowIssue, TargetConfigLoader
 from core.scrapers.registry import RegisteredPlugin
 from core.scrapers.state import JsonStateRepository
-from core.settings import ResolvedSettings, SettingStatus, resolve_settings
+from core.settings import ResolvedSettings, resolve_settings
+
+
+class LoadFailureKind(str, Enum):
+    CONFIG = "config"
+    STATE = "state"
+
+
+@dataclass(frozen=True)
+class LoadFailure:
+    kind: LoadFailureKind
+    detail: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, LoadFailureKind):
+            raise TypeError("load failure kind must be CONFIG or STATE")
+        if not isinstance(self.detail, str) or not self.detail.strip():
+            raise ValueError("load failure detail must be nonblank")
 
 
 @dataclass(frozen=True)
@@ -21,8 +39,16 @@ class TargetLoad:
     items: tuple[TrackedItem, ...] = ()
     row_issues: tuple[RowIssue, ...] = ()
     state: JsonStateRepository | None = None
-    error: str | None = None
-    state_error: bool = False
+    failure: LoadFailure | None = None
+
+    def __post_init__(self) -> None:
+        if self.failure is None and self.state is None:
+            raise ValueError("successful target load requires state")
+        if self.failure is not None and self.state is not None:
+            raise ValueError("failed target load cannot contain state")
+        if self.failure is not None and self.failure.kind is LoadFailureKind.CONFIG:
+            if self.items or self.row_issues:
+                raise ValueError("config failure cannot contain decoded items")
 
     @property
     def target(self) -> str:
@@ -52,8 +78,12 @@ def load_targets(
         try:
             loaded = loader.load()
         except ConfigFileError as exc:
-            settings = resolve_settings(plugin.setting_specs, None, SettingStatus.NO_CONFIG)
-            results.append(TargetLoad(plugin, settings, error=str(exc)))
+            settings = resolve_settings(plugin.setting_specs, None)
+            results.append(TargetLoad(
+                plugin,
+                settings,
+                failure=LoadFailure(LoadFailureKind.CONFIG, str(exc)),
+            ))
             continue
 
         state = JsonStateRepository(resolved_state_dir / f"{plugin.target}.json")
@@ -61,19 +91,21 @@ def load_targets(
             state.load()
         except StateFileError as exc:
             results.append(TargetLoad(
-                plugin,
-                loaded.settings,
-                loaded.items,
-                loaded.row_issues,
-                error=str(exc),
-                state_error=True,
+                plugin=plugin,
+                settings=loaded.settings,
+                items=loaded.items,
+                row_issues=loaded.row_issues,
+                failure=LoadFailure(LoadFailureKind.STATE, str(exc)),
             ))
             continue
         results.append(TargetLoad(
-            plugin,
-            loaded.settings,
-            loaded.items,
-            loaded.row_issues,
-            state,
+            plugin=plugin,
+            settings=loaded.settings,
+            items=loaded.items,
+            row_issues=loaded.row_issues,
+            state=state,
         ))
     return results
+
+
+__all__ = ["LoadFailure", "LoadFailureKind", "TargetLoad", "load_targets"]

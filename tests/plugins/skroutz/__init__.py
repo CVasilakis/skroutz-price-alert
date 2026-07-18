@@ -1,0 +1,1 @@
+"""Skroutz plugin tests."""

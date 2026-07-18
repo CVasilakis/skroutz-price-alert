@@ -115,7 +115,7 @@ def test_malformed_existing_state_is_not_overwritten(tmp_path):
     ({"schema_version": 1, "settings": {}, "items": []}, "unknown top-level"),
     ({"settings": [], "items": []}, "settings"),
     ({"settings": {}, "items": {}}, "items"),
-    ({"settings": {}, "items": [], "metadata": []}, "metadata"),
+    ({"settings": {}, "items": [], "metadata": {}}, "metadata"),
     ({"settings": {"typo": 1}, "items": []}, "unknown settings"),
 ])
 def test_strict_document_shapes(tmp_path, document, message):
@@ -129,7 +129,7 @@ def test_strict_document_shapes(tmp_path, document, message):
     {"name": " "}, {"url": "relative"},
     {"url": "https://example.com/s/1/x"},
     {"url": "https://www.skroutz.gr/search?q=x"},
-    {"target_price": True}, {"target_price": -1}, {"skip": "no"}, {"metadata": []},
+    {"target_price": True}, {"target_price": -1}, {"skip": "no"}, {"metadata": {}},
 ])
 def test_invalid_rows_are_structured_and_never_loaded(tmp_path, changes):
     plugin = CATALOG.get("skroutz")

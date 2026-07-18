@@ -123,7 +123,7 @@ def drive_orchestrated_run(products: list[dict],
     from core import orchestrator as orchestrator_module
     from core.orchestrator import ScrapingOrchestrator
     from core.scrapers.api import ScraperClient
-    from core.scrapers.registry import ClientFactory
+    from core.scrapers.registry import ClientLoader
     from core.preflight import load_targets
     from support import catalog_sandbox, fake_plugin, mock_notifier
 
@@ -158,10 +158,10 @@ def drive_orchestrated_run(products: list[dict],
             strat = tui.InteractiveRunReporter()
             strat.console = Console(file=io.StringIO())
 
-            factory = ClientFactory()
+            loader = ClientLoader()
             loads = load_targets([catalog.get("fakestore")], cfg_dir)
             orch = ScrapingOrchestrator(
-                target_loads=loads, client_factory=factory,
+                target_loads=loads, client_loader=loader,
                 notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
                 quiet=False, reporter=strat,
             )
@@ -170,7 +170,6 @@ def drive_orchestrated_run(products: list[dict],
                  mock.patch.object(orchestrator_module, "get_target_logger",
                                    lambda *a, **k: stub):
                 orch.run()
-            factory.close()
             panel = strat._generate_panel()
         return BuildResult(panel, str(panel.border_style))
     finally:
@@ -182,16 +181,17 @@ def drive_orchestrated_run(products: list[dict],
 def drive_service(target: str, timer: dict, service: dict, resolved: ResolvedSettings,
                   config_filename: str = "skroutz.json",
                   expected_oncalendar: str = "", active_oncalendar: str = "",
-                  config: config_check.ConfigView | None = _DEFAULT_CONFIG) -> BuildResult:
+                  config: config_check.ConfigView = _DEFAULT_CONFIG) -> BuildResult:
     """Builds a per-plugin Service Status panel via ``status.build_service_panel``.
 
     ``config`` is the leading 'Config' row (products-config health); it defaults to a
     healthy load so the common case is exercised, and is overridden with a faulty/failed
-    :class:`ConfigView` — or ``None`` (no row, e.g. missing dependencies) — per scenario.
+    :class:`ConfigView` per scenario.
     """
     panel = status.build_service_panel(
         target, timer, service, resolved,
         config_filename, expected_oncalendar, active_oncalendar, config,
+        display_name=target.capitalize(),
         interval_spec=__import__("ui.catalog.inputs", fromlist=["SPEC_INTERVAL"]).SPEC_INTERVAL,
     )
     return BuildResult(panel, panel.get_panel_color())

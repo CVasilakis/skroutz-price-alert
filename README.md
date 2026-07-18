@@ -3,7 +3,7 @@
   Scrooge Alert
 </h1>
 
-<p align="center">An open-source web scraper and price monitor for Skroutz and the insomnia.gr classifieds. Receive automated push notifications when products reach your desired price.</p>
+<p align="center">An extensible price monitor for supported product pages and classified listings. Receive automated push notifications when offers reach your desired price.</p>
 
 
 > [!IMPORTANT]
@@ -24,7 +24,6 @@
    - [Scraper Configuration (config/<target>.json)](#file-2-scraper-configuration-configtargetjson)
      - [Scraper Settings](#scraper-settings)
      - [Monitored Products](#monitored-products)
-     - [Insomnia Classifieds Searches](#insomnia-classifieds-searches)
    - [General Settings (config/general.json)](#file-3-general-settings-configgeneraljson)
 6. [Usage](#-usage)
    - [Automated Systemd Execution](#automated-systemd-execution)
@@ -51,19 +50,10 @@
 
 ## 🌍 Supported Stores
 
-### Skroutz
-
-All Skroutz domains are supported, dynamically detecting the locale and currency:
-
-* `.gr` (Greece - €)
-* `.cy` (Cyprus - €)
-* `.bg` (Bulgaria - €)
-* `.de` (Germany - €)
-* `.ro` (Romania - Lei)
-
-### Insomnia
-
-The [insomnia.gr](https://www.insomnia.gr/classifieds/) second-hand classifieds (Greece - €). Instead of single product pages you monitor **classifieds listing pages** with per-advert title filters, and every matching advert below your target gets its own alert — see [Insomnia Classifieds Searches](#insomnia-classifieds-searches).
+Supported targets are discovered from the checked-in plugin packages. Run
+`./scripts/run.sh --help` to see the exact target flags available in your checkout.
+Each target's accepted URLs, custom fields, settings, dependencies, and examples are
+documented in `src/core/scrapers/<target>/README.md` beside its implementation.
 
 ## 📋 Prerequisites
 
@@ -124,7 +114,7 @@ The [insomnia.gr](https://www.insomnia.gr/classifieds/) second-hand classifieds 
 
 ## ⚙️ Configuration
 
-All custom user parameters reside outside the source code logic. Apprise Notification URLs go in the `.env` file, and the products you want to monitor go inside a `config/<target>.json` file (e.g., `config/skroutz.json` for Skroutz).
+All custom user parameters reside outside the source code logic. Apprise Notification URLs go in the `.env` file, and the entries you want to monitor go inside a `config/<target>.json` file.
 
 ### File 1: Notification Settings (`.env`)
 
@@ -144,13 +134,14 @@ NOTIFICATION_URLS = tgram://<token>/<chat_id>, discord://<webhook_id>/<webhook_t
 ### File 2: Scraper Configuration (`config/<target>.json`)
 
 Each scraper reads a strict, unversioned, read-only JSON file in `config/` (for example,
-`config/skroutz.json`) containing its settings and monitored items. Machine state is
+`config/<target>.json`) containing its settings and monitored items. Machine state is
 stored separately in the ignored, schema-versioned `state/<target>.json`. Example files
 live beside their plugins:
 
 ```sh
-cp src/core/scrapers/skroutz/config.example.json config/skroutz.json
-nano config/skroutz.json
+target=TARGET_NAME  # replace with a target shown by ./scripts/run.sh --help
+cp "src/core/scrapers/$target/config.example.json" "config/$target.json"
+nano "config/$target.json"
 ```
 
 A complete file is structured like this:
@@ -164,16 +155,10 @@ A complete file is structured like this:
   },
   "items": [
     {
-      "id": "samsung-ssd-2tb",
+      "id": "monitor-123",
       "name": "Awesome Monitor",
-      "url": "https://www.skroutz.gr/s/xxxxxxxx/product_url.html",
+      "url": "https://store.example/products/123",
       "target_price": 150
-    },
-    {
-      "id": "great-game",
-      "name": "Great Game",
-      "url": "https://www.skroutz.cy/s/xxxxxxxx/product_url.html",
-      "target_price": 30
     }
   ]
 }
@@ -201,54 +186,15 @@ stable `id`; separate IDs may intentionally use the same URL.
 | :--- | :--- | :--- | :--- |
 | `id` | String | **User-defined** | Unique stable state key for this row. |
 | `name` | String | **User-defined** | A friendly naming label used inside the notifications. |
-| `url` | String | **User-defined** | The direct link to the Skroutz product page. |
+| `url` | String | **User-defined** | An absolute HTTP(S) URL accepted by the selected plugin. |
 | `target_price` | Number | **User-defined** | The maximum price threshold. If the price drops below this, you get alerted; use `0` to monitor without an alert threshold. |
 | `skip` | Boolean | **User-defined** | Optional. Set to `true` to skip monitoring this product. Defaults to `false`. |
 Runtime `last_price` and `last_checked` values are written to `state/<target>.json`, not
 to user configuration. Timestamps are RFC 3339 UTC strings ending in `Z`.
 
-#### Insomnia Classifieds Searches
-
-The Insomnia scraper (`config/insomnia.json`) works on the [insomnia.gr classifieds](https://www.insomnia.gr/classifieds/), and its entries are **searches** rather than single products: each row points at a category *listing page* and describes which advert titles you are after. Every advert that passes your title filters and is priced below `target_price` triggers its own **Price Drop** notification, linking directly to that advert.
-
-```json
-{
-  "settings": {
-    "execution_interval": "1h",
-    "min_advert_price": 30
-  },
-  "items": [
-    {
-      "id": "pixel-9-128",
-      "name": "Google Pixel 9 (128 GB)",
-      "url": "https://www.insomnia.gr/classifieds/category/174-google/",
-      "target_price": 200,
-      "title_include": ["Pixel 9", "128"],
-      "title_exclude": ["9a"]
-    }
-  ]
-}
-```
-
-On top of the base product fields above, each search supports two extra fields:
-
-| Field | Type | Source | Description |
-| :--- | :--- | :--- | :--- |
-| `title_include` | Array of strings | **User-defined** | Optional. An advert matches only when its title contains **all** of these strings (case-insensitive). |
-| `title_exclude` | Array of strings | **User-defined** | Optional. An advert is rejected when its title contains **any** of these strings (case-insensitive). |
-
-And the `settings` block supports one extra setting on top of the [shared ones](#scraper-settings):
-
-| Setting | Type | Description |
-| :--- | :--- | :--- |
-| `min_advert_price` | Number | Adverts priced below this value are ignored entirely. This filters out bait adverts (an iPhone listed for 1 € just to attract clicks). If omitted, unsupported, or `0`, the filter is disabled. |
-
-> [!NOTE]
-> * Several searches can safely share the same listing URL with different filters — e.g. one row per Pixel storage size, each with its own `target_price`.
-> * Only the **first page** of a listing (the newest adverts) is checked each run, so point your searches at the most specific category available.
-> * "Ζήτηση" (want-to-buy) adverts and adverts without a listed price ("Επικοινωνία") are skipped.
-> * `last_price` stores the cheapest matching advert of the last check. When nothing matches, the search still counts as a successful check (you will not get stale-tracking alerts) and `last_price` keeps its previous value.
-> * While an advert stays below your target you will be re-alerted about it on **every** scheduled run. Set your target price to a genuine "I'd buy it right now" number, and remove or `skip` the search once you have bought.
+Plugins may add item fields and settings beyond the shared keys above. Those additions
+belong exclusively in the package-local guide and example config, so adding a new target
+does not require changing this document.
 
 ### File 3: General Settings (`config/general.json`)
 

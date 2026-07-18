@@ -22,6 +22,12 @@ def test_typed_item_and_setting_lookup_uses_declaration_objects():
     assert resolved.status(spec) is SettingStatus.OK
 
 
+def test_missing_and_present_empty_settings_have_distinct_statuses():
+    spec = SettingSpec("limit", 2, int)
+    assert resolve_settings((spec,), None).status(spec) is SettingStatus.NO_CONFIG
+    assert resolve_settings((spec,), {}).status(spec) is SettingStatus.DEFAULT
+
+
 @pytest.mark.parametrize("price", [True, -1, float("nan"), float("inf")])
 def test_result_construction_rejects_invalid_prices(price):
     with pytest.raises(InvalidScrapeResultError):

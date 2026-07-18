@@ -23,6 +23,7 @@ REQUIREMENTS_FILE="requirements.txt"
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
+    load_plugin_manifest || true
     printf '\n'
     printf '%s\n' "Usage: install.sh [-h] [--<target> ...]"
     printf '\n'
@@ -157,6 +158,7 @@ fi
 # The venv now exists, so the registry can be queried (the single source of truth
 # for which scrapers exist). One systemd unit pair is generated per plugin.
 
+load_plugin_manifest || true
 ALL_PLUGINS="$(list_plugins || true)"
 if [ -z "$ALL_PLUGINS" ]; then
     # Distinguishes a broken venv from a plugin whose discovery failed, and

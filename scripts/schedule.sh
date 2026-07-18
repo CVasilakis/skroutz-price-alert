@@ -19,6 +19,7 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
+    load_plugin_manifest || true
     _registered="$(list_plugins 2>/dev/null || true)"
     # The supported cadences come from the settings vocabulary (SUPPORTED_INTERVALS),
     # not a literal here, so this help can never drift from the code.
@@ -76,6 +77,7 @@ done
 
 require_systemctl
 
+load_plugin_manifest || true
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"
 

@@ -1,6 +1,9 @@
 import json
 
-from core.preflight import load_targets
+import pytest
+
+from core.preflight import LoadFailure, LoadFailureKind, TargetLoad, load_targets
+from core.settings import resolve_settings
 from core.scrapers.registry import PluginCatalog
 
 CATALOG = PluginCatalog.discover()
@@ -22,7 +25,7 @@ def test_preflight_loads_settings_and_items_once(tmp_path):
     load = load_targets(
         [CATALOG.get("skroutz")], str(tmp_path / "config"), str(tmp_path / "state")
     )[0]
-    assert load.count == 1 and load.error is None
+    assert load.count == 1 and load.failure is None
 
 
 def test_preflight_distinguishes_config_and_state_failures(tmp_path):
@@ -30,7 +33,8 @@ def test_preflight_distinguishes_config_and_state_failures(tmp_path):
     config_failure = load_targets(
         [plugin], str(tmp_path / "config"), str(tmp_path / "state")
     )[0]
-    assert config_failure.error and not config_failure.state_error
+    assert config_failure.failure is not None
+    assert config_failure.failure.kind is LoadFailureKind.CONFIG
     _write(tmp_path / "config" / "skroutz.json", {
         "settings": {"log_retention_days": 3},
         "items": [{
@@ -42,6 +46,23 @@ def test_preflight_distinguishes_config_and_state_failures(tmp_path):
     state_failure = load_targets(
         [plugin], str(tmp_path / "config"), str(tmp_path / "state")
     )[0]
-    assert state_failure.error and state_failure.state_error
+    assert state_failure.failure is not None
+    assert state_failure.failure.kind is LoadFailureKind.STATE
     assert state_failure.count == 1
     assert state_failure.faulty_indices == [2]
+
+
+def test_target_load_rejects_inconsistent_failure_combinations():
+    plugin = CATALOG.get("skroutz")
+    settings = resolve_settings(plugin.setting_specs, {})
+    with pytest.raises(ValueError, match="requires state"):
+        TargetLoad(plugin, settings)
+    with pytest.raises(ValueError, match="cannot contain state"):
+        TargetLoad(
+            plugin,
+            settings,
+            state=object(),
+            failure=LoadFailure(LoadFailureKind.STATE, "broken"),
+        )
+    with pytest.raises(ValueError, match="detail"):
+        LoadFailure(LoadFailureKind.CONFIG, " ")

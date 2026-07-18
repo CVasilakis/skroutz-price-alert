@@ -48,10 +48,12 @@ class HttpScraperClient(ScraperClient):
             timeout_seconds=self.REQUEST_TIMEOUT_SECONDS,
         )
 
-    def get_current_headers(self) -> dict[str, str]:
-        return self.current_headers
+    def diagnostic_context(self) -> dict[str, str]:
+        """Expose only coarse, non-secret identity details to error logs."""
+        keys = ("accept-language", "sec-ch-ua-platform")
+        return {key: self.current_headers[key] for key in keys if key in self.current_headers}
 
-    def refresh_identity(self) -> None:
+    def prepare_retry(self) -> None:
         self.current_headers = dict(random.choice(self.HEADERS_POOL))
         self.session.close()
         self.session = self._new_session()

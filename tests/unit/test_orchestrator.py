@@ -14,10 +14,10 @@ from core.constants import (
 )
 from core.exceptions import LockAcquisitionError, PluginDependencyError, StateFileError
 from core.orchestrator import ScrapingOrchestrator
-from core.preflight import TargetLoad
+from core.preflight import LoadFailure, LoadFailureKind, TargetLoad
 from core.run import ItemRunOutcome, RunReporter
 from core.scrapers.api import ScraperPlugin, TrackedItem
-from core.scrapers.registry import ClientFactory, compile_plugin
+from core.scrapers.registry import ClientLoader, compile_plugin
 from core.scrapers.state import JsonStateRepository
 from core.settings import resolve_settings
 
@@ -36,27 +36,28 @@ def _plugin():
     )
 
 
-def _load(*, items=(), state=None, error=None, state_error=False):
+def _load(*, items=(), state=None, error=None, failure_kind=LoadFailureKind.CONFIG):
     plugin = _plugin()
+    failure = None
+    if error is not None:
+        failure = LoadFailure(failure_kind, error)
     return TargetLoad(
-        plugin,
-        resolve_settings(plugin.setting_specs, {}),
-        tuple(items),
-        (),
-        state,
-        error,
-        state_error,
+        plugin=plugin,
+        settings=resolve_settings(plugin.setting_specs, {}),
+        items=tuple(items),
+        state=state,
+        failure=failure,
     )
 
 
 def _orchestrator(load):
-    factory = mock.create_autospec(ClientFactory, instance=True)
+    loader = mock.create_autospec(ClientLoader, instance=True)
     notifier = mock.Mock(has_services=False)
     reporter = mock.create_autospec(RunReporter, instance=True)
     orchestrator = ScrapingOrchestrator(
-        [load], factory, notifier, reporter=reporter, now_fn=lambda: NOW,
+        [load], loader, notifier, reporter=reporter, now_fn=lambda: NOW,
     )
-    return orchestrator, factory, notifier, reporter
+    return orchestrator, loader, notifier, reporter
 
 
 @pytest.fixture(autouse=True)
@@ -72,7 +73,7 @@ def test_config_and_state_failures_keep_distinct_exit_status_and_reporting():
 
     item = TrackedItem("one", "One", "https://store.example/one", 1)
     state_run, _, _, state_reporter = _orchestrator(
-        _load(items=[item], error="bad state", state_error=True)
+        _load(items=[item], error="bad state", failure_kind=LoadFailureKind.STATE)
     )
     assert state_run.run() == EXIT_CODE_STORAGE_ERROR
     assert state_reporter.start_target.call_args.args[3].loaded_count == 1
@@ -88,11 +89,11 @@ def test_lock_and_dependency_failures_are_isolated(monkeypatch):
     assert lock_run.run() == EXIT_CODE_SKIPPED
     lock_reporter.log_error.assert_called_once()
 
-    dependency_run, factory, _, dependency_reporter = _orchestrator(
+    dependency_run, loader, _, dependency_reporter = _orchestrator(
         _load(items=[item], state=state)
     )
     monkeypatch.setattr("core.orchestrator.acquire_lock", lambda _target: contextlib.nullcontext())
-    factory.create.side_effect = PluginDependencyError("install it")
+    loader.load.side_effect = PluginDependencyError("install it")
     assert dependency_run.run() == EXIT_CODE_PLUGIN_DEPENDENCY_ERROR
     dependency_reporter.log_error.assert_called_once()
 
@@ -118,7 +119,7 @@ def test_success_commits_once_and_aggregates_notification_failures(monkeypatch):
     item = TrackedItem("one", "One", "https://store.example/one", 1)
     state = mock.create_autospec(JsonStateRepository, instance=True)
     state.has_pending = True
-    run, _, notifier, reporter = _orchestrator(_load(items=[item], state=state))
+    run, loader, notifier, reporter = _orchestrator(_load(items=[item], state=state))
     notifier.has_services = True
     notifier.notify_old_entries.return_value = False
     notifier.notify_errors.return_value = False
@@ -135,12 +136,13 @@ def test_success_commits_once_and_aggregates_notification_failures(monkeypatch):
     notifier.notify_old_entries.assert_called_once_with("Store", [item], 48)
     notifier.notify_errors.assert_called_once()
     assert reporter.log_warning.call_count == 2
+    loader.load.return_value.close.assert_called_once()
 
 
 def test_interruption_stops_target_and_wins_exit_priority(monkeypatch):
     item = TrackedItem("one", "One", "https://store.example/one", 1)
     state = mock.create_autospec(JsonStateRepository, instance=True)
-    run, _, _, reporter = _orchestrator(_load(items=[item], state=state))
+    run, loader, _, reporter = _orchestrator(_load(items=[item], state=state))
     run._interrupt_message = "Received signal SIGTERM"
     monkeypatch.setattr("core.orchestrator.acquire_lock", lambda _target: contextlib.nullcontext())
     executor_type = mock.MagicMock()
@@ -155,3 +157,18 @@ def test_interruption_stops_target_and_wins_exit_priority(monkeypatch):
 
     assert run.run() == EXIT_CODE_INTERRUPT
     reporter.log_interrupt.assert_called_once_with("Received signal SIGTERM")
+    loader.load.return_value.close.assert_called_once()
+
+
+def test_client_closes_when_target_execution_raises(monkeypatch):
+    item = TrackedItem("one", "One", "https://store.example/one", 1)
+    state = mock.create_autospec(JsonStateRepository, instance=True)
+    run, loader, _, _ = _orchestrator(_load(items=[item], state=state))
+    monkeypatch.setattr("core.orchestrator.acquire_lock", lambda _target: contextlib.nullcontext())
+    monkeypatch.setattr(
+        "core.orchestrator.ItemExecutor", mock.Mock(side_effect=RuntimeError("broken"))
+    )
+
+    with pytest.raises(RuntimeError, match="broken"):
+        run.run()
+    loader.load.return_value.close.assert_called_once()

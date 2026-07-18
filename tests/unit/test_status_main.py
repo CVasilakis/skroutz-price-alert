@@ -13,15 +13,17 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         target="alpha",
         display_name="Alpha",
         config_filename="alpha.json",
+        setting=lambda _key: interval_spec,
     )
     beta = SimpleNamespace(
         target="beta",
         display_name="Beta",
         config_filename="beta.json",
+        setting=lambda _key: interval_spec,
     )
     load = SimpleNamespace(
-        target="alpha", count=2, faulty_indices=(1,), error=None,
-        state_error=False, settings=mock.MagicMock(),
+        target="alpha", count=2, faulty_indices=(1,), failure=None,
+        settings=mock.MagicMock(),
     )
     interval = SimpleNamespace(status=SettingStatus.OK, value="1h")
     resolved = load.settings
@@ -41,7 +43,6 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
          mock.patch("core.status.setup_global_logging"), \
          mock.patch("core.status.Console", return_value=console), \
          mock.patch("core.status.PluginCatalog.discover", return_value=catalog), \
-         mock.patch("core.status.setting_spec", return_value=interval_spec), \
          mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar, \
          mock.patch("core.status.load_targets", return_value=(load,)), \
          mock.patch("core.status.render_config_panel"), \

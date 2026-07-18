@@ -69,13 +69,13 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "mixed_skip_warning_no_target", "Skip, 404 warning, and a missing target price", tags=("combined",))
+@scenario(Surface.E2E_RUN, "mixed_skip_warning_zero_target", "Skip, 404 warning, and an explicit zero target", tags=("combined",))
 def _():
     return drive_orchestrated_run(
         products=[
             {"name": "Paused Product", "url": _URL.format(1), "target_price": 10.0, "skip": True},
             {"name": "Removed Product", "url": _URL.format(2), "target_price": 10.0},
-            {"name": "Untargeted Product", "url": _URL.format(3)},
+            {"name": "Untargeted Product", "url": _URL.format(3), "target_price": 0.0},
         ],
         results_by_url={
             _URL.format(2): [ProductNotFoundError(messages.not_found_detail(404))],

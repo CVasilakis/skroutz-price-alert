@@ -1,4 +1,4 @@
-"""Immutable scraper discovery/catalog and per-run lazy client construction."""
+"""Immutable scraper discovery/catalog and one-shot client loading."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import importlib
 import os
 import pkgutil
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 from core import messages
 from core.exceptions import (
@@ -21,12 +21,19 @@ from core.exceptions import (
 )
 from core.scrapers.api import ItemField, ScraperClient, ScraperPlugin
 from core.scrapers.settings import SUPPORTED_INTERVALS, framework_setting_specs
-from core.scrapers.url import normalize_domain, parsed_matches_domains, parse_url
+from core.scrapers.url import (
+    canonicalize_url,
+    normalize_domain,
+    parsed_matches_domains,
+    parse_url,
+)
 from core.settings import ResolvedSettings, SettingSpec
 
 RESERVED_PLUGIN_NAMES = frozenset({"general", "help", "quiet", "ping", "status", "update"})
-RESERVED_ITEM_KEYS = frozenset({"id", "name", "url", "target_price", "skip", "metadata"})
-REQUIRED_PLUGIN_FILES = ("__init__.py", "plugin.py", "client.py", "README.md", "config.example.json")
+RESERVED_ITEM_KEYS = frozenset({"id", "name", "url", "target_price", "skip"})
+RUNTIME_PLUGIN_FILES = ("__init__.py", "plugin.py", "client.py")
+SNAKE_CASE_KEY = re.compile(r"[a-z][a-z0-9_]*\Z")
+CONTROL_CHAR = re.compile(r"[\x00-\x1f\x7f]")
 
 
 @dataclass(frozen=True)
@@ -36,9 +43,10 @@ class RegisteredPlugin:
     target: str
     display_name: str
     domains: tuple[str, ...]
-    accepts_url: Any
+    _accepts_url: Callable[[SplitResult], bool]
     item_fields: tuple[ItemField[Any], ...]
     setting_specs: tuple[SettingSpec[Any], ...]
+    settings_by_key: Mapping[str, SettingSpec[Any]]
     default_interval: str
     package: str
     source_dir: str
@@ -49,21 +57,28 @@ class RegisteredPlugin:
     def config_filename(self) -> str:
         return f"{self.target}.json"
 
-    def accepts(self, value: object) -> bool:
-        """Return whether this adapter accepts an absolute URL value."""
+    def canonicalize_url(self, value: object) -> str:
+        """Canonicalize and validate a URL through this plugin's complete contract."""
+        canonical = canonicalize_url(value)
+        parsed = parse_url(canonical)
+        if not parsed_matches_domains(parsed, self.domains):
+            raise ValueError("URL host is not registered for this plugin")
         try:
-            parsed = parse_url(value)
-            return parsed_matches_domains(parsed, self.domains) and self.accepts_url(parsed) is True
-        except Exception:
-            return False
+            accepted = self._accepts_url(parsed)
+        except Exception as exc:
+            raise ValueError(f"plugin URL matcher failed: {exc}") from exc
+        if not isinstance(accepted, bool):
+            raise ValueError("plugin URL matcher must return bool")
+        if not accepted:
+            raise ValueError("URL path is not accepted by this plugin")
+        return canonical
 
-
-def setting_spec(plugin: RegisteredPlugin, key: str) -> SettingSpec[Any]:
-    """Return a compiled setting declaration by framework-owned key."""
-    try:
-        return next(spec for spec in plugin.setting_specs if spec.key == key)
-    except StopIteration as exc:
-        raise KeyError(f"Plugin {plugin.target!r} has no setting {key!r}") from exc
+    def setting(self, key: str) -> SettingSpec[Any]:
+        """Return a compiled setting declaration by key."""
+        try:
+            return self.settings_by_key[key]
+        except KeyError as exc:
+            raise KeyError(f"Plugin {self.target!r} has no setting {key!r}") from exc
 
 
 def _sequence(value: object, *, target: str, field: str) -> tuple[Any, ...]:
@@ -72,14 +87,26 @@ def _sequence(value: object, *, target: str, field: str) -> tuple[Any, ...]:
     return tuple(value)
 
 
-def _canonical_default(target: str, kind: str, key: str, declaration: Any) -> Any:
+def _safe_text(value: object, *, context: str, nonblank: bool = True) -> str:
+    if not isinstance(value, str) or nonblank and not value.strip():
+        raise PluginValidationError(f"{context} must be a nonblank string.")
+    if CONTROL_CHAR.search(value):
+        raise PluginValidationError(f"{context} must not contain control characters.")
+    return value
+
+
+def _validate_canonical_default(target: str, kind: str, key: str, declaration: Any) -> None:
     try:
         canonical = declaration.decode(declaration.default)
     except Exception as exc:
         raise PluginValidationError(
             f"Plugin '{target}' {kind} '{key}' default failed: {exc}"
         ) from exc
-    return canonical
+    if canonical != declaration.default:
+        raise PluginValidationError(
+            f"Plugin '{target}' {kind} '{key}' default is not canonical; "
+            f"declare {canonical!r} instead of {declaration.default!r}."
+        )
 
 
 def compile_plugin(
@@ -96,10 +123,11 @@ def compile_plugin(
         raise PluginValidationError(
             f"Plugin '{context}' must export a ScraperPlugin as PLUGIN."
         )
-    if not isinstance(target, str) or re.fullmatch(r"[a-z][a-z0-9_]*", target) is None or target in RESERVED_PLUGIN_NAMES:
+    if not isinstance(target, str) or SNAKE_CASE_KEY.fullmatch(target) is None or target in RESERVED_PLUGIN_NAMES:
         raise PluginValidationError(f"Plugin package name '{target}' is invalid or reserved.")
-    if not isinstance(definition.display_name, str) or not definition.display_name.strip():
-        raise PluginValidationError(f"Plugin '{target}' must declare a nonblank display_name.")
+    display_name = _safe_text(
+        definition.display_name, context=f"Plugin '{target}' display_name"
+    ).strip()
 
     raw_domains = _sequence(definition.domains, target=target, field="domains")
     if not raw_domains:
@@ -133,12 +161,11 @@ def compile_plugin(
 
     fields = _sequence(definition.item_fields, target=target, field="item_fields")
     seen_fields: set[str] = set()
-    canonical_defaults: list[tuple[Any, Any]] = []
     for declaration in fields:
         if not isinstance(declaration, ItemField):
             raise PluginValidationError(f"Plugin '{target}' item_fields contains a non-ItemField.")
         key = declaration.key
-        if not isinstance(key, str) or not key.strip() or key in RESERVED_ITEM_KEYS:
+        if not isinstance(key, str) or SNAKE_CASE_KEY.fullmatch(key) is None or key in RESERVED_ITEM_KEYS:
             raise PluginValidationError(
                 f"Plugin '{target}' item field key {key!r} is invalid or reserved."
             )
@@ -149,9 +176,7 @@ def compile_plugin(
             raise PluginValidationError(
                 f"Plugin '{target}' item field '{key}' decoder is not callable."
             )
-        canonical_defaults.append((
-            declaration, _canonical_default(target, "item field", key, declaration)
-        ))
+        _validate_canonical_default(target, "item field", key, declaration)
 
     custom_settings = _sequence(definition.settings, target=target, field="settings")
     framework_settings = framework_setting_specs(definition.default_interval)
@@ -161,7 +186,7 @@ def compile_plugin(
         if not isinstance(declaration, SettingSpec):
             raise PluginValidationError(f"Plugin '{target}' settings contains a non-SettingSpec.")
         key = declaration.key
-        if not isinstance(key, str) or not key.strip() or key in seen_settings:
+        if not isinstance(key, str) or SNAKE_CASE_KEY.fullmatch(key) is None or key in seen_settings:
             raise PluginValidationError(
                 f"Plugin '{target}' setting key {key!r} is blank or duplicated."
             )
@@ -170,10 +195,9 @@ def compile_plugin(
             raise PluginValidationError(
                 f"Plugin '{target}' setting '{key}' has a non-callable codec."
             )
-        canonical = _canonical_default(target, "setting", key, declaration)
-        canonical_defaults.append((declaration, canonical))
+        _validate_canonical_default(target, "setting", key, declaration)
         try:
-            displayed = declaration.display(canonical)
+            displayed = declaration.display(declaration.default)
         except Exception as exc:
             raise PluginValidationError(
                 f"Plugin '{target}' setting '{key}' display failed: {exc}"
@@ -182,6 +206,11 @@ def compile_plugin(
             raise PluginValidationError(
                 f"Plugin '{target}' setting '{key}' display must return str."
             )
+        _safe_text(
+            displayed,
+            context=f"Plugin '{target}' setting '{key}' display output",
+            nonblank=False,
+        )
         try:
             label = declaration.display_label
             warning = declaration.warning
@@ -189,9 +218,12 @@ def compile_plugin(
             raise PluginValidationError(
                 f"Plugin '{target}' setting '{key}' display override failed: {exc}"
             ) from exc
-        if (
-            not isinstance(label, str) or not label.strip()
-            or warning is not None and (not isinstance(warning, str) or not warning.strip())
+        if not isinstance(label, str) or not label.strip() or CONTROL_CHAR.search(label):
+            raise PluginValidationError(
+                f"Plugin '{target}' setting '{key}' has an invalid display override."
+            )
+        if warning is not None and (
+            not isinstance(warning, str) or not warning.strip() or CONTROL_CHAR.search(warning)
         ):
             raise PluginValidationError(
                 f"Plugin '{target}' setting '{key}' has an invalid display override."
@@ -199,30 +231,23 @@ def compile_plugin(
 
     source = Path(source_dir).resolve() if source_dir is not None else None
     if source is not None:
-        missing = [name for name in REQUIRED_PLUGIN_FILES if not (source / name).is_file()]
+        missing = [name for name in RUNTIME_PLUGIN_FILES if not (source / name).is_file()]
         if missing:
             raise PluginValidationError(
                 f"Plugin '{target}' is missing required file(s): {', '.join(missing)}."
             )
-        readme = source / "README.md"
-        try:
-            if not readme.read_text(encoding="utf-8").strip():
-                raise PluginValidationError(f"Plugin '{target}' README.md must not be empty.")
-        except (OSError, UnicodeError) as exc:
-            raise PluginValidationError(f"Plugin '{target}' README.md is unreadable: {exc}") from exc
+        _safe_text(str(source), context=f"Plugin '{target}' source path")
 
     requirements = source / "requirements.txt" if source else None
-    # Declaration-object lookup is intentional. Canonicalize only after every
-    # validation succeeds, so a failed compilation has no partial side effects.
-    for declaration, canonical in canonical_defaults:
-        object.__setattr__(declaration, "default", canonical)
+    settings_by_key = MappingProxyType({spec.key: spec for spec in settings})
     return RegisteredPlugin(
         target=target,
-        display_name=definition.display_name.strip(),
+        display_name=display_name,
         domains=tuple(domains),
-        accepts_url=definition.accepts_url,
+        _accepts_url=definition.accepts_url,
         item_fields=tuple(fields),
         setting_specs=tuple(settings),
+        settings_by_key=settings_by_key,
         default_interval=definition.default_interval,
         package=package,
         source_dir=str(source) if source else "",
@@ -314,21 +339,35 @@ class PluginCatalog:
             raise ValueError(f"Unsupported plugin: {target}") from exc
 
 
-class ClientFactory:
-    """Per-run lazy client ownership, including dependency guidance and shutdown."""
+class ClientLoader:
+    """Load one conventional client without retaining lifecycle state."""
 
-    def __init__(self) -> None:
-        self._clients: dict[str, ScraperClient] = {}
+    @staticmethod
+    def _import_failure(plugin: RegisteredPlugin, exc: ImportError) -> Exception:
+        missing = getattr(exc, "name", None)
+        internal = (
+            not missing
+            or missing == plugin.package
+            or plugin.package.startswith(f"{missing}.")
+            or missing.startswith(f"{plugin.package}.")
+            or missing == "core"
+            or missing.startswith("core.")
+        )
+        if internal:
+            return PluginValidationError(
+                f"Plugin '{plugin.target}' client import failed: {exc}"
+            )
+        return PluginDependencyError(messages.plugin_dependency_detail(plugin.target, missing))
 
-    def create(self, plugin: RegisteredPlugin, settings: ResolvedSettings) -> ScraperClient:
-        if plugin.target in self._clients:
-            return self._clients[plugin.target]
+    def load(self, plugin: RegisteredPlugin, settings: ResolvedSettings) -> ScraperClient:
         module_name = f"{plugin.package}.client"
         try:
             module = importlib.import_module(module_name)
         except ImportError as exc:
-            raise PluginDependencyError(
-                messages.plugin_dependency_detail(plugin.target, getattr(exc, "name", None))
+            raise self._import_failure(plugin, exc) from exc
+        except Exception as exc:
+            raise PluginValidationError(
+                f"Plugin '{plugin.target}' client import failed: {exc}"
             ) from exc
         try:
             client_type = module.Client
@@ -340,32 +379,15 @@ class ClientFactory:
             raise PluginValidationError(
                 f"Plugin '{plugin.target}' Client must be a ScraperClient subclass."
             )
-        client = client_type(settings)
-        self._clients[plugin.target] = client
-        return client
-
-    def close(self) -> None:
-        failures: list[Exception] = []
-        for client in self._clients.values():
-            try:
-                client.close()
-            except Exception as exc:
-                failures.append(exc)
-        self._clients.clear()
-        if failures:
-            raise failures[0]
-
-    def __enter__(self) -> "ClientFactory":
-        return self
-
-    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
-        self.close()
+        try:
+            return client_type(settings)
+        except ImportError as exc:
+            raise self._import_failure(plugin, exc) from exc
 
 
 __all__ = [
-    "ClientFactory",
+    "ClientLoader",
     "PluginCatalog",
     "RegisteredPlugin",
     "compile_plugin",
-    "setting_spec",
 ]

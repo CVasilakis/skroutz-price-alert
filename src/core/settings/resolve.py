@@ -10,26 +10,25 @@ from core.settings.model import (
 )
 
 
-def resolve_spec(spec: SettingSpec[Any], block: Mapping[str, object] | None,
-                 load_status: SettingStatus | None = None) -> ResolvedSetting[Any]:
-    if load_status is SettingStatus.NO_CONFIG:
+def resolve_spec(
+    spec: SettingSpec[Any], block: Mapping[str, object] | None
+) -> ResolvedSetting[Any]:
+    if block is None:
         return ResolvedSetting(spec.default, SettingStatus.NO_CONFIG)
-    if load_status is not None:
-        return ResolvedSetting(spec.default, SettingStatus.DEFAULT)
-    settings = block or {}
-    raw = settings.get(spec.key)
+    raw = block.get(spec.key)
     if spec.is_unset(raw):
         return ResolvedSetting(spec.default, SettingStatus.DEFAULT)
     try:
         value = spec.decode(raw)
     except (TypeError, ValueError, OverflowError):
-        return ResolvedSetting(spec.default, SettingStatus.INVALID, raw)
-    return ResolvedSetting(value, SettingStatus.OK, raw)
+        return ResolvedSetting(spec.default, SettingStatus.INVALID)
+    return ResolvedSetting(value, SettingStatus.OK)
 
 
-def resolve_settings(specs: Sequence[SettingSpec[Any]], block: Mapping[str, object] | None,
-                     load_status: SettingStatus | None = None) -> ResolvedSettings:
-    pairs = [(spec, resolve_spec(spec, block, load_status)) for spec in specs]
+def resolve_settings(
+    specs: Sequence[SettingSpec[Any]], block: Mapping[str, object] | None
+) -> ResolvedSettings:
+    pairs = [(spec, resolve_spec(spec, block)) for spec in specs]
     return ResolvedSettings(pairs)
 
 

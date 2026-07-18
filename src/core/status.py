@@ -12,18 +12,19 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.constants import CONFIG_DIR
 from core.exit_status import classify_service_state
 from core.scrapers.intervals import oncalendar_for
-from core.scrapers.registry import PluginCatalog, setting_spec
+from core.scrapers.registry import PluginCatalog
 from core.scrapers.settings import KEY_INTERVAL
 from core.settings import SettingStatus
 from core.logger import setup_global_logging
 from core.ui.panel import StatusPanelBuilder
-from core.preflight import load_targets
+from core.preflight import LoadFailureKind, load_targets
 from core.ui.config_check import render_config_panel, config_view, add_config_row, add_setting_row, ConfigView
 from core.utils import install_interrupt_handler
 
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.markup import escape
 
 # ``systemctl show`` normally returns immediately, but it crosses a subprocess / user
 # bus boundary and must not be able to hang the one-shot ``--status`` command forever.
@@ -129,7 +130,12 @@ def build_not_installed_panel(target: str, display_name: str | None = None) -> P
     service_table.add_column("Message", style="dim")
     service_table.add_row("❗", "Background service not installed.")
     label = display_name or target.capitalize()
-    return Panel(service_table, title=f"[bold]{label} Service Status[/bold]", border_style="red", width=75)
+    return Panel(
+        service_table,
+        title=f"[bold]{escape(label)} Service Status[/bold]",
+        border_style="red",
+        width=75,
+    )
 
 def build_orphan_panel(name: str) -> StatusPanelBuilder:
     """Builds the red 'orphaned unit' panel for an installed unit whose plugin is gone.
@@ -148,10 +154,10 @@ def build_orphan_panel(name: str) -> StatusPanelBuilder:
 def build_service_panel(target: str, timer_props: dict, service_props: dict, resolved,
                         config_filename: str, expected_oncalendar: str,
                         active_oncalendar: str,
-                        config: ConfigView | None = None,
-                        display_name: str | None = None,
-                        interval_spec=None,
-                        state_error: str | None = None) -> StatusPanelBuilder:
+                        config: ConfigView,
+                        display_name: str,
+                        interval_spec,
+                        state_failure_detail: str | None = None) -> StatusPanelBuilder:
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
     Pure presentation given the systemd property dicts, the resolved settings, the
@@ -178,14 +184,13 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     Returns:
         StatusPanelBuilder: The populated Service Status panel.
     """
-    service_panel = StatusPanelBuilder(f"{display_name or target.capitalize()} Service Status")
+    service_panel = StatusPanelBuilder(f"{display_name} Service Status")
 
     # Settings section: the products-config health ('Config' row) leads, then each scraper's
     # settings (or its active default), then a separator, then the systemd status rows.
-    if config is not None:
-        add_config_row(service_panel, config)
-    if state_error:
-        ref = service_panel.add_note_ref(state_error)
+    add_config_row(service_panel, config)
+    if state_failure_detail:
+        ref = service_panel.add_note_ref(state_failure_detail)
         service_panel.add_row("❗", "State", f"[red]Failed[/red]{ref}")
     for view in resolved.views():
         add_setting_row(service_panel, view)
@@ -211,6 +216,7 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
         next_exec = "[red]Not Scheduled[/red]"
         next_exec_icon = "❗"
     else:
+        next_exec = escape(next_exec)
         next_exec_icon = "✅"
 
     service_panel.add_row(timer_icon, "Systemd Timer Active", timer_active)
@@ -224,15 +230,15 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
         verdict = classify_service_state(result, exec_status, target, config_filename)
         ref = service_panel.add_note_ref(verdict.note) if verdict.note else ""
         completed_str = f"[{verdict.color}]{verdict.label}{ref}[/{verdict.color}]"
-        service_panel.add_row("✅", "Last Execution Time", last_exec_time)
+        service_panel.add_row("✅", "Last Execution Time", escape(last_exec_time))
         service_panel.add_row(verdict.icon, "Last Execution Status", completed_str)
 
     # Flag schedule *drift* only: the live timer's OnCalendar (on disk) versus the
     # effective schedule the configured execution_interval resolves to. An invalid/missing
     # interval is owned by the Execution Interval row above, so the check is gated to a
     # usable (ok/default) interval.
-    interval = resolved.resolved(interval_spec) if interval_spec is not None else None
-    if interval is not None and interval.status in (SettingStatus.OK, SettingStatus.DEFAULT):
+    interval = resolved.resolved(interval_spec)
+    if interval.status in (SettingStatus.OK, SettingStatus.DEFAULT):
         if active_oncalendar and active_oncalendar != expected_oncalendar:
             next_exec += service_panel.add_note_ref(
                 "Timer differs from config. Run `./scripts/schedule.sh`."
@@ -291,7 +297,7 @@ def main():
         # the effective schedule the configured execution_interval resolves to. Computed
         # only for a usable (ok/default) interval — an invalid/missing one is owned by the
         # Execution Interval settings row — preserving the original lazy timer-file read.
-        interval_spec = setting_spec(plugin, KEY_INTERVAL)
+        interval_spec = plugin.setting(KEY_INTERVAL)
         interval = resolved.resolved(interval_spec)
         expected_oncalendar = ""
         active_oncalendar = ""
@@ -306,11 +312,15 @@ def main():
             config_view(
                 load.count,
                 load.faulty_indices,
-                load.error if not load.state_error else None,
+                load.failure.detail
+                if load.failure is not None and load.failure.kind is LoadFailureKind.CONFIG
+                else None,
             ),
             plugin.display_name,
             interval_spec,
-            load.error if load.state_error else None,
+            load.failure.detail
+            if load.failure is not None and load.failure.kind is LoadFailureKind.STATE
+            else None,
         )
 
         console.print()

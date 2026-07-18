@@ -76,7 +76,7 @@ def _():
 
 # --- Products-config ('Config' row) variants -----------------------------------------
 # The healthy 'Config' row is exercised by every scenario above (drive_service defaults to
-# a clean load); these cover the faulty / failed / unavailable variants.
+# a clean load); these cover the faulty and failed variants.
 
 @scenario(Surface.STATUS, "config_faulty", "Some products are misconfigured (Config row)", tags=("products",))
 def _():
@@ -88,12 +88,6 @@ def _():
 def _():
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
                          CFG, "hourly", "hourly", config=config_failed(STORAGE_BAD_JSON))
-
-
-@scenario(Surface.STATUS, "config_unavailable", "Dependencies missing (no Config row)", tags=("products", "system"))
-def _():
-    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved_settings(),
-                         CFG, "hourly", "hourly", config=None)
 
 
 # --- Timer / last-execution / next-execution variants --------------------------------

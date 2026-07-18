@@ -20,6 +20,7 @@ VENV_DIR="venv"
 # ==============================================================================
 
 print_help() {
+    load_plugin_manifest || true
     _registered="$(list_plugins 2>/dev/null || true)"
 
     # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
@@ -79,6 +80,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 require_systemctl
+load_plugin_manifest || true
 
 # ------------------------------------------------------------------------------
 # SELECTED-PLUGIN REMOVAL

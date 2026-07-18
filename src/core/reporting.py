@@ -24,22 +24,21 @@ class SilentRunReporter(RunReporter):
         self,
         target_name: str,
         target_logger: logging.Logger,
-        settings_view: Sequence[SettingView] = (),
-        config: ConfigOutcome | None = None,
+        settings_view: Sequence[SettingView],
+        config: ConfigOutcome,
     ) -> None:
         self.target_logger = target_logger
-        if config is not None:
-            if config.error:
-                target_logger.warning(f"❗ Monitored Items: Failed ({config.error})")
-            elif config.faulty_indices:
-                indices = ", ".join(map(str, config.faulty_indices))
-                target_logger.warning(
-                    f"❗ Monitored Items: {config.loaded_count} loaded, "
-                    f"{len(config.faulty_indices)} misconfigured "
-                    f"(Problematic items found at JSON index: {indices}.)"
-                )
-            else:
-                target_logger.info(f"🗄️  Monitored Items: {config.loaded_count} loaded")
+        if config.error:
+            target_logger.warning(f"❗ Monitored Items: Failed ({config.error})")
+        elif config.faulty_indices:
+            indices = ", ".join(map(str, config.faulty_indices))
+            target_logger.warning(
+                f"❗ Monitored Items: {config.loaded_count} loaded, "
+                f"{len(config.faulty_indices)} misconfigured "
+                f"(Problematic items found at JSON index: {indices}.)"
+            )
+        else:
+            target_logger.info(f"🗄️  Monitored Items: {config.loaded_count} loaded")
         for view in settings_view:
             if view.has_warning:
                 target_logger.warning(f"❗ {view.label}: {view.display_value} ({view.footnote})")

@@ -38,7 +38,6 @@ NOTIFIED_FAIL = messages.NOTE_NOTIFIED_FAIL
 NOTIFIED_NONE = messages.NOTE_NOTIFIED_NONE
 ERRORS_LOG = messages.errors_log_pointer("skroutz")
 ABORTED = messages.NOTE_RATE_LIMIT_ABORTED
-CORRUPTED_TS = messages.NOTE_CORRUPTED_TIMESTAMP
 STALE = messages.stale_note("25-06-2026 09:00:00", OLD_ENTRY_HOURS)
 
 
@@ -138,30 +137,6 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "no_target_missing", "Success with no target_price field set", tags=("ok",))
-def _():
-    def script(s):
-        _start(s)
-        s.start_scraping("Generic Monitor", 1, 3)
-        s.complete_scraping()
-        s.log_price_result("Generic Monitor", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET,
-                           notes=[messages.missing_target_price(CURRENCY)])
-        s.complete_target()
-    return drive_run(script)
-
-
-@scenario(Surface.RUN, "no_target_invalid", "Success with an unparseable target_price", tags=("ok",))
-def _():
-    def script(s):
-        _start(s)
-        s.start_scraping("Generic Monitor", 1, 3)
-        s.complete_scraping()
-        s.log_price_result("Generic Monitor", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET,
-                           notes=[messages.invalid_target_price("abc", CURRENCY)])
-        s.complete_target()
-    return drive_run(script)
-
-
 @scenario(Surface.RUN, "no_target_zero", "Success with target explicitly 0.0 (no note)", tags=("ok",))
 def _():
     def script(s):
@@ -173,28 +148,6 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "success_corrupted_timestamp", "Success after repairing a corrupted timestamp", tags=("ok",))
-def _():
-    def script(s):
-        _start(s)
-        s.start_scraping("Sony WH-1000XM5", 1, 3)
-        s.complete_scraping()
-        s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP, notes=[NOTIFIED_OK, CORRUPTED_TS])
-        s.complete_target()
-    return drive_run(script)
-
-
-@scenario(Surface.RUN, "success_stale", "Success on a product that had gone stale (>48h)", tags=("ok",))
-def _():
-    def script(s):
-        _start(s)
-        s.start_scraping("Sony WH-1000XM5", 1, 3)
-        s.complete_scraping()
-        s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK, notes=[STALE])
-        s.complete_target()
-    return drive_run(script)
-
-
 # --- Skips and non-retryable warnings -----------------------------------------------
 
 @scenario(Surface.RUN, "skip_true", "Product skipped via skip:true in config", tags=("skipped",))
@@ -202,24 +155,6 @@ def _():
     def script(s):
         _start(s)
         s.log_result("✅", "Paused Product", "Skipped", messages.NOTE_SKIP_FIELD)
-        s.complete_target()
-    return drive_run(script)
-
-
-@scenario(Surface.RUN, "invalid_url_warning", "Product URL not scrapable; shown as a failure", tags=("skipped",))
-def _():
-    def script(s):
-        _start(s)
-        s.log_error("Mistyped Product", messages.WARN_INVALID_URL)
-        s.complete_target()
-    return drive_run(script)
-
-
-@scenario(Surface.RUN, "invalid_url_warning_stale", "Invalid-URL failure on a stale product", tags=("skipped",))
-def _():
-    def script(s):
-        _start(s)
-        s.log_error("Mistyped Product", messages.WARN_INVALID_URL, STALE)
         s.complete_target()
     return drive_run(script)
 
@@ -289,22 +224,6 @@ def _():
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK,
                            notes=[messages.succeeded_on_attempt(3, 3)],
                            attempt_notes=_attempts("ScraperParseError", "ServerError"))
-        s.complete_target()
-    return drive_run(script)
-
-
-@scenario(Surface.RUN, "retry_success_stale_notified", "Stale product: fail attempt 1, succeed attempt 2, drop + notify", tags=("retry", "price_drop"))
-def _():
-    def script(s):
-        _start(s)
-        s.start_scraping("Sony WH-1000XM5", 1, 3)
-        s.complete_scraping()
-        s.log_attempt("Sony WH-1000XM5", 1, 3, "ScraperParseError: No price element found")
-        s.start_scraping("Sony WH-1000XM5", 2, 3)
-        s.complete_scraping()
-        s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP,
-                           notes=[messages.succeeded_on_attempt(2, 3), NOTIFIED_OK, STALE],
-                           attempt_notes=_attempts("ScraperParseError"))
         s.complete_target()
     return drive_run(script)
 
@@ -523,18 +442,6 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "config_unavailable", "No Config row shown: this scraper's optional dependencies are not installed", tags=("system", "layout"))
-def _():
-    # The storage-deps branch: the manager could not even be instantiated, so the
-    # panel opens with NO 'Monitored Items' row (config_view=None) — unlike
-    # system_plugin_dependency, where storage loaded and only the client failed.
-    def script(s):
-        _start(s, config=None)
-        s.log_error("System", messages.plugin_dependency_detail("skroutz", "tls_client"))
-        s.complete_target()
-    return drive_run(script)
-
-
 @scenario(Surface.RUN, "storage_save_failure", "The state file could not be persisted", tags=("system",))
 def _():
     def script(s):
@@ -637,7 +544,7 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "wrap_many_footnotes", "A single row carrying six stacked footnotes", tags=("layout",))
+@scenario(Surface.RUN, "wrap_many_footnotes", "Synthetic renderer stress: one row with six footnotes", tags=("layout", "synthetic"))
 def _():
     def script(s):
         _start(s)
@@ -645,7 +552,10 @@ def _():
         s.complete_scraping()
         s.log_price_result(
             "Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP,
-            notes=[messages.succeeded_on_attempt(3, 3), NOTIFIED_OK, CORRUPTED_TS, STALE],
+            notes=[
+                "Synthetic renderer note one", "Synthetic renderer note two",
+                "Synthetic renderer note three", "Synthetic renderer note four",
+            ],
             attempt_notes=_attempts("ScraperParseError", "ServerError"),
         )
         s.complete_target()
@@ -665,8 +575,7 @@ def _():
         s.complete_scraping()
         s.log_price_result("Logitech MX Master 3S", 79.0, CURRENCY, 70.0, PriceOutcome.OK)
         s.log_warning("Removed Product", messages.skipping_warning("ProductNotFoundError"), [messages.not_found_detail(404)])
-        s.log_price_result("Untargeted Product", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET,
-                           notes=[messages.missing_target_price(CURRENCY)])
+        s.log_price_result("Untargeted Product", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET)
         s.log_failure("Flaky Product", "ConnectionError",
                       _attempts("ConnectionError", "ConnectionError", "ConnectionError"),
                       [ERRORS_LOG])

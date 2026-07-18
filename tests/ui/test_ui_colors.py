@@ -23,10 +23,10 @@ EXPECTED_COLORS = {
     "run__success_drop_notify_failed": "yellow",
     "run__listing_matches_notify_failed": "yellow",
     "run__success_ok": "green",
-    "run__no_target_missing": "yellow",
+    "run__no_target_zero": "yellow",
     "run__settings_each_invalid": "yellow",
     "run__failure_all_parse": "red",
-    "run__invalid_url_warning": "red",
+    "run__skip_invalid_url_error": "red",
     "run__system_lock_held": "red",
     "run__interrupt_during_scraping": "red",
     "run__config_faulty": "yellow",         # a faulty 'Config' row tints the panel yellow

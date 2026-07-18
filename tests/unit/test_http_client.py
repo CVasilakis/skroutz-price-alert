@@ -2,7 +2,7 @@
 
 Covers the bounded request hook, the pure HTTP-status -> modeled-exception mapping
 (``raise_for_status``, the table the orchestrator's ErrorPolicy is keyed on), and
-identity rotation (``refresh_identity``). ``tls_client`` is patched, so no real
+identity rotation (``prepare_retry``). ``tls_client`` is patched, so no real
 session or network is involved. The module imports ``tls_client`` at top (a
 per-plugin transport dep), so the whole suite skips cleanly on a core-only install.
 
@@ -136,7 +136,21 @@ class TestRaiseForStatus(unittest.TestCase):
 
 
 @unittest.skipUnless(_HAS_TLS, "tls_client not installed")
-class TestRefreshIdentity(unittest.TestCase):
+class TestRetryPreparation(unittest.TestCase):
+    def test_diagnostics_exclude_request_and_identity_details(self):
+        with mock.patch("core.scrapers.http.tls_client.Session"), \
+             mock.patch("core.scrapers.http.random.choice", return_value={
+                 "accept-language": "el-GR",
+                 "sec-ch-ua-platform": '"Linux"',
+                 "user-agent": "secret-ish fingerprint",
+                 "referer": "https://example.test/private-query",
+             }):
+            client = _ConcreteClient(_settings())
+        self.assertEqual(client.diagnostic_context(), {
+            "accept-language": "el-GR",
+            "sec-ch-ua-platform": '"Linux"',
+        })
+
     def test_rotates_headers_and_replaces_session(self):
         s1, s2 = mock.Mock(name="session1"), mock.Mock(name="session2")
         with mock.patch("core.scrapers.http.tls_client.Session",
@@ -146,7 +160,7 @@ class TestRefreshIdentity(unittest.TestCase):
             client = _ConcreteClient(_settings())
             self.assertIs(client.session, s1)
 
-            client.refresh_identity()
+            client.prepare_retry()
 
             s1.close.assert_called_once()          # old session is closed
             self.assertIs(client.session, s2)      # a fresh session is installed
@@ -165,7 +179,7 @@ class TestRefreshIdentity(unittest.TestCase):
             client = OneProfileClient(_settings())
             client.current_headers["authority"] = "mutated.example"
 
-            client.refresh_identity()
+            client.prepare_retry()
 
             self.assertNotIn("authority", client.current_headers)
             self.assertEqual(profile, {"User-Agent": "original"})

@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
 from core.utils import install_interrupt_handler
-from core.scrapers.registry import ClientFactory, PluginCatalog
+from core.scrapers.registry import ClientLoader, PluginCatalog
 from core.notifier import Notifier
 from core.logger import setup_global_logging, save_traceback
 from core.orchestrator import ScrapingOrchestrator
@@ -90,15 +90,12 @@ def main() -> None:
     # of an interactive run.
     ReminderService(CONFIG_DIR, notifier).run_once()
 
-    client_factory = ClientFactory()
+    client_loader = ClientLoader()
     try:
-        try:
-            orchestrator = ScrapingOrchestrator(
-                load_results, client_factory, notifier, args.quiet, reporter,
-            )
-            exit_code = orchestrator.run()
-        finally:
-            client_factory.close()
+        orchestrator = ScrapingOrchestrator(
+            load_results, client_loader, notifier, args.quiet, reporter,
+        )
+        exit_code = orchestrator.run()
 
         sys.exit(exit_code)
 

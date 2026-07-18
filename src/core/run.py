@@ -105,8 +105,8 @@ class RunReporter(Protocol):
         self,
         target_name: str,
         target_logger: logging.Logger,
-        settings_view: Sequence[SettingView] = (),
-        config: ConfigOutcome | None = None,
+        settings_view: Sequence[SettingView],
+        config: ConfigOutcome,
     ) -> None: ...
 
     def start_scraping(self, name: str, attempt: int = 1, max_retries: int = 1) -> None: ...

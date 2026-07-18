@@ -11,7 +11,7 @@ from core.constants import CONFIG_DIR
 from core.scrapers.check import check_plugin
 from core.scrapers.configuration import TargetConfigLoader
 from core.scrapers.intervals import SUPPORTED_INTERVALS, oncalendar_for
-from core.scrapers.registry import PluginCatalog, RegisteredPlugin, setting_spec
+from core.scrapers.registry import PluginCatalog, RegisteredPlugin
 from core.scrapers.settings import KEY_INTERVAL
 from core.settings import ResolvedSetting, SettingStatus
 
@@ -25,7 +25,7 @@ class ScheduleResolution:
 def resolve_schedule(plugin: RegisteredPlugin, config_dir: str) -> ScheduleResolution:
     """Resolve a plugin schedule from one strict target-config read."""
     path = Path(config_dir) / plugin.config_filename
-    interval_spec = setting_spec(plugin, KEY_INTERVAL)
+    interval_spec = plugin.setting(KEY_INTERVAL)
     if not path.exists():
         interval = ResolvedSetting(plugin.default_interval, SettingStatus.NO_CONFIG)
     else:

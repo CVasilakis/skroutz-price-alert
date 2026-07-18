@@ -3,6 +3,7 @@ import datetime
 import time
 import traceback
 import os
+from collections.abc import Mapping
 from logging.handlers import TimedRotatingFileHandler
 from rich.console import Console
 from rich.padding import Padding
@@ -127,14 +128,20 @@ def get_target_logger(
 
     return logger
 
-def save_traceback(logger: logging.Logger, target_name: str | None = None, url: str | None = None, headers: dict[str, str] | None = None, log_to_console: bool = True) -> None:
+def save_traceback(
+    logger: logging.Logger,
+    target_name: str | None = None,
+    url: str | None = None,
+    diagnostic_context: Mapping[str, str] | None = None,
+    log_to_console: bool = True,
+) -> None:
     """Saves the current exception traceback to a target-specific error log file.
 
     Args:
         logger (logging.Logger): The logger instance to log the error summary to.
         target_name (str | None): The identifier for the scraper. If None, saves to root logs dir.
         url (str | None): The URL associated with the error, if any.
-        headers (dict[str, str] | None): HTTP headers associated with the error, if any.
+        diagnostic_context: Non-secret plugin diagnostics associated with the error.
         log_to_console (bool): If True, logs the critical error message to the logger.
     """
     if target_name:
@@ -153,8 +160,10 @@ def save_traceback(logger: logging.Logger, target_name: str | None = None, url: 
         log_file.write(f"\n\nAn error occurred at {time_now} UTC:\n")
         if url:
             log_file.write(f"URL: {url}\n")
-        if headers:
-            header_id = f"Platform: {headers.get('sec-ch-ua-platform', 'Unknown')}, Lang: {headers.get('accept-language', 'Unknown')}"
-            log_file.write(f"Header ID: {header_id}\n")
+        if diagnostic_context:
+            details = ", ".join(
+                f"{key}: {value}" for key, value in sorted(diagnostic_context.items())
+            )
+            log_file.write(f"Diagnostic context: {details}\n")
         traceback.print_exc(file=log_file)
         log_file.write(f"\n{'-'*100}")

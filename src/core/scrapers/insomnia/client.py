@@ -1,10 +1,10 @@
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
 from core.scrapers.http import HttpScraperClient
-from core.scrapers.api import InvalidURLError, ListingResult, Offer, ScraperParseError, TrackedItem
+from core.scrapers.api import ListingResult, Offer, ScraperParseError, TrackedItem
 from core.scrapers.pricing import parse_price
 from core.scrapers.insomnia.plugin import MIN_ADVERT_PRICE, TITLE_EXCLUDE, TITLE_INCLUDE
 
@@ -74,7 +74,6 @@ class Client(HttpScraperClient):
             means the listing was checked successfully but no offer matched.
 
         Raises:
-            InvalidURLError: If the URL is not a classifieds page.
             ScraperError: For generic scraping errors (e.g. empty response, unexpected HTTP code).
             RateLimitError: If the server blocks the request or limits the rate.
             ServerError: For server-side HTTP errors (5xx).
@@ -83,9 +82,6 @@ class Client(HttpScraperClient):
         listing_url = item.url
         include = item[TITLE_INCLUDE]
         exclude = item[TITLE_EXCLUDE]
-
-        if not urlparse(listing_url).path.startswith("/classifieds/"):
-            raise InvalidURLError(f"Not an insomnia classifieds URL: {listing_url}")
 
         response = self.get(listing_url, headers=self.current_headers)
 

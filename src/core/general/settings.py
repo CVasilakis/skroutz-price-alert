@@ -16,7 +16,7 @@ import os
 from core.exceptions import ConfigFileError
 from core.persistence import read_json_object
 from core.settings import (
-    ResolvedSettings, SettingSpec, SettingStatus, resolve_settings,
+    ResolvedSettings, SettingSpec, resolve_settings,
     unsupported_value_message,
 )
 from core.general.vocab import (
@@ -56,7 +56,7 @@ def resolve_general_settings(config_dir: str) -> ResolvedSettings:
     path = general_config_path(config_dir)
     document = read_json_object(path, required=False)
     if document is None:
-        return resolve_settings(GENERAL_SETTING_SPECS, None, SettingStatus.NO_CONFIG)
+        return resolve_settings(GENERAL_SETTING_SPECS, None)
     unknown_top = set(document) - {"settings"}
     if unknown_top:
         raise ConfigFileError(f"Unknown general config keys: {', '.join(sorted(unknown_top))}")
