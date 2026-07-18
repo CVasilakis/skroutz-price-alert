@@ -1,1 +1,0 @@
-# Add only dependencies used by this plugin's client.

@@ -15,7 +15,8 @@ assertion keep running; render on demand with ``gallery.py --surface startup`` o
 matching ``--tag`` (e.g. ``layout``).
 """
 
-from core.ui.tui import PriceOutcome
+from core.run import PriceOutcome
+from core.run import ConfigOutcome
 
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import CURRENCY, config_ok, stub_logger, views_all_ok
@@ -26,7 +27,7 @@ LOGGER = stub_logger()
 
 def _run_script(s):
     """A minimal but realistic interactive run: open a target, scrape one product, finish."""
-    s.start_target("Skroutz", LOGGER, views_all_ok(), None, config_ok())
+    s.start_target("Skroutz", LOGGER, views_all_ok(), ConfigOutcome(5))
     s.start_scraping("Sony WH-1000XM5", 1, 1)
     s.complete_scraping()
     s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP)

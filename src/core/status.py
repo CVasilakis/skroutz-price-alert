@@ -11,13 +11,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.constants import CONFIG_DIR
 from core.exit_status import classify_service_state
-from core.scrapers.registry import ScraperRegistry
+from core.scrapers.intervals import oncalendar_for
+from core.scrapers.registry import PluginCatalog, setting_spec
 from core.scrapers.settings import KEY_INTERVAL
 from core.settings import SettingStatus
 from core.logger import setup_global_logging
 from core.ui.panel import StatusPanelBuilder
 from core.preflight import load_targets
-from core.ui.config_check import render_config_panel, config_view, add_config_row, add_setting_row, add_unknown_settings_row, ConfigView
+from core.ui.config_check import render_config_panel, config_view, add_config_row, add_setting_row, ConfigView
 from core.utils import install_interrupt_handler
 
 from rich.console import Console
@@ -149,12 +150,13 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
                         active_oncalendar: str,
                         config: ConfigView | None = None,
                         display_name: str | None = None,
-                        interval_spec=None) -> StatusPanelBuilder:
+                        interval_spec=None,
+                        state_error: str | None = None) -> StatusPanelBuilder:
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
     Pure presentation given the systemd property dicts, the resolved settings, the
     products-config health, and the schedule-drift inputs (the caller queries systemd, the
-    registry, the ``load_targets`` I/O and the on-disk timer; this only renders). Lets the
+    catalog, the ``load_targets`` I/O and the on-disk timer; this only renders). Lets the
     UI test harness drive every config/settings/timer/exit-code variant with synthetic inputs.
 
     Args:
@@ -182,10 +184,11 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     # settings (or its active default), then a separator, then the systemd status rows.
     if config is not None:
         add_config_row(service_panel, config)
-    block_ref = service_panel.add_note_ref(resolved.block_warning) if resolved.block_warning else ""
+    if state_error:
+        ref = service_panel.add_note_ref(state_error)
+        service_panel.add_row("❗", "State", f"[red]Failed[/red]{ref}")
     for view in resolved.views():
-        add_setting_row(service_panel, view, block_ref)
-    add_unknown_settings_row(service_panel, resolved.unknown_warning)
+        add_setting_row(service_panel, view)
     service_panel.add_separator()
 
     timer_active_val = timer_props.get("ActiveState") == "active"
@@ -252,17 +255,15 @@ def main():
     # Print a starting empty line
     console.print()
 
-    registry = ScraperRegistry(CONFIG_DIR)
-
-    # Discover targets via the plugin registry (single source of truth), not by
+    # Discover targets via the immutable plugin catalog, not by
     # scanning config filenames, so an unrelated JSON file cannot become a target.
-    # registered_targets() triggers idempotent plugin discovery on first use.
-    registered_scrapers = ScraperRegistry.registered_targets()
+    catalog = PluginCatalog.discover()
+    registered_scrapers = list(catalog.targets)
 
     # --- Configuration Checks Panel (global checks only: version + .env) ---
     # load_targets is still the single config-file read; its per-target outcomes now feed
     # the 'Config' row atop each Service Status panel below, not this shared panel.
-    load_results = load_targets(registry, registered_scrapers)
+    load_results = load_targets(list(catalog.plugins), CONFIG_DIR)
     loads_by_target = {tl.target: tl for tl in load_results}
     render_config_panel(console)
 
@@ -272,7 +273,7 @@ def main():
 
     # --- Systemd Service Panels ---
     for target in registered_scrapers:
-        plugin = ScraperRegistry.get_plugin(target)
+        plugin = catalog.get(target)
         timer_props = get_systemd_properties(f'{target}-scraper.timer', 'ActiveState,NextElapseUSecRealtime')
         service_props = get_systemd_properties(f'{target}-scraper.service', 'ActiveState,Result,ExecMainStartTimestamp,ExecMainStatus')
 
@@ -281,32 +282,35 @@ def main():
             console.print(build_not_installed_panel(target, plugin.display_name))
             continue
 
-        # Resolve once via the registry instance (its read is cached and reused for the
-        # schedule-drift check below), rather than re-reading the config per query.
-        resolved = registry.settings_for(target)
+        # Reuse the settings resolved by the run's single target-config read for the
+        # schedule-drift check below.
+        load = loads_by_target[target]
+        resolved = load.settings
 
         # Schedule-drift inputs: only the live timer's OnCalendar (what is on disk) versus
         # the effective schedule the configured execution_interval resolves to. Computed
         # only for a usable (ok/default) interval — an invalid/missing one is owned by the
         # Execution Interval settings row — preserving the original lazy timer-file read.
-        interval_spec = plugin.setting(KEY_INTERVAL)
+        interval_spec = setting_spec(plugin, KEY_INTERVAL)
         interval = resolved.resolved(interval_spec)
         expected_oncalendar = ""
         active_oncalendar = ""
         if interval.status in (SettingStatus.OK, SettingStatus.DEFAULT):
-            expected_oncalendar = ScraperRegistry.expected_on_calendar(
-                plugin, interval
-            )
+            expected_oncalendar = oncalendar_for(interval.value)
             active_oncalendar = read_timer_oncalendar(target)
 
         config_filename = plugin.config_filename
-        load = loads_by_target.get(target)
         service_panel = build_service_panel(
             target, timer_props, service_props, resolved,
             config_filename, expected_oncalendar, active_oncalendar,
-            config_view(load.count, load.faulty_indices, load.error) if load else None,
+            config_view(
+                load.count,
+                load.faulty_indices,
+                load.error if not load.state_error else None,
+            ),
             plugin.display_name,
             interval_spec,
+            load.error if load.state_error else None,
         )
 
         console.print()

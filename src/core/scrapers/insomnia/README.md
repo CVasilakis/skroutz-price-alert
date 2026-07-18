@@ -13,6 +13,8 @@ them from the immutable framework `TrackedItem` and returns a `ListingResult`; e
 qualifying offer has its own title, price, and direct URL. An empty offer tuple is a
 successful no-match check. Separate explicit IDs distinguish searches sharing one URL.
 
-The custom `min_advert_price` setting filters implausibly cheap/bait adverts; `0` disables
-the floor. Private `tls-client` and Beautiful Soup dependencies live in
-`requirements.txt`. Copy `config.example.json` to `config/insomnia.json` before running.
+The custom `min_advert_price` setting filters implausibly cheap/bait adverts; `0`
+disables the floor. `client.py` exports the conventional `Client` and uses the shared
+HTTP transport and price parser. Private `tls-client` and Beautiful Soup dependencies
+live in `requirements.txt`. Copy `config.example.json` to `config/insomnia.json` before
+running.

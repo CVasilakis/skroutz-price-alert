@@ -76,7 +76,7 @@ def get_target_logger(
     Log retention (the rotating handler's ``backupCount``) is passed in by the caller
     rather than resolved here, so this logging utility stays free of any dependency on
     the scraper/plugin system. The component that owns the run (the orchestrator)
-    resolves ``settings.log_retention_days`` via the registry and hands the result
+    receives the explicitly resolved ``settings.log_retention_days`` and hands it
     down; callers that don't care (e.g. abort-path error logging) get the default.
 
     Args:

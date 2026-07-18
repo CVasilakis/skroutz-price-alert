@@ -1,109 +1,180 @@
 # Contributing a scraper plugin
 
-A plugin needs only two implementation files: an import-light `plugin.py` descriptor
-and a `client.py`. Start by copying `src/core/scrapers/_example/` to
-`src/core/scrapers/<target>/`, then run:
+Scrapers are checked-in price adapters under `src/core/scrapers/`. Adding one is
+additive: copy `src/core/scrapers/_example/` to
+`src/core/scrapers/<target>/`; no framework, shell, registry, or UI edit is needed.
+The package name becomes the CLI flag and the stem for config, state, logs, and
+systemd units.
 
-```sh
-./scripts/plugin-check.sh --<target>
-```
+## Package layout
 
-The package directory is the target name and determines `config/<target>.json`,
-`state/<target>.json`, CLI flags, logs, requirements, and systemd unit names. Adding a
-store must not require edits to framework code or management scripts.
+Every production plugin must contain:
 
-## Descriptor
+- `__init__.py` — empty and import-light;
+- `plugin.py` — the import-light descriptor;
+- `client.py` — exports the conventional `Client` class;
+- `README.md` — store-specific behavior and configuration;
+- `config.example.json` — a strict, runnable example.
 
-`plugin.py` is imported during discovery, so it may import only the Python standard
-library and `core.scrapers.api`. Never import an HTTP, browser, or parser dependency
-there. The binding uses one relative `.module:Symbol` string and is resolved lazily.
+Add `requirements.txt` only when the client needs private dependencies. Those
+dependencies must never be imported by `plugin.py` or `__init__.py`.
+
+## Descriptor contract
+
+`plugin.py` may import only the Python standard library and
+`core.scrapers.api`. The descriptor declares metadata; the framework derives
+`<package>.client:Client` and imports it only when that target runs.
 
 ```python
 from urllib.parse import SplitResult
+
 from core.scrapers.api import ScraperPlugin
+
 
 def accepts_url(url: SplitResult) -> bool:
     return url.path.startswith("/products/")
 
+
 PLUGIN = ScraperPlugin(
     display_name="Acme",
-    domains=("acme.example",),
-    client=".client:AcmeClient",
+    domains=["acme.example"],
     accepts_url=accepts_url,
     default_interval="1h",
 )
 ```
 
-The framework validates the scheme, credentials, host, port, and registered domain
-before calling `accepts_url`. Inspect only the parsed URL shape your client accepts.
-Queries are preserved because they may define a search; fragments are removed.
+Domains are hostnames or IP addresses only—no scheme, credentials, port, path,
+query, or fragment. Multiple adapters may support different page shapes on the
+same domain. The framework validates and canonicalizes an item's absolute
+credential-free HTTP(S) URL, verifies its host against this plugin's domains,
+then calls `accepts_url`. Queries are preserved; fragments are removed. The URL
+predicate must return a real `bool` and should inspect only the parsed page shape
+the client understands.
 
-## Client
+`default_interval` defaults to `1h` and must use a supported canonical interval.
+`domains`, `item_fields`, and `settings` accept ordinary sequences and are
+compiled into immutable tuples.
 
-Subclass `ScraperClient` and implement `scrape(item)`. Return `PriceResult` for a
-single product page or `ListingResult` containing `Offer` values for a listing/search.
-An empty listing result means the check succeeded with no match. Raise the modeled
-exceptions exported by `core.scrapers.api` so retries and exit status follow the common
-policy. Constructor settings are required and available as `self.settings`.
+## Client and result contract
 
-Result constructors reject blank text, booleans as prices, negative or non-finite
-prices, invalid offer URLs, and non-`Offer` members. `ListingResult` snapshots any
-iterable into an immutable tuple. The orchestrator retains a final return-type check.
-
-## Optional item fields
-
-Declare a field once with `ItemField[T]`; its decoder returns `T` or raises
-`ValueError`/`TypeError`. The framework decodes and validates it, and client code reads
-it through the declaration object:
+`client.py` exports `Client`, a `ScraperClient` subclass:
 
 ```python
-TITLE_INCLUDE = ItemField(
-    key="title_include",
-    decode=decode_string_tuple,
-    default=(),
-)
+from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
 
-terms = item[TITLE_INCLUDE]
+
+class Client(ScraperClient):
+    def scrape(self, item: TrackedItem) -> PriceResult:
+        price = fetch_price(item.url)
+        return PriceResult(price=price, currency="EUR")
 ```
 
-Do not add a model or storage class. Every runtime item is an immutable `TrackedItem`,
-and its explicit `id` is the only state key. Duplicate IDs are configuration errors;
-different IDs intentionally allow the same URL more than once.
+`TrackedItem` contains immutable configuration only: `id`, `name`, `url`,
+`target_price`, `skip`, and declared custom fields. Plugins do not receive or
+write historical state.
 
-## Optional settings
+Return one of two intentional variants:
 
-Declare custom settings with `SettingSpec[T]`. Its decoder follows the same
-return-or-raise rule, and clients use typed lookup:
+- `PriceResult(price, currency)` for one product price;
+- `ListingResult(currency, offers)` for a listing/search, with one `Offer(title,
+  price, url)` per independently alertable advert.
+
+An empty `ListingResult` is a successful no-match check. It refreshes
+`last_checked`, preserves `last_price`, and sends no alert. Every listing offer
+below the target triggers its own alert on every run. Single prices below target
+also alert on every run; historical price does not suppress them.
+
+Result values reject blank currency/title strings, boolean, negative, or
+non-finite prices, non-`Offer` members, and non-absolute offer URLs. Listing
+iterables are snapshotted to immutable tuples.
+
+Raise modeled exceptions from `core.scrapers.api`: `ProductNotFoundError`,
+`ProductUnavailableError`, `InvalidURLError`, `RateLimitError`, `ServerError`,
+`ScraperParseError`, or the base `ScraperError`. Their retry, identity refresh,
+abort, traceback, notification, and exit-status policies are framework-owned.
+
+## Custom item fields
+
+Declare a typed field once. Its decoder returns a canonical value or raises
+`TypeError`/`ValueError`; its default must pass that same decoder.
 
 ```python
-MIN_PRICE = SettingSpec(
-    key="min_price",
-    label="Minimum Price",
-    decode=decode_nonnegative_float,
-    display=lambda value: f"{value:g} EUR",
-    warning="min_price must be non-negative; using 0",
-    default=0.0,
+from core.scrapers.api import ItemField
+
+TITLE_TERMS = ItemField(
+    key="title_terms",
+    default=(),
+    decode=decode_string_tuple,
 )
 
+# In Client.scrape:
+terms = item[TITLE_TERMS]
+```
+
+Lookup uses the exact declaration object. Keys must be unique and cannot collide
+with framework item keys. Do not add plugin-specific models or storage classes.
+
+## Custom settings
+
+The normal declaration needs only `key`, `default`, and `decode`; its label,
+string display, and invalid-value warning are derived. Override presentation only
+when the setting needs specialized vocabulary.
+
+```python
+from core.scrapers.api import SettingSpec
+
+MIN_PRICE = SettingSpec(
+    key="min_price",
+    default=0.0,
+    decode=decode_nonnegative_float,
+    display=lambda value: f"{value:g} EUR" if value else "disabled",
+)
+
+# In Client.scrape:
 floor = self.settings[MIN_PRICE]
 ```
 
-The framework adds `execution_interval`, `log_retention_days`, and
-`notify_scraping_errors`, using the plugin's concrete default interval. Plugins never
-declare systemd directives.
+Invalid known values fall back to the compiled default and surface a warning.
+Unknown setting keys and malformed settings blocks are fatal configuration
+errors. The framework adds `execution_interval`, `log_retention_days`, and
+`notify_scraping_errors`; plugins cannot declare systemd directives.
 
-## Package files
+## Optional client helpers
 
-Ship `config.example.json` and a useful `README.md`. Add `requirements.txt` only for
-client-private dependencies; discovery must work without them. An example has
-`settings` and `items`, and each item has a unique human-readable ID. Optional
-`metadata` objects are ignored user notes. Unknown keys—including `schema_version`—are
-rejected in user configuration.
+HTTP clients may subclass the documented `core.scrapers.http.HttpScraperClient`
+for bounded requests, TLS identity rotation, clean shutdown, and standard HTTP
+status mapping. Use `core.scrapers.pricing.parse_price` for finite price parsing
+with European or US separators. These modules may load private dependencies and
+therefore belong in `client.py`, never the descriptor.
 
-Framework-owned, schema-versioned state lives separately in `state/<target>.json`;
-plugins never read or write it. Both state prices and aware RFC 3339 UTC timestamps are
-persisted atomically.
+## Config, dependencies, and tests
 
-Add focused tests for your URL predicate, codecs, settings, and response parsing. The
-generic plugin verifier covers discovery, import weight, metadata, example loading,
-routing, binding, dependency guidance, README presence, and state round trips.
+The example config is a strict JSON object containing `settings` and `items`.
+Every item needs a unique, stable `id`, `name`, accepted `url`, and non-negative
+`target_price`; `skip` and `metadata` are optional. Unknown keys are rejected.
+User config is read-only. Schema-v1 machine state is owned by the framework in
+`state/<target>.json`.
+
+Put client-only dependencies in the colocated `requirements.txt`. A missing
+dependency must remain discoverable and produce the install hint
+`./install.sh --<target>` only when the client is constructed.
+
+Add focused parser tests for representative success payloads, malformed markup,
+no-price/unavailable cases, relevant status codes, URL shapes, field codecs, and
+custom setting codecs. The generic verifier already checks descriptor imports,
+package import weight, metadata, canonical defaults, conventional client typing,
+strict example loading, URL acceptance, dependency guidance, schema-v1 state
+round trips, and clean client shutdown.
+
+Run the focused verifier and full acceptance suite:
+
+```sh
+./scripts/plugin-check.sh --<target>
+./venv/bin/python3 -m pytest
+./venv/bin/basedpyright src
+find . -type f -name '*.sh' -print0 | xargs -0 shellcheck
+```
+
+To prove the additive workflow itself, copy `_example`, rename its package, run
+its plugin check, and verify that no framework or management-script edit is
+required.

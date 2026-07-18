@@ -8,7 +8,7 @@ schedule-drift footnote.
 
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import (
-    resolved_settings, malformed_block_warning, timer_props, service_props,
+    resolved_settings, timer_props, service_props,
     config_faulty, config_failed, STORAGE_BAD_JSON,
 )
 from ui.harness.drivers import drive_service, drive_not_installed, drive_orphan
@@ -71,23 +71,6 @@ def _():
 @scenario(Surface.STATUS, "service_invalid_notify", "An unrecognized notify_scraping_errors value", tags=("settings",))
 def _():
     resolved = resolved_settings(notify=(True, STATUS_INVALID, "maybe"))
-    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
-
-
-@scenario(Surface.STATUS, "service_block_ignored", "A malformed settings block (ignored)", tags=("settings",))
-def _():
-    resolved = resolved_settings(
-        interval=("1h", STATUS_DEFAULT, None),
-        retention=(7, STATUS_DEFAULT, None),
-        notify=(True, STATUS_DEFAULT, None),
-        block_warning=malformed_block_warning(),
-    )
-    return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
-
-
-@scenario(Surface.STATUS, "service_unknown_keys", "Unknown setting keys are ignored and surfaced", tags=("settings",))
-def _():
-    resolved = resolved_settings(unknown_keys=("future_option", "typo_key"))
     return drive_service(TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly")
 
 

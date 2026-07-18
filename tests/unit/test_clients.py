@@ -4,15 +4,15 @@ import pytest
 
 from core.exceptions import InvalidURLError, RateLimitError, ScraperParseError
 from core.scrapers.api import TrackedItem
-from core.scrapers.insomnia.client import InsomniaClient
+from core.scrapers.insomnia.client import Client as InsomniaClient
 from core.scrapers.insomnia.plugin import MIN_ADVERT_PRICE, TITLE_EXCLUDE, TITLE_INCLUDE
-from core.scrapers.registry import ScraperRegistry
-from core.scrapers.skroutz.client import SkroutzClient
+from core.scrapers.registry import PluginCatalog
+from core.scrapers.skroutz.client import Client as SkroutzClient
 from core.settings import resolve_settings
 
 
 def _settings(target, values=None):
-    plugin = ScraperRegistry.get_plugin(target)
+    plugin = PluginCatalog.discover().get(target)
     return resolve_settings(plugin.setting_specs, values or {})
 
 
@@ -28,7 +28,7 @@ class Response:
 
 
 def test_skroutz_request_and_price_parsing():
-    with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
+    with mock.patch("core.scrapers.http.tls_client.Session"):
         client = SkroutzClient(_settings("skroutz"))
     client.get = mock.Mock(return_value=Response(data={"price_min": "1.234,56"}))
     result = client.scrape(_item("https://www.skroutz.gr/s/123/Product.html"))
@@ -47,7 +47,7 @@ HTML = """
 
 
 def _insomnia(html=HTML, status=200, floor=30):
-    with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
+    with mock.patch("core.scrapers.http.tls_client.Session"):
         client = InsomniaClient(_settings("insomnia", {"min_advert_price": floor}))
     client.get = mock.Mock(return_value=Response(text=html, status=status))
     return client

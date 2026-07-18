@@ -10,4 +10,4 @@ Optional arguments:
   --quiet           Run script with no console output
   --status          Perform a health check of the background service
   --ping            Send a test notification via Apprise
-  --skroutz         Run exclusively the skroutz scraper
+  --skroutz         Run exclusively the Skroutz scraper

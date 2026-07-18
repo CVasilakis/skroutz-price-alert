@@ -1,40 +1,21 @@
-"""Framework-owned, atomic JSON state persistence for scraper targets."""
+"""Framework-owned schema-v1 JSON state for scraper targets."""
 
 from __future__ import annotations
 
 import json
 import math
 import os
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from core.exceptions import StateFileError
-from core.scrapers.api import TrackedItem
-from core.utils import write_json_atomically
+from core.persistence import format_utc, parse_utc, write_json_atomically
 
 SCHEMA_VERSION = 1
 STATE_TOP_KEYS = frozenset({"schema_version", "items"})
 STATE_ITEM_KEYS = frozenset({"last_price", "last_checked"})
-
-
-def format_utc(value: datetime) -> str:
-    """Serialize an aware datetime as RFC 3339 UTC with a ``Z`` suffix."""
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError("datetime must be timezone-aware")
-    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-
-def parse_utc(value: object) -> datetime:
-    if not isinstance(value, str) or not value.endswith("Z"):
-        raise ValueError("timestamp must be RFC 3339 UTC ending in Z")
-    try:
-        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
-    except ValueError as exc:
-        raise ValueError("timestamp must be valid RFC 3339 UTC") from exc
-    if parsed.tzinfo is None:
-        raise ValueError("timestamp must be timezone-aware")
-    return parsed.astimezone(timezone.utc)
 
 
 def _state_price(value: object) -> float:
@@ -46,20 +27,26 @@ def _state_price(value: object) -> float:
     return price
 
 
+@dataclass(frozen=True)
+class StateEntry:
+    """Historical state for one explicit item ID."""
+
+    last_price: float | None = None
+    last_checked: datetime | None = None
+
+
 class JsonStateRepository:
-    """Loaded state plus pending mutations; missing state is healthy and empty."""
+    """Loaded state plus pending ID-based mutations; missing state is empty."""
 
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self.path = str(path)
         self._items: dict[str, dict[str, Any]] = {}
         self._pending: dict[str, dict[str, Any]] = {}
-        self.loaded = False
 
     def load(self) -> None:
         path = Path(self.path)
         if not path.exists():
             self._items = {}
-            self.loaded = True
             return
         try:
             with path.open(encoding="utf-8") as file:
@@ -67,7 +54,6 @@ class JsonStateRepository:
             self._items = self._validate_document(document)
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
             raise StateFileError(f"State file '{path}' is invalid or unreadable: {exc}") from exc
-        self.loaded = True
 
     @staticmethod
     def _validate_document(document: object) -> dict[str, dict[str, Any]]:
@@ -101,25 +87,25 @@ class JsonStateRepository:
             result[item_id] = state
         return result
 
-    def state_for(self, item_id: str) -> tuple[float | None, datetime | None]:
-        state = self._items.get(item_id, {})
+    def get(self, item_id: str) -> StateEntry:
+        state = self._pending.get(item_id, self._items.get(item_id, {}))
         price = state.get("last_price")
         checked = state.get("last_checked")
-        return (
-            float(price) if price is not None else None,
-            parse_utc(checked) if checked is not None else None,
+        return StateEntry(
+            last_price=float(price) if price is not None else None,
+            last_checked=parse_utc(checked) if checked is not None else None,
         )
 
-    def update_item(self, item: TrackedItem, *, last_price: float | None = None,
-                    last_checked: datetime | None = None) -> None:
-        if last_price is None and last_checked is None:
-            return
-        update = dict(self._pending.get(item.id, self._items.get(item.id, {})))
-        if last_price is not None:
-            update["last_price"] = _state_price(last_price)
-        if last_checked is not None:
-            update["last_checked"] = format_utc(last_checked)
-        self._pending[item.id] = update
+    def record_priced_check(self, item_id: str, price: float, checked_at: datetime) -> None:
+        update = dict(self._pending.get(item_id, self._items.get(item_id, {})))
+        update["last_price"] = _state_price(price)
+        update["last_checked"] = format_utc(checked_at)
+        self._pending[item_id] = update
+
+    def record_no_price_check(self, item_id: str, checked_at: datetime) -> None:
+        update = dict(self._pending.get(item_id, self._items.get(item_id, {})))
+        update["last_checked"] = format_utc(checked_at)
+        self._pending[item_id] = update
 
     @property
     def has_pending(self) -> bool:
@@ -139,5 +125,4 @@ class JsonStateRepository:
         self._pending.clear()
 
 
-def general_state_path(config_dir: str) -> str:
-    return str(Path(config_dir).resolve().parent / "state" / "general.json")
+__all__ = ["JsonStateRepository", "StateEntry"]

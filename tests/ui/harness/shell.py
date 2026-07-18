@@ -17,9 +17,8 @@ What is faked (each a tiny POSIX-sh shim on a sandbox-only PATH):
 * ``git`` - branch/dirty answers for update.sh; checkout/fetch/reset failable.
 * ``python3`` - answers install.sh's prerequisite probes and plants the venv
   responder when asked to create a venv.
-* ``venv/bin/python3`` - the registry responder: recognizes each inline heredoc
-  program common.sh pipes to it (by a marker string unique to that snippet) and
-  prints canned plugin/config/timer data instead of importing the ScraperRegistry.
+* ``venv/bin/python3`` - the catalog responder: recognizes the stable scraper CLI
+  commands and prints a canned plugin manifest instead of importing the catalog.
 
 Determinism: the environment is built from scratch (never inherited), HOME and
 SYSTEMD_USER_DIR live inside the sandbox, LC_ALL=C, all shim output is canned, and
@@ -58,7 +57,7 @@ _SCRIPT_FILES = (
 # sandbox-only, so these symlinks plus the shims are the entire command universe a
 # script can reach — the host's genuine systemctl/python3 (or any unshimmed
 # external) can never leak in.
-_REAL_TOOLS = ("dirname", "cut", "cat", "chmod", "mkdir", "rm", "cp", "mv", "id")
+_REAL_TOOLS = ("dirname", "cut", "cat", "chmod", "mkdir", "rm", "cp", "mv", "id", "awk")
 
 
 @dataclass(frozen=True)
@@ -264,19 +263,15 @@ esac
 exit 0
 """
 
-# Registry CLI invocations recognized by the venv responder. Guard-tested against
+# Scraper CLI invocations recognized by the venv responder. Guard-tested against
 # common.sh so the snapshot harness cannot silently drift from the shell bridge.
 VENV_RESPONDER_MARKERS: tuple[str, ...] = (
-    "plugins --view targets",
-    "plugins --view examples",
-    "plugins --view requirements",
-    "schedules --view calendar",
-    "schedules --view status",
+    "manifest --config-dir",
     "intervals",
     "diagnose",
 )
 
-# The venv responder implements the small machine-readable registry CLI used by
+# The venv responder implements the small machine-readable scraper CLI used by
 # common.sh, plus pip failure injection and run.sh's final dispatch marker.
 _VENV_PYTHON_SHIM = """#!/bin/sh
 # venv python responder: canned registry answers, pip failure injection, and a
@@ -285,21 +280,9 @@ case "${1:-}" in
     -m)
         shift
         case "$*" in
-            "core.scrapers.cli plugins --view targets")
+            "core.scrapers.cli manifest --config-dir "*)
                 [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
-                for _p in ${FAKE_PLUGINS:-}; do printf '%s\\n' "$_p"; done ;;
-            "core.scrapers.cli plugins --view examples")
-                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
-                [ -n "${FAKE_PLUGIN_EXAMPLES:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_EXAMPLES" ;;
-            "core.scrapers.cli plugins --view requirements")
-                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
-                [ -n "${FAKE_PLUGIN_REQUIREMENTS:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_REQUIREMENTS" ;;
-            "core.scrapers.cli schedules --view calendar"*)
-                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
-                [ -n "${FAKE_SCHEDULES:-}" ] && printf '%s\\n' "$FAKE_SCHEDULES" ;;
-            "core.scrapers.cli schedules --view status"*)
-                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
-                [ -n "${FAKE_INTERVAL_STATUS:-}" ] && printf '%s\\n' "$FAKE_INTERVAL_STATUS" ;;
+                [ -n "${FAKE_PLUGIN_MANIFEST:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_MANIFEST" ;;
             "core.scrapers.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
             "core.scrapers.cli diagnose")
                 if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
@@ -468,6 +451,17 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p}\t{r}" for p, r in (world.requirements or {}).items()),
         "FAKE_SCHEDULES": "\n".join(f"{p}\t{calendar}" for p, calendar in schedules.items()),
         "FAKE_INTERVAL_STATUS": "\n".join(f"{p}\t{s}" for p, s in interval_status.items()),
+        "FAKE_PLUGIN_MANIFEST": "\n".join(
+            "\t".join((
+                plugin,
+                plugin.capitalize(),
+                f"{sandbox}/src/core/scrapers/{plugin}/config.example.json",
+                (world.requirements or {}).get(plugin, ""),
+                schedules.get(plugin, ""),
+                interval_status.get(plugin, ""),
+            ))
+            for plugin in plugins
+        ),
         "FAKE_SUPPORTED_INTERVALS": world.supported_intervals,
         "FAKE_DISCOVERY_ERROR": world.discovery_error or "",
         "FAKE_NO_ENSUREPIP": "1" if world.ensurepip_missing else "0",

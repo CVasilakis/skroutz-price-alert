@@ -7,5 +7,8 @@ Rows use the shared fields (`id`, `name`, `url`, `target_price`, and optional
 `skip`). The client resolves the product's current minimum price and returns a
 `PriceResult`. State is framework-owned in `state/skroutz.json` and keyed only by `id`.
 
-The plugin has no custom settings. Its private `tls-client` dependency is declared in
-`requirements.txt`. Copy `config.example.json` to `config/skroutz.json` before running.
+`client.py` exports the conventional `Client` and uses the shared
+`core.scrapers.http.HttpScraperClient` transport plus
+`core.scrapers.pricing.parse_price`. The plugin has no custom settings. Its private
+`tls-client` dependency is declared in `requirements.txt`. Copy
+`config.example.json` to `config/skroutz.json` before running.

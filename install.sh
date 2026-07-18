@@ -35,7 +35,8 @@ print_help() {
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
     for plugin in $(list_plugins 2>/dev/null || true); do
-        printf '  --%-15s Install and enable only the %s scraper\n' "$plugin" "$plugin"
+        display_name="$(plugin_display_name "$plugin")"
+        printf '  --%-15s Install and enable only the %s scraper\n' "$plugin" "${display_name:-$plugin}"
     done
     printf '\n'
 }

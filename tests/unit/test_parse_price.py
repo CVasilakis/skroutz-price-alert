@@ -12,7 +12,7 @@ cases exist to catch a regression in that rule.
 
 import unittest
 
-from core.utils import parse_price
+from core.scrapers.pricing import parse_price
 
 
 class TestParsePrice(unittest.TestCase):

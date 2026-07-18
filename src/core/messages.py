@@ -181,16 +181,14 @@ def plugin_dependency_detail(name: str, missing: str | None = None) -> str:
     )
 
 
-def save_failed(config_filename: str) -> str:
-    """The error message for a config file that could not be written back.
+def state_load_failed(target: str) -> str:
+    """Describe a machine-state read failure without implying config mutation."""
+    return f"Failed to load state/{target}.json file!"
 
-    Args:
-        config_filename (str): The plugin's config filename (e.g. ``skroutz.json``).
 
-    Returns:
-        str: The error wording.
-    """
-    return f"Failed to update config/{config_filename} file!"
+def state_save_failed(target: str) -> str:
+    """Describe a machine-state commit failure."""
+    return f"Failed to update state/{target}.json file!"
 
 
 # --- HTTP status details (base HTTP client) -------------------------------------------

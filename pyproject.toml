@@ -8,6 +8,7 @@
 # per-file sys.path juggling.
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
+addopts = "--cov=src/core --cov-report=term-missing:skip-covered --cov-fail-under=90"
 
 [tool.coverage.run]
 # The underscore-prefixed package is a copyable contributor template, deliberately

@@ -10,11 +10,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
 from core.utils import install_interrupt_handler
-from core.scrapers.registry import ScraperRegistry
+from core.scrapers.registry import ClientFactory, PluginCatalog
 from core.notifier import Notifier
 from core.logger import setup_global_logging, save_traceback
 from core.orchestrator import ScrapingOrchestrator
-from core.ui.tui import InteractiveExecutionStrategy, SilentExecutionStrategy
+from core.reporting import SilentRunReporter
+from core.ui.tui import InteractiveRunReporter
 from core.preflight import load_targets
 from core.ui.config_check import preflight
 from core.general import ReminderService
@@ -31,10 +32,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Scrooge Alert scraper')
     parser.add_argument('--quiet', action='store_true', help='Run script with no console output')
 
-    # Discover and register all scraper plugins (idempotent).
-    registered_scrapers = ScraperRegistry.registered_targets()
+    # Atomically discover and compile the immutable plugin catalog.
+    catalog = PluginCatalog.discover()
+    registered_scrapers = list(catalog.targets)
     for scraper in registered_scrapers:
-        display_name = ScraperRegistry.get_plugin(scraper).display_name
+        display_name = catalog.get(scraper).display_name
         parser.add_argument(f'--{scraper}', action='store_true', help=f'Run the {display_name} scraper')
 
     # Strict parsing: an unknown flag (e.g. a typo'd --<plugin>) must error out,
@@ -45,7 +47,6 @@ def main() -> None:
 
     setup_global_logging(args.quiet)
 
-    registry = ScraperRegistry(CONFIG_DIR)
     targets_to_run = [s for s in registered_scrapers if getattr(args, s, False)]
 
     if not targets_to_run:
@@ -54,7 +55,8 @@ def main() -> None:
     # Single load/validation phase: read each config once into its immutable target load.
     # The orchestrator later reuses these same in-memory snapshots, and the per-target
     # outcomes drive each scraper's 'Config' row and its per-target broken-config skip.
-    load_results = load_targets(registry, targets_to_run)
+    selected_plugins = [catalog.get(target) for target in targets_to_run]
+    load_results = load_targets(selected_plugins, CONFIG_DIR)
 
     if not args.quiet:
         install_interrupt_handler()
@@ -70,10 +72,10 @@ def main() -> None:
 
         console.print()
 
-        ui_strategy = InteractiveExecutionStrategy()
+        reporter = InteractiveRunReporter()
     else:
         init_fatal_error = preflight(None, targets_to_run, quiet=True)
-        ui_strategy = SilentExecutionStrategy()
+        reporter = SilentRunReporter()
 
     if init_fatal_error:
         sys.exit(init_fatal_error)
@@ -88,20 +90,21 @@ def main() -> None:
     # of an interactive run.
     ReminderService(CONFIG_DIR, notifier).run_once()
 
+    client_factory = ClientFactory()
     try:
         try:
             orchestrator = ScrapingOrchestrator(
-                load_results, registry, notifier, args.quiet, ui_strategy,
+                load_results, client_factory, notifier, args.quiet, reporter,
             )
             exit_code = orchestrator.run()
         finally:
-            registry.close_all()
+            client_factory.close()
 
         sys.exit(exit_code)
 
     except Exception:
-        if 'ui_strategy' in locals():
-            ui_strategy.complete_target()
+        if 'reporter' in locals():
+            reporter.complete_target()
         save_traceback(logging.root)
         notifier.notify_crash()
         sys.exit(EXIT_CODE_ERROR)

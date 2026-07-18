@@ -13,7 +13,6 @@ def is_product_url(url: SplitResult) -> bool:
 PLUGIN = ScraperPlugin(
     display_name="Skroutz",
     domains=("skroutz.gr", "skroutz.cy", "skroutz.ro", "skroutz.bg", "skroutz.de"),
-    client=".client:SkroutzClient",
     accepts_url=is_product_url,
     default_interval="1h",
 )

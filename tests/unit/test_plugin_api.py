@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 import pytest
 
 from core.exceptions import InvalidScrapeResultError
@@ -18,7 +16,7 @@ def test_typed_item_and_setting_lookup_uses_declaration_objects():
     with pytest.raises(KeyError):
         _ = item[other]
 
-    spec = SettingSpec("limit", "Limit", lambda raw: int(raw), str, "bad", 2)
+    spec = SettingSpec("limit", 2, lambda raw: int(raw))
     resolved = resolve_settings((spec,), {"limit": "4"})
     assert resolved[spec] == 4
     assert resolved.status(spec) is SettingStatus.OK

@@ -1,6 +1,6 @@
 """Interactive scraping-panel scenarios (the standard, no-flag run).
 
-Each scenario replays the exact sequence of ``InteractiveExecutionStrategy`` calls the
+Each scenario replays the exact sequence of ``InteractiveRunReporter`` calls the
 orchestrator makes for a given situation, ending at the visual state to capture. A
 *finished* target ends with ``complete_target()`` (settling the final border color); a
 *mid-flight* state (spinner, sleeping) stops earlier. The note strings come straight
@@ -12,26 +12,24 @@ stay as illustrative literals — they are arbitrary inputs, not framework wordi
 
 from core import messages
 from core.constants import OLD_ENTRY_HOURS
-from core.ui.tui import PriceOutcome
+from core.run import ConfigOutcome, PriceOutcome
 
 from ui.catalog._base import scenario, Surface
 from ui.catalog.inputs import (
     stub_logger, CURRENCY,
-    views_all_default, views_all_ok, views_one_invalid_each, views_malformed_block,
-    malformed_block_warning, interval_view, retention_view, notify_view,
-    config_ok, config_faulty, config_failed, STORAGE_BAD_JSON,
+    views_all_default, views_all_ok, views_one_invalid_each,
+    interval_view, retention_view, notify_view, STORAGE_BAD_JSON,
 )
 from ui.harness.drivers import drive_run
 from core.settings import SettingStatus
 STATUS_OK = SettingStatus.OK
 STATUS_DEFAULT = SettingStatus.DEFAULT
 STATUS_INVALID = SettingStatus.INVALID
-from core.settings.messages import unknown_keys_message
 
 LOGGER = stub_logger()
 
 # The healthy 'Config' row every real Scraping panel leads with (overridden per scenario).
-_CONFIG_OK = config_ok()
+_CONFIG_OK = ConfigOutcome(5)
 
 # Common notes, resolved through the production catalog with this suite's fixed
 # example inputs (target 'skroutz', an example stale timestamp).
@@ -49,11 +47,11 @@ def _attempts(*error_types: str) -> list[str]:
     return [messages.attempt_note(i + 1, t) for i, t in enumerate(error_types)]
 
 
-def _start(s, settings=None, block_warning=None, target="Skroutz", config=_CONFIG_OK,
-           settings_warning=None):
+def _start(s, settings=None, target="Skroutz", config=_CONFIG_OK):
     """Opens a target with a realistic 'Config' row + settings section (defaults unless overridden)."""
-    s.start_target(target, LOGGER, views_all_default() if settings is None else settings,
-                   block_warning, config, settings_warning)
+    s.start_target(
+        target, LOGGER, views_all_default() if settings is None else settings, config
+    )
 
 
 # --- Single-attempt price outcomes --------------------------------------------------
@@ -537,14 +535,18 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "storage_save_failure", "The config file could not be written back", tags=("system",))
+@scenario(Surface.RUN, "storage_save_failure", "The state file could not be persisted", tags=("system",))
 def _():
     def script(s):
         _start(s)
         s.start_scraping("Sony WH-1000XM5", 1, 3)
         s.complete_scraping()
         s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP, notes=[NOTIFIED_OK])
-        s.log_error("Storage", messages.save_failed("skroutz.json"), "Permission denied: 'config/skroutz.json'")
+        s.log_error(
+            "Storage",
+            messages.state_save_failed("skroutz"),
+            "Permission denied: 'state/skroutz.json'",
+        )
         s.complete_target()
     return drive_run(script)
 
@@ -592,25 +594,6 @@ def _():
     return drive_run(script)
 
 
-@scenario(Surface.RUN, "settings_malformed_block", "The settings block is not an object (ignored)", tags=("settings",))
-def _():
-    def script(s):
-        _start(s, settings=views_malformed_block(), block_warning=malformed_block_warning())
-        s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
-        s.complete_target()
-    return drive_run(script)
-
-
-@scenario(Surface.RUN, "settings_unknown_keys", "Unknown setting keys are ignored and surfaced", tags=("settings",))
-def _():
-    def script(s):
-        warning = unknown_keys_message(("future_option", "typo_key"))
-        _start(s, settings=views_all_ok(), settings_warning=warning)
-        s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
-        s.complete_target()
-    return drive_run(script)
-
-
 # --- Products-config ('Config' row) variants -----------------------------------------
 # The healthy 'Config' row leads every scenario above (_start defaults to a clean load);
 # these cover the faulty row and the per-target broken-config skip.
@@ -618,7 +601,7 @@ def _():
 @scenario(Surface.RUN, "config_faulty", "Some products misconfigured (Config row leads)", tags=("products",))
 def _():
     def script(s):
-        _start(s, config=config_faulty())
+        _start(s, config=ConfigOutcome(3, (2, 4)))
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
     return drive_run(script)
@@ -629,7 +612,7 @@ def _():
     # Mirrors the orchestrator's per-target skip: open the panel with a failed 'Config' row
     # and finish immediately — no products are scraped for this target.
     def script(s):
-        _start(s, config=config_failed(STORAGE_BAD_JSON))
+        _start(s, config=ConfigOutcome(0, error=STORAGE_BAD_JSON))
         s.complete_target()
     return drive_run(script)
 

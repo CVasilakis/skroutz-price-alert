@@ -1,6 +1,4 @@
 import logging
-from abc import ABC, abstractmethod
-from enum import Enum
 from collections.abc import Sequence
 from rich.console import Console, Group
 from rich.live import Live
@@ -13,216 +11,12 @@ from rich.spinner import Spinner
 from rich.progress_bar import ProgressBar
 
 from core import messages
+from core.run import ConfigOutcome, Notes, PriceOutcome, RunReporter
 from core.settings import SettingView
-from core.ui.config_check import ConfigView
+from core.ui.config_check import ConfigView, config_view
 from core.ui.panel import uniform_column_widths
-
-# Accepts a single note string, a list of note strings, or None.
-Notes = str | list[str] | None
-
-
-class PriceOutcome(Enum):
-    """The outcome of a successful price scrape, used to pick row styling.
-
-    The orchestrator decides which bucket a result falls into (business logic);
-    each strategy maps the bucket to its own icon/formatting (presentation).
-    """
-    DROP = "drop"            # below target -> celebrate + notify
-    NO_TARGET = "no_target"  # no real target set (target price is 0.0)
-    OK = "ok"                # at or above a real target
-    NO_MATCH = "no_match"    # listing checked fine, no advert matched (no price)
-
-
-class ExecutionStrategy(ABC):
-    """Abstract base class for execution UI and logging strategies."""
-
-    @staticmethod
-    def _outcome_icon(outcome: PriceOutcome, delivery_failed: bool = False) -> str:
-        """Maps a price outcome to its status icon (shared by all strategies)."""
-        if delivery_failed:
-            return "🟡"
-        return {PriceOutcome.DROP: "🎉", PriceOutcome.NO_TARGET: "🟡"}.get(outcome, "✅")
-
-    @staticmethod
-    def _normalize_notes(notes: Notes) -> list[str]:
-        """Normalizes the notes parameter into a flat list of strings.
-
-        Accepts None, a single string, or a list and always returns a
-        (possibly empty) list suitable for iteration.
-
-        Args:
-            notes (Notes): The raw notes value.
-
-        Returns:
-            list[str]: A list of note strings (empty when notes is None).
-        """
-        if notes is None:
-            return []
-
-        def _ensure_period(s: str) -> str:
-            s_stripped = s.strip()
-            if s_stripped and not s_stripped.endswith('.'):
-                return s_stripped + '.'
-            return s_stripped
-
-        if isinstance(notes, str):
-            return [_ensure_period(notes)] if notes else []
-        return [_ensure_period(n) for n in notes if n]
-
-    @abstractmethod
-    def start_target(self, target_name: str, target_logger: logging.Logger,
-                     settings_view: Sequence[SettingView] = (),
-                     block_warning: str | None = None,
-                     config_view: ConfigView | None = None,
-                     settings_warning: str | None = None) -> None:
-        """Called when a new scraping target begins.
-
-        Args:
-            target_name (str): The target being scraped.
-            target_logger (logging.Logger): The target's logger (used by the silent strategy).
-            settings_view (Sequence[SettingView]): The target's resolved settings,
-                rendered as a section atop the interactive panel (and logged once by the
-                silent strategy). The orchestrator resolves these so the strategies stay
-                presentation-only.
-            block_warning (str | None): A one-line message when the config's
-                ``settings`` block was malformed (present but not an object) and ignored,
-                shown once as a shared footnote cited by each defaulted (🟡) setting row;
-                ``None`` when well-formed.
-            config_view (ConfigView | None): The target's products-config health,
-                rendered as the leading 'Config' row of the section (and logged once by the
-                silent strategy); ``None`` when unavailable (e.g. missing dependencies).
-            settings_warning (str | None): Presentation-ready warning for ignored
-                unknown setting keys.
-        """
-        pass
-
-    @abstractmethod
-    def start_scraping(self, name: str, attempt: int = 1, max_retries: int = 1) -> None:
-        """Called when scraping for a specific product begins.
-
-        Args:
-            name (str): The product name being scraped.
-            attempt (int): The 1-based attempt number; values above 1 indicate a retry.
-            max_retries (int): The total number of attempts that will be made.
-        """
-        pass
-
-    @abstractmethod
-    def complete_scraping(self) -> None:
-        """Called when scraping for a specific product ends."""
-        pass
-
-    @abstractmethod
-    def log_result(self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
-        """Logs a successful or informational result.
-
-        Args:
-            attempt_notes (Notes): Per-attempt footnotes for preceding failed retries.
-                Interactive renders them; silent ignores them (already streamed via
-                log_attempt) to avoid duplicating per-attempt detail in the log file.
-        """
-        pass
-
-    @abstractmethod
-    def log_price_result(self, name: str, price: float | None, currency: str,
-                         target: float, outcome: PriceOutcome, notes: Notes = None,
-                         attempt_notes: Notes = None,
-                         delivery_failed: bool = False) -> None:
-        """Logs a completed price scrape, choosing icon/formatting from the outcome.
-
-        The orchestrator passes semantic values only; each strategy owns how the
-        price/target are styled (colors for interactive, plain text for silent).
-
-        Args:
-            name (str): The product name.
-            price (float | None): The scraped current price, or None for a
-                listing check that matched no advert (``PriceOutcome.NO_MATCH``).
-            currency (str): The currency symbol/label (e.g. ``"€"``).
-            target (float): The product's target price (0.0 means no real threshold).
-            outcome (PriceOutcome): Which bucket the result falls into.
-            notes (Notes): Result footnotes (e.g. notification status).
-            attempt_notes (Notes): Per-attempt footnotes for preceding failed retries.
-            delivery_failed (bool): Whether at least one due notification failed,
-                overriding the normal outcome icon with a yellow warning.
-        """
-        pass
-
-    @abstractmethod
-    def log_warning(self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
-        """Logs a warning message for a specific product.
-
-        Args:
-            attempt_notes (Notes): Per-attempt footnotes for preceding failed retries.
-                Interactive renders them; silent ignores them (already streamed via
-                log_attempt).
-        """
-        pass
-
-    @abstractmethod
-    def log_error(self, name: str, error_str: str, notes: Notes = None,
-                  attempt_notes: Notes = None) -> None:
-        """Logs a red error row, optionally retaining preceding retry footnotes."""
-        pass
-
-    @abstractmethod
-    def log_attempt(self, name: str, attempt: int, max_retries: int, detail: str) -> None:
-        """Reports a single failed scrape attempt that will be retried or is terminal.
-
-        The interactive strategy collapses these into the product's single row and
-        ignores this call; the silent strategy logs one line per attempt so that
-        background-run logs retain full per-attempt detail.
-        """
-        pass
-
-    @abstractmethod
-    def log_failure(self, name: str, error_type: str, attempt_notes: Notes = None, extra_notes: Notes = None) -> None:
-        """Logs the terminal failure of a product after all retries are exhausted.
-
-        Args:
-            name (str): The product name.
-            error_type (str): The exception type of the final failed attempt.
-            attempt_notes (Notes): Per-attempt footnotes for the collapsed interactive
-                row (already streamed to the log file by the silent strategy).
-            extra_notes (Notes): Additional notes (e.g. a stale-tracking warning) shown
-                by every strategy.
-        """
-        pass
-
-    @abstractmethod
-    def start_sleep(self, total_delay: float, retry_attempt: int = 0, max_retries: int = 0) -> None:
-        """Called when a sleep/delay period begins.
-
-        Args:
-            total_delay (float): The total delay in seconds.
-            retry_attempt (int): The 1-based number of the upcoming retry attempt, or 0
-                for the normal pacing delay between products.
-            max_retries (int): The total number of attempts (used with retry_attempt).
-        """
-        pass
-
-    @abstractmethod
-    def update_sleep(self, remaining: float) -> None:
-        """Called to update the progress of an ongoing sleep period."""
-        pass
-
-    @abstractmethod
-    def complete_sleep(self, actual_delay: float) -> None:
-        """Called when a sleep/delay period ends."""
-        pass
-
-    @abstractmethod
-    def complete_target(self) -> None:
-        """Called when a scraping target completes its execution."""
-        pass
-
-    @abstractmethod
-    def log_interrupt(self, message: str) -> None:
-        """Logs an interruption or early termination signal."""
-        pass
-
-
-class InteractiveExecutionStrategy(ExecutionStrategy):
-    """Execution strategy that updates a rich console live display for interactive usage."""
+class InteractiveRunReporter(RunReporter):
+    """Rich live reporter for an interactive scraping run."""
     def __init__(self):
         """Initializes the interactive strategy state."""
         self.console = Console()
@@ -242,9 +36,7 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
 
     def start_target(self, target_name: str, target_logger: logging.Logger,
                      settings_view: Sequence[SettingView] = (),
-                     block_warning: str | None = None,
-                     config_view: ConfigView | None = None,
-                     settings_warning: str | None = None) -> None:
+                     config: ConfigOutcome | None = None) -> None:
         """Starts a new live display session for the given target."""
         if self.live:
             self.live.stop()
@@ -261,43 +53,35 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
 
         # Build the static settings section after resetting notes, so its invalid-value
         # footnotes take the first reference numbers, ahead of the scraping rows.
-        self.settings_rows = self._build_settings_rows(
-            settings_view, block_warning, config_view, settings_warning
+        view = (
+            config_view(config.loaded_count, list(config.faulty_indices), config.error)
+            if config is not None else None
         )
+        self.settings_rows = self._build_settings_rows(settings_view, view)
 
         self.live = Live(self._generate_panel(), refresh_per_second=10)
         self.live.start()
 
     def _build_settings_rows(self, settings_view: Sequence[SettingView],
-                             block_warning: str | None = None,
-                             config_view: ConfigView | None = None,
-                             settings_warning: str | None = None) -> list[tuple]:
+                             config_view: ConfigView | None = None) -> list[tuple]:
         """Renders the products-config health + resolved settings into ``(icon, label, value)`` rows.
 
         The 'Config' row (products-config health) leads the section when ``config_view`` is
         set. A valid setting shows as ``✅``; an unset value (or missing config) shows its
         active default as ``✅`` with a dim ``(default)`` marker; an invalid value shows
         the default it fell back to as ``🟡`` plus a footnote naming the problem. A
-        malformed ``settings`` block (when ``block_warning`` is set) is registered once as
-        a shared footnote, and every per-setting row — which then shows its default —
-        renders as ``🟡`` citing it, rather than a standalone "Block ignored" row.
         """
         rows: list[tuple] = []
         if config_view is not None:
             refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
             rows.append((config_view.icon, "Monitored Items", f"{config_view.value}{refs}"))
-        block_ref = self._build_note_refs(block_warning) if block_warning else ""
         for view in settings_view:
             note_ref = self._build_note_refs(view.footnote) if view.has_warning else ""
             value = view.render_value(
                 note_ref, default_marker=" [dim](default)[/dim]",
                 value_text=escape(view.display_value),
-                default_note_ref=block_ref,
             )
             rows.append((view.icon, escape(view.label), value))
-        if settings_warning:
-            ref = self._build_note_refs(settings_warning)
-            rows.append(("🟡", "Settings / Unknown keys ignored", f"Ignored{ref}"))
         return rows
 
     @staticmethod
@@ -540,141 +324,3 @@ class InteractiveExecutionStrategy(ExecutionStrategy):
             self.live.update(self._generate_panel())
         else:
             logging.info(f"🛑 {message}", extra={"pad_top": 1, "pad_bottom": 1})
-
-
-class SilentExecutionStrategy(ExecutionStrategy):
-    """Execution strategy that operates without an active rich live UI, logging purely to a target logger."""
-    def __init__(self):
-        """Initializes the silent strategy execution."""
-        self.target_logger = None
-
-    @staticmethod
-    def _format_notes_suffix(notes_list: list[str]) -> str:
-        """Formats a list of note strings into a parenthesized suffix for log lines.
-
-        Each note is wrapped in its own parentheses and appended to the line,
-        e.g., ' (First note) (Second note)'.
-
-        Args:
-            notes_list (list[str]): The normalized list of note strings.
-
-        Returns:
-            str: The formatted suffix, or an empty string when the list is empty.
-        """
-        if not notes_list:
-            return ""
-        return " " + " ".join(f"({n})" for n in notes_list)
-
-    def start_target(self, target_name: str, target_logger: logging.Logger,
-                     settings_view: Sequence[SettingView] = (),
-                     block_warning: str | None = None,
-                     config_view: ConfigView | None = None,
-                     settings_warning: str | None = None) -> None:
-        """Sets the logger context and records the effective config + settings to the file log.
-
-        Logging the products-config health and the resolved settings once at target start
-        gives background (service) runs a record of what was in effect, and surfaces a
-        faulty/failed config or an invalid setting as a warning (replacing the ad-hoc
-        retention warning the logger used to emit). A malformed ``settings`` block is
-        logged once as a warning ahead of the rows.
-        """
-        self.target_logger = target_logger
-        if config_view is not None:
-            value = Text.from_markup(config_view.value).plain
-            if config_view.has_warning:
-                note = f" ({config_view.footnote})" if config_view.footnote else ""
-                target_logger.warning(f"❗ Monitored Items: {value}{note}")
-            else:
-                target_logger.info(f"🗄️  Monitored Items: {value}")
-        if block_warning:
-            target_logger.warning(f"❗ Settings: {block_warning}")
-        if settings_warning:
-            target_logger.warning(f"❗ Settings / Unknown keys ignored: {settings_warning}")
-        for view in settings_view:
-            if view.has_warning:
-                target_logger.warning(f"❗ {view.label}: {view.display_value} ({view.footnote})")
-            else:
-                suffix = " (default)" if view.is_default else ""
-                target_logger.info(f"⚙️  {view.label}: {view.display_value}{suffix}")
-
-    def start_scraping(self, name: str, attempt: int = 1, max_retries: int = 1) -> None:
-        """Does nothing in silent mode."""
-        pass
-
-    def complete_scraping(self) -> None:
-        """Does nothing in silent mode."""
-        pass
-
-    def log_result(self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
-        """Logs an informational result to the target logger.
-
-        ``attempt_notes`` are ignored here; the silent strategy already streamed each
-        failed attempt via log_attempt, so re-listing them would duplicate log lines.
-        """
-        if self.target_logger:
-            clean_value = Text.from_markup(value).plain
-            suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            self.target_logger.info(f"{icon} {name}: {clean_value}{suffix}")
-
-    def log_price_result(self, name: str, price: float | None, currency: str,
-                         target: float, outcome: PriceOutcome, notes: Notes = None,
-                         attempt_notes: Notes = None,
-                         delivery_failed: bool = False) -> None:
-        """Logs a price result as plain text (``attempt_notes`` ignored; already streamed)."""
-        if self.target_logger:
-            price_str = messages.ROW_NO_MATCH if (outcome == PriceOutcome.NO_MATCH or price is None) else f"{price} {currency}"
-            value = f"{price_str} (Target: {target} {currency})"
-            suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            message = f"{self._outcome_icon(outcome, delivery_failed)} {name}: {value}{suffix}"
-            if delivery_failed:
-                self.target_logger.warning(message)
-            else:
-                self.target_logger.info(message)
-
-    def log_warning(self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
-        """Logs a warning to the target logger (``attempt_notes`` ignored; already streamed)."""
-        if self.target_logger:
-            suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            self.target_logger.warning(f"❗ {name}: {warning_str}{suffix}")
-
-    def log_error(self, name: str, error_str: str, notes: Notes = None,
-                  attempt_notes: Notes = None) -> None:
-        """Logs an error to the target logger."""
-        if self.target_logger:
-            suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            self.target_logger.error(f"❗ {name}: {error_str}{suffix}")
-
-    def log_attempt(self, name: str, attempt: int, max_retries: int, detail: str) -> None:
-        """Logs a single failed attempt, preserving per-attempt detail in the log file."""
-        if self.target_logger:
-            self.target_logger.warning(f"❗ {name}: Attempt {attempt}/{max_retries} FAILED ({detail})")
-
-    def log_failure(self, name: str, error_type: str, attempt_notes: Notes = None, extra_notes: Notes = None) -> None:
-        """Logs the terminal failure line; per-attempt detail was already streamed via log_attempt."""
-        if self.target_logger:
-            suffix = self._format_notes_suffix(self._normalize_notes(extra_notes))
-            self.target_logger.error(f"❗ {name}: All attempts failed ({error_type}){suffix}")
-
-    def start_sleep(self, total_delay: float, retry_attempt: int = 0, max_retries: int = 0) -> None:
-        """Does nothing in silent mode."""
-        pass
-
-    def update_sleep(self, remaining: float) -> None:
-        """Does nothing in silent mode."""
-        pass
-
-    def complete_sleep(self, actual_delay: float) -> None:
-        """Does nothing in silent mode."""
-        pass
-
-
-    def complete_target(self) -> None:
-        """Clears the target logger context."""
-        self.target_logger = None
-
-    def log_interrupt(self, message: str) -> None:
-        """Logs an interrupt message to the target logger or root logger."""
-        if self.target_logger:
-            self.target_logger.info(f"🛑 {message}")
-        else:
-            logging.info(f"🛑 {message}")

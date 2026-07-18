@@ -3,7 +3,7 @@
 Each driver exercises the *real* production panel-building code with controlled inputs, so
 the captured snapshot reflects exactly what the application renders:
 
-* ``drive_run`` replays a script of public ``InteractiveExecutionStrategy`` calls (with
+* ``drive_run`` replays a script of public ``InteractiveRunReporter`` calls (with
   ``rich.live.Live`` stubbed) and captures the resulting panel — the same panel the
   orchestrator drives at runtime.
 * ``drive_service`` / ``drive_not_installed`` / ``drive_orphan`` call the pure builders
@@ -71,7 +71,7 @@ class _FakeLive:
         pass
 
 
-def drive_run(script: Callable[[tui.InteractiveExecutionStrategy], None]) -> BuildResult:
+def drive_run(script: Callable[[tui.InteractiveRunReporter], None]) -> BuildResult:
     """Runs ``script`` against a real strategy and captures its final panel.
 
     The script calls the strategy's public methods (``start_target``, ``log_price_result``,
@@ -84,7 +84,7 @@ def drive_run(script: Callable[[tui.InteractiveExecutionStrategy], None]) -> Bui
         BuildResult: the panel from ``_generate_panel()`` and its ``border_style``.
     """
     with mock.patch.object(tui, "Live", _FakeLive):
-        strat = tui.InteractiveExecutionStrategy()
+        strat = tui.InteractiveRunReporter()
         # Absorb the blank line complete_target prints; the captured panel comes from
         # _generate_panel(), not this console.
         strat.console = Console(file=io.StringIO())
@@ -123,9 +123,9 @@ def drive_orchestrated_run(products: list[dict],
     from core import orchestrator as orchestrator_module
     from core.orchestrator import ScrapingOrchestrator
     from core.scrapers.api import ScraperClient
-    from core.scrapers.registry import ScraperRegistry
+    from core.scrapers.registry import ClientFactory
     from core.preflight import load_targets
-    from support import fake_plugin, mock_notifier, registry_sandbox
+    from support import catalog_sandbox, fake_plugin, mock_notifier
 
     scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
 
@@ -154,22 +154,23 @@ def drive_orchestrated_run(products: list[dict],
 
         plugin = fake_plugin(name="fakestore", domains=("fake-store.example",),
                              client_class=_ScriptedClient)
-        with registry_sandbox(plugin), mock.patch.object(tui, "Live", _FakeLive):
-            strat = tui.InteractiveExecutionStrategy()
+        with catalog_sandbox(plugin) as catalog, mock.patch.object(tui, "Live", _FakeLive):
+            strat = tui.InteractiveRunReporter()
             strat.console = Console(file=io.StringIO())
 
-            registry = ScraperRegistry(cfg_dir)
-            loads = load_targets(registry, ["fakestore"])
+            factory = ClientFactory()
+            loads = load_targets([catalog.get("fakestore")], cfg_dir)
             orch = ScrapingOrchestrator(
-                target_loads=loads, registry=registry,
+                target_loads=loads, client_factory=factory,
                 notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
-                quiet=False, ui_strategy=strat,
+                quiet=False, reporter=strat,
             )
-            with mock.patch.object(orch, "_sleep_with_jitter"), \
+            with mock.patch("core.execution.ItemExecutor.sleep_with_jitter"), \
                  mock.patch.object(orchestrator_module.signal, "signal"), \
                  mock.patch.object(orchestrator_module, "get_target_logger",
                                    lambda *a, **k: stub):
                 orch.run()
+            factory.close()
             panel = strat._generate_panel()
         return BuildResult(panel, str(panel.border_style))
     finally:
@@ -222,10 +223,8 @@ def drive_ping(url_entries: Sequence[tuple[str, bool]],
 def drive_config(version_state: str = "uptodate",
                  valid_count: int = 0, invalid_count: int = 0,
                  env_error: str = "", reminder_raw: object = None,
-                 reminder_day_raw: object = None, reminder_time_raw: object = None,
-                 general_block_raw: object = None,
-                 general_load_status: str | None = None,
-                 general_unknown_keys: tuple[str, ...] = ()) -> BuildResult:
+                 reminder_day_raw: object = None,
+                 reminder_time_raw: object = None) -> BuildResult:
     """Builds the Configuration Check panel (global checks only), patching its seams.
 
     Per-scraper products-config health is no longer on this panel — it now leads each
@@ -245,12 +244,6 @@ def drive_config(version_state: str = "uptodate",
             value renders the invalid-value row.
         reminder_day_raw (object): the raw ``reminder_day`` value (same semantics).
         reminder_time_raw (object): the raw ``reminder_time`` value (same semantics).
-        general_block_raw (object): when set, the raw ``settings`` *block* itself
-            (e.g. a string, for the malformed-block case where each defaulted row cites
-            the shared footnote); overrides the per-key raws above. ``None`` builds a
-            well-formed block from them.
-        general_load_status (str | None): the settings file-read status; ``"readerror"``
-            exercises the unreadable/undecodable-file fallback and shared warning.
     """
     panel = StatusPanelBuilder("Configuration Check")
 
@@ -269,21 +262,14 @@ def drive_config(version_state: str = "uptodate",
     def resolve_general(_config_dir) -> ResolvedSettings:
         # The real resolve machinery against a synthetic settings block, so each row
         # renders with production status/default/invalid logic but no file I/O. The
-        # block-shape warning comes from the same production helper resolve_all uses,
-        # so the malformed-block footnote wording can never drift from what users see.
+        # Use the production resolver so valid/default/invalid rows match runtime.
         from core.settings import resolve_settings
-        block = general_block_raw if general_block_raw is not None else {
+        block = {
             KEY_REMINDER: reminder_raw,
             KEY_REMINDER_DAY: reminder_day_raw,
             KEY_REMINDER_TIME: reminder_time_raw,
         }
-        resolved = resolve_settings(GENERAL_SETTING_SPECS, block, general_load_status)
-        if general_unknown_keys and isinstance(block, dict) and general_load_status is None:
-            return ResolvedSettings(
-                resolved._pairs, block_warning=resolved.block_warning,
-                unknown_keys=general_unknown_keys,
-            )
-        return resolved
+        return resolve_settings(GENERAL_SETTING_SPECS, block)
 
     with mock.patch.object(config_check, "check_for_updates", check_for_updates), \
          mock.patch.object(config_check, "check_env_file", check_env_file), \
@@ -332,7 +318,7 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
         shutil.rmtree(cfg_dir, ignore_errors=True)
 
 
-def drive_startup(run_script: Callable[[tui.InteractiveExecutionStrategy], None], *,
+def drive_startup(run_script: Callable[[tui.InteractiveRunReporter], None], *,
                   reminder_raw: object = None, version_state: str = "uptodate",
                   valid_count: int = 1, invalid_count: int = 0,
                   env_error: str = "") -> BuildResult:

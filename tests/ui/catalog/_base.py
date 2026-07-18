@@ -26,7 +26,7 @@ class Surface(Enum):
     prefixes; never rename them (that would rename every snapshot file). The
     human-readable section labels live in :data:`SURFACE_INFO` instead.
     """
-    RUN = "run"        # the interactive scraping panel (tui.InteractiveExecutionStrategy)
+    RUN = "run"        # the interactive scraping panel (tui.InteractiveRunReporter)
     E2E_RUN = "e2e-run"  # the same panel, driven end-to-end by the real ScrapingOrchestrator
     CONFIG = "config"  # the shared Configuration Check panel
     STARTUP = "startup"  # the full interactive pre-scrape console transcript (multi-panel)

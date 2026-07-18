@@ -1,4 +1,4 @@
-"""Strict URL validation shared by routing, configuration, and result contracts."""
+"""Strict URL validation shared by configuration and result contracts."""
 
 import ipaddress
 from collections.abc import Iterable
@@ -69,10 +69,3 @@ def host_matches_domain(host: str, domain: str) -> bool:
 def parsed_matches_domains(parsed: SplitResult, domains: Iterable[str]) -> bool:
     host = normalize_domain(parsed.hostname)
     return any(host_matches_domain(host, domain) for domain in domains)
-
-
-def url_matches_domains(value: object, domains: Iterable[str]) -> bool:
-    try:
-        return parsed_matches_domains(parse_url(value), domains)
-    except ValueError:
-        return False

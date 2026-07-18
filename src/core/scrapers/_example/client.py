@@ -4,7 +4,7 @@ from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
 from .plugin import REGION, SKU
 
 
-class ExampleClient(ScraperClient):
+class Client(ScraperClient):
     def scrape(self, item: TrackedItem) -> PriceResult:
         _sku = item[SKU]
         _region = self.settings[REGION]

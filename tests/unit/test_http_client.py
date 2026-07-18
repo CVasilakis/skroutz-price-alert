@@ -19,7 +19,7 @@ from core.exceptions import (
 )
 
 try:
-    from core.scrapers.base.http_client import HttpScraperClient
+    from core.scrapers.http import HttpScraperClient
 
     class _ConcreteClient(HttpScraperClient):
         """Minimal concrete client (HttpScraperClient.scrape is abstract)."""
@@ -35,17 +35,17 @@ except Exception:  # pragma: no cover - tls_client not installed (core-only inst
 
 def _make_client():
     """Builds a concrete client with tls_client.Session patched inert."""
-    from core.scrapers.registry import ScraperRegistry
+    from core.scrapers.registry import PluginCatalog
     from core.settings import resolve_settings
-    plugin = ScraperRegistry.get_plugin("skroutz")
-    with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
+    plugin = PluginCatalog.discover().get("skroutz")
+    with mock.patch("core.scrapers.http.tls_client.Session"):
         return _ConcreteClient(resolve_settings(plugin.setting_specs, {}))
 
 
 def _settings():
-    from core.scrapers.registry import ScraperRegistry
+    from core.scrapers.registry import PluginCatalog
     from core.settings import resolve_settings
-    plugin = ScraperRegistry.get_plugin("skroutz")
+    plugin = PluginCatalog.discover().get("skroutz")
     return resolve_settings(plugin.setting_specs, {})
 
 
@@ -71,10 +71,10 @@ class TestBoundedGet(unittest.TestCase):
         class SlowClient(_ConcreteClient):
             REQUEST_TIMEOUT_SECONDS = 45
 
-        with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
-            from core.scrapers.registry import ScraperRegistry
+        with mock.patch("core.scrapers.http.tls_client.Session"):
+            from core.scrapers.registry import PluginCatalog
             from core.settings import resolve_settings
-            plugin = ScraperRegistry.get_plugin("skroutz")
+            plugin = PluginCatalog.discover().get("skroutz")
             client = SlowClient(resolve_settings(plugin.setting_specs, {}))
         session = cast(mock.Mock, client.session)
 
@@ -123,10 +123,10 @@ class TestRaiseForStatus(unittest.TestCase):
         class OddClient(_ConcreteClient):
             NOT_FOUND_CODES = (418,)  # this API signals "gone" with 418
 
-        with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
-            from core.scrapers.registry import ScraperRegistry
+        with mock.patch("core.scrapers.http.tls_client.Session"):
+            from core.scrapers.registry import PluginCatalog
             from core.settings import resolve_settings
-            plugin = ScraperRegistry.get_plugin("skroutz")
+            plugin = PluginCatalog.discover().get("skroutz")
             client = OddClient(resolve_settings(plugin.setting_specs, {}))
         with self.assertRaises(ProductNotFoundError):
             client.raise_for_status(418)
@@ -139,9 +139,9 @@ class TestRaiseForStatus(unittest.TestCase):
 class TestRefreshIdentity(unittest.TestCase):
     def test_rotates_headers_and_replaces_session(self):
         s1, s2 = mock.Mock(name="session1"), mock.Mock(name="session2")
-        with mock.patch("core.scrapers.base.http_client.tls_client.Session",
+        with mock.patch("core.scrapers.http.tls_client.Session",
                         side_effect=[s1, s2]), \
-             mock.patch("core.scrapers.base.http_client.random.choice",
+             mock.patch("core.scrapers.http.random.choice",
                         return_value={"User-Agent": "probe"}):
             client = _ConcreteClient(_settings())
             self.assertIs(client.session, s1)
@@ -161,7 +161,7 @@ class TestRefreshIdentity(unittest.TestCase):
         class OneProfileClient(_ConcreteClient):
             HEADERS_POOL = [profile]
 
-        with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
+        with mock.patch("core.scrapers.http.tls_client.Session"):
             client = OneProfileClient(_settings())
             client.current_headers["authority"] = "mutated.example"
 

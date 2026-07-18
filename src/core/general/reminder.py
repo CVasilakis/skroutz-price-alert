@@ -40,6 +40,7 @@ import json
 import logging
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.constants import TIMESTAMP_FORMAT
@@ -55,8 +56,8 @@ from core.general.vocab import (
 from core.locks import acquire_lock
 from core.logger import get_target_logger, save_traceback
 from core.settings import SettingStatus
-from core.scrapers.state import format_utc, general_state_path, parse_utc
-from core.utils import check_for_updates, write_json_atomically
+from core.persistence import format_utc, parse_utc, write_json_atomically
+from core.utils import check_for_updates
 
 if TYPE_CHECKING:
     from core.notifier import Notifier
@@ -80,6 +81,11 @@ LAST_REMINDER_FIELD = "last_reminder"
 # and passes the configured weekday/time.
 _DEFAULT_SLOT_WEEKDAY = weekday_index(DEFAULT_REMINDER_DAY)
 _DEFAULT_SLOT_HOUR, _DEFAULT_SLOT_MINUTE = time_parts(DEFAULT_REMINDER_TIME)
+
+
+def general_state_path(config_dir: str) -> str:
+    """Return the machine-owned reminder state beside the config directory."""
+    return str(Path(config_dir).resolve().parent / "state" / "general.json")
 
 
 def most_recent_slot(now: datetime.datetime, weekday: int = _DEFAULT_SLOT_WEEKDAY,
@@ -199,13 +205,9 @@ class ReminderService:
     def _run_once(self) -> None:
         """Resolves the settings, gates on "off"/no-services, and runs the check under the lock."""
         resolved = resolve_general_settings(self.config_dir)
-        if resolved.block_warning:
-            self._log.warning(f"🟡 config/general.json: {resolved.block_warning}.")
-        if resolved.unknown_warning:
-            self._log.warning(f"🟡 config/general.json: {resolved.unknown_warning}.")
         for spec in GENERAL_SETTING_SPECS:
             if resolved.status(spec) is SettingStatus.INVALID:
-                self._log.warning(f"🟡 config/general.json: {spec.warning}")
+                self._log.warning(f"🟡 config/general.json: {spec.invalid_warning}")
 
         canonical = resolved[SPEC_REMINDER]
         weeks = weeks_for(canonical)

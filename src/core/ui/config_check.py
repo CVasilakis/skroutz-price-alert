@@ -68,15 +68,12 @@ def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
     panel.add_row(view.icon, "Monitored Items", f"{view.value}{ref}")
 
 
-def add_setting_row(panel: StatusPanelBuilder, view, block_ref: str = "") -> None:
+def add_setting_row(panel: StatusPanelBuilder, view) -> None:
     """Renders one resolved setting as a row in the panel's settings section.
 
     A valid, explicitly-set value shows as ``✅``. An unset value (or a missing config)
     shows its active default as ``✅`` with a dim ``(default)`` marker. An invalid value
-    shows the default it fell back to as ``🟡`` plus a footnote naming the problem. When
-    the whole ``settings`` block was malformed (``view.block_malformed``), the row shows
-    its default as ``🟡`` citing the shared ``block_ref`` footnote — this replaces the old
-    standalone "Block ignored" row.
+    shows the default it fell back to as ``🟡`` plus a footnote naming the problem.
 
     Shared by the per-scraper Service Status panels (``--status``) and the general
     settings rows of the Configuration Check panel, so every settings row renders
@@ -85,14 +82,9 @@ def add_setting_row(panel: StatusPanelBuilder, view, block_ref: str = "") -> Non
     Args:
         panel (StatusPanelBuilder): The panel being built.
         view (SettingView): The resolved setting (label, display value, status, footnote).
-        block_ref (str): The already-registered reference to the shared malformed-block
-            footnote, appended to this row when ``view.block_malformed``; empty when the
-            block is well-formed. The caller registers the footnote once and passes the
-            same ref to every row.
     """
     note_ref = panel.add_note_ref(view.footnote) if view.has_warning else ""
-    value = view.render_value(note_ref, default_marker=" [dim](default)[/dim]",
-                              default_note_ref=block_ref)
+    value = view.render_value(note_ref, default_marker=" [dim](default)[/dim]")
     panel.add_row(view.icon, view.label, value)
 
 
@@ -113,10 +105,8 @@ def _append_general_rows(panel: StatusPanelBuilder) -> None:
     """Appends one row per project-wide setting, resolved from ``config/general.json``.
 
     Mirrors the per-scraper settings section of the Service Status panels, so the general
-    settings get the same invalid-value UX. A malformed ``settings`` block is registered
-    once as a shared footnote that each defaulted (🟡) row cites, rather than a standalone
-    "Block ignored" row. Iterates whatever ``GENERAL_SETTING_SPECS`` declares - a future
-    general setting needs no change here.
+    settings get the same invalid-value UX. Malformed blocks and unknown keys fail the
+    strict general-config boundary. Iterates whatever ``GENERAL_SETTING_SPECS`` declares.
     """
     try:
         resolved = resolve_general_settings(CONFIG_DIR)
@@ -124,17 +114,8 @@ def _append_general_rows(panel: StatusPanelBuilder) -> None:
         ref = panel.add_note_ref(str(exc))
         panel.add_row("❗", "General Config", f"[red]Failed{ref}[/red]")
         return
-    block_ref = panel.add_note_ref(resolved.block_warning) if resolved.block_warning else ""
     for view in resolved.views():
-        add_setting_row(panel, view, block_ref)
-    add_unknown_settings_row(panel, resolved.unknown_warning)
-
-
-def add_unknown_settings_row(panel: StatusPanelBuilder, warning: str | None) -> None:
-    """Append the shared yellow row for ignored unknown setting keys."""
-    if warning:
-        ref = panel.add_note_ref(warning)
-        panel.add_row("🟡", "Settings / Unknown keys ignored", f"Ignored{ref}")
+        add_setting_row(panel, view)
 
 
 def _append_env_row(panel: StatusPanelBuilder) -> None:

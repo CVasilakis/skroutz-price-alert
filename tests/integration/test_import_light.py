@@ -3,11 +3,11 @@
 Plugin discovery imports every plugin's descriptor (``plugin.py`` + package
 ``__init__``) merely to enumerate scrapers (argparse flags, ``list_plugins``,
 ``--status``). That path must NOT pull in any transport/parsing library - those belong
-behind the registry's lazy relative client binding. This test runs
+behind the catalog's conventional lazy client import. This test runs
 discovery in a fresh subprocess and enforces the contract two ways:
 
-1. A generic check: after importing the framework contracts (the registry and the base
-   plugin module - whose own dependencies, e.g. ``dotenv`` via ``core.utils``, form the
+1. A generic check: after importing the framework contracts (the catalog and public
+   plugin API, whose own dependencies form the
    allowed baseline), running discovery must add **no** module that lives in
    ``site-packages``. This catches any third-party import in any plugin's descriptor,
    even one whose library happens to be installed on the dev machine - the case where
@@ -28,15 +28,15 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 _SNIPPET = r"""
 import sys
 
-# Framework baseline: the registry and the base contracts a descriptor may legitimately
-# import (plus whatever *they* pull in, e.g. framework deps via core.utils).
+# Framework baseline: the catalog and public contracts a descriptor may legitimately
+# import.
 import core.scrapers.api  # noqa: F401
-from core.scrapers.registry import ScraperRegistry
+from core.scrapers.registry import PluginCatalog
 baseline = set(sys.modules)
 
-ScraperRegistry.registered_targets()  # triggers full plugin discovery
+PluginCatalog.discover().targets  # triggers full plugin discovery
 
-if "_example" in ScraperRegistry.registered_targets():
+if "_example" in PluginCatalog.discover().targets:
     sys.stderr.write("underscore-prefixed example was registered during discovery")
     sys.exit(1)
 example_modules = sorted(
@@ -63,7 +63,7 @@ third_party = sorted({
 if third_party:
     sys.stderr.write(
         "third-party modules imported during discovery (a plugin descriptor imports "
-        "them at module top instead of behind the lazy client binding): "
+        "them at module top instead of in client.py): "
         + ", ".join(third_party)
     )
     sys.exit(1)

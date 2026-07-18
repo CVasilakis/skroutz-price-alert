@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Generic, TypeVar, cast
 from urllib.parse import SplitResult
@@ -26,6 +25,7 @@ from core.exceptions import (
     ScraperParseError,
     ServerError,
 )
+from core.settings.model import ResolvedSettings, SettingSpec
 
 T = TypeVar("T")
 
@@ -39,37 +39,15 @@ class ItemField(Generic[T]):
     default: T
 
 
-@dataclass(frozen=True, eq=False)
-class SettingSpec(Generic[T]):
-    """One typed setting declaration.
-
-    ``decode`` returns a valid value or raises ``ValueError``/``TypeError``.
-    Invalid user values fall back to ``default`` and are surfaced by the settings
-    presentation layer; ``None`` is never an invalid-value sentinel.
-    """
-
-    key: str
-    label: str
-    decode: Callable[[object], T]
-    display: Callable[[T], str]
-    warning: str
-    default: T
-    is_unset: Callable[[object], bool] = field(
-        default=lambda value: value is None, compare=False, repr=False
-    )
-
-
 @dataclass(frozen=True)
 class TrackedItem:
-    """A validated runtime item with state joined by its explicit ID."""
+    """Immutable configuration data passed to a plugin client."""
 
     id: str
     name: str
     url: str
     target_price: float
     skip: bool = False
-    last_price: float | None = None
-    last_checked: datetime | None = None
     _custom: Mapping[ItemField[Any], Any] = field(
         default_factory=dict, repr=False, compare=False
     )
@@ -196,17 +174,11 @@ class ScraperPlugin:
     """A plugin's declarative, stdlib-only descriptor."""
 
     display_name: str
-    domains: tuple[str, ...]
-    client: str
+    domains: Sequence[str]
     accepts_url: Callable[[SplitResult], bool]
-    item_fields: tuple[ItemField[Any], ...] = ()
-    settings: tuple[SettingSpec[Any], ...] = ()
+    item_fields: Sequence[ItemField[Any]] = ()
+    settings: Sequence[SettingSpec[Any]] = ()
     default_interval: str = "1h"
-
-
-# Imported only for annotations at runtime through this late import, after all public
-# contributor contracts exist.  core.settings itself is stdlib-only.
-from core.settings.model import ResolvedSettings  # noqa: E402
 
 
 __all__ = [

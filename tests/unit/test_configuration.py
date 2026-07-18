@@ -5,10 +5,12 @@ from unittest import mock
 import pytest
 
 from core.exceptions import ConfigFileError, StateFileError
-from core.scrapers.api import TrackedItem
+from core.persistence import format_utc, parse_utc
 from core.scrapers.configuration import TargetConfigLoader
-from core.scrapers.registry import ScraperRegistry
-from core.scrapers.state import JsonStateRepository, format_utc, parse_utc
+from core.scrapers.registry import PluginCatalog
+from core.scrapers.state import JsonStateRepository, StateEntry
+
+CATALOG = PluginCatalog.discover()
 
 
 def _write(path, value):
@@ -31,22 +33,22 @@ def _row(**updates):
 
 
 def test_loader_keeps_query_removes_fragment_and_reports_bad_rows(tmp_path):
-    plugin = ScraperRegistry.get_plugin("skroutz")
+    plugin = CATALOG.get("skroutz")
     _write(tmp_path / "config" / "skroutz.json", _skroutz_document([
         _row(), _row(id="bad", mystery=True), _row(id="phone"),
     ]))
-    loaded = TargetConfigLoader(plugin, str(tmp_path / "config"), str(tmp_path / "state")).load()
+    loaded = TargetConfigLoader(plugin, str(tmp_path / "config")).load()
     assert [item.id for item in loaded.items] == ["phone"]
     assert loaded.items[0].url.endswith("?variant=blue")
     assert [issue.index for issue in loaded.row_issues] == [2, 3]
 
 
 def test_invalid_row_still_reserves_its_explicit_id(tmp_path):
-    plugin = ScraperRegistry.get_plugin("skroutz")
+    plugin = CATALOG.get("skroutz")
     _write(tmp_path / "config" / "skroutz.json", _skroutz_document([
         _row(name=" "), _row(name="Valid duplicate"),
     ]))
-    loaded = TargetConfigLoader(plugin, str(tmp_path / "config"), str(tmp_path / "state")).load()
+    loaded = TargetConfigLoader(plugin, str(tmp_path / "config")).load()
     assert loaded.items == ()
     assert [issue.index for issue in loaded.row_issues] == [1, 2]
     assert "duplicate item id" in loaded.row_issues[1].message
@@ -56,7 +58,7 @@ def test_invalid_row_still_reserves_its_explicit_id(tmp_path):
     "extra", [{"future": 1}, {"products": []}, {"schema_version": 1}],
 )
 def test_unknown_top_level_keys_fail_closed(tmp_path, extra):
-    plugin = ScraperRegistry.get_plugin("skroutz")
+    plugin = CATALOG.get("skroutz")
     document = _skroutz_document([]) | extra
     _write(tmp_path / "config" / "skroutz.json", document)
     with pytest.raises(ConfigFileError):
@@ -66,17 +68,36 @@ def test_unknown_top_level_keys_fail_closed(tmp_path, extra):
 def test_state_missing_is_healthy_and_round_trips_aware_utc(tmp_path):
     repo = JsonStateRepository(tmp_path / "state" / "x.json")
     repo.load()
-    plugin = ScraperRegistry.get_plugin("skroutz")
+    plugin = CATALOG.get("skroutz")
     _write(tmp_path / "config" / "skroutz.json", _skroutz_document([_row()]))
-    item = TargetConfigLoader(plugin, str(tmp_path / "config"), str(tmp_path / "state")).load().items[0]
+    item = TargetConfigLoader(plugin, str(tmp_path / "config")).load().items[0]
     now = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
-    repo.update_item(item, last_price=190, last_checked=now)
+    repo.record_priced_check(item.id, 190, now)
     repo.save()
     second = JsonStateRepository(tmp_path / "state" / "x.json")
     second.load()
-    assert second.state_for("phone") == (190.0, now)
+    assert second.get("phone") == StateEntry(190.0, now)
     assert format_utc(now) == "2026-07-18T18:30:00Z"
     assert parse_utc(format_utc(now)) == now
+
+
+def test_schema_v1_no_price_check_preserves_historical_price(tmp_path):
+    path = tmp_path / "state" / "x.json"
+    _write(path, {
+        "schema_version": 1,
+        "items": {"phone": {
+            "last_price": 190.0,
+            "last_checked": "2026-07-17T18:30:00Z",
+        }},
+    })
+    repo = JsonStateRepository(path)
+    repo.load()
+    checked = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
+    repo.record_no_price_check("phone", checked)
+    repo.save()
+    reloaded = JsonStateRepository(path)
+    reloaded.load()
+    assert reloaded.get("phone") == StateEntry(190.0, checked)
 
 
 def test_malformed_existing_state_is_not_overwritten(tmp_path):
@@ -98,7 +119,7 @@ def test_malformed_existing_state_is_not_overwritten(tmp_path):
     ({"settings": {"typo": 1}, "items": []}, "unknown settings"),
 ])
 def test_strict_document_shapes(tmp_path, document, message):
-    plugin = ScraperRegistry.get_plugin("skroutz")
+    plugin = CATALOG.get("skroutz")
     _write(tmp_path / "config" / "skroutz.json", document)
     with pytest.raises(ConfigFileError, match=message):
         TargetConfigLoader(plugin, str(tmp_path / "config")).load()
@@ -111,9 +132,9 @@ def test_strict_document_shapes(tmp_path, document, message):
     {"target_price": True}, {"target_price": -1}, {"skip": "no"}, {"metadata": []},
 ])
 def test_invalid_rows_are_structured_and_never_loaded(tmp_path, changes):
-    plugin = ScraperRegistry.get_plugin("skroutz")
+    plugin = CATALOG.get("skroutz")
     _write(tmp_path / "config" / "skroutz.json", _skroutz_document([_row(**changes)]))
-    loaded = TargetConfigLoader(plugin, str(tmp_path / "config"), str(tmp_path / "state")).load()
+    loaded = TargetConfigLoader(plugin, str(tmp_path / "config")).load()
     assert loaded.items == ()
     assert loaded.row_issues[0].index == 1
 
@@ -136,10 +157,8 @@ def test_state_rejects_every_malformed_shape(tmp_path, document):
 def test_state_noop_and_save_failure_are_explicit(tmp_path):
     repo = JsonStateRepository(tmp_path / "state" / "x.json")
     repo.load()
-    item = TrackedItem("x", "X", "https://example.com/x", 0)
-    repo.update_item(item)
     assert not repo.has_pending
-    repo.update_item(item, last_price=1)
+    repo.record_priced_check("x", 1, datetime.now(timezone.utc))
     with mock.patch("core.scrapers.state.write_json_atomically", side_effect=OSError("disk full")):
         with pytest.raises(StateFileError, match="disk full"):
             repo.save()

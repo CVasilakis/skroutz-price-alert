@@ -1,8 +1,5 @@
 import os
-import re
 import sys
-import json
-import math
 import signal
 import subprocess
 from dotenv import load_dotenv
@@ -18,74 +15,6 @@ from core.exceptions import EnvFileError, UpdateCheckError
 # function already folds into ``UpdateCheckError`` (degrading to "could not check").
 UPDATE_CHECK_TIMEOUT = 10
 
-
-def write_json_atomically(path: str, data) -> None:
-    """Serializes ``data`` to ``path`` as JSON via a temp-file swap.
-
-    Writes ``<path>.tmp`` then ``os.replace``s it over ``path``, so a crash mid-write can
-    never leave a partially written file. The single atomic-JSON writer shared by the
-    storage backend and the reminder state file; it raises ``OSError`` and lets each
-    framework state repositories and the reminder; callers choose their error policy.
-    """
-    temp_path = path + ".tmp"
-    with open(temp_path, mode="w") as file:
-        json.dump(data, file, indent=2)
-    os.replace(temp_path, path)
-
-def parse_price(raw_value) -> float | None:
-    """Parses a raw price value into a float.
-
-    This is the scraper price-normalization routine, so a new
-    store never needs to re-implement price cleaning. Ints and floats are returned directly; strings
-    may carry a currency symbol, surrounding quotes/whitespace, and either European
-    (``1.299,00``) or US (``1,299.00``) grouping.
-
-    Normalization rule: after stripping everything but digits, ``.``, ``,`` and a
-    leading sign, the right-most ``.``/``,`` is treated as the decimal separator and
-    every other separator is dropped as a thousands grouping. A value with a single
-    separator is therefore read as a decimal (``"1,234"`` -> ``1.234``), matching the
-    previous behavior. Returns None when the value cannot be parsed into a finite number.
-
-    Args:
-        raw_value: The raw price value (str, int, float, or None).
-
-    Returns:
-        float | None: The parsed price, or None if parsing fails.
-    """
-    if raw_value is None or isinstance(raw_value, bool):
-        return None
-
-    if isinstance(raw_value, (int, float)):
-        try:
-            value = float(raw_value)
-        except OverflowError:
-            return None
-        return value if math.isfinite(value) else None
-
-    if not isinstance(raw_value, str):
-        return None
-
-    # Keep only digits, separators and a leading sign (drops currency symbols,
-    # spaces, and surrounding quotes in one pass).
-    cleaned = re.sub(r'[^\d.,-]', '', raw_value)
-    sign = '-' if cleaned.startswith('-') else ''
-    cleaned = cleaned.replace('-', '')
-    if not cleaned:
-        return None
-
-    decimal_pos = max(cleaned.rfind('.'), cleaned.rfind(','))
-    if decimal_pos == -1:
-        number = cleaned
-    else:
-        integer_part = re.sub(r'[.,]', '', cleaned[:decimal_pos])
-        fractional_part = re.sub(r'[.,]', '', cleaned[decimal_pos + 1:])
-        number = f"{integer_part}.{fractional_part}"
-
-    try:
-        value = float(f"{sign}{number}")
-        return value if math.isfinite(value) else None
-    except (ValueError, OverflowError):
-        return None
 
 def is_valid_apprise_url(url: str) -> bool:
     """Returns whether a single Apprise URL is usable.
@@ -209,7 +138,7 @@ def install_interrupt_handler() -> None:
     deferred handler instead (see ScrapingOrchestrator.signal_handler).
     """
     # Deferred so importing utils does not load rich (~30ms) for paths that never
-    # render output (e.g. the registry's list_plugins enumeration in the scripts).
+    # render output (e.g. manifest enumeration in the management scripts).
     from rich.console import Console
 
     def _handler(signum, _frame):

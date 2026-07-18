@@ -11,5 +11,5 @@ to install additional scrapers.
 
 Optional arguments:
   -h, --help        show this help message and exit
-  --skroutz         Install and enable only the skroutz scraper
-  --amazon          Install and enable only the amazon scraper
+  --skroutz         Install and enable only the Skroutz scraper
+  --amazon          Install and enable only the Amazon scraper

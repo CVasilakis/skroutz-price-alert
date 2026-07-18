@@ -1,8 +1,8 @@
 """Project-wide settings: the ``settings`` block of ``config/general.json``.
 
 Declares the general (non-scraper) settings as :class:`SettingSpec` objects and resolves
-them with the exact machinery the per-scraper configs use (:func:`resolve_all` with
-``plugin=None``), so statuses, defaults and invalid-value handling (warn + default)
+them with the same strict machinery as per-scraper configs, so statuses, defaults,
+and invalid-value handling (warn + default)
 behave identically everywhere. Adding a project-wide setting is exactly one new spec
 appended to :data:`GENERAL_SETTING_SPECS` - its vocabulary lives in
 :mod:`core.general.vocab`, and resolution, defaulting and the panel row need no new code.
@@ -11,10 +11,10 @@ Import-light: builds on the stdlib-only :mod:`core.settings` engine and the gene
 vocabulary, so it is safe to import from ``--status`` and the config panel.
 """
 
-import json
 import os
 
 from core.exceptions import ConfigFileError
+from core.persistence import read_json_object
 from core.settings import (
     ResolvedSettings, SettingSpec, SettingStatus, resolve_settings,
     unsupported_value_message,
@@ -54,15 +54,9 @@ def resolve_general_settings(config_dir: str) -> ResolvedSettings:
         ResolvedSettings: The resolved settings, queryable by key and as views.
     """
     path = general_config_path(config_dir)
-    if not os.path.exists(path):
+    document = read_json_object(path, required=False)
+    if document is None:
         return resolve_settings(GENERAL_SETTING_SPECS, None, SettingStatus.NO_CONFIG)
-    try:
-        with open(path, encoding="utf-8") as file:
-            document = json.load(file)
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ConfigFileError(f"Config file '{path}' is invalid or unreadable: {exc}") from exc
-    if not isinstance(document, dict):
-        raise ConfigFileError(f"Config file '{path}' must contain an object")
     unknown_top = set(document) - {"settings"}
     if unknown_top:
         raise ConfigFileError(f"Unknown general config keys: {', '.join(sorted(unknown_top))}")

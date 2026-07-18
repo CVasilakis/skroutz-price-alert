@@ -76,7 +76,7 @@ plugin_in_list() {
 # ------------------------------------------------------------------------------
 
 # list_plugins: print the machine name of every registered plugin, one per line,
-# by querying the ScraperRegistry (the single source of truth). Requires the venv,
+# by filtering the immutable plugin manifest (the single source of truth). Requires the venv,
 # but plugin discovery only imports each plugin's lightweight descriptor (plugin.py)
 # - never its client/storage or transport libraries (tls_client, selenium, ...),
 # which load lazily only when a scrape actually runs. Returns non-zero (printing
@@ -88,27 +88,31 @@ registry_cli() {
 }
 
 list_plugins() {
-    registry_cli plugins --view targets 2>/dev/null
+    plugin_manifest | awk -F '\t' '{ print $1 }'
+}
+
+plugin_display_name() {
+    plugin_manifest | awk -F '\t' -v target="$1" '$1 == target { print $2; exit }'
 }
 
 list_plugin_examples() {
-    registry_cli plugins --view examples 2>/dev/null
+    plugin_manifest | awk -F '\t' '{ print $1 "\t" $3 }'
 }
 
 # list_plugin_requirements: print "<plugin><TAB><abs_requirements_path>" for every
 # registered plugin that ships its own requirements.txt (one pair per line),
-# using the registry-computed colocated path. Plugins with no extra dependencies are
+# using the catalog-computed colocated path. Plugins with no extra dependencies are
 # omitted. The path is absolute, so it installs regardless of cwd. Same venv
 # requirement as list_plugins.
 list_plugin_requirements() {
-    registry_cli plugins --view requirements 2>/dev/null
+    plugin_manifest | awk -F '\t' '$4 != "" { print $1 "\t" $4 }'
 }
 
 # list_plugin_schedules: print "<plugin><TAB><OnCalendar value>" for every
-# registered plugin. The registry resolves the user's execution_interval and owns
-# its translation to systemd syntax; plugins cannot inject timer directives.
+# registered plugin. The manifest resolves the user's execution_interval and carries
+# its framework-owned systemd translation; plugins cannot inject timer directives.
 list_plugin_schedules() {
-    registry_cli schedules --view calendar --config-dir "$BASE_DIR/config" 2>/dev/null
+    plugin_manifest | awk -F '\t' '{ print $1 "\t" $5 }'
 }
 
 # list_interval_status: print "<plugin><TAB><status>" for every registered plugin
@@ -120,7 +124,14 @@ list_plugin_schedules() {
 # schedule.sh uses this to decide whether to apply, warn, or skip a plugin's timer.
 # Same venv requirement as list_plugins.
 list_interval_status() {
-    registry_cli schedules --view status --config-dir "$BASE_DIR/config" 2>/dev/null
+    plugin_manifest | awk -F '\t' '{ print $1 "\t" $6 }'
+}
+
+# plugin_manifest: the only metadata bridge between POSIX scripts and Python.
+# Columns are target, display name, example config, optional requirements,
+# resolved OnCalendar, and interval status.
+plugin_manifest() {
+    registry_cli manifest --config-dir "$BASE_DIR/config" 2>/dev/null
 }
 
 # list_supported_intervals: print the canonical execution_interval keys as one

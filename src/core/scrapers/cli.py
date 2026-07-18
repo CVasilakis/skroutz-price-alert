@@ -1,72 +1,84 @@
-"""Stable machine-readable command line bridge for POSIX management scripts."""
+"""Stable machine-readable bridge for POSIX management scripts."""
 
 from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 
 from core.constants import CONFIG_DIR
-from core.scrapers.settings import SUPPORTED_INTERVALS
-from core.scrapers.registry import ScraperRegistry
 from core.scrapers.check import check_plugin
+from core.scrapers.configuration import TargetConfigLoader
+from core.scrapers.intervals import SUPPORTED_INTERVALS, oncalendar_for
+from core.scrapers.registry import PluginCatalog, RegisteredPlugin, setting_spec
+from core.scrapers.settings import KEY_INTERVAL
+from core.settings import ResolvedSetting, SettingStatus
 
 
-def _plugins(view: str) -> None:
-    for target in ScraperRegistry.registered_targets():
-        plugin = ScraperRegistry.get_plugin(target)
-        if view == "targets":
-            print(target)
-        elif view == "examples":
-            print(f"{target}\t{plugin.example_config_path}")
-        elif view == "requirements" and plugin.requirements_path:
-            print(f"{target}\t{plugin.requirements_path}")
-        elif view == "all":
-            print(
-                f"{target}\t{plugin.display_name}\t{plugin.config_filename}\t"
-                f"{plugin.example_config_path}\t{plugin.requirements_path or ''}"
-            )
+@dataclass(frozen=True)
+class ScheduleResolution:
+    on_calendar: str
+    status: SettingStatus
 
 
-def _schedules(view: str, config_dir: str) -> None:
-    for target in ScraperRegistry.registered_targets():
-        schedule = ScraperRegistry.resolve_schedule(target, config_dir)
-        value = schedule.on_calendar if view == "calendar" else schedule.status.value
-        print(f"{target}\t{value}")
+def resolve_schedule(plugin: RegisteredPlugin, config_dir: str) -> ScheduleResolution:
+    """Resolve a plugin schedule from one strict target-config read."""
+    path = Path(config_dir) / plugin.config_filename
+    interval_spec = setting_spec(plugin, KEY_INTERVAL)
+    if not path.exists():
+        interval = ResolvedSetting(plugin.default_interval, SettingStatus.NO_CONFIG)
+    else:
+        settings = TargetConfigLoader(plugin, config_dir).load_settings()
+        interval = settings.resolved(interval_spec)
+    canonical = (
+        interval.value
+        if interval.status in (SettingStatus.OK, SettingStatus.DEFAULT)
+        else plugin.default_interval
+    )
+    return ScheduleResolution(oncalendar_for(canonical), interval.status)
+
+
+def manifest(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
+    """Return the single six-column TSV manifest consumed by shell scripts."""
+    rows: list[str] = []
+    for plugin in catalog.plugins:
+        schedule = resolve_schedule(plugin, config_dir)
+        rows.append("\t".join((
+            plugin.target,
+            plugin.display_name,
+            plugin.example_config_path,
+            plugin.requirements_path or "",
+            schedule.on_calendar,
+            schedule.status.value,
+        )))
+    return tuple(rows)
 
 
 def _diagnose() -> int:
     try:
-        targets = ScraperRegistry.registered_targets()
+        catalog = PluginCatalog.discover()
     except Exception as exc:
         print(f"  {type(exc).__name__}: {exc}")
         return 1
-    print(f"  (discovery succeeded on retry: {len(targets)} scraper(s) registered)")
+    print(f"  (discovery succeeded on retry: {len(catalog.plugins)} scraper(s) registered)")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.scrapers.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    plugins = subparsers.add_parser("plugins")
-    plugins.add_argument(
-        "--view",
-        choices=("all", "targets", "examples", "requirements"),
-        default="all",
-    )
-    schedules = subparsers.add_parser("schedules")
-    schedules.add_argument("--view", choices=("calendar", "status"), default="calendar")
-    schedules.add_argument("--config-dir", default=CONFIG_DIR)
+    manifest_parser = subparsers.add_parser("manifest")
+    manifest_parser.add_argument("--config-dir", default=CONFIG_DIR)
     subparsers.add_parser("intervals")
     subparsers.add_parser("diagnose")
     plugin_check = subparsers.add_parser("plugin-check")
     plugin_check.add_argument("target")
 
     args = parser.parse_args(argv)
-    if args.command == "plugins":
-        _plugins(args.view)
-    elif args.command == "schedules":
-        _schedules(args.view, args.config_dir)
+    if args.command == "manifest":
+        for row in manifest(PluginCatalog.discover(), args.config_dir):
+            print(row)
     elif args.command == "intervals":
         print(", ".join(SUPPORTED_INTERVALS))
     elif args.command == "diagnose":

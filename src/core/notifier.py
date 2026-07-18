@@ -1,13 +1,10 @@
 import apprise
-from urllib.parse import urlparse
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 from core.utils import is_valid_apprise_url
-from core.scrapers.registry import ScraperRegistry
 
 if TYPE_CHECKING:
     from core.scrapers.api import TrackedItem
-    from core.scrapers.registry import RegisteredPlugin
 
 # The fixed notification titles, exported so tests assert against the same
 # constants the sends use (one home per wording; the per-site titles below
@@ -20,19 +17,12 @@ TITLE_TEST = 'Scrooge Alert - Test Notification'
 
 class Notifier:
     """Handles sending notifications via configured Apprise URLs."""
-    def __init__(self, notification_urls: str,
-                 plugin_for_url: "Callable[[str], RegisteredPlugin | None] | None" = None):
+    def __init__(self, notification_urls: str):
         """Initializes the Notifier with a list of notification URLs.
 
         Args:
             notification_urls (str): A comma-separated list of Apprise notification URLs.
-            plugin_for_url (Callable | None): Resolves a product URL to its plugin, for
-                the display name in message bodies. Defaults to
-                ``ScraperRegistry.plugin_for_url`` — the injection seam (mirroring the
-                orchestrator's ``now_fn``) exists so tests and non-scraper callers can
-                use the Notifier without triggering plugin discovery as a side effect.
         """
-        self._plugin_for_url = plugin_for_url or ScraperRegistry.plugin_for_url
         self.app_notif = apprise.Apprise()
         self.has_services = False
         if notification_urls:
@@ -40,31 +30,6 @@ class Notifier:
                 url = url.strip()
                 if is_valid_apprise_url(url) and self.app_notif.add(url):
                     self.has_services = True
-
-    def _extract_site(self, url: str) -> str:
-        """Returns a human-readable store name for a product URL.
-
-        Prefers the authoritative display name from the URL's registered plugin,
-        so the brand is correct even when it differs from the domain label. Falls
-        back to deriving a name from the domain only when no plugin matches the URL.
-        """
-        if not url:
-            return "Unknown Site"
-
-        plugin = self._plugin_for_url(url)
-        if plugin is not None:
-            return plugin.display_name
-
-        try:
-            domain = urlparse(url).netloc.lower()
-            if domain.startswith('www.'):
-                domain = domain[4:]
-            if not domain:
-                return "Unknown Site"
-            # Fallback: capitalize the main domain label (e.g. 'example.gr' -> 'Example')
-            return domain.split('.')[0].capitalize()
-        except Exception:
-            return "Unknown Site"
 
     def notify(self, title: str, body: str) -> bool:
         """Sends a notification with the given title and body.
@@ -83,7 +48,9 @@ class Notifier:
             # report False without confusing a transport fault with a scrape fault.
             return False
 
-    def notify_low_price(self, product_name: str, target_price: float, current_price: float, url: str, currency: str = '€', advert_title: str | None = None) -> bool:
+    def notify_low_price(self, site: str, product_name: str, target_price: float,
+                         current_price: float, url: str, currency: str = '€',
+                         advert_title: str | None = None) -> bool:
         """Sends a notification about a price drop below the target price.
 
         Args:
@@ -100,7 +67,6 @@ class Notifier:
         Returns:
             bool: True if the notification was sent successfully, False otherwise.
         """
-        site = self._extract_site(url)
         advert_line = f'\nAdvert: {advert_title}' if advert_title else ''
         return self.notify(
             title=TITLE_PRICE_DROP,
@@ -141,7 +107,7 @@ class Notifier:
 
         return self.notify(title=title, body="\n".join(body_lines))
 
-    def notify_old_entries(self, stale_items: Sequence['TrackedItem'], hours: int) -> bool:
+    def notify_old_entries(self, site: str, stale_items: Sequence['TrackedItem'], hours: int) -> bool:
         """Sends a single notification summarizing products that have gone stale.
 
         Aggregates every product that hasn't been successfully scraped within the
@@ -159,8 +125,6 @@ class Notifier:
         if not stale_items:
             return False
 
-        # Extract site name from the first stale item to give context
-        site = self._extract_site(stale_items[0].url)
         return self._build_summary(
             title=f'Scrooge Alert - Tracking Stale on {site}',
             header=f"{len(stale_items)} product(s) on {site} haven't been successfully scraped in over {hours} hours:\n",
@@ -169,7 +133,8 @@ class Notifier:
             footer="\nPlease check the error logs or verify the URLs are still valid.",
         )
 
-    def notify_errors(self, failed_items: Sequence[tuple['TrackedItem', Exception]]) -> bool:
+    def notify_errors(self, site: str,
+                      failed_items: Sequence[tuple['TrackedItem', Exception]]) -> bool:
         """Sends a notification indicating that specific errors occurred during scraping.
 
         Formats a summary of the failed products and their corresponding errors.
@@ -185,8 +150,6 @@ class Notifier:
         if not failed_items:
             return False
 
-        # Extract site name from the first failed item to give context
-        site = self._extract_site(failed_items[0][0].url)
         return self._build_summary(
             title=f'Scrooge Alert - Scraping Errors on {site}',
             header=f"The script encountered errors while checking {len(failed_items)} product(s) on {site}:\n",

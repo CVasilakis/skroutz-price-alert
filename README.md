@@ -617,6 +617,14 @@ To see all the undergoing feature requests or to request a new feature, please c
 
 ## 🤝 Contributing & Issues
 
+New stores use the in-repository plugin contract: copy
+`src/core/scrapers/_example/`, keep `plugin.py` import-light, export `Client` from
+`client.py`, and run `./scripts/plugin-check.sh --<target>`. The immutable plugin
+catalog and shell manifest discover the new adapter automatically, so framework,
+CLI, UI, and management-script edits are unnecessary. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the complete URL, field, setting, result,
+exception, dependency, and testing contracts.
+
 Contributions are always welcome! If you have an idea to make this project better, feel free to fork the repository and submit a pull request.
 To add a marketplace, follow [CONTRIBUTING.md](CONTRIBUTING.md): a scraper is one self-contained package, and adding it requires no registry, orchestrator, shell, or UI edits.
 If you encounter a bug or run into any issues, please [open an issue](https://github.com/CVasilakis/scrooge-alert/issues). To help me resolve it quickly, include as much detail as possible.

@@ -4,7 +4,6 @@ import math
 from urllib.parse import SplitResult
 
 from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec
-from core.settings import unsupported_value_message
 
 
 def decode_string_tuple(raw: object) -> tuple[str, ...]:
@@ -42,11 +41,9 @@ def decode_min_advert_price(raw: object) -> float:
 
 MIN_ADVERT_PRICE = SettingSpec[float](
     key="min_advert_price",
-    label="Min Advert Price",
+    default=0.0,
     decode=decode_min_advert_price,
     display=lambda value: f"{value:g} €" if value else "disabled",
-    warning=unsupported_value_message("min_advert_price", "disabled"),
-    default=0.0,
 )
 
 
@@ -57,7 +54,6 @@ def is_classifieds_url(url: SplitResult) -> bool:
 PLUGIN = ScraperPlugin(
     display_name="Insomnia",
     domains=("insomnia.gr",),
-    client=".client:InsomniaClient",
     accepts_url=is_classifieds_url,
     item_fields=(TITLE_INCLUDE, TITLE_EXCLUDE),
     settings=(MIN_ADVERT_PRICE,),

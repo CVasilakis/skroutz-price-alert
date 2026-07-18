@@ -29,21 +29,12 @@ def test_service_gate_and_dispatch_exception():
     assert notifier.notify("T", "B") is False
 
 
-def test_price_drop_and_site_resolution():
+def test_price_drop_uses_selected_plugin_display_name():
     notifier, app = _notifier()
     app.notify.return_value = True
-    with mock.patch.object(notifier, "_extract_site", return_value="Store"):
-        assert notifier.notify_low_price("Widget", 12, 9, "https://x/1", "EUR")
+    assert notifier.notify_low_price("Store", "Widget", 12, 9, "https://x/1", "EUR")
     assert app.notify.call_args.kwargs["title"] == TITLE_PRICE_DROP
     assert "Store" in app.notify.call_args.kwargs["body"]
-    plugin = mock.Mock(display_name="Skroutz")
-    notifier, _ = _notifier("")
-    notifier._plugin_for_url = lambda _url: plugin
-    assert notifier._extract_site("https://www.skroutz.gr/x") == "Skroutz"
-    with mock.patch("core.notifier.ScraperRegistry.plugin_for_url", return_value=None):
-        notifier._plugin_for_url = lambda _url: None
-        assert notifier._extract_site("https://www.example.gr/x") == "Example"
-        assert notifier._extract_site("garbage") == "Unknown Site"
 
 
 def test_reminder_variants_and_error_summary_truncation():
@@ -55,18 +46,16 @@ def test_reminder_variants_and_error_summary_truncation():
         assert phrase in app.notify.call_args.kwargs["body"]
         assert app.notify.call_args.kwargs["title"] == TITLE_STATUS_UPDATE
     failures = [(_item(i), ValueError("boom")) for i in range(5)]
-    with mock.patch.object(notifier, "_extract_site", return_value="Store"):
-        assert notifier.notify_errors(failures)
+    assert notifier.notify_errors("Store", failures)
     body = app.notify.call_args.kwargs["body"]
     assert "... and 2 more errors." in body
-    assert not notifier.notify_errors([])
+    assert not notifier.notify_errors("Store", [])
 
 
 def test_old_entries_and_crash_and_ping_delegation():
     notifier, app = _notifier()
     app.notify.return_value = True
-    with mock.patch.object(notifier, "_extract_site", return_value="Store"):
-        assert notifier.notify_old_entries([_item()], 48)
+    assert notifier.notify_old_entries("Store", [_item()], 48)
     assert notifier.notify_crash()
     server = mock.Mock()
     server.url.return_value = "tgram://token/chat"

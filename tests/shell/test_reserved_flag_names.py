@@ -1,6 +1,6 @@
 """Drift guard: RESERVED_PLUGIN_NAMES must equal the scripts' built-in '--<flag>' set.
 
-``ScraperRegistry.RESERVED_PLUGIN_NAMES`` exists because the management scripts match
+``RESERVED_PLUGIN_NAMES`` exists because the management scripts match
 their built-in flags (``--help``, ``--quiet``, ``--ping``, ``--status``, ``--update``)
 *before* the per-plugin ``--*`` branch, so a plugin named after one of them would
 register fine yet never be dispatchable from the command line. The authoritative set is

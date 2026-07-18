@@ -7,30 +7,28 @@ from core.settings import SettingStatus
 
 def test_status_main_renders_installed_missing_and_orphan_panels():
     console = mock.MagicMock()
-    registry = mock.MagicMock()
+    catalog = mock.MagicMock()
     interval_spec = object()
     alpha = SimpleNamespace(
+        target="alpha",
         display_name="Alpha",
         config_filename="alpha.json",
-        setting=lambda key: interval_spec,
     )
     beta = SimpleNamespace(
+        target="beta",
         display_name="Beta",
         config_filename="beta.json",
-        setting=lambda key: interval_spec,
     )
     load = SimpleNamespace(
-        target="alpha", count=2, faulty_indices=(1,), error=None
+        target="alpha", count=2, faulty_indices=(1,), error=None,
+        state_error=False, settings=mock.MagicMock(),
     )
-    interval = SimpleNamespace(status=SettingStatus.OK)
-    resolved = mock.MagicMock()
+    interval = SimpleNamespace(status=SettingStatus.OK, value="1h")
+    resolved = load.settings
     resolved.resolved.return_value = interval
-    registry.settings_for.return_value = resolved
-
-    registry_type = mock.MagicMock(return_value=registry)
-    registry_type.registered_targets.return_value = ("alpha", "beta")
-    registry_type.get_plugin.side_effect = lambda target: alpha if target == "alpha" else beta
-    registry_type.expected_on_calendar.return_value = "hourly"
+    catalog.targets = ("alpha", "beta")
+    catalog.plugins = (alpha, beta)
+    catalog.get.side_effect = lambda target: alpha if target == "alpha" else beta
 
     def systemd_properties(unit, _properties):
         return {"ActiveState": "active"} if unit.startswith("alpha-") else {}
@@ -42,7 +40,9 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
     with mock.patch("core.status.install_interrupt_handler"), \
          mock.patch("core.status.setup_global_logging"), \
          mock.patch("core.status.Console", return_value=console), \
-         mock.patch("core.status.ScraperRegistry", registry_type), \
+         mock.patch("core.status.PluginCatalog.discover", return_value=catalog), \
+         mock.patch("core.status.setting_spec", return_value=interval_spec), \
+         mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar, \
          mock.patch("core.status.load_targets", return_value=(load,)), \
          mock.patch("core.status.render_config_panel"), \
          mock.patch("core.status.signal.signal"), \
@@ -59,7 +59,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
                     return_value=orphan_panel) as build_orphan:
         core.status.main()
 
-    registry_type.expected_on_calendar.assert_called_once_with(alpha, interval)
+    oncalendar.assert_called_once_with("1h")
     build_service.assert_called_once()
     service_panel.render.assert_called_once_with(console)
     build_missing.assert_called_once_with("beta", "Beta")

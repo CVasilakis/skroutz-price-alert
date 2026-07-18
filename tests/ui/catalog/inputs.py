@@ -25,7 +25,7 @@ STATUS_INVALID = SettingStatus.INVALID
 # A throwaway currency symbol used across price scenarios (matches the scraper default).
 CURRENCY = "€"
 
-# Faithful storage/env error messages (see scrapers/base/storage.py and utils.py), shared
+# Faithful persistence/environment error messages, shared across UI scenarios.
 # by the CONFIG (.env), STATUS and RUN (products-config) scenarios.
 STORAGE_MISSING = "The config/skroutz.json file is missing or not a file"
 STORAGE_PERMS = "The config/skroutz.json file has wrong permissions"
@@ -90,31 +90,6 @@ def views_one_invalid_each() -> list[SettingView]:
     ]
 
 
-def malformed_block_warning() -> str:
-    """The exact block-shape warning production emits for a non-object ``settings`` block.
-
-    Sourced from the same ``_block_warning`` helper ``resolve_all`` uses, so the RUN/STATUS
-    scenarios' footnote text can never drift from what users see.
-    """
-    warning = resolve_settings((SPEC_INTERVAL,), "not-an-object").block_warning
-    assert warning is not None  # a non-dict, cleanly-read block always warns
-    return warning
-
-
-def views_malformed_block() -> list[SettingView]:
-    """Every built-in setting defaulted because the ``settings`` block was malformed.
-
-    Built through ``ResolvedSettings.views()`` with ``block_warning`` set, so each view is
-    flagged ``block_malformed`` exactly as production does — the rows render as ``🟡``
-    defaults citing the shared block footnote (no standalone "Block ignored" row)."""
-    return resolved_settings(
-        interval=("1h", STATUS_DEFAULT, None),
-        retention=(7, STATUS_DEFAULT, None),
-        notify=(True, STATUS_DEFAULT, None),
-        block_warning=malformed_block_warning(),
-    ).views()
-
-
 # --- ResolvedSettings (the STATUS settings section) ---------------------------------
 
 _Triple = tuple[object, SettingStatus, object]
@@ -124,8 +99,6 @@ def resolved_settings(
     interval: _Triple = ("1h", STATUS_OK, "1h"),
     retention: _Triple = (7, STATUS_OK, 7),
     notify: _Triple = (True, STATUS_OK, True),
-    block_warning: str | None = None,
-    unknown_keys: tuple[str, ...] = (),
 ) -> ResolvedSettings:
     """A ``ResolvedSettings`` for ``--status``, built from synthetic ``(value, status, raw)``."""
     pairs = [
@@ -133,7 +106,7 @@ def resolved_settings(
         (SPEC_RETENTION, ResolvedSetting(*retention)),
         (SPEC_NOTIFY, ResolvedSetting(*notify)),
     ]
-    return ResolvedSettings(pairs, block_warning=block_warning, unknown_keys=unknown_keys)
+    return ResolvedSettings(pairs)
 
 
 # --- systemd property dicts (the STATUS systemd rows) -------------------------------

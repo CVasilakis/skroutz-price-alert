@@ -3,10 +3,9 @@ from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from core.scrapers.base.http_client import HttpScraperClient
-from core.scrapers.api import TrackedItem, ListingResult, Offer
-from core.exceptions import ScraperParseError, InvalidURLError
-from core.utils import parse_price
+from core.scrapers.http import HttpScraperClient
+from core.scrapers.api import InvalidURLError, ListingResult, Offer, ScraperParseError, TrackedItem
+from core.scrapers.pricing import parse_price
 from core.scrapers.insomnia.plugin import MIN_ADVERT_PRICE, TITLE_EXCLUDE, TITLE_INCLUDE
 
 # Headers impersonating a real browser fetching an HTML page. The scraper
@@ -51,7 +50,7 @@ _NO_PRICE_TEXT = "Επικοινωνία"                # price placeholder: "c
 _CURRENCY = "€"
 
 
-class InsomniaClient(HttpScraperClient):
+class Client(HttpScraperClient):
     """Client scraping insomnia.gr classifieds listing pages.
 
     One scrape fetches a listing page, walks its advert cards, and returns every

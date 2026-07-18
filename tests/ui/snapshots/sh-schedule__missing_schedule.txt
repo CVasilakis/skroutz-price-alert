@@ -1,4 +1,5 @@
 # border: red
 # exit: 1
 
-
+[skroutz] Has no resolved schedule; skipping.
+One or more timer schedules could not be applied.

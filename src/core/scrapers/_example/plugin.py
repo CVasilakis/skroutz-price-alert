@@ -13,8 +13,7 @@ def decode_sku(raw: object) -> str:
 
 SKU = ItemField(key="sku", decode=decode_sku, default="unknown")
 REGION = SettingSpec(
-    key="region", label="Region", decode=decode_sku, display=str,
-    warning="region must be a nonblank string; using global", default="global",
+    key="region", default="global", decode=decode_sku,
 )
 
 
@@ -24,10 +23,9 @@ def accepts_url(url: SplitResult) -> bool:
 
 PLUGIN = ScraperPlugin(
     display_name="Example Store",
-    domains=("store.example",),
-    client=".client:ExampleClient",
+    domains=["store.example"],
     accepts_url=accepts_url,
-    item_fields=(SKU,),
-    settings=(REGION,),
+    item_fields=[SKU],
+    settings=[REGION],
     default_interval="1h",
 )

@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from core.scrapers.api import SettingSpec
 from core.settings.model import (
-    ResolvedSetting, ResolvedSettings, SettingStatus, SettingView,
+    ResolvedSetting, ResolvedSettings, SettingSpec, SettingStatus, SettingView,
 )
 
 
-def resolve_spec(spec: SettingSpec[Any], block: object,
-                 load_status: SettingStatus | str | None = None) -> ResolvedSetting[Any]:
+def resolve_spec(spec: SettingSpec[Any], block: Mapping[str, object] | None,
+                 load_status: SettingStatus | None = None) -> ResolvedSetting[Any]:
     if load_status is SettingStatus.NO_CONFIG:
         return ResolvedSetting(spec.default, SettingStatus.NO_CONFIG)
     if load_status is not None:
         return ResolvedSetting(spec.default, SettingStatus.DEFAULT)
-    settings = block if isinstance(block, dict) else {}
+    settings = block or {}
     raw = settings.get(spec.key)
     if spec.is_unset(raw):
         return ResolvedSetting(spec.default, SettingStatus.DEFAULT)
@@ -28,28 +27,16 @@ def resolve_spec(spec: SettingSpec[Any], block: object,
     return ResolvedSetting(value, SettingStatus.OK, raw)
 
 
-def resolve_settings(specs: Sequence[SettingSpec[Any]], block: object,
-                     load_status: SettingStatus | str | None = None) -> ResolvedSettings:
+def resolve_settings(specs: Sequence[SettingSpec[Any]], block: Mapping[str, object] | None,
+                     load_status: SettingStatus | None = None) -> ResolvedSettings:
     pairs = [(spec, resolve_spec(spec, block, load_status)) for spec in specs]
-    known = {spec.key for spec in specs}
-    unknown = (
-        tuple(sorted(str(key) for key in block if key not in known))
-        if load_status is None and isinstance(block, dict) else ()
-    )
-    warning = None
-    if load_status == "readerror":
-        warning = "The settings file could not be read; using defaults"
-    elif load_status is None and block is not None and not isinstance(block, dict):
-        warning = "The settings section is misformatted; using defaults"
-    return ResolvedSettings(pairs, warning, unknown)
+    return ResolvedSettings(pairs)
 
 
-def setting_view(spec: SettingSpec[Any], resolved: ResolvedSetting[Any],
-                 block_malformed: bool = False) -> SettingView:
+def setting_view(spec: SettingSpec[Any], resolved: ResolvedSetting[Any]) -> SettingView:
     return SettingView(
-        label=spec.label,
+        label=spec.display_label,
         display_value=spec.display(resolved.value),
         status=resolved.status,
-        footnote=spec.warning if resolved.status is SettingStatus.INVALID else None,
-        block_malformed=block_malformed,
+        footnote=spec.invalid_warning if resolved.status is SettingStatus.INVALID else None,
     )

@@ -78,7 +78,7 @@ reviewing it), and from then on any drift is flagged automatically.
 
 **Why drive the real code instead of mocking the panels?** Fidelity. The drivers call the
 actual functions the app uses at runtime (`ping.build_ping_panel`,
-`status.build_service_panel`, the real `InteractiveExecutionStrategy`, the real
+`status.build_service_panel`, the real `InteractiveRunReporter`, the real
 `config_check` row helpers). A reimplementation could pass its own tests while the real UI
 is broken. (These builder functions were deliberately extracted from the `main()` bodies
 of `ping.py`/`status.py` so they could be called in isolation — same pattern
@@ -261,7 +261,7 @@ real production builder:
 
 | Surface  | Gallery label | Driver(s)                                                   | Drives (production code)                              |
 |----------|---------------|-------------------------------------------------------------|------------------------------------------------------|
-| `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `tui.InteractiveExecutionStrategy` panel    |
+| `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `tui.InteractiveRunReporter` panel    |
 | `E2E_RUN`| Scraping panel (end-to-end) | `drive_orchestrated_run(products, results_by_url)`          | the real `ScrapingOrchestrator` driving that same panel |
 | `STATUS` | Health check (--status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
 | `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
@@ -369,7 +369,7 @@ formatting and warning text), `inputs.py` offers small factories:
 - `interval_view / retention_view / notify_view(value, status, raw)` — a single
   `SettingView` row; `views_all_ok() / views_all_default() / views_one_invalid_each()` —
   ready-made sets for the settings section.
-- `resolved_settings(interval=…, retention=…, notify=…, block_warning=…)` — a full
+- `resolved_settings(interval=…, retention=…, notify=…)` — a full
   `ResolvedSettings` for `--status`.
 - `timer_props(...)` / `service_props(...)` — the systemd property dicts `--status` reads.
 - `target_load(...)` — a Configuration Check row outcome.

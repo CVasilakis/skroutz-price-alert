@@ -2,10 +2,12 @@ import re
 import json
 from urllib.parse import urlparse
 
-from core.scrapers.base.http_client import HttpScraperClient
-from core.scrapers.api import TrackedItem, PriceResult
-from core.exceptions import ScraperParseError, ProductUnavailableError, InvalidURLError
-from core.utils import parse_price
+from core.scrapers.http import HttpScraperClient
+from core.scrapers.api import (
+    InvalidURLError, PriceResult, ProductUnavailableError, ScraperParseError,
+    TrackedItem,
+)
+from core.scrapers.pricing import parse_price
 
 # Headers impersonating a real browser to avoid being blocked by anti-bot measures.
 # The scraper rotates through these profiles randomly on retries.
@@ -70,7 +72,7 @@ def _currency_for_domain(domain: str) -> str:
     return _DEFAULT_CURRENCY
 
 
-class SkroutzClient(HttpScraperClient):
+class Client(HttpScraperClient):
     """Client for scraping product information from Skroutz.
 
     Inherits the TLS session, header-pool rotation, and HTTP-status-to-exception

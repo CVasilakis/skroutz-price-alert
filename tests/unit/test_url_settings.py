@@ -1,7 +1,7 @@
 import pytest
 
 from core.scrapers.intervals import normalize_interval, oncalendar_for
-from core.scrapers.url import canonicalize_url, normalize_domain, parse_url, url_matches_domains
+from core.scrapers.url import canonicalize_url, normalize_domain, parse_url, parsed_matches_domains
 from core.settings.normalizers import normalize_bool, normalize_retention_days
 
 
@@ -30,8 +30,8 @@ def test_invalid_domains(domain):
 
 def test_url_security_domain_matching_and_canonicalization():
     assert canonicalize_url("  HTTPS://www.Example.com/p?q=1#frag  ") == "https://www.Example.com/p?q=1"
-    assert url_matches_domains("https://sub.example.com/p", ("example.com",))
-    assert not url_matches_domains("https://evil-example.com/p", ("example.com",))
+    assert parsed_matches_domains(parse_url("https://sub.example.com/p"), ("example.com",))
+    assert not parsed_matches_domains(parse_url("https://evil-example.com/p"), ("example.com",))
     for value in ("ftp://example.com/x", "https://u:p@example.com/x", "relative/x"):
         with pytest.raises(ValueError):
             parse_url(value)
