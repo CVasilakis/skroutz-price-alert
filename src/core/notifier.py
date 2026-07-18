@@ -6,8 +6,8 @@ from core.utils import is_valid_apprise_url
 from core.scrapers.registry import ScraperRegistry
 
 if TYPE_CHECKING:
-    from core.scrapers.base.model import BaseTrackedItem
-    from core.scrapers.base.plugin import RegisteredPlugin
+    from core.scrapers.api import TrackedItem
+    from core.scrapers.registry import RegisteredPlugin
 
 # The fixed notification titles, exported so tests assert against the same
 # constants the sends use (one home per wording; the per-site titles below
@@ -141,7 +141,7 @@ class Notifier:
 
         return self.notify(title=title, body="\n".join(body_lines))
 
-    def notify_old_entries(self, stale_items: Sequence['BaseTrackedItem'], hours: int) -> bool:
+    def notify_old_entries(self, stale_items: Sequence['TrackedItem'], hours: int) -> bool:
         """Sends a single notification summarizing products that have gone stale.
 
         Aggregates every product that hasn't been successfully scraped within the
@@ -149,7 +149,7 @@ class Notifier:
         truncated to prevent notification bloat.
 
         Args:
-            stale_items (Sequence[BaseTrackedItem]): The products whose last successful
+            stale_items (Sequence[TrackedItem]): The products whose last successful
                 scrape is older than the threshold.
             hours (int): The staleness threshold in hours.
 
@@ -169,7 +169,7 @@ class Notifier:
             footer="\nPlease check the error logs or verify the URLs are still valid.",
         )
 
-    def notify_errors(self, failed_items: Sequence[tuple['BaseTrackedItem', Exception]]) -> bool:
+    def notify_errors(self, failed_items: Sequence[tuple['TrackedItem', Exception]]) -> bool:
         """Sends a notification indicating that specific errors occurred during scraping.
 
         Formats a summary of the failed products and their corresponding errors.

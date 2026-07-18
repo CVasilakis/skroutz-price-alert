@@ -1,17 +1,15 @@
 # border: red
 
 ╭────────────────────────── Fake Store Scraping ──────────────────────────╮
-│   🟡    Monitored Items       3 loaded, 1 misconfigured [1]             │
+│   🟡    Monitored Items       2 loaded, 1 misconfigured [1]             │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Paused Product        Skipped [2]                               │
 │   ❗    Removed Product       Skipping (ProductNotFoundError) [3]       │
-│   🟡    Untargeted Product    55.0 € (Target: 0.0 €) [4]                │
 │                                                                         │
 │   [1] Problematic items found at JSON index: 3.                         │
 │   [2] The skip field was set to true in the configuration file.         │
 │   [3] Product not found or removed (HTTP 404).                          │
-│   [4] Missing target price. Defaulting to 0.0 €.                        │
 ╰─────────────────────────────────────────────────────────────────────────╯

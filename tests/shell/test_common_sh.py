@@ -21,6 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_SH = REPO_ROOT / "scripts" / "lib" / "common.sh"
 
 
+def test_install_does_not_invoke_configuration_migration():
+    install = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
+    assert "registry_cli migration" not in install
+
+
 def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None):
     """Runs `script` under `sh -eu` with common.sh sourced (the caller contract).
 
@@ -241,7 +246,7 @@ class TestListSupportedIntervals(unittest.TestCase):
         venv_python = REPO_ROOT / "venv" / "bin" / "python3"
         if not venv_python.exists():  # pragma: no cover - core-only checkout
             self.skipTest("project venv not available")
-        from core.scrapers.base.settings import SUPPORTED_INTERVALS
+        from core.scrapers.settings import SUPPORTED_INTERVALS
 
         result = run_sh('list_supported_intervals')
         self.assertEqual(result.stdout.strip(), ", ".join(SUPPORTED_INTERVALS))
@@ -253,26 +258,31 @@ class TestRealRegistryBridge(unittest.TestCase):
     The UI shell snapshots fake the venv responder (canned answers), so these are
     the only place the actual Python inside common.sh's heredocs executes via the
     shell — a break in the shell<->Python contract (the tab-stream shape, the
-    name/filename pairing) fails here instead of hiding behind the shim. Assertions
-    are shape-based where the value depends on the user's local config (the
-    resolved cadence), exact where it comes from the plugin descriptor.
+    name/filename pairing) fails here instead of hiding behind the shim. The bridge runs
+    against an empty temporary config directory so private user configuration cannot
+    affect its result.
     """
 
     def setUp(self):
         if not (REPO_ROOT / "venv" / "bin" / "python3").exists():  # pragma: no cover
             self.skipTest("project venv not available")
+        self.base_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.base_dir, ignore_errors=True)
+        (self.base_dir / "venv").symlink_to(REPO_ROOT / "venv", target_is_directory=True)
+        (self.base_dir / "src").symlink_to(REPO_ROOT / "src", target_is_directory=True)
+        (self.base_dir / "config").mkdir()
 
     def test_list_plugins_yields_registered_names(self):
-        result = run_sh('list_plugins')
+        result = run_sh('list_plugins', base_dir=self.base_dir)
         self.assertIn("skroutz", result.stdout.split())
 
     def test_list_plugin_examples_pairs_names_with_package_paths(self):
-        result = run_sh('list_plugin_examples')
+        result = run_sh('list_plugin_examples', base_dir=self.base_dir)
         pairs = dict(line.split("\t", 1) for line in result.stdout.splitlines())
         self.assertTrue(pairs.get("skroutz", "").endswith("/skroutz/config.example.json"))
 
     def test_list_plugin_schedules_is_a_value_stream(self):
-        result = run_sh('list_plugin_schedules')
+        result = run_sh('list_plugin_schedules', base_dir=self.base_dir)
         lines = result.stdout.splitlines()
         self.assertTrue(lines)
         for line in lines:
@@ -283,11 +293,9 @@ class TestRealRegistryBridge(unittest.TestCase):
         self.assertTrue(any(line.startswith("skroutz\t") for line in lines))
 
     def test_list_interval_status_reports_a_known_status(self):
-        result = run_sh('list_interval_status')
+        result = run_sh('list_interval_status', base_dir=self.base_dir)
         statuses = dict(line.split("\t") for line in result.stdout.splitlines())
-        # The value depends on the local config/skroutz.json; the contract is that
-        # it is one of the resolver's four statuses.
-        self.assertIn(statuses.get("skroutz"), {"ok", "default", "invalid", "nocfg"})
+        self.assertEqual(statuses.get("skroutz"), "nocfg")
 
 
 class TestVenvResponderMarkers(unittest.TestCase):

@@ -6,7 +6,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from types import FrameType
-from typing import Any
 
 from core import messages
 from core.locks import acquire_lock
@@ -16,32 +15,25 @@ from core.constants import (
     EXIT_CODE_INTERRUPT, EXIT_CODE_SKIPPED, EXIT_CODE_SUCCESS,
     EXIT_CODE_PRODUCTS_ERROR, EXIT_CODE_SCRAPE_ERROR, EXIT_CODE_STORAGE_ERROR,
     EXIT_CODE_NOTIFICATION_ERROR, EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    TIMESTAMP_FORMAT,
 )
 from core.exceptions import RateLimitError, ServerError, ScraperError, ScraperParseError, LockAcquisitionError, StorageFileError, ProductNotFoundError, ProductUnavailableError, InvalidURLError, PluginDependencyError
 from core.preflight import TargetLoad
 from core.ui.config_check import config_view
-from core.scrapers.base.model import (
-    BaseTrackedItem, ListingResult, PriceResult, ScrapeResult, validate_scrape_result,
+from core.scrapers.api import (
+    TrackedItem, ListingResult, ScrapeResult, validate_scrape_result,
 )
-from core.scrapers.base.storage import BaseDataManager
-from core.scrapers.base.settings import KEY_RETENTION, KEY_NOTIFY
+from core.scrapers.settings import KEY_RETENTION, KEY_NOTIFY
+from core.scrapers.state import JsonStateRepository, format_utc
 from core.scrapers.registry import ScraperRegistry
 from core.notifier import Notifier
 from core.logger import save_traceback, get_target_logger
 from core.ui.tui import ExecutionStrategy, SilentExecutionStrategy, Notes, PriceOutcome
-from core.utils import describe_signal, parse_price
+from core.utils import describe_signal
 
 
 def _utc_now() -> datetime.datetime:
-    """Returns the current time as a naive UTC datetime.
-
-    Timestamps are written and compared in naive UTC so the staleness window is
-    immune to host timezone or DST changes (UTC has no DST). The value is naive
-    (no tzinfo) so it formats with TIMESTAMP_FORMAT and parses back without a
-    timezone suffix, keeping existing config files migration-free.
-    """
-    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    """Return an aware UTC clock value for state and staleness decisions."""
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 # --- Error handling policy -------------------------------------------------
@@ -49,7 +41,8 @@ def _utc_now() -> datetime.datetime:
 # behavior for each retryable error — whether to refresh identity before
 # retrying, abort the whole target, count it as a notified failure, save a
 # traceback, and any extra footnotes — is declared here once instead of in a
-# branching ladder. See BaseScraperClient's docstring for the full contract.
+# branching ladder. Plugin clients expose the optional identity-refresh hook through
+# the contributor API.
 
 # Terminal, non-retryable product errors: rendered red, but they do not abort the run.
 SKIP_ERRORS = (ProductNotFoundError, ProductUnavailableError, InvalidURLError)
@@ -116,7 +109,7 @@ def _policy_for(exc: Exception) -> ErrorPolicy:
 class ProductRunOutcome:
     """Structured result of processing one config row."""
 
-    item: BaseTrackedItem
+    item: TrackedItem
     reported_error: Exception | None = None
     affects_scrape_status: bool = False
     notification_failed: bool = False
@@ -158,37 +151,31 @@ class RunOutcome:
 
 class ScrapingOrchestrator:
     """Orchestrates the scraping process across multiple targets and manages execution flow."""
-    def __init__(self, targets_to_run: list[str], registry: ScraperRegistry, notifier: Notifier, config_dir: str, quiet: bool = False, ui_strategy: ExecutionStrategy | None = None, loads_by_target: dict[str, TargetLoad] | None = None, now_fn: Callable[[], datetime.datetime] = _utc_now):
+    def __init__(self, target_loads: list[TargetLoad], registry: ScraperRegistry,
+                 notifier: Notifier, quiet: bool = False,
+                 ui_strategy: ExecutionStrategy | None = None,
+                 now_fn: Callable[[], datetime.datetime] = _utc_now):
         """Initializes the ScrapingOrchestrator.
 
         Args:
-            targets_to_run (list[str]): A list of scraper target names to run.
-            registry (ScraperRegistry): The unified registry for scraper clients and data managers.
+            target_loads (list[TargetLoad]): Immutable config/state snapshots to run.
+            registry (ScraperRegistry): The registry for lazy scraper clients.
             notifier (Notifier): The service used to send notifications.
-            config_dir (str): The directory for saving user data and configuration.
             quiet (bool): Whether to log to file silently.
             ui_strategy (ExecutionStrategy | None): The strategy for the UI console output.
-            loads_by_target (dict[str, TargetLoad] | None): The preflight ``load_targets`` outcomes keyed by
-                target (``{target: TargetLoad}``). Drives the per-scraper 'Config' row and the
-                per-target skip of a scraper whose products config failed to load. Targets
-                absent from the map (e.g. missing dependencies) simply get no 'Config' row.
-            now_fn (Callable): Returns the current time as a naive *UTC* datetime (the
-                contract of ``_utc_now``, its default). The clock seam mirroring
-                ``ReminderService.now_fn``, so the staleness window and timestamp
-                writes are testable without patching the module.
+            now_fn (Callable): Returns an aware UTC datetime for state and staleness.
         """
-        self.targets_to_run: list[str] = targets_to_run
+        self.target_loads = tuple(target_loads)
+        self.targets_to_run = [load.target for load in target_loads]
         self.registry: ScraperRegistry = registry
         self.notifier: Notifier = notifier
-        self.config_dir: str = config_dir
         self.quiet: bool = quiet
         self.interrupted: bool = False
         self._interrupt_message: str = ""
         self._current_target: str = ""
         self._current_logger: logging.Logger | None = None
-        self._stale_items: list[BaseTrackedItem] = []
+        self._stale_items: list[TrackedItem] = []
         self.ui_strategy: ExecutionStrategy = ui_strategy or SilentExecutionStrategy()
-        self.loads_by_target: dict[str, TargetLoad] = loads_by_target or {}
         self._now_fn: Callable[[], datetime.datetime] = now_fn
 
     def signal_handler(self, signum: int, _frame: FrameType | None) -> None:
@@ -232,43 +219,24 @@ class ScrapingOrchestrator:
             actual_delay = time.monotonic() - start_time
             self.ui_strategy.complete_sleep(actual_delay)
 
-    def _check_and_repair_timestamp(self, item: BaseTrackedItem, data_manager: BaseDataManager) -> str | None:
-        """Evaluates — and may repair — the stored timestamp of an unscraped product.
+    def _check_staleness(self, item: TrackedItem) -> str | None:
+        """Evaluate the stored timestamp of an unsuccessfully scraped item.
 
-        This method writes: a corrupted (unparseable) timestamp is repaired in place
-        via the data manager's update mechanism. It is called only for non-skipped
-        products whose scrape did not succeed (a successful scrape refreshes the
-        timestamp to now, so such a product is never stale). Genuinely stale products
-        are recorded for the aggregated end-of-target notification.
-
-        Timestamps are written and compared in naive UTC (see ``_utc_now``), so the
-        staleness window is immune to host timezone or DST changes.
+        Successful scrapes refresh the timestamp, so only failures reach this path.
+        Aware UTC values keep the staleness window independent of host timezone and DST.
 
         Args:
-            item (BaseTrackedItem): The product whose timestamp is being evaluated.
-            data_manager (BaseDataManager): The data manager, used to repair a
-                corrupted timestamp via the atomic update mechanism.
+            item (TrackedItem): The item whose timestamp is being evaluated.
 
         Returns:
             str | None: A footnote to attach to the product's row, or None when
                 the product has no usable timestamp or is still fresh.
         """
-        if not item.last_checked:
+        if item.last_checked is None:
             return None
-
-        try:
-            timestamp = datetime.datetime.strptime(item.last_checked, TIMESTAMP_FORMAT)
-        except (ValueError, TypeError):
-            data_manager.update_item(
-                item,
-                last_price=item.last_price,
-                last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT)
-            )
-            return messages.NOTE_CORRUPTED_TIMESTAMP
-
-        if (self._now_fn() - timestamp) > datetime.timedelta(hours=OLD_ENTRY_HOURS):
+        if (self._now_fn() - item.last_checked) > datetime.timedelta(hours=OLD_ENTRY_HOURS):
             self._stale_items.append(item)
-            return messages.stale_note(item.last_checked, OLD_ENTRY_HOURS)
+            return messages.stale_note(format_utc(item.last_checked), OLD_ENTRY_HOURS)
 
         return None
 
@@ -305,18 +273,18 @@ class ScrapingOrchestrator:
         self.ui_strategy.log_attempt(item_name, attempt + 1, MAX_RETRIES, detail)
         attempt_notes.append(messages.attempt_note(attempt + 1, error_type))
 
-    def _emit_failure(self, item: BaseTrackedItem, data_manager: BaseDataManager, error_type: str, attempt_notes: list[str], extra_notes: Notes = None) -> None:
+    def _emit_failure(self, item: TrackedItem, error_type: str,
+                      attempt_notes: list[str], extra_notes: Notes = None) -> None:
         """Emits the terminal failure row for a product after all retries are exhausted.
 
         Args:
-            item (BaseTrackedItem): The product that failed.
-            data_manager (BaseDataManager): The data manager, for stale evaluation.
+            item (TrackedItem): The item that failed.
             error_type (str): The exception type of the final failed attempt.
             attempt_notes (list): The accumulated per-attempt footnotes.
             extra_notes (Notes): Additional footnotes for this failure (e.g. an
                 errors.txt pointer), shown by every strategy alongside the stale note.
         """
-        stale_note = self._check_and_repair_timestamp(item, data_manager)
+        stale_note = self._check_staleness(item)
         self.ui_strategy.log_failure(item.name, error_type, attempt_notes=attempt_notes,
                                      extra_notes=self._combine_notes(extra_notes, stale_note))
 
@@ -346,16 +314,15 @@ class ScrapingOrchestrator:
                 )
             return False
 
-    def _handle_successful_scrape(self, item: BaseTrackedItem, result: ScrapeResult, data_manager: BaseDataManager, original_invalid_price: object | None = None, missing_target_price: bool = False, retries_used: int = 0, attempt_notes: list[str] | None = None) -> bool:
+    def _handle_successful_scrape(self, item: TrackedItem, result: ScrapeResult,
+                                  state: JsonStateRepository, retries_used: int = 0,
+                                  attempt_notes: list[str] | None = None) -> bool:
         """Processes a successful product scrape, sending notifications if necessary.
 
         Args:
-            item (BaseTrackedItem): The product that was scraped.
+            item (TrackedItem): The item that was scraped.
             result: A validated product-price or listing-search result.
-            data_manager (BaseDataManager): The data manager responsible for saving the updates.
-            original_invalid_price: The raw value from the config if the target price was
-                unparseable, or None if it was valid.
-            missing_target_price (bool): True if the config entry had no target_price field.
+            state (JsonStateRepository): The framework-owned pending state repository.
             retries_used (int): The number of failed attempts preceding this success.
             attempt_notes (list | None): Per-attempt footnotes for preceding failed
                 retries, surfaced on the interactive row ahead of the success notes.
@@ -363,17 +330,13 @@ class ScrapingOrchestrator:
         notes: list[str] = []
         if retries_used > 0:
             notes.append(messages.succeeded_on_attempt(retries_used + 1, MAX_RETRIES))
-        if original_invalid_price is not None:
-            notes.append(messages.invalid_target_price(original_invalid_price, result.currency))
-        elif missing_target_price:
-            notes.append(messages.missing_target_price(result.currency))
 
         if isinstance(result, ListingResult) and not result.offers:
             # A listing check that completed fine but matched no advert: refresh
             # the check timestamp (so the row never goes stale) without touching
             # last_price — there is no price — and send no alert.
             self.ui_strategy.log_price_result(item.name, None, result.currency, item.target_price, PriceOutcome.NO_MATCH, notes=notes, attempt_notes=attempt_notes)
-            data_manager.update_item(item, last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT))
+            state.update_item(item, last_checked=self._now_fn())
             return False
 
         notification_failed = False
@@ -410,14 +373,15 @@ class ScrapingOrchestrator:
                 notes=notes, attempt_notes=attempt_notes,
             )
 
-        data_manager.update_item(
+        state.update_item(
             item,
             last_price=current_price,
-            last_checked=self._now_fn().strftime(TIMESTAMP_FORMAT)
+            last_checked=self._now_fn(),
         )
         return notification_failed
 
-    def _notify_matching_adverts(self, item: BaseTrackedItem, result: ListingResult, notes: list[str]) -> tuple[PriceOutcome, bool]:
+    def _notify_matching_adverts(self, item: TrackedItem, result: ListingResult,
+                                 notes: list[str]) -> tuple[PriceOutcome, bool]:
         """Sends one price-drop push per matching advert below the target price.
 
         The listing-type counterpart of the single-price notification branch:
@@ -426,7 +390,7 @@ class ScrapingOrchestrator:
         summarized in the row notes rather than one note per advert.
 
         Args:
-            item (BaseTrackedItem): The product row (a listing search) being processed.
+            item (TrackedItem): The listing-search item being processed.
             result (ListingResult): The listing result carrying matched offers.
             notes (list): The row's notes accumulator (appended in place).
 
@@ -435,7 +399,7 @@ class ScrapingOrchestrator:
                 NO_TARGET/OK mirroring the single-price outcome buckets.
         """
         below = [offer for offer in result.offers if offer.price < item.target_price]
-        notes.append(messages.advert_matches_note(len(result.offers), len(below)))
+        notes.append(messages.advert_matches_note(len(tuple(result.offers)), len(below)))
 
         if not below:
             return (PriceOutcome.NO_TARGET if item.target_price == 0.0 else PriceOutcome.OK), False
@@ -457,55 +421,21 @@ class ScrapingOrchestrator:
             notes.append(messages.NOTE_NOTIFIED_NONE)
         return PriceOutcome.DROP, notification_failed
 
-    @staticmethod
-    def _target_price_issues(row: dict[str, Any]) -> tuple[object | None, bool]:
-        """Return the raw invalid value and whether the target field is missing.
-
-        Args:
-            row (dict): The raw config row, used to recover the original raw value.
-
-        Returns:
-            tuple[object | None, bool]: ``(original_invalid_price, missing_target_price)``
-                where ``original_invalid_price`` is the raw unparseable value (or None
-                when the price was valid) and ``missing_target_price`` is True when the
-                field was absent entirely.
-        """
-        if "target_price" not in row:
-            return None, True
-        parsed = parse_price(row.get("target_price"))
-        return (row.get("target_price") if parsed is None or parsed < 0 else None), False
-
-    def _process_product(self, row: dict[str, Any], data_manager: BaseDataManager) -> ProductRunOutcome:
-        """Processes a single product from the configuration, attempting to scrape it.
-
-        Args:
-            row (dict): The dictionary representation of the product.
-            data_manager (BaseDataManager): The data manager.
-
-        Returns:
-            ProductRunOutcome: The row's reporting, health, notification, and abort outcome.
-        """
-        item = data_manager.parse_item(row)
-
+    def _process_product(self, item: TrackedItem,
+                         state: JsonStateRepository) -> ProductRunOutcome:
+        """Process one item that passed the strict configuration boundary."""
         if item.skip:
             self.ui_strategy.log_result("✅", item.name, "Skipped", messages.NOTE_SKIP_FIELD)
             return ProductRunOutcome(item)
-
-        if not data_manager.is_scrapable_item(row):
-            stale_note = self._check_and_repair_timestamp(item, data_manager)
-            error = InvalidURLError(messages.WARN_INVALID_URL)
-            self.ui_strategy.log_error(item.name, messages.WARN_INVALID_URL, notes=stale_note)
-            return ProductRunOutcome(item, reported_error=error)
-
-        original_invalid_price, missing_target_price = self._target_price_issues(row)
 
         self._sleep_with_jitter(MIN_DELAY_SECONDS)
         if self.interrupted:
             return ProductRunOutcome(item)
 
-        return self._run_attempts(item, data_manager, original_invalid_price, missing_target_price)
+        return self._run_attempts(item, state)
 
-    def _run_attempts(self, item: BaseTrackedItem, data_manager: BaseDataManager, original_invalid_price: object | None, missing_target_price: bool) -> ProductRunOutcome:
+    def _run_attempts(self, item: TrackedItem,
+                      state: JsonStateRepository) -> ProductRunOutcome:
         """Runs the retry loop for one product, mapping each error through its policy.
 
         On success it delegates to ``_handle_successful_scrape`` and returns no error.
@@ -513,10 +443,8 @@ class ScrapingOrchestrator:
         per-error ``ErrorPolicy`` decides refresh/abort/notify/traceback behavior.
 
         Args:
-            item (BaseTrackedItem): The product to scrape.
-            data_manager (BaseDataManager): The data manager (for stale evaluation).
-            original_invalid_price: The raw target price when it was unparseable, else None.
-            missing_target_price (bool): True when the config row had no target price.
+            item (TrackedItem): The item to scrape.
+            state (JsonStateRepository): The framework-owned pending state repository.
 
         Returns:
             ProductRunOutcome: The structured terminal or successful attempt outcome.
@@ -539,8 +467,7 @@ class ScrapingOrchestrator:
                     break
 
                 notification_failed = self._handle_successful_scrape(
-                    item, result, data_manager, original_invalid_price,
-                    missing_target_price, retries_used=attempt,
+                    item, result, state, retries_used=attempt,
                     attempt_notes=attempt_notes,
                 )
                 return ProductRunOutcome(item, notification_failed=notification_failed)
@@ -549,7 +476,7 @@ class ScrapingOrchestrator:
                 # Terminal for this item, no retry: the product is gone, unavailable,
                 # or its URL is unusable. Surfaced as a red product failure without
                 # changing process health; InvalidURLError is also aggregated.
-                stale_note = self._check_and_repair_timestamp(item, data_manager)
+                stale_note = self._check_staleness(item)
                 self.ui_strategy.log_error(
                     item.name, messages.skipping_warning(type(e).__name__),
                     notes=self._combine_notes(str(e), stale_note),
@@ -565,7 +492,8 @@ class ScrapingOrchestrator:
                 self._record_attempt(item.name, attempt, type(e).__name__, f"{type(e).__name__}: {e}", attempt_notes)
 
                 if attempt == MAX_RETRIES - 1:
-                    self._emit_failure(item, data_manager, type(e).__name__, attempt_notes, self._resolve_policy_notes(policy))
+                    self._emit_failure(item, type(e).__name__, attempt_notes,
+                                       self._resolve_policy_notes(policy))
                     if policy.save_traceback and self._current_logger:
                         save_traceback(self._current_logger, target_name=self._current_target, url=item.url, headers=scraper.get_current_headers(), log_to_console=False)
                     return ProductRunOutcome(
@@ -583,126 +511,78 @@ class ScrapingOrchestrator:
         return ProductRunOutcome(item)
 
     def run(self) -> int:
-        """Starts the scraping orchestrator loop.
-
-        Iterates through all configured targets, attempts to scrape their products,
-        and manages the overall workflow, including saving state and error reporting.
-        """
+        """Scrape the immutable target snapshots produced by preflight."""
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
         outcome = RunOutcome()
 
-        for target in self.targets_to_run:
-            failed_items: list[tuple[BaseTrackedItem, Exception]] = []
+        for load in self.target_loads:
+            target = load.target
+            failed_items: list[tuple[TrackedItem, Exception]] = []
             self._stale_items = []
-            needs_save = False
             abort_target = False
-
             if self.interrupted:
                 break
 
             self._current_target = target
-            plugin = self.registry.get_plugin(target)
-            display_name = getattr(plugin, "display_name", None)
-            target_label = display_name if isinstance(display_name, str) else target
-            # Resolve this target's settings once for the whole run; the registry caches
-            # the read and shares the very same accessor with the client and storage. The
-            # logger, the start_target settings section, and the notify-on-errors gate
-            # below are all derived from this single snapshot. The day-count is handed to
-            # the logging utility, which is kept free of any plugin-system dependency; an
-            # invalid value is reported to the user via the settings section / silent log
-            # at start_target, not by the logger itself.
-            settings = self.registry.settings_for(target)
-            self._current_logger = get_target_logger(target, self.quiet, settings.value(KEY_RETENTION))
+            plugin = load.plugin
+            settings = load.settings
+            self._current_logger = get_target_logger(
+                target, self.quiet, settings[plugin.setting(KEY_RETENTION)],
+            )
             settings_view = settings.views()
-
-            # A target whose products config failed to load (missing / bad permissions /
-            # invalid JSON) is skipped individually — the healthy scrapers still run — with
-            # the failure surfaced in this scraper's own panel/log as its 'Config' row.
-            # Mirrors the missing-dependency skip below; the whole run no longer aborts.
-            load = self.loads_by_target.get(target)
-            if load is not None and load.error is not None:
+            if load.error is not None:
                 self.ui_strategy.start_target(
-                    target_label, self._current_logger, settings_view, settings.block_warning,
+                    plugin.display_name, self._current_logger, settings_view,
+                    settings.block_warning,
                     config_view(0, (), load.error), settings.unknown_warning,
                 )
                 self.ui_strategy.complete_target()
-                outcome.products_error = True
+                if load.state_error:
+                    outcome.storage_error = True
+                else:
+                    outcome.products_error = True
                 continue
-
-            try:
-                data_manager = self.registry.get_manager(target)
-            except ValueError:
-                continue
-            except PluginDependencyError as e:
-                # This scraper's storage layer needs dependencies that are not
-                # installed. Skip just this target with an actionable message
-                # (mirroring the client-instantiation handler below); other
-                # targets and the rest of the run proceed.
-                self.ui_strategy.start_target(
-                    target_label, self._current_logger, settings_view, settings.block_warning,
-                    settings_warning=settings.unknown_warning,
-                )
-                self.ui_strategy.log_error("System", str(e))
-                self.ui_strategy.complete_target()
-                outcome.dependency_error = True
-                continue
-
-            # Storage was already read and validated during the preflight load phase;
-            # the registry returns that same cached, in-memory snapshot here.
-            # The 'Config' row (products-config health) leads this scraper's panel, above
-            # its settings section — built from the same loaded snapshot the run iterates.
             self.ui_strategy.start_target(
-                target_label, self._current_logger, settings_view, settings.block_warning,
-                config_view(data_manager.get_item_count(), data_manager.get_faulty_indices()),
+                plugin.display_name, self._current_logger, settings_view,
+                settings.block_warning,
+                config_view(load.count, load.faulty_indices),
                 settings.unknown_warning,
             )
-
-            if data_manager.get_item_count() == 0:
+            if not load.items:
                 self.ui_strategy.complete_target()
                 continue
+            assert load.state is not None
+            state = load.state
 
             try:
                 with acquire_lock(target):
-                    # Normalize the in-memory snapshot the loop iterates. The
-                    # actual rewrite happens in save() below, under this same lock,
-                    # so a concurrent instance can't race the read-merge-rewrite.
-                    data_manager.clean_storage()
-                    for row in data_manager.get_items():
+                    for item in load.items:
                         if abort_target or self.interrupted:
                             break
-
-                        # Preflight has already reported non-object JSON entries by
-                        # index. They have no safe item model to render or scrape, so
-                        # leave them untouched and continue with the usable rows.
-                        if not isinstance(row, dict):
-                            continue
-
-                        product_outcome = self._process_product(row, data_manager)
+                        product_outcome = self._process_product(item, state)
                         if product_outcome.reported_error:
-                            failed_items.append((product_outcome.item, product_outcome.reported_error))
+                            failed_items.append(
+                                (product_outcome.item, product_outcome.reported_error)
+                            )
                         abort_target = abort_target or product_outcome.abort_target
                         outcome.rate_limited = outcome.rate_limited or product_outcome.rate_limited
-                        outcome.scrape_error = outcome.scrape_error or product_outcome.affects_scrape_status
+                        outcome.scrape_error = (
+                            outcome.scrape_error or product_outcome.affects_scrape_status
+                        )
                         outcome.notification_error = (
                             outcome.notification_error or product_outcome.notification_failed
                         )
-                        needs_save = True
-
-                    # Persist under the same lock as clean_storage(): save() does a
-                    # read-merge-rewrite, so a concurrent instance must not race the
-                    # final write.
-                    if needs_save:
+                    if state.has_pending:
                         try:
-                            data_manager.save()
+                            state.save()
                         except StorageFileError as e:
-                            # The registry derives the config filename from the target.
-                            config_filename = self.registry.get_plugin(target).config_filename
-                            self.ui_strategy.log_error("Storage", messages.save_failed(config_filename), str(e))
+                            self.ui_strategy.log_error(
+                                "Storage", messages.save_failed(f"state/{target}.json"), str(e)
+                            )
                             outcome.storage_error = True
 
-                # Notifications involve network I/O and need no lock.
                 if not self.interrupted and self._stale_items and self.notifier.has_services:
                     if not self._try_notification(
                         lambda: self.notifier.notify_old_entries(self._stale_items, OLD_ENTRY_HOURS)
@@ -711,15 +591,8 @@ class ScrapingOrchestrator:
                         self.ui_strategy.log_warning(
                             "Notifications", messages.WARN_STALE_NOTIFICATION_FAILED,
                         )
-
                 if not self.interrupted and failed_items:
-                    # Per-scraper opt-out: notify_scraping_errors=false silences the
-                    # "Scraping Errors" push for this target. Stale-product and crash
-                    # alerts are unaffected (and the rate-limit exit code is unchanged),
-                    # so a sustained failure still surfaces. The resolver is the single
-                    # home for the default-ON rule: unset/unparseable values resolve to
-                    # True (notify), so only an explicit, valid `false` silences the push.
-                    if settings.value(KEY_NOTIFY) and self.notifier.has_services:
+                    if settings[plugin.setting(KEY_NOTIFY)] and self.notifier.has_services:
                         if not self._try_notification(lambda: self.notifier.notify_errors(failed_items)):
                             outcome.notification_error = True
                             self.ui_strategy.log_warning(
@@ -733,9 +606,6 @@ class ScrapingOrchestrator:
                 continue
 
             except PluginDependencyError as e:
-                # This scraper's dependencies are not installed (e.g. run manually
-                # after a single-plugin install). Skip just this target with an
-                # actionable message; other targets and the rest of the run proceed.
                 self.ui_strategy.log_error("System", str(e))
                 self.ui_strategy.complete_target()
                 outcome.dependency_error = True

@@ -1,76 +1,59 @@
-"""Preflight target loading: the run's single storage read/validation phase.
+"""The run's single target configuration and state loading phase."""
 
-Holds the :class:`TargetLoad` outcome record and :func:`load_targets`, the one place a
-target's products config is opened and validated before a run. This is orchestration-side
-work (file I/O + registry cache-warming), deliberately outside :mod:`core.ui` — the UI
-package only *renders* these outcomes (``ui.config_check.config_view`` builds the 'Config'
-row from a ``TargetLoad``'s fields). The mode-specific gating/rendering entry point named
-``preflight()`` stays in :mod:`core.ui.config_check`, since its interactive half draws the
-Configuration Check panel.
-"""
+from dataclasses import dataclass
 
-from dataclasses import dataclass, field
-
-from core.exceptions import StorageFileError, PluginDependencyError
-from core.scrapers.registry import ScraperRegistry
+from core.exceptions import ConfigFileError, StateFileError
+from core.scrapers.api import TrackedItem
+from core.scrapers.configuration import RowIssue, TargetConfigLoader
+from core.scrapers.registry import RegisteredPlugin, ScraperRegistry
+from core.scrapers.state import JsonStateRepository
+from core.settings import ResolvedSettings, SettingStatus, resolve_settings
 
 
-@dataclass
+@dataclass(frozen=True)
 class TargetLoad:
-    """Outcome of loading a single target's storage during the preflight load phase.
-
-    Attributes:
-        target (str): The target name.
-        count (int): The number of loaded items (0 when the load failed).
-        faulty_indices (list[int]): 1-based indices of items failing validation.
-        error (str | None): The failure message if the storage could not be loaded.
-
-    Note:
-        This outcome is no longer rendered on the shared 'Configuration Check' panel.
-        Both it and the ``settings`` block are surfaced per-scraper: the products-config
-        health as a 'Config' row (built via ``ui.config_check.config_view``) and the
-        settings section atop each Service Status panel (``--status``) and Scraping
-        panel (a run).
-    """
     target: str
-    count: int = 0
-    faulty_indices: list[int] = field(default_factory=list)
+    plugin: RegisteredPlugin
+    settings: ResolvedSettings
+    items: tuple[TrackedItem, ...] = ()
+    row_issues: tuple[RowIssue, ...] = ()
+    state: JsonStateRepository | None = None
     error: str | None = None
+    state_error: bool = False
+
+    @property
+    def count(self) -> int:
+        return len(self.items)
+
+    @property
+    def faulty_indices(self) -> list[int]:
+        return [issue.index for issue in self.row_issues]
 
 
-def load_targets(registry: ScraperRegistry, targets: list) -> list[TargetLoad]:
-    """Loads every target's storage exactly once — the single read/validation point.
-
-    The managers are cached in the registry, so the orchestrator later reuses the
-    very same in-memory snapshot without re-reading any file. This is the only
-    place a config file is opened for validation.
-
-    Args:
-        registry (ScraperRegistry): The registry used to resolve and cache managers.
-        targets (list): The targets to load.
-
-    Returns:
-        list[TargetLoad]: One outcome per resolvable target, in the given order
-            (targets without a registered plugin are skipped).
-    """
+def load_targets(registry: ScraperRegistry, targets: list[str]) -> list[TargetLoad]:
     results: list[TargetLoad] = []
     for target in targets:
         try:
-            manager = registry.get_manager(target)
+            plugin = registry.get_plugin(target)
         except ValueError:
             continue
-        except PluginDependencyError:
-            # The plugin's storage layer needs dependencies that are not
-            # installed. Skip it here so preflight does not crash; the
-            # orchestrator surfaces the actionable './install.sh --<plugin>'
-            # message per-target and lets the other targets proceed, matching
-            # how a missing transport (client) dependency is handled at runtime.
-            continue
+        loader = TargetConfigLoader(plugin, registry.config_dir, registry.state_dir)
         try:
-            manager.load()
-            results.append(TargetLoad(
-                target, manager.get_item_count(), manager.get_faulty_indices(),
-            ))
-        except StorageFileError as e:
-            results.append(TargetLoad(target, error=str(e)))
+            loaded = loader.load()
+            result = TargetLoad(
+                target, plugin, loaded.settings, loaded.items,
+                loaded.row_issues, loaded.state,
+            )
+        except ConfigFileError as exc:
+            settings = resolve_settings(plugin.setting_specs, None, SettingStatus.NO_CONFIG)
+            result = TargetLoad(target, plugin, settings, error=str(exc))
+        except StateFileError as exc:
+            # The config itself is still useful for presentation and client settings.
+            try:
+                settings = loader.load_settings()
+            except ConfigFileError:
+                settings = resolve_settings(plugin.setting_specs, None, SettingStatus.NO_CONFIG)
+            result = TargetLoad(target, plugin, settings, error=str(exc), state_error=True)
+        registry.prime_settings(target, result.settings)
+        results.append(result)
     return results

@@ -118,7 +118,7 @@ main() {
         # Turn the bare plugin names from the glob into install.sh's --<plugin>
         # flags. When nothing was installed this stays empty and the call below
         # collapses to a bare '--update', i.e. a full install (fresh bootstrap /
-        # legacy behavior).
+        # original bootstrap behavior).
         UPDATE_FLAGS=""
         for plugin in $INSTALLED_PLUGINS; do
             UPDATE_FLAGS="$UPDATE_FLAGS --$plugin"

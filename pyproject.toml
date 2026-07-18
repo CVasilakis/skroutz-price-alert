@@ -9,6 +9,11 @@
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+# The underscore-prefixed package is a copyable contributor template, deliberately
+# excluded from runtime discovery and therefore not part of production coverage.
+omit = ["src/core/scrapers/_example/*"]
+
 # Static-analysis configuration for Pyright / Pylance / basedpyright (basedpyright
 # reads [tool.pyright] as a fallback). extraPaths mirrors pytest's `pythonpath`
 # above so `core.*` (src/) and `ui.*` (tests/) resolve in the editor exactly as

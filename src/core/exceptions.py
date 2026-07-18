@@ -38,6 +38,14 @@ class StorageFileError(Exception):
     """Raised when there is an issue with a storage data file."""
     pass
 
+class ConfigFileError(StorageFileError):
+    """Raised when strict user configuration cannot be loaded."""
+    pass
+
+class StateFileError(StorageFileError):
+    """Raised when machine-owned state cannot be loaded or persisted."""
+    pass
+
 class UpdateCheckError(Exception):
     """Raised when there is an issue checking for script updates."""
     pass

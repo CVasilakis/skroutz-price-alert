@@ -1,22 +1,19 @@
-"""Project-wide settings and services: ``config/general.json``.
+"""Project-wide settings and reminder service.
 
-The file mirrors the per-scraper config shape - a user-authored ``settings`` object -
-plus machine-written top-level state (``last_reminder``), the same user-input/state
-split the scraper configs use (the app never writes into ``settings``)::
+``config/general.json`` is an optional, read-only settings document::
 
     {
-      "settings": { "reminder": "1 month" },
-      "last_reminder": "04-07-2026 13:00:00"
+      "settings": { "reminder": "1 month" }
     }
 
-The file is optional: every general setting degrades to its default when the file or
-key is missing, and the app creates/patches the file only when it persists state.
+Machine-owned ``last_reminder`` state is persisted separately in
+``state/general.json`` as RFC 3339 UTC. Missing configuration uses defaults.
 
 Layout:
     * :mod:`~core.general.vocab` - the tolerant reminder/weekday/time vocabulary and the
-      display/parse helpers (the analog of the per-scraper ``intervals.py``).
+      display and parse helpers.
     * :mod:`~core.general.settings` - the general :class:`SettingSpec` declarations and
-      their resolution (via the shared :mod:`core.settings` machinery, ``plugin=None``).
+      their resolution via the shared :mod:`core.settings` machinery.
       Adding a project-wide setting is exactly one spec appended to ``GENERAL_SETTING_SPECS``.
     * :mod:`~core.general.reminder` - the periodic liveness reminder: the anchor-slot grid,
       the persisted state, and the dispatch service.

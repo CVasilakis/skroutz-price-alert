@@ -25,7 +25,7 @@ def write_json_atomically(path: str, data) -> None:
     Writes ``<path>.tmp`` then ``os.replace``s it over ``path``, so a crash mid-write can
     never leave a partially written file. The single atomic-JSON writer shared by the
     storage backend and the reminder state file; it raises ``OSError`` and lets each
-    caller pick its own error policy (fatal for a scrape vs. degrade for the reminder).
+    framework state repositories and the reminder; callers choose their error policy.
     """
     temp_path = path + ".tmp"
     with open(temp_path, mode="w") as file:
@@ -35,9 +35,8 @@ def write_json_atomically(path: str, data) -> None:
 def parse_price(raw_value) -> float | None:
     """Parses a raw price value into a float.
 
-    This is the single price-normalization routine shared by config validation
-    (target prices) and every scraper (scraped prices), so a new store never needs
-    to re-implement price cleaning. Ints and floats are returned directly; strings
+    This is the scraper price-normalization routine, so a new
+    store never needs to re-implement price cleaning. Ints and floats are returned directly; strings
     may carry a currency symbol, surrounding quotes/whitespace, and either European
     (``1.299,00``) or US (``1,299.00``) grouping.
 

@@ -1,11 +1,19 @@
-"""Declarative descriptor for the Skroutz scraper."""
+"""Import-light descriptor for the Skroutz scraper."""
 
-from core.scrapers.base.plugin import ClassRef, PluginDefinition
+import re
+from urllib.parse import SplitResult
+
+from core.scrapers.api import ScraperPlugin
 
 
-PLUGIN = PluginDefinition(
+def is_product_url(url: SplitResult) -> bool:
+    return re.search(r"/s/\d+(?:/|$)", url.path) is not None
+
+
+PLUGIN = ScraperPlugin(
     display_name="Skroutz",
     domains=("skroutz.gr", "skroutz.cy", "skroutz.ro", "skroutz.bg", "skroutz.de"),
-    client=ClassRef(".client", "SkroutzClient"),
-    storage=ClassRef(".storage", "SkroutzDataManager"),
+    client=".client:SkroutzClient",
+    accepts_url=is_product_url,
+    default_interval="1h",
 )

@@ -61,6 +61,34 @@ class TestMainWiring(unittest.TestCase):
         ReminderService.return_value.run_once.assert_not_called()
         Orchestrator.assert_not_called()
 
+    def test_interactive_mode_installs_handler_and_uses_interactive_strategy(self):
+        with mock.patch.object(sys, "argv", ["main", "--skroutz"]), \
+             mock.patch("core.main.setup_global_logging"), \
+             mock.patch("core.main.ScraperRegistry") as Registry, \
+             mock.patch("core.main.load_targets", return_value=[]) as load_targets, \
+             mock.patch("core.main.preflight", return_value=None) as preflight, \
+             mock.patch("core.main.install_interrupt_handler") as install_handler, \
+             mock.patch("core.main.Console"), \
+             mock.patch("core.main.signal.signal"), \
+             mock.patch("core.main.InteractiveExecutionStrategy") as strategy_type, \
+             mock.patch("core.main.Notifier"), \
+             mock.patch("core.main.ReminderService"), \
+             mock.patch("core.main.ScrapingOrchestrator") as Orchestrator:
+            plugin = mock.MagicMock(display_name="Skroutz")
+            Registry.registered_targets.return_value = ["skroutz", "insomnia"]
+            Registry.get_plugin.return_value = plugin
+            Orchestrator.return_value.run.return_value = 0
+            with self.assertRaises(SystemExit) as caught:
+                core.main.main()
+
+        self.assertEqual(caught.exception.code, 0)
+        load_targets.assert_called_once_with(Registry.return_value, ["skroutz"])
+        preflight.assert_called_once_with(mock.ANY, ["skroutz"], quiet=False)
+        install_handler.assert_called_once()
+        Orchestrator.assert_called_once_with(
+            [], Registry.return_value, mock.ANY, False, strategy_type.return_value
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

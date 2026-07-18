@@ -1,46 +1,65 @@
-"""Declarative descriptor and custom settings for the Insomnia scraper."""
+"""Import-light descriptor, item fields, and setting for Insomnia listings."""
 
 import math
+from urllib.parse import SplitResult
 
-from core.scrapers.base.plugin import ClassRef, PluginDefinition
-from core.scrapers.base.settings import SettingSpec
+from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec
 from core.settings import unsupported_value_message
 
-SETTING_MIN_ADVERT_PRICE = "min_advert_price"
+
+def decode_string_tuple(raw: object) -> tuple[str, ...]:
+    if not isinstance(raw, (list, tuple)):
+        raise ValueError("must be an array of strings")
+    if any(not isinstance(value, str) for value in raw):
+        raise ValueError("must contain only strings")
+    return tuple(value.strip() for value in raw if value.strip())
 
 
-def _normalize_min_advert_price(raw: object) -> float | int | None:
-    if isinstance(raw, bool):
-        return None
-    if isinstance(raw, (int, float)):
-        try:
-            value = float(raw)
-        except OverflowError:
-            return None
-        return raw if math.isfinite(value) and raw >= 0 else None
-    if isinstance(raw, str):
-        try:
-            value = float(raw.replace("€", "").strip())
-        except ValueError:
-            return None
-        return value if math.isfinite(value) and value >= 0 else None
-    return None
-
-
-SPEC_MIN_ADVERT_PRICE = SettingSpec(
-    key=SETTING_MIN_ADVERT_PRICE,
-    label="Min Advert Price",
-    normalize=_normalize_min_advert_price,
-    display=lambda value: f"{value} €" if value else "disabled",
-    warning=unsupported_value_message(SETTING_MIN_ADVERT_PRICE, "disabled"),
-    default=0,
+TITLE_INCLUDE = ItemField[tuple[str, ...]](
+    key="title_include", decode=decode_string_tuple, default=(),
+)
+TITLE_EXCLUDE = ItemField[tuple[str, ...]](
+    key="title_exclude", decode=decode_string_tuple, default=(),
 )
 
 
-PLUGIN = PluginDefinition(
+def decode_min_advert_price(raw: object) -> float:
+    if isinstance(raw, bool):
+        raise ValueError("must be a non-negative number")
+    if isinstance(raw, str):
+        try:
+            value = float(raw.replace("€", "").strip())
+        except ValueError as exc:
+            raise ValueError("must be a non-negative number") from exc
+    elif isinstance(raw, (int, float)):
+        value = float(raw)
+    else:
+        raise ValueError("must be a non-negative number")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("must be a finite non-negative number")
+    return value
+
+
+MIN_ADVERT_PRICE = SettingSpec[float](
+    key="min_advert_price",
+    label="Min Advert Price",
+    decode=decode_min_advert_price,
+    display=lambda value: f"{value:g} €" if value else "disabled",
+    warning=unsupported_value_message("min_advert_price", "disabled"),
+    default=0.0,
+)
+
+
+def is_classifieds_url(url: SplitResult) -> bool:
+    return url.path.startswith("/classifieds/")
+
+
+PLUGIN = ScraperPlugin(
     display_name="Insomnia",
     domains=("insomnia.gr",),
-    client=ClassRef(".client", "InsomniaClient"),
-    storage=ClassRef(".storage", "InsomniaDataManager"),
-    setting_specs=(SPEC_MIN_ADVERT_PRICE,),
+    client=".client:InsomniaClient",
+    accepts_url=is_classifieds_url,
+    item_fields=(TITLE_INCLUDE, TITLE_EXCLUDE),
+    settings=(MIN_ADVERT_PRICE,),
+    default_interval="1h",
 )

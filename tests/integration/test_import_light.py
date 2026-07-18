@@ -3,7 +3,7 @@
 Plugin discovery imports every plugin's descriptor (``plugin.py`` + package
 ``__init__``) merely to enumerate scrapers (argparse flags, ``list_plugins``,
 ``--status``). That path must NOT pull in any transport/parsing library - those belong
-behind the registry's lazy ``ClassRef`` imports. This test runs
+behind the registry's lazy relative client binding. This test runs
 discovery in a fresh subprocess and enforces the contract two ways:
 
 1. A generic check: after importing the framework contracts (the registry and the base
@@ -30,11 +30,23 @@ import sys
 
 # Framework baseline: the registry and the base contracts a descriptor may legitimately
 # import (plus whatever *they* pull in, e.g. framework deps via core.utils).
-import core.scrapers.base.plugin  # noqa: F401
+import core.scrapers.api  # noqa: F401
 from core.scrapers.registry import ScraperRegistry
 baseline = set(sys.modules)
 
 ScraperRegistry.registered_targets()  # triggers full plugin discovery
+
+if "_example" in ScraperRegistry.registered_targets():
+    sys.stderr.write("underscore-prefixed example was registered during discovery")
+    sys.exit(1)
+example_modules = sorted(
+    name for name in sys.modules
+    if name == "core.scrapers._example" or name.startswith("core.scrapers._example.")
+)
+if example_modules:
+    sys.stderr.write("underscore-prefixed example was imported during discovery: "
+                     + ", ".join(example_modules))
+    sys.exit(1)
 
 heavy = [m for m in ("tls_client", "selenium", "lxml") if m in sys.modules]
 if heavy:
@@ -51,7 +63,7 @@ third_party = sorted({
 if third_party:
     sys.stderr.write(
         "third-party modules imported during discovery (a plugin descriptor imports "
-        "them at module top instead of behind lazy ClassRef bindings): "
+        "them at module top instead of behind the lazy client binding): "
         + ", ".join(third_party)
     )
     sys.exit(1)

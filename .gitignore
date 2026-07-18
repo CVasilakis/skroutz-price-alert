@@ -207,10 +207,12 @@ marimo/_lsp/
 __marimo__/
 
 # Project specific
+state/
 *.lock
 *.tmp
 *.json
 !src/core/scrapers/*/config.example.json
+!src/core/general/config.example.json
 *.pyc
 *.txt
 !requirements*.txt

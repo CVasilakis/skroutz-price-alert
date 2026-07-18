@@ -10,13 +10,17 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from core.preflight import TargetLoad
 from core.ui.config_check import config_view, ConfigView
-from core.scrapers.base.settings import (
-    ResolvedSetting, ResolvedSettings, SettingView, setting_view,
-    SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY,
-    STATUS_OK, STATUS_DEFAULT, STATUS_INVALID,
+from core.scrapers.settings import framework_setting_specs
+from core.settings import (
+    ResolvedSetting, ResolvedSettings, SettingStatus, SettingView, setting_view,
+    resolve_settings,
 )
+
+SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY = framework_setting_specs("1h")
+STATUS_OK = SettingStatus.OK
+STATUS_DEFAULT = SettingStatus.DEFAULT
+STATUS_INVALID = SettingStatus.INVALID
 
 # A throwaway currency symbol used across price scenarios (matches the scraper default).
 CURRENCY = "€"
@@ -41,21 +45,21 @@ def stub_logger() -> logging.Logger:
 # A view is built from the real spec + a synthetic ResolvedSetting, so its label, display
 # formatting and (for invalid) warning footnote are exactly what production produces.
 
-def _view(spec, value: Any, status: str, raw: Any = None) -> SettingView:
+def _view(spec, value: Any, status: SettingStatus, raw: Any = None) -> SettingView:
     return setting_view(spec, ResolvedSetting(value, status, raw))
 
 
 # ``raw`` is the user's raw config value (any type, or None when unset), matching
 # ``ResolvedSetting.raw: Any`` — annotated Any so an unset (None) raw is accepted.
-def interval_view(value: str = "1h", status: str = STATUS_OK, raw: Any = "1h") -> SettingView:
+def interval_view(value: str = "1h", status: SettingStatus = STATUS_OK, raw: Any = "1h") -> SettingView:
     return _view(SPEC_INTERVAL, value, status, raw)
 
 
-def retention_view(value: int = 7, status: str = STATUS_OK, raw: Any = 7) -> SettingView:
+def retention_view(value: int = 7, status: SettingStatus = STATUS_OK, raw: Any = 7) -> SettingView:
     return _view(SPEC_RETENTION, value, status, raw)
 
 
-def notify_view(value: bool = True, status: str = STATUS_OK, raw: Any = True) -> SettingView:
+def notify_view(value: bool = True, status: SettingStatus = STATUS_OK, raw: Any = True) -> SettingView:
     return _view(SPEC_NOTIFY, value, status, raw)
 
 
@@ -92,8 +96,7 @@ def malformed_block_warning() -> str:
     Sourced from the same ``_block_warning`` helper ``resolve_all`` uses, so the RUN/STATUS
     scenarios' footnote text can never drift from what users see.
     """
-    from core.settings.resolve import _block_warning
-    warning = _block_warning("not-an-object", None)
+    warning = resolve_settings((SPEC_INTERVAL,), "not-an-object").block_warning
     assert warning is not None  # a non-dict, cleanly-read block always warns
     return warning
 
@@ -114,7 +117,7 @@ def views_malformed_block() -> list[SettingView]:
 
 # --- ResolvedSettings (the STATUS settings section) ---------------------------------
 
-_Triple = tuple[object, str, object]
+_Triple = tuple[object, SettingStatus, object]
 
 
 def resolved_settings(
@@ -156,15 +159,6 @@ def service_props(running: bool = False, result: str = "success", exec_status: s
         "ExecMainStatus": exec_status,
         "ExecMainStartTimestamp": exec_start,
     }
-
-
-# --- TargetLoad (the CONFIG per-target rows) ----------------------------------------
-
-def target_load(target: str = "skroutz", count: int = 5,
-                faulty_indices: Sequence[int] = (), error: str | None = None) -> TargetLoad:
-    """A ``config_check.TargetLoad`` outcome (the preflight load phase)."""
-    return TargetLoad(target=target, count=count,
-                      faulty_indices=list(faulty_indices), error=error)
 
 
 # --- ConfigView (the CONFIG row atop Service Status / Scraping panels) --------------

@@ -1,6 +1,6 @@
 """The general-settings vocabulary: reminder cadence, weekday and time-of-day.
 
-The analog of :mod:`core.scrapers.base.settings.intervals` for the project-wide settings -
+The analog of :mod:`core.scrapers.intervals` for the project-wide settings -
 the tolerant normalizers that fold the many ways a user might spell a value onto a
 canonical form, plus the display/parse helpers the specs and the reminder scheduler read.
 Kept separate from :mod:`core.general.settings` (which wires these into ``SettingSpec``

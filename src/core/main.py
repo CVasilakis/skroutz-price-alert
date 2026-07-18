@@ -51,11 +51,10 @@ def main() -> None:
     if not targets_to_run:
         targets_to_run = registered_scrapers
 
-    # Single load/validation phase: read each config once into its cached manager.
+    # Single load/validation phase: read each config once into its immutable target load.
     # The orchestrator later reuses these same in-memory snapshots, and the per-target
     # outcomes drive each scraper's 'Config' row and its per-target broken-config skip.
     load_results = load_targets(registry, targets_to_run)
-    loads_by_target = {tl.target: tl for tl in load_results}
 
     if not args.quiet:
         install_interrupt_handler()
@@ -91,7 +90,9 @@ def main() -> None:
 
     try:
         try:
-            orchestrator = ScrapingOrchestrator(targets_to_run, registry, notifier, CONFIG_DIR, args.quiet, ui_strategy, loads_by_target)
+            orchestrator = ScrapingOrchestrator(
+                load_results, registry, notifier, args.quiet, ui_strategy,
+            )
             exit_code = orchestrator.run()
         finally:
             registry.close_all()

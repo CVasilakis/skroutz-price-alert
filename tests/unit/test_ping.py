@@ -6,8 +6,12 @@ the ``***`` fallback) and ``build_ping_panel``'s border color + the alignment of
 delivery results with the valid URLs they belong to.
 """
 
+import os
 import unittest
+from unittest import mock
 
+import core.ping
+from core.exceptions import EnvFileError
 from core.ping import build_ping_panel, obfuscate_invalid_url
 
 
@@ -71,6 +75,59 @@ class TestBuildPingPanel(unittest.TestCase):
             test_results=[("json://first/...", True), ("json://second/...", False)],
             env_error_msg="")
         self.assertEqual(panel.icons, ["✅", "❗", "🛑"])
+
+
+class TestPingMain(unittest.TestCase):
+    def test_main_validates_only_nonblank_urls_and_renders_results(self):
+        console = mock.MagicMock()
+        status_context = console.status.return_value
+        status_context.__enter__.return_value = None
+        status_context.__exit__.return_value = None
+
+        with mock.patch.dict(os.environ, {
+            "NOTIFICATION_URLS": " json://first , broken , , json://second "
+        }, clear=False), \
+             mock.patch("core.ping.install_interrupt_handler"), \
+             mock.patch("core.ping.setup_global_logging"), \
+             mock.patch("core.ping.check_env_file"), \
+             mock.patch("core.ping.is_valid_apprise_url",
+                        side_effect=lambda value: value.startswith("json://")), \
+             mock.patch("core.ping.Notifier") as notifier_type, \
+             mock.patch("core.ping.Console", return_value=console), \
+             mock.patch("core.ping.signal.signal"), \
+             mock.patch("core.ping.build_ping_panel") as build_panel:
+            notifier_type.return_value.notify_test.return_value = [
+                ("first", True), ("second", False)
+            ]
+            panel = mock.MagicMock()
+            build_panel.return_value = (panel, "yellow")
+            core.ping.main()
+
+        notifier_type.assert_called_once_with("json://first,json://second")
+        build_panel.assert_called_once_with(
+            [("json://first", True), ("broken", False), ("json://second", True)],
+            [("first", True), ("second", False)],
+            "",
+        )
+        panel.render.assert_called_once_with(console, panel_color="yellow")
+
+    def test_main_reports_env_error_without_constructing_notifier(self):
+        console = mock.MagicMock()
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("core.ping.install_interrupt_handler"), \
+             mock.patch("core.ping.setup_global_logging"), \
+             mock.patch("core.ping.check_env_file",
+                        side_effect=EnvFileError("missing env")), \
+             mock.patch("core.ping.Notifier") as notifier_type, \
+             mock.patch("core.ping.Console", return_value=console), \
+             mock.patch("core.ping.signal.signal"), \
+             mock.patch("core.ping.build_ping_panel") as build_panel:
+            panel = mock.MagicMock()
+            build_panel.return_value = (panel, "red")
+            core.ping.main()
+
+        notifier_type.assert_not_called()
+        build_panel.assert_called_once_with([], [], "missing env")
 
 
 if __name__ == "__main__":

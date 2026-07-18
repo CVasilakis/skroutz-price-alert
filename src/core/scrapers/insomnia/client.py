@@ -4,11 +4,10 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 
 from core.scrapers.base.http_client import HttpScraperClient
-from core.scrapers.base.model import BaseTrackedItem, ListingResult, OfferMatch
+from core.scrapers.api import TrackedItem, ListingResult, Offer
 from core.exceptions import ScraperParseError, InvalidURLError
 from core.utils import parse_price
-from core.scrapers.insomnia.model import AdvertSearch
-from core.scrapers.insomnia.plugin import SETTING_MIN_ADVERT_PRICE
+from core.scrapers.insomnia.plugin import MIN_ADVERT_PRICE, TITLE_EXCLUDE, TITLE_INCLUDE
 
 # Headers impersonating a real browser fetching an HTML page. The scraper
 # rotates through these profiles randomly on retries.
@@ -57,7 +56,7 @@ class InsomniaClient(HttpScraperClient):
 
     One scrape fetches a listing page, walks its advert cards, and returns every
     advert that passes the tracked row's title filters and the
-    ``min_advert_price`` floor — each one an :class:`OfferMatch` candidate for
+    ``min_advert_price`` floor — each one an :class:`Offer` candidate for
     its own price-drop alert. Inherits the
     TLS session, header-pool rotation, and HTTP-status-to-exception mapping
     from :class:`HttpScraperClient`.
@@ -65,11 +64,11 @@ class InsomniaClient(HttpScraperClient):
 
     HEADERS_POOL = _HEADERS_POOL
 
-    def scrape(self, item: BaseTrackedItem) -> ListingResult:
+    def scrape(self, item: TrackedItem) -> ListingResult:
         """Scrapes an insomnia classifieds listing for adverts matching the search.
 
         Args:
-            item (BaseTrackedItem): The parsed listing-search row, including filters.
+            item (TrackedItem): The decoded listing-search item, including filters.
 
         Returns:
             ListingResult: Every matching offer, cheapest first; an empty tuple
@@ -82,11 +81,9 @@ class InsomniaClient(HttpScraperClient):
             ServerError: For server-side HTTP errors (5xx).
             ScraperParseError: If the page does not look like a classifieds listing.
         """
-        if not isinstance(item, AdvertSearch):
-            raise InvalidURLError("InsomniaClient requires an AdvertSearch item")
         listing_url = item.url
-        include = item.title_include
-        exclude = item.title_exclude
+        include = item[TITLE_INCLUDE]
+        exclude = item[TITLE_EXCLUDE]
 
         if not urlparse(listing_url).path.startswith("/classifieds/"):
             raise InvalidURLError(f"Not an insomnia classifieds URL: {listing_url}")
@@ -101,7 +98,7 @@ class InsomniaClient(HttpScraperClient):
         matches.sort(key=lambda match: match.price)
         return ListingResult(currency=_CURRENCY, offers=tuple(matches))
 
-    def _parse_adverts(self, html: str, listing_url: str, include: list[str], exclude: list[str]) -> list[OfferMatch]:
+    def _parse_adverts(self, html: str, listing_url: str, include: tuple[str, ...], exclude: tuple[str, ...]) -> list[Offer]:
         """Extracts the adverts matching the search from a listing page.
 
         Args:
@@ -111,7 +108,7 @@ class InsomniaClient(HttpScraperClient):
             exclude (list[str]): Title terms that must all be absent.
 
         Returns:
-            list[OfferMatch]: The matching offers (unordered).
+            list[Offer]: The matching offers (unordered).
 
         Raises:
             ScraperParseError: If no advert cards are present at all — a markup
@@ -125,7 +122,7 @@ class InsomniaClient(HttpScraperClient):
 
         # The minimum-price floor filtering out bait adverts (an iPhone for 1€).
         # Resolved/validated by the settings engine; 0 disables the floor.
-        floor = self.settings.get(SETTING_MIN_ADVERT_PRICE, 0) if self.settings is not None else 0
+        floor = self.settings[MIN_ADVERT_PRICE]
 
         matches = []
         for advert in adverts:
@@ -166,6 +163,6 @@ class InsomniaClient(HttpScraperClient):
             if any(term.casefold() in folded for term in exclude):
                 continue
 
-            matches.append(OfferMatch(title=title, price=price,
-                                      url=urljoin(listing_url, str(title_tag.get("href", "")))))
+            matches.append(Offer(title=title, price=price,
+                                 url=urljoin(listing_url, str(title_tag.get("href", "")))))
         return matches

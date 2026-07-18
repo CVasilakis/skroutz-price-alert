@@ -5,14 +5,14 @@ import tls_client
 from tls_client.response import Response
 
 from core import messages
-from core.scrapers.base.client import BaseScraperClient
+from core.scrapers.api import ScraperClient
 from core.exceptions import ScraperError, RateLimitError, ServerError, ProductNotFoundError
 
 if TYPE_CHECKING:
-    from core.scrapers.base.settings import ResolvedSettings
+    from core.settings import ResolvedSettings
 
 
-class HttpScraperClient(BaseScraperClient):
+class HttpScraperClient(ScraperClient):
     """Base client for HTTP-based scrapers (JSON APIs and HTML pages alike).
 
     Owns the transport boilerplate every HTTP scraper would otherwise copy:
@@ -46,7 +46,7 @@ class HttpScraperClient(BaseScraperClient):
     NOT_FOUND_CODES: tuple = (404, 410)
     RATE_LIMIT_CODES: tuple = (401, 403, 429)
 
-    def __init__(self, settings: "ResolvedSettings | None" = None) -> None:
+    def __init__(self, settings: "ResolvedSettings") -> None:
         """Picks a random header profile and opens the initial TLS session.
 
         Args:

@@ -31,23 +31,21 @@ Delivery safety:
     never marks an undelivered reminder as sent.
 
 State:
-    ``last_reminder`` is a machine-written top-level field of ``config/general.json``,
-    a sibling of the user-authored ``settings`` block (which is never written back) -
-    the same split the scraper configs use for the products' ``last_checked``.
+    ``last_reminder`` is a machine-written field of ``state/general.json``. The
+    user-authored, settings-only ``config/general.json`` is never written at runtime.
 """
 
 import datetime
 import json
 import logging
 import os
-import shutil
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from core.constants import TIMESTAMP_FORMAT
 from core.exceptions import LockAcquisitionError
 from core.general.settings import (
-    KEY_REMINDER, KEY_REMINDER_DAY, KEY_REMINDER_TIME, GENERAL_SETTING_SPECS,
+    GENERAL_SETTING_SPECS, SPEC_REMINDER, SPEC_REMINDER_DAY, SPEC_REMINDER_TIME,
     general_config_path, resolve_general_settings,
 )
 from core.general.vocab import (
@@ -56,7 +54,8 @@ from core.general.vocab import (
 )
 from core.locks import acquire_lock
 from core.logger import get_target_logger, save_traceback
-from core.settings import STATUS_INVALID
+from core.settings import SettingStatus
+from core.scrapers.state import format_utc, general_state_path, parse_utc
 from core.utils import check_for_updates, write_json_atomically
 
 if TYPE_CHECKING:
@@ -71,8 +70,7 @@ REMINDER_TARGET = "reminder"
 # check, not a scrape - rather than the per-scraper "<target>_scraper_running.lock".
 REMINDER_LOCK_FILENAME = "reminder_check.lock"
 
-# The machine-written top-level field of general.json holding the grid slot of the last
-# delivered reminder (or the anchor written on first run), in TIMESTAMP_FORMAT.
+# Machine-owned state key holding the last delivered grid slot as RFC 3339 UTC.
 LAST_REMINDER_FIELD = "last_reminder"
 
 # The default grid anchor, *derived* from the settings defaults so the two can never
@@ -156,6 +154,7 @@ class ReminderService:
         """
         self.config_dir = config_dir
         self.config_path = general_config_path(config_dir)
+        self.state_path = general_state_path(config_dir)
         self.notifier = notifier
         self._now_fn = now_fn
         self._update_check_fn = update_check_fn
@@ -205,10 +204,10 @@ class ReminderService:
         if resolved.unknown_warning:
             self._log.warning(f"🟡 config/general.json: {resolved.unknown_warning}.")
         for spec in GENERAL_SETTING_SPECS:
-            if resolved.status(spec.key) == STATUS_INVALID:
+            if resolved.status(spec) is SettingStatus.INVALID:
                 self._log.warning(f"🟡 config/general.json: {spec.warning}")
 
-        canonical = resolved.value(KEY_REMINDER)
+        canonical = resolved[SPEC_REMINDER]
         weeks = weeks_for(canonical)
         if weeks is None:  # "off": no lock, no state, no network
             return
@@ -220,8 +219,8 @@ class ReminderService:
             self._log.info("Reminder skipped: no notification services configured.")
             return
 
-        weekday = weekday_index(resolved.value(KEY_REMINDER_DAY))
-        hour, minute = time_parts(resolved.value(KEY_REMINDER_TIME))
+        weekday = weekday_index(resolved[SPEC_REMINDER_DAY])
+        hour, minute = time_parts(resolved[SPEC_REMINDER_TIME])
 
         # Cheap unlocked pre-check: the overwhelmingly common outcome is "not due yet".
         # Only pay for the lock (and creating logs/reminder/) when a send is plausible;
@@ -256,10 +255,9 @@ class ReminderService:
 
         if problem == "unreadable":
             # An OSError reading an existing file (permissions, transient I/O): we can
-            # neither trust nor safely rewrite it (that would clobber the user's settings
-            # with a state-only file), so skip this run and retry on the next.
+            # neither trust nor safely rewrite it, so skip and retry on the next run.
             self._log.warning(
-                "🟡 config/general.json is unreadable; skipping this reminder check (will retry next run)."
+                "🟡 state/general.json is unreadable; skipping this reminder check (will retry next run)."
             )
             return
 
@@ -355,7 +353,7 @@ class ReminderService:
             return None
 
     def _read_state(self) -> tuple[dict | None, datetime.datetime | None, str | None]:
-        """Reads ``general.json`` once, returning ``(data, last_slot, problem)``.
+        """Read ``state/general.json`` once as ``(data, last_slot, problem)``.
 
         This is the single reader for the reminder state, so the due-check and the
         write-back share one file read under the lock.
@@ -363,60 +361,52 @@ class ReminderService:
         Returns:
             tuple: ``data`` is the parsed dict (mutated and rewritten by
                 :meth:`_persist_slot`), ``{}`` when the file is absent, or ``None`` when
-                it is unreadable/corrupt (the writer rebuilds around it). ``last_slot`` is
+                it is unreadable/corrupt (the writer refuses to overwrite it). ``last_slot`` is
                 the parsed ``last_reminder`` grid slot, or ``None``. ``problem`` is
                 ``None``; ``"unreadable"`` (an ``OSError`` - do not rewrite); or
-                ``"corrupt"`` (an unparseable file or timestamp - re-anchor, backing up a
-                corrupt file).
+                ``"corrupt"`` (an unparseable file or timestamp).
         """
-        if not os.path.isfile(self.config_path):
+        if not os.path.isfile(self.state_path):
             return {}, None, None
         try:
-            with open(self.config_path, "r") as file:
+            with open(self.state_path, "r") as file:
                 loaded = json.load(file)
         except OSError:
             return None, None, "unreadable"
         except (json.JSONDecodeError, UnicodeError):
             return None, None, "corrupt"
 
-        if not isinstance(loaded, dict):
+        if (not isinstance(loaded, dict) or loaded.get("schema_version") != 1
+                or set(loaded) - {"schema_version", LAST_REMINDER_FIELD}):
             return None, None, "corrupt"
         raw = loaded.get(LAST_REMINDER_FIELD)
         if raw is None:
             return loaded, None, None
         try:
-            return loaded, datetime.datetime.strptime(str(raw), TIMESTAMP_FORMAT), None
+            local_naive = parse_utc(raw).astimezone().replace(tzinfo=None)
+            return loaded, local_naive, None
         except (ValueError, TypeError):
             return loaded, None, "corrupt"
 
     def _persist_slot(self, data: dict | None, slot: datetime.datetime) -> bool:
         """Writes ``slot`` into the top-level state field and rewrites the file atomically.
 
-        ``data`` is the already-parsed file contents from :meth:`_read_state` (mutated in
-        place and rewritten, so the ``settings`` block and any unknown keys pass through
-        untouched). ``None`` means the file was corrupt or not an object: it is backed up
-        to ``general.json.corrupt`` and rebuilt around the state field (the storage
-        backend's self-heal idiom). A write failure logs and reports False; it never
-        raises into the run.
+        ``data`` is the already-parsed state document from :meth:`_read_state`, mutated
+        in place and atomically rewritten. ``None`` means the existing state is corrupt;
+        it is preserved unchanged. A write failure logs and reports False.
 
         Returns:
             bool: True when the state is on disk.
         """
         if data is None:
-            data = {}
-            if os.path.isfile(self.config_path):
-                try:
-                    shutil.copy2(self.config_path, self.config_path + ".corrupt")
-                    self._log.warning(
-                        "🟡 config/general.json is corrupted; backed it up to general.json.corrupt."
-                    )
-                except OSError:
-                    pass  # best-effort backup; the rewrite below still repairs the file
-
-        data[LAST_REMINDER_FIELD] = slot.strftime(TIMESTAMP_FORMAT)
+            self._log.warning("🟡 state/general.json is malformed; refusing to overwrite it.")
+            return False
+        data["schema_version"] = 1
+        data[LAST_REMINDER_FIELD] = format_utc(slot.astimezone())
         try:
-            write_json_atomically(self.config_path, data)
+            os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
+            write_json_atomically(self.state_path, data)
         except OSError as e:
-            self._log.warning(f"🟡 Could not update config/general.json: {e}")
+            self._log.warning(f"🟡 Could not update state/general.json: {e}")
             return False
         return True

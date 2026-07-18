@@ -12,7 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.constants import CONFIG_DIR
 from core.exit_status import classify_service_state
 from core.scrapers.registry import ScraperRegistry
-from core.scrapers.base.settings import STATUS_OK, STATUS_DEFAULT, KEY_INTERVAL
+from core.scrapers.settings import KEY_INTERVAL
+from core.settings import SettingStatus
 from core.logger import setup_global_logging
 from core.ui.panel import StatusPanelBuilder
 from core.preflight import load_targets
@@ -147,7 +148,8 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
                         config_filename: str, expected_oncalendar: str,
                         active_oncalendar: str,
                         config: ConfigView | None = None,
-                        display_name: str | None = None) -> StatusPanelBuilder:
+                        display_name: str | None = None,
+                        interval_spec=None) -> StatusPanelBuilder:
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
     Pure presentation given the systemd property dicts, the resolved settings, the
@@ -226,8 +228,8 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     # effective schedule the configured execution_interval resolves to. An invalid/missing
     # interval is owned by the Execution Interval row above, so the check is gated to a
     # usable (ok/default) interval.
-    interval = resolved.resolved(KEY_INTERVAL)
-    if interval.status in (STATUS_OK, STATUS_DEFAULT):
+    interval = resolved.resolved(interval_spec) if interval_spec is not None else None
+    if interval is not None and interval.status in (SettingStatus.OK, SettingStatus.DEFAULT):
         if active_oncalendar and active_oncalendar != expected_oncalendar:
             next_exec += service_panel.add_note_ref(
                 "Timer differs from config. Run `./scripts/schedule.sh`."
@@ -287,10 +289,11 @@ def main():
         # the effective schedule the configured execution_interval resolves to. Computed
         # only for a usable (ok/default) interval — an invalid/missing one is owned by the
         # Execution Interval settings row — preserving the original lazy timer-file read.
-        interval = resolved.resolved(KEY_INTERVAL)
+        interval_spec = plugin.setting(KEY_INTERVAL)
+        interval = resolved.resolved(interval_spec)
         expected_oncalendar = ""
         active_oncalendar = ""
-        if interval.status in (STATUS_OK, STATUS_DEFAULT):
+        if interval.status in (SettingStatus.OK, SettingStatus.DEFAULT):
             expected_oncalendar = ScraperRegistry.expected_on_calendar(
                 plugin, interval
             )
@@ -303,6 +306,7 @@ def main():
             config_filename, expected_oncalendar, active_oncalendar,
             config_view(load.count, load.faulty_indices, load.error) if load else None,
             plugin.display_name,
+            interval_spec,
         )
 
         console.print()

@@ -6,8 +6,9 @@ import argparse
 import sys
 
 from core.constants import CONFIG_DIR
-from core.scrapers.base.settings import SUPPORTED_INTERVALS
+from core.scrapers.settings import SUPPORTED_INTERVALS
 from core.scrapers.registry import ScraperRegistry
+from core.scrapers.check import check_plugin
 
 
 def _plugins(view: str) -> None:
@@ -29,7 +30,7 @@ def _plugins(view: str) -> None:
 def _schedules(view: str, config_dir: str) -> None:
     for target in ScraperRegistry.registered_targets():
         schedule = ScraperRegistry.resolve_schedule(target, config_dir)
-        value = schedule.on_calendar if view == "calendar" else schedule.status
+        value = schedule.on_calendar if view == "calendar" else schedule.status.value
         print(f"{target}\t{value}")
 
 
@@ -58,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     schedules.add_argument("--config-dir", default=CONFIG_DIR)
     subparsers.add_parser("intervals")
     subparsers.add_parser("diagnose")
+    plugin_check = subparsers.add_parser("plugin-check")
+    plugin_check.add_argument("target")
 
     args = parser.parse_args(argv)
     if args.command == "plugins":
@@ -66,8 +69,16 @@ def main(argv: list[str] | None = None) -> int:
         _schedules(args.view, args.config_dir)
     elif args.command == "intervals":
         print(", ".join(SUPPORTED_INTERVALS))
-    else:
+    elif args.command == "diagnose":
         return _diagnose()
+    else:
+        try:
+            checks = check_plugin(args.target)
+        except (RuntimeError, ValueError) as exc:
+            print(f"Plugin check failed: {exc}", file=sys.stderr)
+            return 1
+        for label in checks:
+            print(f"ok\t{label}")
     return 0
 
 

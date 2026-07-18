@@ -15,7 +15,7 @@ deterministically (spinners, sleeps, interrupts, stale timestamps) stay in
 
 from core.exceptions import ProductNotFoundError, ScraperParseError, ServerError
 from core import messages
-from core.scrapers.base.model import PriceResult
+from core.scrapers.api import PriceResult
 
 from ui.catalog._base import scenario, Surface
 from ui.harness.drivers import drive_orchestrated_run

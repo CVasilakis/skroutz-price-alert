@@ -100,7 +100,7 @@ def get_target_logger(
 
     if quiet:
         # Log line timestamps are emitted in UTC (with an explicit marker) so they
-        # match the UTC last_checked written to config and are immune to host
+        # match the UTC last_checked written to state and are immune to host
         # timezone/DST shifts. utc=True keeps the daily rollover boundary aligned
         # with those UTC timestamps.
         log_format = '[%(asctime)s UTC] %(message)s'

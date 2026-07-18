@@ -39,7 +39,7 @@ from core.general.settings import (
 )
 from core.logger import setup_global_logging
 from core.ui.panel import StatusPanelBuilder
-from core.scrapers.base.settings import ResolvedSettings, resolve_spec
+from core.settings import ResolvedSettings, resolve_spec
 
 from ui.catalog._base import BuildResult
 # NB: ``ui.harness.rendering`` is imported lazily inside drive_startup, not here:
@@ -122,15 +122,14 @@ def drive_orchestrated_run(products: list[dict],
     """
     from core import orchestrator as orchestrator_module
     from core.orchestrator import ScrapingOrchestrator
-    from core.scrapers.base.client import BaseScraperClient
-    from core.scrapers.base.storage import JsonProductDataManager
+    from core.scrapers.api import ScraperClient
     from core.scrapers.registry import ScraperRegistry
     from core.preflight import load_targets
     from support import fake_plugin, mock_notifier, registry_sandbox
 
     scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
 
-    class _ScriptedClient(BaseScraperClient):
+    class _ScriptedClient(ScraperClient):
         def scrape(self, item):
             script = scripts[item.url]
             outcome = script.pop(0) if len(script) > 1 else script[0]
@@ -138,32 +137,33 @@ def drive_orchestrated_run(products: list[dict],
                 raise outcome
             return outcome
 
-    class _ScriptedStorage(JsonProductDataManager):
-        def _matches_product_path(self, url):
-            return True
-
     stub = logging.getLogger("ui.catalog.e2e-stub")
     stub.handlers[:] = [logging.NullHandler()]
     stub.propagate = False
 
     cfg_dir = tempfile.mkdtemp()
     try:
+        canonical_products = []
+        for index, product in enumerate(products, 1):
+            canonical_products.append(
+                {"id": f"item-{index}", "skip": False, **product}
+                if isinstance(product, dict) else product
+            )
         with open(os.path.join(cfg_dir, "fakestore.json"), "w") as f:
-            json.dump({"products": products}, f)
+            json.dump({"settings": {}, "items": canonical_products}, f)
 
         plugin = fake_plugin(name="fakestore", domains=("fake-store.example",),
-                             client_class=_ScriptedClient, storage_class=_ScriptedStorage)
+                             client_class=_ScriptedClient)
         with registry_sandbox(plugin), mock.patch.object(tui, "Live", _FakeLive):
             strat = tui.InteractiveExecutionStrategy()
             strat.console = Console(file=io.StringIO())
 
             registry = ScraperRegistry(cfg_dir)
-            loads_by_target = {tl.target: tl for tl in load_targets(registry, ["fakestore"])}
+            loads = load_targets(registry, ["fakestore"])
             orch = ScrapingOrchestrator(
-                targets_to_run=["fakestore"], registry=registry,
+                target_loads=loads, registry=registry,
                 notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
-                config_dir=cfg_dir, quiet=False, ui_strategy=strat,
-                loads_by_target=loads_by_target,
+                quiet=False, ui_strategy=strat,
             )
             with mock.patch.object(orch, "_sleep_with_jitter"), \
                  mock.patch.object(orchestrator_module.signal, "signal"), \
@@ -191,6 +191,7 @@ def drive_service(target: str, timer: dict, service: dict, resolved: ResolvedSet
     panel = status.build_service_panel(
         target, timer, service, resolved,
         config_filename, expected_oncalendar, active_oncalendar, config,
+        interval_spec=__import__("ui.catalog.inputs", fromlist=["SPEC_INTERVAL"]).SPEC_INTERVAL,
     )
     return BuildResult(panel, panel.get_panel_color())
 
@@ -270,17 +271,19 @@ def drive_config(version_state: str = "uptodate",
         # renders with production status/default/invalid logic but no file I/O. The
         # block-shape warning comes from the same production helper resolve_all uses,
         # so the malformed-block footnote wording can never drift from what users see.
-        from core.settings.resolve import _block_warning
+        from core.settings import resolve_settings
         block = general_block_raw if general_block_raw is not None else {
             KEY_REMINDER: reminder_raw,
             KEY_REMINDER_DAY: reminder_day_raw,
             KEY_REMINDER_TIME: reminder_time_raw,
         }
-        return ResolvedSettings(
-            [(spec, resolve_spec(spec, block, general_load_status)) for spec in GENERAL_SETTING_SPECS],
-            block_warning=_block_warning(block, general_load_status),
-            unknown_keys=general_unknown_keys if isinstance(block, dict) and general_load_status is None else (),
-        )
+        resolved = resolve_settings(GENERAL_SETTING_SPECS, block, general_load_status)
+        if general_unknown_keys and isinstance(block, dict) and general_load_status is None:
+            return ResolvedSettings(
+                resolved._pairs, block_warning=resolved.block_warning,
+                unknown_keys=general_unknown_keys,
+            )
+        return resolved
 
     with mock.patch.object(config_check, "check_for_updates", check_for_updates), \
          mock.patch.object(config_check, "check_env_file", check_env_file), \

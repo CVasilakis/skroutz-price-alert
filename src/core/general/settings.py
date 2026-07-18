@@ -11,10 +11,14 @@ Import-light: builds on the stdlib-only :mod:`core.settings` engine and the gene
 vocabulary, so it is safe to import from ``--status`` and the config panel.
 """
 
+import json
 import os
 
-from core.config_constants import GENERAL_CONFIG_FILENAME
-from core.settings import ResolvedSettings, SettingSpec, resolve_all, unsupported_value_message
+from core.exceptions import ConfigFileError
+from core.settings import (
+    ResolvedSettings, SettingSpec, SettingStatus, resolve_settings,
+    unsupported_value_message,
+)
 from core.general.vocab import (
     DEFAULT_REMINDER, DEFAULT_REMINDER_DAY, DEFAULT_REMINDER_TIME,
     normalize_reminder, normalize_reminder_day, normalize_reminder_time,
@@ -22,6 +26,7 @@ from core.general.vocab import (
 )
 
 
+GENERAL_CONFIG_FILENAME = "general.json"
 
 # The JSON keys of the general settings in general.json's ``settings`` block. Exported so
 # framework code references them by name instead of a string literal.
@@ -48,7 +53,34 @@ def resolve_general_settings(config_dir: str) -> ResolvedSettings:
     Returns:
         ResolvedSettings: The resolved settings, queryable by key and as views.
     """
-    return resolve_all(GENERAL_SETTING_SPECS, general_config_path(config_dir), plugin=None)
+    path = general_config_path(config_dir)
+    if not os.path.exists(path):
+        return resolve_settings(GENERAL_SETTING_SPECS, None, SettingStatus.NO_CONFIG)
+    try:
+        with open(path, encoding="utf-8") as file:
+            document = json.load(file)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ConfigFileError(f"Config file '{path}' is invalid or unreadable: {exc}") from exc
+    if not isinstance(document, dict):
+        raise ConfigFileError(f"Config file '{path}' must contain an object")
+    unknown_top = set(document) - {"settings"}
+    if unknown_top:
+        raise ConfigFileError(f"Unknown general config keys: {', '.join(sorted(unknown_top))}")
+    block = document.get("settings", {})
+    if not isinstance(block, dict):
+        raise ConfigFileError("General settings must be an object")
+    known = {spec.key for spec in GENERAL_SETTING_SPECS}
+    unknown_settings = set(block) - known
+    if unknown_settings:
+        raise ConfigFileError(f"Unknown general settings: {', '.join(sorted(unknown_settings))}")
+    return resolve_settings(GENERAL_SETTING_SPECS, block)
+
+
+def _decode(normalizer, raw):
+    value = normalizer(raw)
+    if value is None:
+        raise ValueError("unsupported value")
+    return value
 
 
 SPEC_REMINDER = SettingSpec(
@@ -57,7 +89,7 @@ SPEC_REMINDER = SettingSpec(
     # The settings layer speaks the user's vocabulary: the effective value is the
     # canonical reminder key (e.g. "1m"). Translation to a week count happens at the
     # scheduling boundary (core.general.reminder), not here.
-    normalize=normalize_reminder,
+    decode=lambda raw: _decode(normalize_reminder, raw),
     display=display_reminder_row,
     warning=unsupported_value_message(KEY_REMINDER, display_reminder(DEFAULT_REMINDER)),
     default=DEFAULT_REMINDER,
@@ -66,7 +98,7 @@ SPEC_REMINDER = SettingSpec(
 SPEC_REMINDER_DAY = SettingSpec(
     key=KEY_REMINDER_DAY,
     label="Reminder Day",
-    normalize=normalize_reminder_day,
+    decode=lambda raw: _decode(normalize_reminder_day, raw),
     display=lambda name: name,
     warning=unsupported_value_message(KEY_REMINDER_DAY, DEFAULT_REMINDER_DAY),
     default=DEFAULT_REMINDER_DAY,
@@ -75,7 +107,7 @@ SPEC_REMINDER_DAY = SettingSpec(
 SPEC_REMINDER_TIME = SettingSpec(
     key=KEY_REMINDER_TIME,
     label="Reminder Time",
-    normalize=normalize_reminder_time,
+    decode=lambda raw: _decode(normalize_reminder_time, raw),
     display=lambda hhmm: hhmm,
     warning=unsupported_value_message(KEY_REMINDER_TIME, DEFAULT_REMINDER_TIME),
     default=DEFAULT_REMINDER_TIME,

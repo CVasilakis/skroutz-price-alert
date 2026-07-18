@@ -35,8 +35,18 @@ except Exception:  # pragma: no cover - tls_client not installed (core-only inst
 
 def _make_client():
     """Builds a concrete client with tls_client.Session patched inert."""
+    from core.scrapers.registry import ScraperRegistry
+    from core.settings import resolve_settings
+    plugin = ScraperRegistry.get_plugin("skroutz")
     with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
-        return _ConcreteClient()
+        return _ConcreteClient(resolve_settings(plugin.setting_specs, {}))
+
+
+def _settings():
+    from core.scrapers.registry import ScraperRegistry
+    from core.settings import resolve_settings
+    plugin = ScraperRegistry.get_plugin("skroutz")
+    return resolve_settings(plugin.setting_specs, {})
 
 
 @unittest.skipUnless(_HAS_TLS, "tls_client not installed")
@@ -62,7 +72,10 @@ class TestBoundedGet(unittest.TestCase):
             REQUEST_TIMEOUT_SECONDS = 45
 
         with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
-            client = SlowClient()
+            from core.scrapers.registry import ScraperRegistry
+            from core.settings import resolve_settings
+            plugin = ScraperRegistry.get_plugin("skroutz")
+            client = SlowClient(resolve_settings(plugin.setting_specs, {}))
         session = cast(mock.Mock, client.session)
 
         client.get("https://example.test/slow")
@@ -111,7 +124,10 @@ class TestRaiseForStatus(unittest.TestCase):
             NOT_FOUND_CODES = (418,)  # this API signals "gone" with 418
 
         with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
-            client = OddClient()
+            from core.scrapers.registry import ScraperRegistry
+            from core.settings import resolve_settings
+            plugin = ScraperRegistry.get_plugin("skroutz")
+            client = OddClient(resolve_settings(plugin.setting_specs, {}))
         with self.assertRaises(ProductNotFoundError):
             client.raise_for_status(418)
         # 404 is no longer a not-found for this store -> generic ScraperError.
@@ -127,7 +143,7 @@ class TestRefreshIdentity(unittest.TestCase):
                         side_effect=[s1, s2]), \
              mock.patch("core.scrapers.base.http_client.random.choice",
                         return_value={"User-Agent": "probe"}):
-            client = _ConcreteClient()
+            client = _ConcreteClient(_settings())
             self.assertIs(client.session, s1)
 
             client.refresh_identity()
@@ -146,7 +162,7 @@ class TestRefreshIdentity(unittest.TestCase):
             HEADERS_POOL = [profile]
 
         with mock.patch("core.scrapers.base.http_client.tls_client.Session"):
-            client = OneProfileClient()
+            client = OneProfileClient(_settings())
             client.current_headers["authority"] = "mutated.example"
 
             client.refresh_identity()

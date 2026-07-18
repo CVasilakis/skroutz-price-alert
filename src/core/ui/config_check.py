@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from rich.console import Console
 
 from core.constants import CONFIG_DIR, EXIT_CODE_ENV_ERROR
-from core.exceptions import EnvFileError, UpdateCheckError
+from core.exceptions import ConfigFileError, EnvFileError, UpdateCheckError
 from core.utils import check_env_file, check_for_updates, classify_notification_urls
 from core.general import resolve_general_settings
 from core.logger import get_target_logger
@@ -118,7 +118,12 @@ def _append_general_rows(panel: StatusPanelBuilder) -> None:
     "Block ignored" row. Iterates whatever ``GENERAL_SETTING_SPECS`` declares - a future
     general setting needs no change here.
     """
-    resolved = resolve_general_settings(CONFIG_DIR)
+    try:
+        resolved = resolve_general_settings(CONFIG_DIR)
+    except ConfigFileError as exc:
+        ref = panel.add_note_ref(str(exc))
+        panel.add_row("❗", "General Config", f"[red]Failed{ref}[/red]")
+        return
     block_ref = panel.add_note_ref(resolved.block_warning) if resolved.block_warning else ""
     for view in resolved.views():
         add_setting_row(panel, view, block_ref)

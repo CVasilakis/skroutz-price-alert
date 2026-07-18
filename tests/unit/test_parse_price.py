@@ -2,7 +2,7 @@
 
 This is the single price-normalization routine shared by config validation (target
 prices) and every scraper (scraped prices), so its documented contract is pinned here
-directly rather than only through the one call site in ``BaseTrackedItem.from_dict``.
+directly rather than only through configuration and scraper call sites.
 
 The load-bearing, counter-intuitive rule is the separator handling: the right-most
 ``.``/``,`` is the decimal separator and every other one is dropped as grouping, so a

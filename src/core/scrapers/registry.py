@@ -1,4 +1,4 @@
-"""Discovery, validation, and lazy construction for scraper plugins."""
+"""Atomic plugin discovery, strict validation, routing, and lazy clients."""
 
 from __future__ import annotations
 
@@ -8,99 +8,80 @@ import pkgutil
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
+from urllib.parse import urlsplit
 
 from core import messages
-from core.exceptions import (
-    PluginDependencyError,
-    PluginDiscoveryError,
-    PluginValidationError,
+from core.exceptions import PluginDependencyError, PluginDiscoveryError, PluginValidationError, StorageFileError
+from core.scrapers.api import ItemField, ScraperClient, ScraperPlugin, SettingSpec
+from core.scrapers.configuration import TargetConfigLoader
+from core.scrapers.settings import (
+    KEY_INTERVAL, SUPPORTED_INTERVALS, framework_setting_specs, oncalendar_for,
 )
-from core.scrapers.base.plugin import ClassRef, PluginDefinition, RegisteredPlugin
-from core.scrapers.base.settings import (
-    BASE_SETTING_SPECS,
-    KEY_INTERVAL,
-    STATUS_OK,
-    SUPPORTED_INTERVALS,
-    ResolvedSetting,
-    ResolvedSettings,
-    SettingSpec,
-    oncalendar_for,
-    resolve_all,
-    resolve_one,
-)
-from core.scrapers.base.url import normalize_domain
+from core.scrapers.url import normalize_domain, parsed_matches_domains, parse_url
+from core.settings import ResolvedSetting, ResolvedSettings, SettingStatus, resolve_settings
 
-if TYPE_CHECKING:
-    from core.scrapers.base.client import BaseScraperClient
-    from core.scrapers.base.storage import BaseDataManager
-
-
-# These names are already claimed by management flags or project-wide config.
 RESERVED_PLUGIN_NAMES = frozenset({"general", "help", "quiet", "ping", "status", "update"})
+RESERVED_ITEM_KEYS = frozenset({"id", "name", "url", "target_price", "skip", "metadata"})
+
+
+@dataclass(frozen=True)
+class RegisteredPlugin:
+    target: str
+    display_name: str
+    domains: tuple[str, ...]
+    client: str
+    accepts_url: Any
+    item_fields: tuple[ItemField[Any], ...]
+    setting_specs: tuple[SettingSpec[Any], ...]
+    custom_setting_specs: tuple[SettingSpec[Any], ...]
+    default_interval: str
+    package: str
+    source_dir: str
+    example_config_path: str
+    requirements_path: str | None
+
+    @property
+    def config_filename(self) -> str:
+        return f"{self.target}.json"
+
+    def matches_url(self, value: object) -> bool:
+        try:
+            parsed = parse_url(value)
+            return parsed_matches_domains(parsed, self.domains) and self.accepts_url(parsed) is True
+        except Exception:
+            return False
+
+    def setting(self, key: str) -> SettingSpec[Any]:
+        """Return one framework-validated declaration for internal boundaries."""
+        return next(spec for spec in self.setting_specs if spec.key == key)
 
 
 @dataclass(frozen=True)
 class ScheduleResolution:
-    """One plugin's effective framework-owned timer schedule."""
-
     on_calendar: str
-    status: str
+    status: SettingStatus
 
 
 class ScraperRegistry:
-    """Discover plugins and provide validated metadata and lazy instances."""
-
     _plugins: dict[str, RegisteredPlugin] = {}
     _discovered = False
 
     @classmethod
-    def register(
-        cls,
-        definition: PluginDefinition,
-        *,
-        target: str,
-        package: str | None = None,
-        source_dir: str | os.PathLike[str] | None = None,
-        where: str | None = None,
-    ) -> None:
-        """Validate and register a definition under its package-derived target."""
-        package = package or f"core.scrapers.{target}"
-        where = where or package
-        if not isinstance(definition, PluginDefinition):
-            raise PluginValidationError(
-                f"Plugin '{where}' must export a PluginDefinition as PLUGIN, got "
-                f"{type(definition).__name__}."
-            )
-        record = cls._validate_definition(
-            target, package, definition, source_dir=source_dir, where=where
-        )
-        if record.target in cls._plugins:
-            raise PluginValidationError(
-                f"Duplicate plugin target '{record.target}' from '{where}'."
-            )
-        cls._check_domain_conflicts_for(record)
-        cls._plugins[record.target] = record
-
-    @classmethod
     def _reset(cls) -> None:
-        """Clear registry state for isolated tests."""
         cls._plugins = {}
         cls._discovered = False
 
     @classmethod
     def discover(cls) -> None:
-        """Discover every scraper package and import only its descriptor module."""
         if cls._discovered:
             return
-
         package_dir = Path(__file__).parent
         original = dict(cls._plugins)
         try:
             for _importer, target, ispkg in pkgutil.iter_modules([str(package_dir)]):
-                if not ispkg or target == "base" or target.startswith("_"):
+                if not ispkg or target in {"base"} or target.startswith("_"):
                     continue
-
                 package = f"core.scrapers.{target}"
                 module_name = f"{package}.plugin"
                 try:
@@ -109,184 +90,147 @@ class ScraperRegistry:
                     raise PluginDiscoveryError(
                         f"Failed to import scraper descriptor '{module_name}': {exc}"
                     ) from exc
-
                 if not hasattr(module, "PLUGIN"):
                     raise PluginDiscoveryError(
                         f"Scraper descriptor '{module_name}' does not export PLUGIN."
                     )
                 cls.register(
-                    getattr(module, "PLUGIN"),
-                    target=target,
-                    package=package,
-                    source_dir=package_dir / target,
-                    where=module_name,
+                    module.PLUGIN, target=target, package=package,
+                    source_dir=package_dir / target, where=module_name,
                 )
         except Exception:
-            # Discovery is atomic: a broken plugin must not leave a partially populated
-            # registry whose next lookup fails for a different (duplicate) reason.
             cls._plugins = original
             raise
-
         cls._discovered = True
 
     @classmethod
-    def _validate_definition(
-        cls,
-        target: str,
-        package: str,
-        definition: PluginDefinition,
-        *,
-        source_dir: str | os.PathLike[str] | None,
-        where: str,
-    ) -> RegisteredPlugin:
-        """Normalize a definition and reject unsafe or ambiguous metadata."""
-        if not isinstance(target, str) or re.fullmatch(r"[a-z][a-z0-9_]*", target) is None:
+    def register(cls, definition: ScraperPlugin, *, target: str,
+                 package: str | None = None,
+                 source_dir: str | os.PathLike[str] | None = None,
+                 where: str | None = None) -> None:
+        package = package or f"core.scrapers.{target}"
+        where = where or package
+        if not isinstance(definition, ScraperPlugin):
             raise PluginValidationError(
-                f"Plugin package '{target}' must be a lowercase Python-style identifier "
-                "containing letters, digits, and underscores and starting with a letter."
+                f"Plugin '{where}' must export a ScraperPlugin as PLUGIN."
             )
-        if target in RESERVED_PLUGIN_NAMES:
-            raise PluginValidationError(
-                f"Plugin package name '{target}' is reserved by the framework."
-            )
+        record = cls._validate(target, package, definition, source_dir, where)
+        if target in cls._plugins:
+            raise PluginValidationError(f"Duplicate plugin target '{target}'.")
+        cls._check_domain_conflicts(record)
+        cls._plugins[target] = record
+
+    @classmethod
+    def _validate(cls, target: str, package: str, definition: ScraperPlugin,
+                  source_dir: str | os.PathLike[str] | None,
+                  where: str) -> RegisteredPlugin:
+        if re.fullmatch(r"[a-z][a-z0-9_]*", target) is None or target in RESERVED_PLUGIN_NAMES:
+            raise PluginValidationError(f"Plugin package name '{target}' is invalid or reserved.")
         if not isinstance(definition.display_name, str) or not definition.display_name.strip():
-            raise PluginValidationError(
-                f"Plugin '{target}' ({where}) must declare a nonblank display_name."
-            )
-
+            raise PluginValidationError(f"Plugin '{target}' must declare a nonblank display_name.")
         if not isinstance(definition.domains, tuple) or not definition.domains:
-            raise PluginValidationError(
-                f"Plugin '{target}' ({where}) must declare a non-empty domains tuple."
-            )
+            raise PluginValidationError(f"Plugin '{target}' domains must be a non-empty tuple.")
         domains: list[str] = []
-        for raw_domain in definition.domains:
+        for raw in definition.domains:
             try:
-                domain = normalize_domain(raw_domain)
+                domain = normalize_domain(raw)
             except ValueError as exc:
-                raise PluginValidationError(
-                    f"Plugin '{target}' ({where}) declares invalid domain {raw_domain!r}: {exc}."
-                ) from exc
+                raise PluginValidationError(f"Plugin '{target}' domain {raw!r}: {exc}.") from exc
             if domain in domains:
-                raise PluginValidationError(
-                    f"Plugin '{target}' ({where}) declares duplicate normalized domain '{domain}'."
-                )
+                raise PluginValidationError(f"Plugin '{target}' repeats domain '{domain}'.")
             domains.append(domain)
-
-        cls._validate_class_ref(target, "client", definition.client)
-        cls._validate_class_ref(target, "storage", definition.storage)
-
+        if not callable(definition.accepts_url):
+            raise PluginValidationError(f"Plugin '{target}' accepts_url must be callable.")
+        for domain in domains:
+            try:
+                probe = definition.accepts_url(urlsplit(f"https://{domain}/"))
+            except Exception as exc:
+                raise PluginValidationError(f"Plugin '{target}' accepts_url probe failed: {exc}") from exc
+            if not isinstance(probe, bool):
+                raise PluginValidationError(f"Plugin '{target}' accepts_url must return bool.")
+        if not isinstance(definition.client, str) or re.fullmatch(
+            r"\.[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*", definition.client
+        ) is None:
+            raise PluginValidationError(
+                f"Plugin '{target}' client must be a relative '.module:Symbol' binding."
+            )
         if definition.default_interval not in SUPPORTED_INTERVALS:
             raise PluginValidationError(
-                f"Plugin '{target}' ({where}) default_interval must be one of "
-                f"{sorted(SUPPORTED_INTERVALS)} (got {definition.default_interval!r})."
+                f"Plugin '{target}' default_interval must be one of {sorted(SUPPORTED_INTERVALS)}."
             )
-        if not isinstance(definition.setting_specs, tuple):
-            raise PluginValidationError(
-                f"Plugin '{target}' ({where}) setting_specs must be a tuple of SettingSpec."
-            )
-
-        specs = (*BASE_SETTING_SPECS, *definition.setting_specs)
-        cls._validate_setting_specs(target, where, specs)
-
-        resolved_source = Path(source_dir).resolve() if source_dir is not None else None
-        source_text = str(resolved_source) if resolved_source is not None else ""
-        requirements = resolved_source / "requirements.txt" if resolved_source is not None else None
-        example = resolved_source / "config.example.json" if resolved_source is not None else None
-        record = RegisteredPlugin(
-            target=target,
-            display_name=definition.display_name.strip(),
-            domains=tuple(domains),
-            client=definition.client,
-            storage=definition.storage,
-            default_interval=definition.default_interval,
-            setting_specs=tuple(specs),
-            package=package,
-            source_dir=source_text,
-            example_config_path=str(example) if example is not None else "",
-            requirements_path=(str(requirements) if requirements is not None and requirements.is_file() else None),
+        if not isinstance(definition.item_fields, tuple):
+            raise PluginValidationError(f"Plugin '{target}' item_fields must be a tuple.")
+        if not isinstance(definition.settings, tuple):
+            raise PluginValidationError(f"Plugin '{target}' settings must be a tuple.")
+        cls._validate_fields(target, definition.item_fields)
+        framework = framework_setting_specs(definition.default_interval)
+        specs = (*framework, *definition.settings)
+        cls._validate_settings(target, specs)
+        source = Path(source_dir).resolve() if source_dir is not None else None
+        requirements = source / "requirements.txt" if source else None
+        return RegisteredPlugin(
+            target=target, display_name=definition.display_name.strip(), domains=tuple(domains),
+            client=definition.client, accepts_url=definition.accepts_url,
+            item_fields=definition.item_fields, setting_specs=tuple(specs),
+            custom_setting_specs=definition.settings,
+            default_interval=definition.default_interval, package=package,
+            source_dir=str(source) if source else "",
+            example_config_path=str(source / "config.example.json") if source else "",
+            requirements_path=str(requirements) if requirements and requirements.is_file() else None,
         )
 
-        for spec in specs:
+    @staticmethod
+    def _validate_fields(target: str, fields: tuple[ItemField[Any], ...]) -> None:
+        seen: set[str] = set()
+        for field in fields:
+            if not isinstance(field, ItemField):
+                raise PluginValidationError(f"Plugin '{target}' item_fields contains a non-ItemField.")
+            if not isinstance(field.key, str) or not field.key.strip() or field.key in RESERVED_ITEM_KEYS:
+                raise PluginValidationError(f"Plugin '{target}' item field key {field.key!r} is invalid or reserved.")
+            if field.key in seen:
+                raise PluginValidationError(f"Plugin '{target}' duplicates item field '{field.key}'.")
+            seen.add(field.key)
+            if not callable(field.decode):
+                raise PluginValidationError(f"Plugin '{target}' item field '{field.key}' decoder is not callable.")
             try:
-                displayed = spec.display(spec.default_for(record))
+                field.decode(field.default)
             except Exception as exc:
-                raise PluginValidationError(
-                    f"Plugin '{target}' setting '{spec.key}' default/display failed: {exc}"
-                ) from exc
-            if not isinstance(displayed, str):
-                raise PluginValidationError(
-                    f"Plugin '{target}' setting '{spec.key}' display(default) must return a string."
-                )
-        return record
+                raise PluginValidationError(f"Plugin '{target}' item field '{field.key}' default failed: {exc}") from exc
 
     @staticmethod
-    def _validate_class_ref(target: str, label: str, ref: object) -> None:
-        if not isinstance(ref, ClassRef):
-            raise PluginValidationError(
-                f"Plugin '{target}' {label} must be a ClassRef."
-            )
-        module_pattern = r"\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*"
-        if re.fullmatch(module_pattern, ref.module) is None:
-            raise PluginValidationError(
-                f"Plugin '{target}' {label} ClassRef has invalid module {ref.module!r}."
-            )
-        if not isinstance(ref.symbol, str) or not ref.symbol.isidentifier():
-            raise PluginValidationError(
-                f"Plugin '{target}' {label} ClassRef has invalid symbol {ref.symbol!r}."
-            )
-
-    @staticmethod
-    def _validate_setting_specs(target: str, where: str, specs: tuple[SettingSpec, ...]) -> None:
+    def _validate_settings(target: str, specs: tuple[SettingSpec[Any], ...]) -> None:
         seen: set[str] = set()
         for spec in specs:
             if not isinstance(spec, SettingSpec):
-                raise PluginValidationError(
-                    f"Plugin '{target}' ({where}) setting_specs must contain only SettingSpec values."
-                )
-            if not isinstance(spec.key, str) or not spec.key.strip():
-                raise PluginValidationError(
-                    f"Plugin '{target}' ({where}) has a setting with a blank key."
-                )
-            if spec.key in seen:
-                raise PluginValidationError(
-                    f"Plugin '{target}' ({where}) declares duplicate setting key '{spec.key}'."
-                )
+                raise PluginValidationError(f"Plugin '{target}' settings contains a non-SettingSpec.")
+            if not spec.key.strip() or spec.key in seen:
+                raise PluginValidationError(f"Plugin '{target}' setting key {spec.key!r} is blank or duplicated.")
             seen.add(spec.key)
-            if not isinstance(spec.label, str) or not spec.label.strip():
-                raise PluginValidationError(
-                    f"Plugin '{target}' setting '{spec.key}' must have a nonblank label."
-                )
-            if not isinstance(spec.warning, str) or not spec.warning.strip():
-                raise PluginValidationError(
-                    f"Plugin '{target}' setting '{spec.key}' must have a nonblank warning."
-                )
-            for field in ("normalize", "display", "is_unset"):
-                if not callable(getattr(spec, field)):
-                    raise PluginValidationError(
-                        f"Plugin '{target}' setting '{spec.key}' field '{field}' must be callable."
-                    )
-            if spec.default_factory is not None and not callable(spec.default_factory):
-                raise PluginValidationError(
-                    f"Plugin '{target}' setting '{spec.key}' default_factory must be callable or None."
-                )
+            if not spec.label.strip() or not spec.warning.strip():
+                raise PluginValidationError(f"Plugin '{target}' setting '{spec.key}' needs label and warning.")
+            if not callable(spec.decode) or not callable(spec.display) or not callable(spec.is_unset):
+                raise PluginValidationError(f"Plugin '{target}' setting '{spec.key}' has a non-callable codec.")
+            try:
+                decoded = spec.decode(spec.default)
+                displayed = spec.display(spec.default)
+            except Exception as exc:
+                raise PluginValidationError(f"Plugin '{target}' setting '{spec.key}' default failed: {exc}") from exc
+            if not isinstance(displayed, str):
+                raise PluginValidationError(f"Plugin '{target}' setting '{spec.key}' display must return str.")
 
     @staticmethod
     def _domains_overlap(first: str, second: str) -> bool:
-        return (
-            first == second
-            or first.endswith("." + second)
-            or second.endswith("." + first)
-        )
+        return first == second or first.endswith("." + second) or second.endswith("." + first)
 
     @classmethod
-    def _check_domain_conflicts_for(cls, plugin: RegisteredPlugin) -> None:
+    def _check_domain_conflicts(cls, plugin: RegisteredPlugin) -> None:
         for domain in plugin.domains:
-            for owner, registered in cls._plugins.items():
-                for existing in registered.domains:
+            for owner, existing_plugin in cls._plugins.items():
+                for existing in existing_plugin.domains:
                     if cls._domains_overlap(domain, existing):
                         raise PluginValidationError(
-                            f"Domain conflict: plugin '{plugin.target}' claims '{domain}', which "
-                            f"overlaps with '{existing}' claimed by plugin '{owner}'."
+                            f"Domain conflict: '{domain}' for '{plugin.target}' overlaps "
+                            f"'{existing}' for '{owner}'."
                         )
 
     @classmethod
@@ -302,97 +246,72 @@ class ScraperRegistry:
         except KeyError as exc:
             raise ValueError(f"Unsupported plugin: {target}") from exc
 
-    @staticmethod
-    def _config_path(plugin: RegisteredPlugin, config_dir: str) -> str:
-        return os.path.join(config_dir, plugin.config_filename)
-
-    @staticmethod
-    def _spec_for(plugin: RegisteredPlugin, key: str) -> SettingSpec:
-        for spec in plugin.setting_specs:
-            if spec.key == key:
-                return spec
-        raise KeyError(f"Plugin '{plugin.target}' exposes no setting '{key}'.")
+    @classmethod
+    def plugin_for_url(cls, value: object) -> RegisteredPlugin | None:
+        cls.discover()
+        return next((plugin for plugin in cls._plugins.values() if plugin.matches_url(value)), None)
 
     @classmethod
     def resolve_all_settings(cls, target: str, config_dir: str) -> ResolvedSettings:
         plugin = cls.get_plugin(target)
-        return resolve_all(plugin.setting_specs, cls._config_path(plugin, config_dir), plugin)
-
-    @classmethod
-    def resolve_value(cls, target: str, key: str, config_dir: str) -> ResolvedSetting:
-        plugin = cls.get_plugin(target)
-        return resolve_one(cls._spec_for(plugin, key), cls._config_path(plugin, config_dir), plugin)
+        path = Path(config_dir) / plugin.config_filename
+        if not path.exists():
+            return resolve_settings(plugin.setting_specs, None, SettingStatus.NO_CONFIG)
+        return TargetConfigLoader(plugin, config_dir).load_settings()
 
     @staticmethod
-    def expected_on_calendar(plugin: RegisteredPlugin, interval: ResolvedSetting) -> str:
-        canonical = interval.value if interval.status == STATUS_OK else plugin.default_interval
+    def expected_on_calendar(plugin: RegisteredPlugin,
+                             interval: ResolvedSetting[Any]) -> str:
+        canonical = interval.value if interval.status in (
+            SettingStatus.OK, SettingStatus.DEFAULT,
+        ) else plugin.default_interval
         return oncalendar_for(canonical)
 
     @classmethod
     def resolve_schedule(cls, target: str, config_dir: str) -> ScheduleResolution:
         plugin = cls.get_plugin(target)
-        interval = cls.resolve_value(target, KEY_INTERVAL, config_dir)
-        return ScheduleResolution(
-            on_calendar=cls.expected_on_calendar(plugin, interval),
-            status=interval.status,
-        )
+        settings = cls.resolve_all_settings(target, config_dir)
+        interval_spec = next(spec for spec in plugin.setting_specs if spec.key == KEY_INTERVAL)
+        interval = settings.resolved(interval_spec)
+        return ScheduleResolution(cls.expected_on_calendar(plugin, interval), interval.status)
 
-    @classmethod
-    def plugin_for_url(cls, url: str) -> RegisteredPlugin | None:
-        cls.discover()
-        return next((plugin for plugin in cls._plugins.values() if plugin.matches_url(url)), None)
-
-    @classmethod
-    def _resolve_bound_class(cls, plugin: RegisteredPlugin, ref: ClassRef, base: type) -> type:
-        try:
-            module = importlib.import_module(ref.module, package=plugin.package)
-        except ImportError as exc:
-            missing = getattr(exc, "name", None)
-            raise PluginDependencyError(
-                messages.plugin_dependency_detail(plugin.target, missing)
-            ) from exc
-        try:
-            bound_class = getattr(module, ref.symbol)
-        except AttributeError as exc:
-            raise PluginValidationError(
-                f"Plugin '{plugin.target}' binding {ref.module}:{ref.symbol} does not exist."
-            ) from exc
-        if not isinstance(bound_class, type) or not issubclass(bound_class, base):
-            raise PluginValidationError(
-                f"Plugin '{plugin.target}' binding {ref.module}:{ref.symbol} must be a "
-                f"{base.__name__} subclass, got {bound_class!r}."
-            )
-        return bound_class
-
-    def __init__(self, config_dir: str):
-        self._clients: dict[str, BaseScraperClient] = {}
-        self._managers: dict[str, BaseDataManager] = {}
-        self._settings: dict[str, ResolvedSettings] = {}
+    def __init__(self, config_dir: str, state_dir: str | None = None):
         self.config_dir = config_dir
+        self.state_dir = state_dir
+        self._clients: dict[str, ScraperClient] = {}
+        self._settings: dict[str, ResolvedSettings] = {}
+
+    def prime_settings(self, target: str, settings: ResolvedSettings) -> None:
+        self._settings[target] = settings
 
     def settings_for(self, target: str) -> ResolvedSettings:
         if target not in self._settings:
             self._settings[target] = self.resolve_all_settings(target, self.config_dir)
         return self._settings[target]
 
-    def get_client(self, target: str) -> BaseScraperClient:
-        if target not in self._clients:
-            from core.scrapers.base.client import BaseScraperClient
-
-            plugin = self.get_plugin(target)
-            client_class = self._resolve_bound_class(plugin, plugin.client, BaseScraperClient)
-            self._clients[target] = client_class(settings=self.settings_for(target))
+    def get_client(self, target: str) -> ScraperClient:
+        if target in self._clients:
+            return self._clients[target]
+        plugin = self.get_plugin(target)
+        module_name, symbol = plugin.client.split(":", 1)
+        try:
+            module = importlib.import_module(module_name, package=plugin.package)
+        except ImportError as exc:
+            raise PluginDependencyError(
+                messages.plugin_dependency_detail(plugin.target, getattr(exc, "name", None))
+            ) from exc
+        try:
+            client_type = getattr(module, symbol)
+        except AttributeError as exc:
+            raise PluginValidationError(
+                f"Plugin '{target}' client binding '{plugin.client}' does not exist."
+            ) from exc
+        if not isinstance(client_type, type) or not issubclass(client_type, ScraperClient):
+            raise PluginValidationError(
+                f"Plugin '{target}' client binding must be a ScraperClient subclass."
+            )
+        self._clients[target] = client_type(self.settings_for(target))
         return self._clients[target]
-
-    def get_manager(self, target: str) -> BaseDataManager:
-        if target not in self._managers:
-            from core.scrapers.base.storage import BaseDataManager
-
-            plugin = self.get_plugin(target)
-            storage_class = self._resolve_bound_class(plugin, plugin.storage, BaseDataManager)
-            path = self._config_path(plugin, self.config_dir)
-            self._managers[target] = storage_class(path, plugin, self.settings_for(target))
-        return self._managers[target]
 
     def close_all(self) -> None:
         for client in self._clients.values():

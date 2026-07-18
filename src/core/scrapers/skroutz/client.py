@@ -3,7 +3,7 @@ import json
 from urllib.parse import urlparse
 
 from core.scrapers.base.http_client import HttpScraperClient
-from core.scrapers.base.model import BaseTrackedItem, PriceResult
+from core.scrapers.api import TrackedItem, PriceResult
 from core.exceptions import ScraperParseError, ProductUnavailableError, InvalidURLError
 from core.utils import parse_price
 
@@ -80,11 +80,11 @@ class SkroutzClient(HttpScraperClient):
 
     HEADERS_POOL = _HEADERS_POOL
 
-    def scrape(self, item: BaseTrackedItem) -> PriceResult:
+    def scrape(self, item: TrackedItem) -> PriceResult:
         """Scrapes the Skroutz API for the current price of a product.
 
         Args:
-            item (BaseTrackedItem): The parsed tracked product.
+            item (TrackedItem): The decoded tracked product.
 
         Returns:
             PriceResult: The scraped price and currency.
