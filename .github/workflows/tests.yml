@@ -32,6 +32,7 @@ jobs:
             [ -f "$f" ] && pip install -r "$f"
           done
           pip install -r requirements-dev.txt
+          pip check
 
       - name: Run tests
         # Coverage is report-only: never add a percentage failure threshold here
@@ -68,3 +69,27 @@ jobs:
           done
       - name: Run basedpyright
         run: venv/bin/basedpyright src
+
+  plugin-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Verify every plugin with only its declared dependencies
+        run: |
+          set -eu
+          while IFS=$'\t' read -r target requirement; do
+            env_dir="$(mktemp -d)"
+            python -m venv "$env_dir/venv"
+            plugin_python="$env_dir/venv/bin/python3"
+            "$plugin_python" -m pip install --upgrade pip
+            "$plugin_python" -m pip install -r requirements.txt -r requirements-dev.txt
+            [ -z "$requirement" ] || "$plugin_python" -m pip install -r "$requirement"
+            "$plugin_python" -m pip check
+            SCROOGE_PLUGIN_CHECK_PYTHON="$plugin_python" \
+              ./scripts/plugin-check.sh "--$target"
+          done < <(PYTHONPATH=src python -m core.scrapers.cli requirements)

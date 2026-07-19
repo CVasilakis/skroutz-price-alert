@@ -35,18 +35,16 @@ except Exception:  # pragma: no cover - tls_client not installed (core-only inst
 
 def _make_client():
     """Builds a concrete client with tls_client.Session patched inert."""
-    from core.scrapers.registry import PluginCatalog
+    from core.scrapers.settings import framework_setting_specs
     from core.settings import resolve_settings
-    plugin = PluginCatalog.discover().get("skroutz")
     with mock.patch("core.scrapers.http.tls_client.Session"):
-        return _ConcreteClient(resolve_settings(plugin.setting_specs, {}))
+        return _ConcreteClient(resolve_settings(framework_setting_specs("1h"), {}))
 
 
 def _settings():
-    from core.scrapers.registry import PluginCatalog
+    from core.scrapers.settings import framework_setting_specs
     from core.settings import resolve_settings
-    plugin = PluginCatalog.discover().get("skroutz")
-    return resolve_settings(plugin.setting_specs, {})
+    return resolve_settings(framework_setting_specs("1h"), {})
 
 
 @unittest.skipUnless(_HAS_TLS, "tls_client not installed")
@@ -72,10 +70,9 @@ class TestBoundedGet(unittest.TestCase):
             REQUEST_TIMEOUT_SECONDS = 45
 
         with mock.patch("core.scrapers.http.tls_client.Session"):
-            from core.scrapers.registry import PluginCatalog
+            from core.scrapers.settings import framework_setting_specs
             from core.settings import resolve_settings
-            plugin = PluginCatalog.discover().get("skroutz")
-            client = SlowClient(resolve_settings(plugin.setting_specs, {}))
+            client = SlowClient(resolve_settings(framework_setting_specs("1h"), {}))
         session = cast(mock.Mock, client.session)
 
         client.get("https://example.test/slow")
@@ -124,10 +121,9 @@ class TestRaiseForStatus(unittest.TestCase):
             NOT_FOUND_CODES = (418,)  # this API signals "gone" with 418
 
         with mock.patch("core.scrapers.http.tls_client.Session"):
-            from core.scrapers.registry import PluginCatalog
+            from core.scrapers.settings import framework_setting_specs
             from core.settings import resolve_settings
-            plugin = PluginCatalog.discover().get("skroutz")
-            client = OddClient(resolve_settings(plugin.setting_specs, {}))
+            client = OddClient(resolve_settings(framework_setting_specs("1h"), {}))
         with self.assertRaises(ProductNotFoundError):
             client.raise_for_status(418)
         # 404 is no longer a not-found for this store -> generic ScraperError.

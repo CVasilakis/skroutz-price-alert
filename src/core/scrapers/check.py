@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import shutil
 import subprocess
@@ -13,6 +14,7 @@ from pathlib import Path
 from core.exceptions import PluginDependencyError
 from core.scrapers.configuration import TargetConfigLoader
 from core.scrapers.registry import ClientLoader, PluginCatalog
+from core.scrapers.settings import framework_setting_specs
 from core.scrapers.state import JsonStateRepository, StateEntry
 
 _IMPORT_PROBE = r"""
@@ -92,7 +94,7 @@ def _check_import_light(package: str, source: Path) -> None:
         )
 
 
-def _check_contributor_files(source: Path, target: str) -> None:
+def _check_contributor_files(source: Path, tests: Path, target: str) -> str:
     for filename in ("README.md", "config.example.json"):
         path = source / filename
         if not path.is_file():
@@ -102,16 +104,74 @@ def _check_contributor_files(source: Path, target: str) -> None:
                 raise RuntimeError(f"plugin {target!r} {filename} must not be empty")
         except (OSError, UnicodeError) as exc:
             raise RuntimeError(f"plugin {target!r} {filename} is unreadable: {exc}") from exc
+    test_modules = tuple(tests.glob("test_*.py")) if tests.is_dir() else ()
+    if not test_modules:
+        raise RuntimeError(
+            f"plugin {target!r} requires tests/plugins/{target}/test_*.py"
+        )
+    return (source / "README.md").read_text(encoding="utf-8")
 
 
-def check_plugin(target: str, catalog: PluginCatalog | None = None) -> list[str]:
+def _check_self_contained(
+    source: Path, target: str, registered_targets: frozenset[str]
+) -> None:
+    """Reject direct imports from another production plugin package."""
+    for path in source.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, UnicodeError, SyntaxError) as exc:
+            raise RuntimeError(f"plugin source {path.name!r} is unreadable: {exc}") from exc
+        for node in ast.walk(tree):
+            modules: list[str] = []
+            if isinstance(node, ast.Import):
+                modules.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level >= 2 and node.module:
+                    sibling = node.module.split(".", 1)[0]
+                    if sibling in registered_targets and sibling != target:
+                        raise RuntimeError(
+                            f"plugin {target!r} imports sibling plugin {sibling!r} in {path.name}"
+                        )
+                if node.module:
+                    modules.append(node.module)
+            for module in modules:
+                prefix = "core.scrapers."
+                if not module.startswith(prefix):
+                    continue
+                sibling = module[len(prefix):].split(".", 1)[0]
+                if sibling in registered_targets and sibling != target:
+                    raise RuntimeError(
+                        f"plugin {target!r} imports sibling plugin {sibling!r} in {path.name}"
+                    )
+
+
+def check_plugin(
+    target: str,
+    catalog: PluginCatalog | None = None,
+    *,
+    repo_root: str | Path | None = None,
+) -> list[str]:
     """Return successful check labels or raise with actionable guidance."""
     catalog = catalog or PluginCatalog.discover()
     plugin = catalog.get(target)
     source = Path(plugin.source_dir)
+    root = Path(repo_root) if repo_root is not None else source.parents[3]
+    tests = root / "tests" / "plugins" / target
     _check_import_light(plugin.package, source)
-    _check_contributor_files(source, target)
-    checks = ["atomic discovery", "isolated import-light descriptor", "contributor files"]
+    readme = _check_contributor_files(source, tests, target)
+    _check_self_contained(source, target, frozenset(catalog.targets))
+    if "URL" not in readme and "url" not in readme:
+        raise RuntimeError("README must document the accepted URL shape")
+    if "PriceResult" not in readme and "ListingResult" not in readme:
+        raise RuntimeError("README must document its PriceResult or ListingResult contract")
+    if plugin.requirements_path and "requirements.txt" not in readme:
+        raise RuntimeError("README must document its private requirements.txt")
+    checks = [
+        "atomic discovery",
+        "isolated import-light descriptor",
+        "contributor files and tests",
+        "self-contained package",
+    ]
 
     for field in plugin.item_fields:
         if field.decode(field.default) != field.default:
@@ -124,6 +184,10 @@ def check_plugin(target: str, catalog: PluginCatalog | None = None) -> list[str]
     checks.append("field and setting codecs")
 
     example = Path(plugin.example_config_path)
+    try:
+        example_document = json.loads(example.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"example config is unreadable: {exc}") from exc
     with tempfile.TemporaryDirectory() as root:
         config_dir = Path(root) / "config"
         state_dir = Path(root) / "state"
@@ -133,6 +197,36 @@ def check_plugin(target: str, catalog: PluginCatalog | None = None) -> list[str]
         if loaded.row_issues:
             detail = "; ".join(f"item {issue.index}: {issue.message}" for issue in loaded.row_issues)
             raise RuntimeError(f"example config has invalid rows: {detail}")
+        if not loaded.items:
+            raise RuntimeError("example config must contain at least one valid item")
+        if not isinstance(example_document, dict):
+            raise RuntimeError("example config top level must be an object")
+        raw_settings = example_document.get("settings", {})
+        raw_items = example_document.get("items", [])
+        framework_keys = {
+            spec.key for spec in framework_setting_specs(plugin.default_interval)
+        }
+        for spec in plugin.setting_specs:
+            if spec.key not in framework_keys and (
+                not isinstance(raw_settings, dict) or spec.key not in raw_settings
+            ):
+                raise RuntimeError(
+                    f"example config must demonstrate custom setting {spec.key!r}"
+                )
+        for field in plugin.item_fields:
+            if not isinstance(raw_items, list) or not any(
+                isinstance(row, dict) and field.key in row for row in raw_items
+            ):
+                raise RuntimeError(
+                    f"example config must demonstrate custom item field {field.key!r}"
+                )
+        documented_keys = [
+            *(field.key for field in plugin.item_fields),
+            *(spec.key for spec in plugin.setting_specs if spec.key not in framework_keys),
+        ]
+        for key in documented_keys:
+            if key not in readme:
+                raise RuntimeError(f"README must document custom key {key!r}")
         for item in loaded.items:
             try:
                 plugin.canonicalize_url(item.url)

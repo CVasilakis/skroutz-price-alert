@@ -1,12 +1,18 @@
 # Example scraper plugin
 
-Copy this directory to `src/core/scrapers/<target>`. Update the descriptor, client,
-example config, and this README, then run `./scripts/plugin-check.sh --<target>`.
+Use `./scripts/plugin-create.sh` to generate a source package and its matching test
+package from this minimal shape. Update the descriptor, client, example config,
+package-local guide, and generated behavior tests, then run
+`./scripts/plugin-check.sh --<target>`.
 
 Runtime discovery requires `__init__.py`, `plugin.py`, and `client.py`; the contributor
-verifier also requires this README and `config.example.json`. Item fields, custom
-settings, and a private `requirements.txt` are optional. Descriptors may use stdlib,
-`core.scrapers.api`, and import-light plugin-local helpers; the isolated probe rejects
-third-party import effects. `client.py` must export `Client`.
+verifier also requires this README, `config.example.json`, and a corresponding
+`tests/plugins/<target>/test_*.py`. Item fields, custom settings, import-light helpers,
+and a private `requirements.txt` are optional advanced additions documented in
+`CONTRIBUTING.md`. Descriptors may use stdlib and `core.scrapers.api`; the isolated
+probe rejects third-party import effects. `client.py` must export `Client`.
+
+The minimal example accepts product URLs under `/products/` and returns a
+`PriceResult`. Replace both choices with the target's real page and result shape.
 
 The leading underscore keeps this package out of automatic plugin discovery.

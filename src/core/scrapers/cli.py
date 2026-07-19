@@ -55,6 +55,14 @@ def manifest(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
     return tuple(rows)
 
 
+def requirements(catalog: PluginCatalog) -> tuple[str, ...]:
+    """Return config-independent target/private-requirement pairs for dev tooling."""
+    return tuple(
+        f"{plugin.target}\t{plugin.requirements_path or ''}"
+        for plugin in catalog.plugins
+    )
+
+
 def _diagnose() -> int:
     try:
         catalog = PluginCatalog.discover()
@@ -71,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest_parser = subparsers.add_parser("manifest")
     manifest_parser.add_argument("--config-dir", default=CONFIG_DIR)
     subparsers.add_parser("intervals")
+    subparsers.add_parser("requirements")
     subparsers.add_parser("diagnose")
     plugin_check = subparsers.add_parser("plugin-check")
     plugin_check.add_argument("target")
@@ -81,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
             print(row)
     elif args.command == "intervals":
         print(", ".join(SUPPORTED_INTERVALS))
+    elif args.command == "requirements":
+        for row in requirements(PluginCatalog.discover()):
+            print(row)
     elif args.command == "diagnose":
         return _diagnose()
     else:

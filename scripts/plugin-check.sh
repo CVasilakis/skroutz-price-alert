@@ -19,6 +19,13 @@ if [ ! -x "$plugin_check_python" ]; then
     printf '%s\n' "Python interpreter not found: $plugin_check_python" >&2
     exit 127
 fi
+plugin_check_python="$(
+    CDPATH='' cd -- "$(dirname -- "$plugin_check_python")" && pwd
+)/$(basename -- "$plugin_check_python")"
+plugin_venv_parent="$(dirname -- "$(dirname -- "$(dirname -- "$plugin_check_python")")")"
 
-exec env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
+env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
     -m core.scrapers.cli plugin-check "$target"
+"$plugin_check_python" -m pytest --no-cov "$BASE_DIR/tests/plugins/$target"
+"$plugin_check_python" -m basedpyright --venvpath "$plugin_venv_parent" \
+    "$BASE_DIR/src/core/scrapers/$target"

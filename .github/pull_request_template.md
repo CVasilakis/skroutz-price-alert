@@ -1,0 +1,15 @@
+## Plugin contribution checklist
+
+For a new scraper plugin, confirm that:
+
+- [ ] The diff adds only `src/core/scrapers/<target>/` and `tests/plugins/<target>/`.
+- [ ] `plugin.py` and `__init__.py` are import-light and use no third-party imports.
+- [ ] `Client` uses bounded requests, modeled exceptions, and clean shutdown.
+- [ ] Tests use mocked/fixture responses and cover success, malformed data,
+      unavailable/no-price behavior, relevant status codes, and URL shapes.
+- [ ] `config.example.json` contains a valid item and demonstrates every custom key.
+- [ ] The package README documents URL matching, result type, custom keys, and dependencies.
+- [ ] `requirements.txt` contains only plugin-private dependencies, when needed.
+- [ ] `./scripts/plugin-check.sh --<target>` and the full suite pass.
+
+For non-plugin changes, remove this checklist or mark non-applicable items clearly.

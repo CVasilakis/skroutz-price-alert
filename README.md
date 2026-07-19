@@ -7,7 +7,7 @@
 
 
 > [!IMPORTANT]
-> Skroutz is a registered trademark of Skroutz S.A., and Insomnia is a trademark of its respective owner. This project is an independent, unofficial tool and is not affiliated with, authorized, maintained, sponsored, or endorsed by Skroutz S.A. or the operators of insomnia.gr in any way.
+> Store and marketplace names are trademarks of their respective owners. This independent, unofficial project is not affiliated with, authorized, maintained, sponsored, or endorsed by any supported marketplace.
 
 ## 📑 Table of Contents
 
@@ -394,7 +394,7 @@ You might receive the following push notification alerts throughout the lifecycl
 
 | Notification&nbsp;Title&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Trigger Condition |
 | :--- | :--- |
-| **Scrooge Alert - Price Drop!** | Sent when a product's price falls below your price limit. For Insomnia classifieds searches, one alert is sent per matching advert, each linking directly to that advert. |
+| **Scrooge Alert - Price Drop!** | Sent when a product's price falls below your price limit. Listing-result plugins send one alert per matching offer, each linking directly to that offer. |
 | **Scrooge Alert - Tracking Stale** | Sent if a specific product continuously fails the scrape. |
 | **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_error](#scraper-settings) setting. |
 | **Scrooge Alert - Script Crash** | Sent if the script completely failed to run. |
@@ -563,9 +563,10 @@ To see all the undergoing feature requests or to request a new feature, please c
 
 ## 🤝 Contributing & Issues
 
-New stores use the in-repository plugin contract: copy
-`src/core/scrapers/_example/`, keep `plugin.py` import-light, export `Client` from
-`client.py`, and run `./scripts/plugin-check.sh --<target>`. The immutable plugin
+New stores use the in-repository plugin contract: run
+`./scripts/plugin-create.sh`, keep `plugin.py` import-light, export `Client` from
+`client.py`, add mocked target-owned tests, and run
+`./scripts/plugin-check.sh --<target>`. The immutable plugin
 catalog and shell manifest discover the new adapter automatically, so framework,
 CLI, UI, and management-script edits are unnecessary. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the complete URL, field, setting, result,
@@ -587,7 +588,7 @@ Did this project save you time or help you snag a deal? Leaving a ⭐ on the rep
 
 ## ⚠️ Disclaimer
 
-Please use this script responsibly. This script is intended for personal, educational use. Users are solely responsible for how they use the script and must comply with Skroutz's Terms of Service. The author is not responsible for any bans, blocks, or legal issues that may arise from using this software.
+Please use this script responsibly. It is intended for personal, educational use. Users are solely responsible for complying with each monitored website's terms and applicable rules. The author is not responsible for bans, blocks, or legal issues arising from use of this software.
 
 ## 📄 License
 

@@ -7,9 +7,9 @@ instead of first surfacing on push. Every script's shebang is ``#!/bin/sh``, so
 shellcheck lints in POSIX mode and its SC3xxx checks are what enforce "verified
 against dash".
 
-The script list comes from ``git ls-files '*.sh'`` — drift-proof: a new shell script
-anywhere in the repo is covered the moment it is tracked, with no list to maintain
-(and the venv is never scanned, since it is untracked).
+The script list comes from ``git ls-files`` over tracked and newly created nonignored
+files — drift-proof and able to lint a new script before it is staged. The ignored
+venv is never scanned.
 
 Skips cleanly when shellcheck is not installed (it ships in ``requirements-dev.txt``
 via the ``shellcheck-py`` wheel, so a dev-toolchain install has it; the venv's own
@@ -37,9 +37,9 @@ def find_shellcheck() -> str | None:
 
 
 def tracked_shell_scripts() -> list[str]:
-    """Every git-tracked ``*.sh`` path, relative to the repo root."""
+    """Every tracked or new nonignored ``*.sh`` path, relative to the repo root."""
     out = subprocess.run(
-        ["git", "ls-files", "--", "*.sh"],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.sh"],
         cwd=REPO_ROOT, capture_output=True, text=True, check=True,
     )
     return [line for line in out.stdout.splitlines() if line]
@@ -52,9 +52,9 @@ class TestShellcheck(unittest.TestCase):
             self.skipTest("shellcheck not installed (pip install -r requirements-dev.txt)")
 
         scripts = tracked_shell_scripts()
-        # Silent-green guard: the repo ships 9 scripts today; an empty or shrunken
-        # enumeration means the listing broke, not that the scripts vanished.
-        self.assertGreaterEqual(len(scripts), 9, scripts)
+        # Silent-green guard: an empty or unexpectedly shrunken enumeration means
+        # the listing broke, not that the management/developer scripts vanished.
+        self.assertGreaterEqual(len(scripts), 12, scripts)
 
         # cwd=REPO_ROOT so the relative "shellcheck source=scripts/lib/common.sh"
         # directives resolve exactly as in the CI job.

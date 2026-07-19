@@ -1,10 +1,39 @@
 # Contributing a scraper plugin
 
-Scrapers are checked-in price adapters under `src/core/scrapers/`. Adding one is
-additive: copy `src/core/scrapers/_example/` to
-`src/core/scrapers/<target>/`; no framework, shell, registry, or UI edit is needed.
+Scrapers are checked-in price adapters. A contribution is strictly additive: it
+creates `src/core/scrapers/<target>/` and `tests/plugins/<target>/` and does not edit
+the framework, registry, shell tools, UI, root documentation, workflows, or snapshots.
 The package name becomes the CLI flag and the stem for config, state, logs, and
 systemd units.
+
+## Quick start
+
+Generate both plugin-owned directories without installing or touching systemd:
+
+```sh
+./scripts/plugin-create.sh acme_store \
+  --display-name "Acme Store" \
+  --domain store.example \
+  --url-prefix /products/
+./scripts/dev-setup.sh --acme_store
+```
+
+The scaffold refuses existing destinations and leaves a failing behavior-test
+placeholder. Implement the client with mocked response fixtures, replace that test,
+complete the package-local guide, and run the one-target acceptance command:
+
+```sh
+./scripts/plugin-check.sh --acme_store
+```
+
+That command checks the descriptor and example, runs only the target-owned tests,
+and statically checks the plugin package. Run the full suite before submitting:
+
+```sh
+./venv/bin/python3 -m pytest
+./venv/bin/basedpyright src
+git ls-files -z -- '*.sh' | xargs -0 ./venv/bin/shellcheck -x --exclude=SC2086,SC2046
+```
 
 ## Package layout
 
@@ -17,10 +46,13 @@ Application discovery requires the Python execution files:
 The contributor verifier additionally requires:
 
 - `README.md` — store-specific behavior and configuration;
-- `config.example.json` — a strict, runnable example.
+- `config.example.json` — a strict, runnable example with at least one item;
+- `tests/plugins/<target>/test_*.py` — mocked target-owned behavior tests.
 
 Add `requirements.txt` only when the client needs private dependencies. Those
 dependencies must never be imported by `plugin.py` or `__init__.py`.
+Production code must not import a sibling plugin; reusable behavior belongs in the
+framework only when it is genuinely store-independent.
 
 ## Descriptor contract
 
@@ -159,12 +191,15 @@ The orchestrator creates one client per target and closes it in that target's
 HTTP clients may subclass the documented `core.scrapers.http.HttpScraperClient`
 for bounded requests, TLS identity rotation, clean shutdown, and standard HTTP
 status mapping. Use `core.scrapers.pricing.parse_price` for finite price parsing
-with European or US separators. These modules may load private dependencies and
-therefore belong in `client.py`, never the descriptor.
+with European or US separators. A plugin using this optional helper must declare
+`tls-client` in its own `requirements.txt`. Transport/parser modules may load private
+dependencies and therefore belong in `client.py`, never the descriptor.
 
 ## Config, dependencies, and tests
 
-The example config is a strict JSON object containing `settings` and `items`.
+The example config is a strict JSON object containing `settings` and at least one
+valid item. It must demonstrate every custom setting and item field so users do not
+need to infer store-specific configuration from Python code.
 Every item needs a unique, stable `id`, `name`, accepted `url`, and non-negative
 `target_price`; `skip` is optional. Unknown keys, including `metadata`, are rejected.
 User config is read-only. Schema-v1 machine state is owned by the framework in
@@ -176,13 +211,18 @@ dependency must remain discoverable and produce the install hint
 a missing or invalid `Client`, and plugin-internal import defects are validation
 errors, not dependency errors.
 
-Add one target-owned test module under `tests/plugins/<target>/` with focused parser
-tests for representative success payloads, malformed markup, no-price/unavailable
-cases, relevant status codes, URL shapes, field codecs, and
-custom setting codecs. The generic verifier already checks descriptor imports,
-actual isolated import effects, contributor files, canonical defaults, conventional
-client typing, strict example loading, URL acceptance, dependency guidance, schema-v1 state
-round trips, and clean client shutdown.
+Add target-owned tests under `tests/plugins/<target>/` with focused parser tests for
+representative success payloads, malformed markup, no-price/unavailable cases,
+relevant status codes, accepted and rejected URL shapes, field codecs, and custom
+setting codecs. Never call the live store. The generic verifier checks descriptor
+imports, actual isolated import effects, contributor files, custom-schema examples,
+sibling-plugin isolation, canonical defaults, conventional client typing, URL
+acceptance, dependency guidance, schema-v1 state round trips, and clean shutdown.
+
+CI additionally creates a clean environment for every plugin and installs only core
+plus that plugin's own `requirements.txt`. This prevents an undeclared dependency
+from being hidden by another plugin. Keep dependencies package-local and verify their
+combined constraints with `pip check`.
 
 Run the focused verifier and full acceptance suite:
 
@@ -190,7 +230,7 @@ Run the focused verifier and full acceptance suite:
 ./scripts/plugin-check.sh --<target>
 ./venv/bin/python3 -m pytest
 ./venv/bin/basedpyright src
-find . -type f -name '*.sh' -print0 | xargs -0 shellcheck
+git ls-files -z -- '*.sh' | xargs -0 ./venv/bin/shellcheck -x --exclude=SC2086,SC2046
 ```
 
 Coverage is collected to show untested production lines, but its percentage is
@@ -198,6 +238,6 @@ informational only. Do not add `--cov-fail-under`, `fail_under`, or another
 coverage threshold: an otherwise successful local or CI test run must never fail
 because of its coverage percentage.
 
-To prove the additive workflow itself, copy `_example`, rename its package, run
-its plugin check, and verify that no framework or management-script edit is
-required.
+The test suite itself scaffolds and discovers a temporary plugin to prove that the
+two new plugin-owned directories are sufficient. A plugin pull request should not
+contain changes outside those directories.

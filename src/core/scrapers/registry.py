@@ -310,20 +310,6 @@ class PluginCatalog:
             raise PluginDiscoveryError(f"Failed to discover scraper plugins in '{root}': {exc}") from exc
         return cls(records)
 
-    @classmethod
-    def from_definitions(
-        cls,
-        definitions: Iterable[tuple[str, ScraperPlugin]],
-        *,
-        package_prefix: str = "core.scrapers",
-    ) -> "PluginCatalog":
-        """Compile injected descriptors without filesystem discovery."""
-        records = [
-            compile_plugin(definition, target=target, package=f"{package_prefix}.{target}")
-            for target, definition in definitions
-        ]
-        return cls(records)
-
     @property
     def plugins(self) -> tuple[RegisteredPlugin, ...]:
         return self._plugins

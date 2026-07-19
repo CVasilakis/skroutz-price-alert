@@ -23,11 +23,11 @@ class PluginFixture:
 
 def fake_plugin(name="fakestore", domains=("fake-store.example",),
                 display_name="Fake Store", specs=None, fields=None,
-                client_class=None, default_interval="1h") -> PluginFixture:
+                client_class=None, default_interval="1h", accepts_url=None) -> PluginFixture:
     definition = ScraperPlugin(
         display_name=display_name,
         domains=tuple(domains),
-        accepts_url=lambda _url: True,
+        accepts_url=accepts_url or (lambda _url: True),
         item_fields=tuple(fields or ()), settings=tuple(specs or ()),
         default_interval=default_interval,
     )

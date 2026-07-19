@@ -132,7 +132,7 @@ the *consumers*.**
 Everything runs through the project's venv. Tests are written with the stdlib `unittest`
 `TestCase` API but run under **pytest**, which is configured in the repo-root
 `pyproject.toml` (`pythonpath = ["src", "tests"]`, `testpaths = ["tests"]`). Install
-the test toolchain once with `./venv/bin/python3 -m pip install -r requirements-dev.txt`.
+the complete development toolchain once with `./scripts/dev-setup.sh`.
 
 ### Run the whole suite
 

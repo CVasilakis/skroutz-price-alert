@@ -261,6 +261,9 @@ def test_verifier_and_manifest_cli(capsys, tmp_path):
     assert "skroutz\tSkroutz\t" in output and "\thourly\tnocfg" in output
     assert cli_main(["intervals"]) == 0
     assert "1h" in capsys.readouterr().out
+    assert cli_main(["requirements"]) == 0
+    requirements_output = capsys.readouterr().out
+    assert "skroutz\t" in requirements_output
     with mock.patch("core.scrapers.cli.check_plugin", return_value=["contributor files"]):
         assert cli_main(["plugin-check", "skroutz"]) == 0
     with mock.patch("core.scrapers.cli.PluginCatalog.discover", side_effect=RuntimeError("bad")):

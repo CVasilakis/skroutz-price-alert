@@ -7,10 +7,17 @@ import pytest
 from core.exceptions import ConfigFileError, StateFileError
 from core.persistence import format_utc, parse_utc
 from core.scrapers.configuration import TargetConfigLoader
-from core.scrapers.registry import PluginCatalog
 from core.scrapers.state import JsonStateRepository, StateEntry
+from support import catalog_sandbox, fake_plugin
 
-CATALOG = PluginCatalog.discover()
+
+@pytest.fixture
+def plugin():
+    definition = fake_plugin(
+        accepts_url=lambda url: url.path.startswith("/products/"),
+    )
+    with catalog_sandbox(definition) as catalog:
+        yield catalog.get("fakestore")
 
 
 def _write(path, value):
@@ -18,23 +25,22 @@ def _write(path, value):
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
-def _skroutz_document(items):
+def _target_document(items):
     return {"settings": {}, "items": items}
 
 
 def _row(**updates):
     row = {
         "id": "phone", "name": "Phone",
-        "url": "https://www.skroutz.gr/s/1/Phone.html?variant=blue#reviews",
+        "url": "https://fake-store.example/products/phone?variant=blue#reviews",
         "target_price": 0, "skip": False,
     }
     row.update(updates)
     return row
 
 
-def test_loader_keeps_query_removes_fragment_and_reports_bad_rows(tmp_path):
-    plugin = CATALOG.get("skroutz")
-    _write(tmp_path / "config" / "skroutz.json", _skroutz_document([
+def test_loader_keeps_query_removes_fragment_and_reports_bad_rows(tmp_path, plugin):
+    _write(tmp_path / "config" / "fakestore.json", _target_document([
         _row(), _row(id="bad", mystery=True), _row(id="phone"),
     ]))
     loaded = TargetConfigLoader(plugin, str(tmp_path / "config")).load()
@@ -43,9 +49,8 @@ def test_loader_keeps_query_removes_fragment_and_reports_bad_rows(tmp_path):
     assert [issue.index for issue in loaded.row_issues] == [2, 3]
 
 
-def test_invalid_row_still_reserves_its_explicit_id(tmp_path):
-    plugin = CATALOG.get("skroutz")
-    _write(tmp_path / "config" / "skroutz.json", _skroutz_document([
+def test_invalid_row_still_reserves_its_explicit_id(tmp_path, plugin):
+    _write(tmp_path / "config" / "fakestore.json", _target_document([
         _row(name=" "), _row(name="Valid duplicate"),
     ]))
     loaded = TargetConfigLoader(plugin, str(tmp_path / "config")).load()
@@ -57,19 +62,17 @@ def test_invalid_row_still_reserves_its_explicit_id(tmp_path):
 @pytest.mark.parametrize(
     "extra", [{"future": 1}, {"products": []}, {"schema_version": 1}],
 )
-def test_unknown_top_level_keys_fail_closed(tmp_path, extra):
-    plugin = CATALOG.get("skroutz")
-    document = _skroutz_document([]) | extra
-    _write(tmp_path / "config" / "skroutz.json", document)
+def test_unknown_top_level_keys_fail_closed(tmp_path, extra, plugin):
+    document = _target_document([]) | extra
+    _write(tmp_path / "config" / "fakestore.json", document)
     with pytest.raises(ConfigFileError):
         TargetConfigLoader(plugin, str(tmp_path / "config")).load()
 
 
-def test_state_missing_is_healthy_and_round_trips_aware_utc(tmp_path):
+def test_state_missing_is_healthy_and_round_trips_aware_utc(tmp_path, plugin):
     repo = JsonStateRepository(tmp_path / "state" / "x.json")
     repo.load()
-    plugin = CATALOG.get("skroutz")
-    _write(tmp_path / "config" / "skroutz.json", _skroutz_document([_row()]))
+    _write(tmp_path / "config" / "fakestore.json", _target_document([_row()]))
     item = TargetConfigLoader(plugin, str(tmp_path / "config")).load().items[0]
     now = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
     repo.record_priced_check(item.id, 190, now)
@@ -118,9 +121,8 @@ def test_malformed_existing_state_is_not_overwritten(tmp_path):
     ({"settings": {}, "items": [], "metadata": {}}, "metadata"),
     ({"settings": {"typo": 1}, "items": []}, "unknown settings"),
 ])
-def test_strict_document_shapes(tmp_path, document, message):
-    plugin = CATALOG.get("skroutz")
-    _write(tmp_path / "config" / "skroutz.json", document)
+def test_strict_document_shapes(tmp_path, document, message, plugin):
+    _write(tmp_path / "config" / "fakestore.json", document)
     with pytest.raises(ConfigFileError, match=message):
         TargetConfigLoader(plugin, str(tmp_path / "config")).load()
 
@@ -128,12 +130,11 @@ def test_strict_document_shapes(tmp_path, document, message):
 @pytest.mark.parametrize("changes", [
     {"name": " "}, {"url": "relative"},
     {"url": "https://example.com/s/1/x"},
-    {"url": "https://www.skroutz.gr/search?q=x"},
+    {"url": "https://fake-store.example/search?q=x"},
     {"target_price": True}, {"target_price": -1}, {"skip": "no"}, {"metadata": {}},
 ])
-def test_invalid_rows_are_structured_and_never_loaded(tmp_path, changes):
-    plugin = CATALOG.get("skroutz")
-    _write(tmp_path / "config" / "skroutz.json", _skroutz_document([_row(**changes)]))
+def test_invalid_rows_are_structured_and_never_loaded(tmp_path, changes, plugin):
+    _write(tmp_path / "config" / "fakestore.json", _target_document([_row(**changes)]))
     loaded = TargetConfigLoader(plugin, str(tmp_path / "config")).load()
     assert loaded.items == ()
     assert loaded.row_issues[0].index == 1
