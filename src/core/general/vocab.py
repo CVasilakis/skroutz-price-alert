@@ -18,8 +18,7 @@ Import-light: stdlib plus the shared token-folding helpers only.
 
 import re
 
-from core.settings.normalizers import fold_token, alias_form
-
+from core.settings.normalizers import alias_form, fold_token
 
 DEFAULT_REMINDER = "1m"
 
@@ -53,15 +52,29 @@ _REMINDER_DISPLAY: dict[str, str] = {key: display for key, (_, display) in _REMI
 
 # Canonical weekday name (as displayed) -> its datetime.weekday() index (Monday is 0).
 _WEEKDAYS: tuple[str, ...] = (
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 )
 _WEEKDAY_INDEX: dict[str, int] = {name.lower(): i for i, name in enumerate(_WEEKDAYS)}
 
 # Short spellings the user may type for a weekday (folded to lowercase first).
 _WEEKDAY_ALIASES: dict[str, str] = {
-    "mon": "Monday", "tue": "Tuesday", "tues": "Tuesday", "wed": "Wednesday",
-    "weds": "Wednesday", "thu": "Thursday", "thur": "Thursday", "thurs": "Thursday",
-    "fri": "Friday", "sat": "Saturday", "sun": "Sunday",
+    "mon": "Monday",
+    "tue": "Tuesday",
+    "tues": "Tuesday",
+    "wed": "Wednesday",
+    "weds": "Wednesday",
+    "thu": "Thursday",
+    "thur": "Thursday",
+    "thurs": "Thursday",
+    "fri": "Friday",
+    "sat": "Saturday",
+    "sun": "Sunday",
 }
 
 # Named cadences the user may type instead of a number+unit (whitespace, case, hyphens

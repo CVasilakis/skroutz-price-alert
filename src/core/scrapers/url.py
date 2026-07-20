@@ -24,7 +24,10 @@ def normalize_domain(value: object) -> str:
         raise ValueError("domain is not a valid DNS name") from exc
     labels = normalized.split(".")
     if len(normalized) > 253 or any(
-        not label or len(label) > 63 or label[0] == "-" or label[-1] == "-"
+        not label
+        or len(label) > 63
+        or label[0] == "-"
+        or label[-1] == "-"
         or not all(char.isalnum() or char == "-" for char in label)
         for label in labels
     ):

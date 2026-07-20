@@ -19,7 +19,6 @@ import io
 from rich.console import Console
 
 from core.ui.panel import StatusPanelBuilder
-
 from ui.catalog._base import BuildResult
 
 # >= the 75-char panel width so panels render at full width with stable surrounding space.

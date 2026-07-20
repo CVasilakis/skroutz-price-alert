@@ -16,7 +16,10 @@ from unittest import mock
 import core.utils
 from core.exceptions import EnvFileError
 from core.utils import (
-    check_env_file, classify_notification_urls, describe_signal, is_valid_apprise_url,
+    check_env_file,
+    classify_notification_urls,
+    describe_signal,
+    is_valid_apprise_url,
 )
 
 VALID_URL = "json://localhost"
@@ -122,8 +125,7 @@ class TestClassifyNotificationUrls(unittest.TestCase):
 class TestDescribeSignal(unittest.TestCase):
     def test_known_signals(self):
         self.assertEqual(describe_signal(signal.SIGINT), "SIGINT (Ctrl+C)")
-        self.assertEqual(describe_signal(signal.SIGTERM),
-                         "SIGTERM (System Shutdown/Termination)")
+        self.assertEqual(describe_signal(signal.SIGTERM), "SIGTERM (System Shutdown/Termination)")
 
     def test_unknown_signal_is_the_raw_number(self):
         self.assertEqual(describe_signal(99), "99")

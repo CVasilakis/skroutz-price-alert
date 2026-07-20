@@ -6,6 +6,7 @@ from core.exceptions import InvalidURLError
 from core.scrapers.api import TrackedItem
 from core.scrapers.registry import PluginCatalog
 from core.scrapers.skroutz.client import Client
+from core.scrapers.skroutz.plugin import URL
 from core.settings import resolve_settings
 
 
@@ -17,7 +18,7 @@ class Response:
 
 
 def _item(url: str) -> TrackedItem:
-    return TrackedItem("id", "Name", url, 500)
+    return TrackedItem("id", "Name", 500, _custom={URL: url})
 
 
 def test_request_and_price_parsing_keeps_defensive_id_extraction():

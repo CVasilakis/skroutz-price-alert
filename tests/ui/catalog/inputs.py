@@ -10,12 +10,15 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from core.ui.config_check import config_view, ConfigView
 from core.scrapers.settings import framework_setting_specs
 from core.settings import (
-    ResolvedSetting, ResolvedSettings, SettingStatus, SettingView, setting_view,
-    resolve_settings,
+    ResolvedSetting,
+    ResolvedSettings,
+    SettingStatus,
+    SettingView,
+    setting_view,
 )
+from core.ui.config_check import ConfigView, config_view
 
 SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY = framework_setting_specs("1h")
 STATUS_OK = SettingStatus.OK
@@ -45,11 +48,14 @@ def stub_logger() -> logging.Logger:
 # A view is built from the real spec + a synthetic ResolvedSetting, so its label, display
 # formatting and (for invalid) warning footnote are exactly what production produces.
 
+
 def _view(spec, value: Any, status: SettingStatus, _raw: Any = None) -> SettingView:
     return setting_view(spec, ResolvedSetting(value, status))
 
 
-def interval_view(value: str = "1h", status: SettingStatus = STATUS_OK, raw: Any = "1h") -> SettingView:
+def interval_view(
+    value: str = "1h", status: SettingStatus = STATUS_OK, raw: Any = "1h"
+) -> SettingView:
     return _view(SPEC_INTERVAL, value, status, raw)
 
 
@@ -57,7 +63,9 @@ def retention_view(value: int = 7, status: SettingStatus = STATUS_OK, raw: Any =
     return _view(SPEC_RETENTION, value, status, raw)
 
 
-def notify_view(value: bool = True, status: SettingStatus = STATUS_OK, raw: Any = True) -> SettingView:
+def notify_view(
+    value: bool = True, status: SettingStatus = STATUS_OK, raw: Any = True
+) -> SettingView:
     return _view(SPEC_NOTIFY, value, status, raw)
 
 
@@ -109,8 +117,8 @@ def resolved_settings(
 
 # --- systemd property dicts (the STATUS systemd rows) -------------------------------
 
-def timer_props(active: bool = True,
-                next_elapse: str = "Mon 2026-06-29 13:00:00 UTC") -> dict:
+
+def timer_props(active: bool = True, next_elapse: str = "Mon 2026-06-29 13:00:00 UTC") -> dict:
     """A ``<target>-scraper.timer`` property dict."""
     return {
         "ActiveState": "active" if active else "inactive",
@@ -118,8 +126,12 @@ def timer_props(active: bool = True,
     }
 
 
-def service_props(running: bool = False, result: str = "success", exec_status: str = "0",
-                  exec_start: str = "Sun 2026-06-28 13:00:00 UTC") -> dict:
+def service_props(
+    running: bool = False,
+    result: str = "success",
+    exec_status: str = "0",
+    exec_start: str = "Sun 2026-06-28 13:00:00 UTC",
+) -> dict:
     """A ``<target>-scraper.service`` property dict.
 
     Pass ``exec_start=""`` to model a service that has never run (no Last Execution rows).
@@ -133,6 +145,7 @@ def service_props(running: bool = False, result: str = "success", exec_status: s
 
 
 # --- ConfigView (the CONFIG row atop Service Status / Scraping panels) --------------
+
 
 def config_ok(count: int = 5) -> ConfigView:
     """A healthy products-config summary (``✅ N loaded``)."""

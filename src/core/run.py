@@ -113,27 +113,39 @@ class RunReporter(Protocol):
 
     def complete_scraping(self) -> None: ...
 
-    def log_result(self, icon: str, name: str, value: str, notes: Notes = None,
-                   attempt_notes: Notes = None) -> None: ...
+    def log_result(
+        self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None: ...
 
-    def log_price_result(self, name: str, price: float | None, currency: str,
-                         target: float, outcome: PriceOutcome, notes: Notes = None,
-                         attempt_notes: Notes = None,
-                         delivery_failed: bool = False) -> None: ...
+    def log_price_result(
+        self,
+        name: str,
+        price: float | None,
+        currency: str,
+        target: float,
+        outcome: PriceOutcome,
+        notes: Notes = None,
+        attempt_notes: Notes = None,
+        delivery_failed: bool = False,
+    ) -> None: ...
 
-    def log_warning(self, name: str, warning_str: str, notes: Notes = None,
-                    attempt_notes: Notes = None) -> None: ...
+    def log_warning(
+        self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None: ...
 
-    def log_error(self, name: str, error_str: str, notes: Notes = None,
-                  attempt_notes: Notes = None) -> None: ...
+    def log_error(
+        self, name: str, error_str: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None: ...
 
     def log_attempt(self, name: str, attempt: int, max_retries: int, detail: str) -> None: ...
 
-    def log_failure(self, name: str, error_type: str, attempt_notes: Notes = None,
-                    extra_notes: Notes = None) -> None: ...
+    def log_failure(
+        self, name: str, error_type: str, attempt_notes: Notes = None, extra_notes: Notes = None
+    ) -> None: ...
 
-    def start_sleep(self, total_delay: float, retry_attempt: int = 0,
-                    max_retries: int = 0) -> None: ...
+    def start_sleep(
+        self, total_delay: float, retry_attempt: int = 0, max_retries: int = 0
+    ) -> None: ...
 
     def update_sleep(self, remaining: float) -> None: ...
 
@@ -145,5 +157,10 @@ class RunReporter(Protocol):
 
 
 __all__ = [
-    "ConfigOutcome", "ItemRunOutcome", "Notes", "PriceOutcome", "RunOutcome", "RunReporter",
+    "ConfigOutcome",
+    "ItemRunOutcome",
+    "Notes",
+    "PriceOutcome",
+    "RunOutcome",
+    "RunReporter",
 ]

@@ -2,14 +2,16 @@ import os
 import subprocess
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def _run(script: str, *args: str):
     return subprocess.run(
-        ["sh", str(ROOT / script), *args], cwd=ROOT,
-        text=True, capture_output=True, env=os.environ.copy(),
+        ["sh", str(ROOT / script), *args],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        env=os.environ.copy(),
     )
 
 

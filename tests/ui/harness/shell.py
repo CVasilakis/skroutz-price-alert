@@ -77,7 +77,7 @@ class ShellWorld:
         venv: Pre-create venv/bin/python3 (the responder) in the sandbox.
         ensurepip_missing: python3 -c "import ensurepip" fails (install.sh prereq).
         venv_create_fails: python3 -m venv fails.
-        pip_fail: None | "upgrade" | "requirements" | "plugin" - which pip call fails.
+        pip_fail: None | "upgrade" | "requirements" | "plugin" | "check" - failing pip call.
         requirements_txt: The root requirements.txt exists.
 
     Installed unit state (real files in the sandbox SYSTEMD_USER_DIR):
@@ -295,6 +295,7 @@ case "${1:-}" in
             *" -r requirements.txt") [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r /"*)               [ "${FAKE_PIP_FAIL:-}" = "plugin" ] && exit 1 ;;
             *" pip")                 [ "${FAKE_PIP_FAIL:-}" = "upgrade" ] && exit 1 ;;
+            "pip check")             [ "${FAKE_PIP_FAIL:-}" = "check" ] && exit 1 ;;
         esac ;;
     *)
         # run.sh's final exec: leave a marker line the golden can lock.
@@ -307,6 +308,7 @@ exit 0
 # ------------------------------------------------------------------------------
 # SANDBOX ASSEMBLY
 # ------------------------------------------------------------------------------
+
 
 def _unit_text_timer(plugin: str, block: str) -> str:
     """A <plugin>-scraper.timer in the exact shape the shared timer renderer emits, so
@@ -429,8 +431,9 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
     """The complete child environment - built from scratch, never inherited."""
     plugins = world.plugins
     schedules = world.schedules if world.schedules is not None else {p: "hourly" for p in plugins}
-    interval_status = (world.interval_status if world.interval_status is not None
-                       else {p: "ok" for p in plugins})
+    interval_status = (
+        world.interval_status if world.interval_status is not None else {p: "ok" for p in plugins}
+    )
 
     return {
         # Sandbox-only in every mode (an allowlist, not shim-by-precedence): the
@@ -448,18 +451,22 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_PLUGIN_EXAMPLES": "\n".join(
             f"{p}\t{sandbox}/src/core/scrapers/{p}/config.example.json" for p in plugins
         ),
-        "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p}\t{r}" for p, r in (world.requirements or {}).items()),
+        "FAKE_PLUGIN_REQUIREMENTS": "\n".join(
+            f"{p}\t{r}" for p, r in (world.requirements or {}).items()
+        ),
         "FAKE_SCHEDULES": "\n".join(f"{p}\t{calendar}" for p, calendar in schedules.items()),
         "FAKE_INTERVAL_STATUS": "\n".join(f"{p}\t{s}" for p, s in interval_status.items()),
         "FAKE_PLUGIN_MANIFEST": "\n".join(
-            "\t".join((
-                plugin,
-                plugin.capitalize(),
-                f"{sandbox}/src/core/scrapers/{plugin}/config.example.json",
-                (world.requirements or {}).get(plugin, ""),
-                schedules.get(plugin, ""),
-                interval_status.get(plugin, ""),
-            ))
+            "\t".join(
+                (
+                    plugin,
+                    plugin.capitalize(),
+                    f"{sandbox}/src/core/scrapers/{plugin}/config.example.json",
+                    (world.requirements or {}).get(plugin, ""),
+                    schedules.get(plugin, ""),
+                    interval_status.get(plugin, ""),
+                )
+            )
             for plugin in plugins
         ),
         "FAKE_SUPPORTED_INTERVALS": world.supported_intervals,
@@ -494,10 +501,14 @@ def _cleanup(sandbox: Path) -> None:
 # THE DRIVER
 # ------------------------------------------------------------------------------
 
-def drive_shell(script: str, *args: str,
-                world: ShellWorld = ShellWorld(),
-                stdin: str = "",
-                border: str | None = None) -> BuildResult:
+
+def drive_shell(
+    script: str,
+    *args: str,
+    world: ShellWorld = ShellWorld(),
+    stdin: str = "",
+    border: str | None = None,
+) -> BuildResult:
     """Runs one management script (sandbox-relative, e.g. ``"scripts/enable.sh"`` or
     ``"install.sh"``) in a fresh sandbox and returns its transcript as a BuildResult.
 

@@ -7,7 +7,10 @@ import pytest
 from core.exceptions import ConfigFileError
 from core.general.reminder import ReminderService, most_recent_slot, next_due_slot
 from core.general.settings import (
-    SPEC_REMINDER, SPEC_REMINDER_DAY, SPEC_REMINDER_TIME, resolve_general_settings,
+    SPEC_REMINDER,
+    SPEC_REMINDER_DAY,
+    SPEC_REMINDER_TIME,
+    resolve_general_settings,
 )
 from core.settings import SettingStatus
 
@@ -39,12 +42,20 @@ def test_general_config_is_strict_and_typed(tmp_path):
         resolve_general_settings(str(config_dir))
 
 
-@pytest.mark.parametrize("document, message", [
-    ([], "must contain an object"),
-    ({"schema_version": 1, "settings": {}}, "Unknown general config keys"),
-    ({"settings": [],}, "General settings must be an object"),
-    ({"settings": {}, "metadata": {}}, "Unknown general config keys"),
-])
+@pytest.mark.parametrize(
+    "document, message",
+    [
+        ([], "must contain an object"),
+        ({"schema_version": 1, "settings": {}}, "Unknown general config keys"),
+        (
+            {
+                "settings": [],
+            },
+            "General settings must be an object",
+        ),
+        ({"settings": {}, "metadata": {}}, "Unknown general config keys"),
+    ],
+)
 def test_general_config_rejects_malformed_and_unknown_fields(tmp_path, document, message):
     path = tmp_path / "config" / "general.json"
     path.parent.mkdir(parents=True)
@@ -62,8 +73,9 @@ def test_reminder_initializes_separate_state_then_delivers_when_due(tmp_path):
     _config(tmp_path, {"reminder": "1 week", "reminder_day": "Saturday", "reminder_time": "13:00"})
     now = datetime(2026, 7, 18, 14, 0)
     notifier = _notifier()
-    service = ReminderService(str(tmp_path / "config"), notifier,
-                              now_fn=lambda: now, update_check_fn=lambda: False)
+    service = ReminderService(
+        str(tmp_path / "config"), notifier, now_fn=lambda: now, update_check_fn=lambda: False
+    )
     with mock.patch("core.general.reminder.acquire_lock", return_value=mock.MagicMock()):
         service.run_once()
     state_path = tmp_path / "state" / "general.json"
@@ -83,8 +95,9 @@ def test_reminder_initializes_separate_state_then_delivers_when_due(tmp_path):
 def test_failed_delivery_does_not_advance_and_off_creates_no_state(tmp_path):
     _config(tmp_path, {"reminder": "off"})
     notifier = _notifier(False)
-    service = ReminderService(str(tmp_path / "config"), notifier,
-                              now_fn=lambda: datetime(2026, 7, 18, 14))
+    service = ReminderService(
+        str(tmp_path / "config"), notifier, now_fn=lambda: datetime(2026, 7, 18, 14)
+    )
     service.run_once()
     assert not (tmp_path / "state" / "general.json").exists()
     notifier.notify_reminder.assert_not_called()
@@ -96,8 +109,9 @@ def test_corrupt_general_state_is_preserved(tmp_path):
     path.parent.mkdir()
     path.write_text("{broken")
     original = path.read_bytes()
-    service = ReminderService(str(tmp_path / "config"), _notifier(),
-                              now_fn=lambda: datetime(2026, 7, 18, 14))
+    service = ReminderService(
+        str(tmp_path / "config"), _notifier(), now_fn=lambda: datetime(2026, 7, 18, 14)
+    )
     service.run_once()
     assert path.read_bytes() == original
 
@@ -116,8 +130,9 @@ def test_no_services_update_failure_and_persist_failure_are_nonfatal(tmp_path):
     _config(tmp_path, {"reminder": "1 week"})
     notifier = _notifier()
     notifier.has_services = False
-    service = ReminderService(str(tmp_path / "config"), notifier,
-                              now_fn=lambda: datetime(2026, 7, 18, 14))
+    service = ReminderService(
+        str(tmp_path / "config"), notifier, now_fn=lambda: datetime(2026, 7, 18, 14)
+    )
     service._logger = mock.Mock()
     service.run_once()
     notifier.notify_reminder.assert_not_called()
@@ -131,8 +146,9 @@ def test_due_delivery_exception_leaves_existing_slot(tmp_path):
     _config(tmp_path, {"reminder": "1 week"})
     start = datetime(2026, 7, 18, 14)
     notifier = _notifier()
-    service = ReminderService(str(tmp_path / "config"), notifier,
-                              now_fn=lambda: start, update_check_fn=lambda: False)
+    service = ReminderService(
+        str(tmp_path / "config"), notifier, now_fn=lambda: start, update_check_fn=lambda: False
+    )
     service._logger = mock.Mock()
     assert service._persist_slot({}, most_recent_slot(start))
     before = (tmp_path / "state" / "general.json").read_bytes()

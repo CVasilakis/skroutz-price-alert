@@ -14,13 +14,15 @@ from core.exceptions import (
     ScraperError,
     ServerError,
 )
-from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
+from core.scrapers.api import PriceResult, ScraperClient, TrackedItem, UrlField
+
+URL = UrlField("url", domains=("127.0.0.1",), accepts_url=lambda _url: True)
 
 
 class FakeStoreClient(ScraperClient):
     def scrape(self, item: TrackedItem) -> PriceResult:
         try:
-            with urllib.request.urlopen(item.url, timeout=5) as response:
+            with urllib.request.urlopen(item[URL], timeout=5) as response:
                 status, body = response.status, response.read()
         except urllib.error.HTTPError as exc:
             status, body = exc.code, b""

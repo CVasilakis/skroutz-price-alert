@@ -22,7 +22,10 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         setting=lambda _key: interval_spec,
     )
     load = SimpleNamespace(
-        target="alpha", count=2, faulty_indices=(1,), failure=None,
+        target="alpha",
+        count=2,
+        faulty_indices=(1,),
+        failure=None,
         settings=mock.MagicMock(),
     )
     interval = SimpleNamespace(status=SettingStatus.OK, value="1h")
@@ -39,25 +42,28 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
     orphan_panel = mock.MagicMock()
     not_installed = object()
 
-    with mock.patch("core.status.install_interrupt_handler"), \
-         mock.patch("core.status.setup_global_logging"), \
-         mock.patch("core.status.Console", return_value=console), \
-         mock.patch("core.status.PluginCatalog.discover", return_value=catalog), \
-         mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar, \
-         mock.patch("core.status.load_targets", return_value=(load,)), \
-         mock.patch("core.status.render_config_panel"), \
-         mock.patch("core.status.signal.signal"), \
-         mock.patch("core.status.get_systemd_properties",
-                    side_effect=systemd_properties), \
-         mock.patch("core.status.read_timer_oncalendar", return_value="daily"), \
-         mock.patch("core.status.config_view", return_value="config-view"), \
-         mock.patch("core.status.build_service_panel", return_value=service_panel) as build_service, \
-         mock.patch("core.status.build_not_installed_panel",
-                    return_value=not_installed) as build_missing, \
-         mock.patch("core.status.get_installed_plugin_units",
-                    return_value={"alpha": {"timer"}, "orphan": {"service"}}), \
-         mock.patch("core.status.build_orphan_panel",
-                    return_value=orphan_panel) as build_orphan:
+    with (
+        mock.patch("core.status.install_interrupt_handler"),
+        mock.patch("core.status.setup_global_logging"),
+        mock.patch("core.status.Console", return_value=console),
+        mock.patch("core.status.PluginCatalog.discover", return_value=catalog),
+        mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar,
+        mock.patch("core.status.load_targets", return_value=(load,)),
+        mock.patch("core.status.render_config_panel"),
+        mock.patch("core.status.signal.signal"),
+        mock.patch("core.status.get_systemd_properties", side_effect=systemd_properties),
+        mock.patch("core.status.read_timer_oncalendar", return_value="daily"),
+        mock.patch("core.status.config_view", return_value="config-view"),
+        mock.patch("core.status.build_service_panel", return_value=service_panel) as build_service,
+        mock.patch(
+            "core.status.build_not_installed_panel", return_value=not_installed
+        ) as build_missing,
+        mock.patch(
+            "core.status.get_installed_plugin_units",
+            return_value={"alpha": {"timer"}, "orphan": {"service"}},
+        ),
+        mock.patch("core.status.build_orphan_panel", return_value=orphan_panel) as build_orphan,
+    ):
         core.status.main()
 
     oncalendar.assert_called_once_with("1h")

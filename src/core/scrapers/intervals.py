@@ -5,13 +5,24 @@ import re
 from core.settings.normalizers import alias_form, fold_token
 
 SUPPORTED_INTERVALS: dict[str, str] = {
-    "15m": "*:0/15", "30m": "*:0/30", "1h": "hourly",
-    "2h": "*-*-* 00/2:00:00", "4h": "*-*-* 00/4:00:00",
-    "8h": "*-*-* 00/8:00:00", "12h": "*-*-* 00/12:00:00", "24h": "daily",
+    "15m": "*:0/15",
+    "30m": "*:0/30",
+    "1h": "hourly",
+    "2h": "*-*-* 00/2:00:00",
+    "4h": "*-*-* 00/4:00:00",
+    "8h": "*-*-* 00/8:00:00",
+    "12h": "*-*-* 00/12:00:00",
+    "24h": "daily",
 }
 _MINUTES = {
-    "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240,
-    "8h": 480, "12h": 720, "24h": 1440,
+    "15m": 15,
+    "30m": 30,
+    "1h": 60,
+    "2h": 120,
+    "4h": 240,
+    "8h": 480,
+    "12h": 720,
+    "24h": 1440,
 }
 _BY_MINUTES = {minutes: key for key, minutes in _MINUTES.items()}
 _ALIASES = {"hourly": 60, "daily": 1440, "halfhourly": 30, "halfhour": 30}

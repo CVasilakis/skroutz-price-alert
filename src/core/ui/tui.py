@@ -1,22 +1,26 @@
 import logging
 from collections.abc import Sequence
+
 from rich.console import Console, Group
 from rich.live import Live
-from rich.table import Table
-from rich.panel import Panel
-from rich.rule import Rule
-from rich.text import Text
 from rich.markup import escape
-from rich.spinner import Spinner
+from rich.panel import Panel
 from rich.progress_bar import ProgressBar
+from rich.rule import Rule
+from rich.spinner import Spinner
+from rich.table import Table
+from rich.text import Text
 
 from core import messages
 from core.run import ConfigOutcome, Notes, PriceOutcome, RunReporter
 from core.settings import SettingView
 from core.ui.config_check import ConfigView, config_view
 from core.ui.panel import uniform_column_widths
+
+
 class InteractiveRunReporter(RunReporter):
     """Rich live reporter for an interactive scraping run."""
+
     def __init__(self):
         """Initializes the interactive strategy state."""
         self.console = Console()
@@ -34,9 +38,13 @@ class InteractiveRunReporter(RunReporter):
         self.scraping_max = 1
         self.is_complete = False
 
-    def start_target(self, target_name: str, target_logger: logging.Logger,
-                     settings_view: Sequence[SettingView],
-                     config: ConfigOutcome) -> None:
+    def start_target(
+        self,
+        target_name: str,
+        target_logger: logging.Logger,
+        settings_view: Sequence[SettingView],
+        config: ConfigOutcome,
+    ) -> None:
         """Starts a new live display session for the given target."""
         if self.live:
             self.live.stop()
@@ -59,8 +67,9 @@ class InteractiveRunReporter(RunReporter):
         self.live = Live(self._generate_panel(), refresh_per_second=10)
         self.live.start()
 
-    def _build_settings_rows(self, settings_view: Sequence[SettingView],
-                             config_view: ConfigView) -> list[tuple]:
+    def _build_settings_rows(
+        self, settings_view: Sequence[SettingView], config_view: ConfigView
+    ) -> list[tuple]:
         """Renders the products-config health + resolved settings into ``(icon, label, value)`` rows.
 
         The 'Config' row (products-config health) leads the section when ``config_view`` is
@@ -74,7 +83,8 @@ class InteractiveRunReporter(RunReporter):
         for view in settings_view:
             note_ref = self._build_note_refs(view.footnote) if view.has_warning else ""
             value = view.render_value(
-                note_ref, default_marker=" [dim](default)[/dim]",
+                note_ref,
+                default_marker=" [dim](default)[/dim]",
                 value_text=escape(view.display_value),
             )
             rows.append((view.icon, escape(view.label), value))
@@ -120,7 +130,7 @@ class InteractiveRunReporter(RunReporter):
     def _truncate_name(self, name: str, max_len: int = 30) -> str:
         """Truncates a name string to fit within the live display panel."""
         if len(name) > max_len:
-            return name[:max_len - 3] + "..."
+            return name[: max_len - 3] + "..."
         return name
 
     def _build_note_refs(self, notes: Notes) -> str:
@@ -153,16 +163,27 @@ class InteractiveRunReporter(RunReporter):
         if self.is_sleeping:
             grid = Table.grid(padding=(0, 1))
             grid.add_row(
-                ProgressBar(total=self.sleep_total, completed=self.sleep_remaining, width=30, style="grey37", complete_style="cyan", finished_style="cyan"),
-                f"[cyan]{self.sleep_remaining:.1f}s[/cyan]"
+                ProgressBar(
+                    total=self.sleep_total,
+                    completed=self.sleep_remaining,
+                    width=30,
+                    style="grey37",
+                    complete_style="cyan",
+                    finished_style="cyan",
+                ),
+                f"[cyan]{self.sleep_remaining:.1f}s[/cyan]",
             )
             display_rows.append(("⏳", self.sleep_label, grid))
         elif self.scraping_name:
             if self.scraping_attempt > 1:
-                scrape_text = f"[cyan]Scraping ({self.scraping_attempt}/{self.scraping_max})...[/cyan]"
+                scrape_text = (
+                    f"[cyan]Scraping ({self.scraping_attempt}/{self.scraping_max})...[/cyan]"
+                )
             else:
                 scrape_text = "[cyan]Scraping...[/cyan]"
-            display_rows.append((Spinner("dots", style="cyan"), escape(self.scraping_name), scrape_text))
+            display_rows.append(
+                (Spinner("dots", style="cyan"), escape(self.scraping_name), scrape_text)
+            )
 
         # Size the icon/label columns once across both sections so the value column starts at
         # the same position above and below the divider. The transient sleep/scraping row is
@@ -197,7 +218,7 @@ class InteractiveRunReporter(RunReporter):
 
         # Settings rows count toward the border color too, so an invalid setting tints
         # the panel yellow.
-        for row in (self.settings_rows + self.rows):
+        for row in self.settings_rows + self.rows:
             icon = row[0]
             if icon == "🎉":
                 has_green = True
@@ -218,19 +239,35 @@ class InteractiveRunReporter(RunReporter):
         else:
             panel_color = "blue"
 
-        return Panel(renderable, title=f"[bold]{escape(self.target_name)} Scraping[/bold]", border_style=panel_color, width=75)
+        return Panel(
+            renderable,
+            title=f"[bold]{escape(self.target_name)} Scraping[/bold]",
+            border_style=panel_color,
+            width=75,
+        )
 
-    def log_result(self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_result(
+        self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None:
         """Logs a standard result directly into the rich table."""
-        refs = self._build_note_refs(self._normalize_notes(attempt_notes) + self._normalize_notes(notes))
+        refs = self._build_note_refs(
+            self._normalize_notes(attempt_notes) + self._normalize_notes(notes)
+        )
         self.rows.append((icon, escape(self._truncate_name(name)), f"{value}{refs}"))
         if self.live:
             self.live.update(self._generate_panel())
 
-    def log_price_result(self, name: str, price: float | None, currency: str,
-                         target: float, outcome: PriceOutcome, notes: Notes = None,
-                         attempt_notes: Notes = None,
-                         delivery_failed: bool = False) -> None:
+    def log_price_result(
+        self,
+        name: str,
+        price: float | None,
+        currency: str,
+        target: float,
+        outcome: PriceOutcome,
+        notes: Notes = None,
+        attempt_notes: Notes = None,
+        delivery_failed: bool = False,
+    ) -> None:
         """Renders a price result row, coloring the price/target per the outcome."""
         safe_currency = escape(currency)
         target_str = f"(Target: {target} {safe_currency})"
@@ -243,19 +280,33 @@ class InteractiveRunReporter(RunReporter):
         else:
             value = f"{price} {safe_currency} {target_str}"
         self.log_result(
-            self._outcome_icon(outcome, delivery_failed), name, value,
-            notes, attempt_notes,
+            self._outcome_icon(outcome, delivery_failed),
+            name,
+            value,
+            notes,
+            attempt_notes,
         )
 
-    def log_warning(self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None) -> None:
+    def log_warning(
+        self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None:
         """Logs a warning entry to the live display."""
-        refs = self._build_note_refs(self._normalize_notes(attempt_notes) + self._normalize_notes(notes))
-        self.rows.append(("🟡", escape(self._truncate_name(name)), f"[yellow]{escape(warning_str)}{refs}[/yellow]"))
+        refs = self._build_note_refs(
+            self._normalize_notes(attempt_notes) + self._normalize_notes(notes)
+        )
+        self.rows.append(
+            (
+                "🟡",
+                escape(self._truncate_name(name)),
+                f"[yellow]{escape(warning_str)}{refs}[/yellow]",
+            )
+        )
         if self.live:
             self.live.update(self._generate_panel())
 
-    def log_error(self, name: str, error_str: str, notes: Notes = None,
-                  attempt_notes: Notes = None) -> None:
+    def log_error(
+        self, name: str, error_str: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None:
         """Logs an error entry to the live display."""
         refs = self._build_note_refs(
             self._normalize_notes(attempt_notes) + self._normalize_notes(notes)
@@ -268,7 +319,9 @@ class InteractiveRunReporter(RunReporter):
         """Ignored: failed attempts are collapsed into the product's single row."""
         pass
 
-    def log_failure(self, name: str, error_type: str, attempt_notes: Notes = None, extra_notes: Notes = None) -> None:
+    def log_failure(
+        self, name: str, error_type: str, attempt_notes: Notes = None, extra_notes: Notes = None
+    ) -> None:
         """Logs the terminal failure as a single red row with one footnote per attempt."""
         notes = self._normalize_notes(attempt_notes) + self._normalize_notes(extra_notes)
         self.log_error(name, error_type, notes)
@@ -278,7 +331,9 @@ class InteractiveRunReporter(RunReporter):
         self.is_sleeping = True
         self.sleep_total = total_delay
         self.sleep_remaining = total_delay
-        self.sleep_label = f"Retrying ({retry_attempt}/{max_retries})" if retry_attempt else "Sleeping"
+        self.sleep_label = (
+            f"Retrying ({retry_attempt}/{max_retries})" if retry_attempt else "Sleeping"
+        )
         if self.live:
             self.live.update(self._generate_panel())
 
@@ -296,7 +351,6 @@ class InteractiveRunReporter(RunReporter):
         replaced atomically, avoiding a brief visual contraction of the panel.
         """
         self.is_sleeping = False
-
 
     def complete_target(self) -> None:
         """Stops the live display console for the target.

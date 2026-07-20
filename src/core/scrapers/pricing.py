@@ -28,7 +28,7 @@ def parse_price(raw_value: object) -> float | None:
         number = cleaned
     else:
         integer = re.sub(r"[.,]", "", cleaned[:decimal_pos])
-        fraction = re.sub(r"[.,]", "", cleaned[decimal_pos + 1:])
+        fraction = re.sub(r"[.,]", "", cleaned[decimal_pos + 1 :])
         number = f"{integer}.{fraction}"
     try:
         value = float(f"{sign}{number}")

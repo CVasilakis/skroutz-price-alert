@@ -100,6 +100,11 @@ NOTE_RATE_LIMIT_ABORTED = "Rate limit reached; scraping aborted."
 ERR_LOCK_HELD = "Another instance is currently running. Aborting..."
 
 
+def plugin_lifecycle_failed(error_type: str) -> str:
+    """Describe an unexpected target-scoped client lifecycle fault."""
+    return f"Scraper target failed unexpectedly ({error_type})."
+
+
 def skipping_warning(error_type: str) -> str:
     """The warning heading for a terminal, non-retryable skip error.
 

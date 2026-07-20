@@ -20,47 +20,94 @@ from ui.catalog.shell_inputs import (
 
 _case = shell_case(Surface.SH_DISABLE, "scripts/disable.sh")
 
-_case("help", "Usage text listing registered targets and installed orphans alike.",
-      "--help", world=WORLD_ORPHAN, tags=("help", "orphan"))
+_case(
+    "help",
+    "Usage text listing registered targets and installed orphans alike.",
+    "--help",
+    world=WORLD_ORPHAN,
+    tags=("help", "orphan"),
+)
 
-_case("invalid_argument", "A positional argument is rejected.",
-      "foo", world=WORLD_INSTALLED, tags=("error",))
+_case(
+    "invalid_argument",
+    "A positional argument is rejected.",
+    "foo",
+    world=WORLD_INSTALLED,
+    tags=("error",),
+)
 
-_case("bare_double_dash", "A bare '--' is rejected instead of silently selecting nothing.",
-      "--", world=WORLD_INSTALLED, tags=("error",))
+_case(
+    "bare_double_dash",
+    "A bare '--' is rejected instead of silently selecting nothing.",
+    "--",
+    world=WORLD_INSTALLED,
+    tags=("error",),
+)
 
-_case("help_after_target", "-h/--help is honored anywhere in the argument list.",
-      "--skroutz", "--help", world=WORLD_INSTALLED, tags=("help",))
+_case(
+    "help_after_target",
+    "-h/--help is honored anywhere in the argument list.",
+    "--skroutz",
+    "--help",
+    world=WORLD_INSTALLED,
+    tags=("help",),
+)
 
-_case("not_installed_notice", "A registered but never-installed target - notice, not an error.",
-      "--amazon", world=WORLD_AMAZON_UNINSTALLED)
+_case(
+    "not_installed_notice",
+    "A registered but never-installed target - notice, not an error.",
+    "--amazon",
+    world=WORLD_AMAZON_UNINSTALLED,
+)
 
-_case("unknown_target", "An explicit --<target> in neither the registry nor the units.",
-      "--bogus", world=WORLD_INSTALLED, tags=("error",))
+_case(
+    "unknown_target",
+    "An explicit --<target> in neither the registry nor the units.",
+    "--bogus",
+    world=WORLD_INSTALLED,
+    tags=("error",),
+)
 
-_case("nothing_installed", "No scraper timers on disk at all.",
-      world=WORLD_EMPTY)
+_case("nothing_installed", "No scraper timers on disk at all.", world=WORLD_EMPTY)
 
-_case("already_disabled", "The timer and service are already fully stopped.",
-      world=WORLD_INSTALLED)
+_case("already_disabled", "The timer and service are already fully stopped.", world=WORLD_INSTALLED)
 
-_case("disable_success", "An enabled and active timer is stopped and disabled.",
-      world=WORLD_HEALTHY)
+_case(
+    "disable_success", "An enabled and active timer is stopped and disabled.", world=WORLD_HEALTHY
+)
 
-_case("disable_fails", "A rejected disable request is reported and returns nonzero.",
-      world=replace(WORLD_HEALTHY, systemctl_fail=("disable",)), tags=("error",))
+_case(
+    "disable_fails",
+    "A rejected disable request is reported and returns nonzero.",
+    world=replace(WORLD_HEALTHY, systemctl_fail=("disable",)),
+    tags=("error",),
+)
 
-_case("disable_noop_detected", "A no-op disable cannot satisfy the enabled-state postcondition.",
-      world=replace(WORLD_HEALTHY, systemctl_noop=("disable",)), tags=("error",))
+_case(
+    "disable_noop_detected",
+    "A no-op disable cannot satisfy the enabled-state postcondition.",
+    world=replace(WORLD_HEALTHY, systemctl_noop=("disable",)),
+    tags=("error",),
+)
 
-_case("query_fails", "A failed state query is not mistaken for an already-disabled pair.",
-      world=replace(WORLD_HEALTHY, systemctl_fail=("show",)), tags=("error",))
+_case(
+    "query_fails",
+    "A failed state query is not mistaken for an already-disabled pair.",
+    world=replace(WORLD_HEALTHY, systemctl_fail=("show",)),
+    tags=("error",),
+)
 
-_case("service_only_pair", "A running service remains manageable when its timer file is missing.",
-      world=ShellWorld(plugins=(), installed_services=("ghost",),
-                       activating_services=("ghost",)), tags=("orphan",))
+_case(
+    "service_only_pair",
+    "A running service remains manageable when its timer file is missing.",
+    world=ShellWorld(plugins=(), installed_services=("ghost",), activating_services=("ghost",)),
+    tags=("orphan",),
+)
 
-_case("orphan_by_name", "An orphan's still-armed timer is disabled by explicit --<target>.",
-      "--ghost",
-      world=replace(WORLD_ORPHAN, enabled_timers=("ghost",), active_timers=("ghost",)),
-      tags=("orphan",))
+_case(
+    "orphan_by_name",
+    "An orphan's still-armed timer is disabled by explicit --<target>.",
+    "--ghost",
+    world=replace(WORLD_ORPHAN, enabled_timers=("ghost",), active_timers=("ghost",)),
+    tags=("orphan",),
+)

@@ -3,7 +3,7 @@
 import math
 from urllib.parse import SplitResult
 
-from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec
+from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec, UrlField
 
 
 def decode_string_tuple(raw: object) -> tuple[str, ...]:
@@ -15,10 +15,14 @@ def decode_string_tuple(raw: object) -> tuple[str, ...]:
 
 
 TITLE_INCLUDE = ItemField[tuple[str, ...]](
-    key="title_include", decode=decode_string_tuple, default=(),
+    key="title_include",
+    decode=decode_string_tuple,
+    default=(),
 )
 TITLE_EXCLUDE = ItemField[tuple[str, ...]](
-    key="title_exclude", decode=decode_string_tuple, default=(),
+    key="title_exclude",
+    decode=decode_string_tuple,
+    default=(),
 )
 
 
@@ -51,11 +55,17 @@ def is_classifieds_url(url: SplitResult) -> bool:
     return url.path.startswith("/classifieds/")
 
 
-PLUGIN = ScraperPlugin(
-    display_name="Insomnia",
+URL = UrlField(
+    key="url",
     domains=("insomnia.gr",),
     accepts_url=is_classifieds_url,
-    item_fields=(TITLE_INCLUDE, TITLE_EXCLUDE),
+)
+
+
+PLUGIN = ScraperPlugin(
+    display_name="Insomnia",
+    item_fields=(URL, TITLE_INCLUDE, TITLE_EXCLUDE),
     settings=(MIN_ADVERT_PRICE,),
     default_interval="1h",
+    reference_url=URL,
 )

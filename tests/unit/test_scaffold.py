@@ -8,7 +8,6 @@ from core.scrapers.configuration import TargetConfigLoader
 from core.scrapers.registry import PluginCatalog
 from core.scrapers.scaffold import ScaffoldRequest, create_plugin, main, validate_request
 
-
 REQUEST = ScaffoldRequest("acme_store", "Acme Store", "Store.Example", "/products")
 
 
@@ -22,7 +21,11 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     assert source == tmp_path / "src/core/scrapers/acme_store"
     assert tests == tmp_path / "tests/plugins/acme_store"
     assert {path.name for path in source.iterdir()} == {
-        "__init__.py", "plugin.py", "client.py", "README.md", "config.example.json",
+        "__init__.py",
+        "plugin.py",
+        "client.py",
+        "README.md",
+        "config.example.json",
     }
     assert {path.name for path in tests.iterdir()} == {"__init__.py", "test_client.py"}
     document = json.loads((source / "config.example.json").read_text(encoding="utf-8"))
@@ -52,14 +55,17 @@ def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
         scraper_package.__path__[:] = saved_path
 
 
-@pytest.mark.parametrize("scaffold_request", [
-    ScaffoldRequest("Bad", "Acme", "store.example", "/products/"),
-    ScaffoldRequest("help", "Acme", "store.example", "/products/"),
-    ScaffoldRequest("acme", " ", "store.example", "/products/"),
-    ScaffoldRequest("acme", "Acme", "https://store.example", "/products/"),
-    ScaffoldRequest("acme", "Acme", "store.example", "products/"),
-    ScaffoldRequest("acme", "Acme", "store.example", "/products/?q=x"),
-])
+@pytest.mark.parametrize(
+    "scaffold_request",
+    [
+        ScaffoldRequest("Bad", "Acme", "store.example", "/products/"),
+        ScaffoldRequest("help", "Acme", "store.example", "/products/"),
+        ScaffoldRequest("acme", " ", "store.example", "/products/"),
+        ScaffoldRequest("acme", "Acme", "https://store.example", "/products/"),
+        ScaffoldRequest("acme", "Acme", "store.example", "products/"),
+        ScaffoldRequest("acme", "Acme", "store.example", "/products/?q=x"),
+    ],
+)
 def test_scaffold_rejects_invalid_identity_and_url_inputs(scaffold_request):
     with pytest.raises(ValueError):
         validate_request(scaffold_request)
@@ -101,8 +107,15 @@ def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path
 
 def test_scaffold_cli_reports_success_and_collision(tmp_path, capsys):
     args = [
-        "acme_store", "--display-name", "Acme Store", "--domain", "store.example",
-        "--url-prefix", "/products/", "--repo-root", str(tmp_path),
+        "acme_store",
+        "--display-name",
+        "Acme Store",
+        "--domain",
+        "store.example",
+        "--url-prefix",
+        "/products/",
+        "--repo-root",
+        str(tmp_path),
     ]
     assert main(args) == 0
     assert "plugin-check.sh --acme_store" in capsys.readouterr().out

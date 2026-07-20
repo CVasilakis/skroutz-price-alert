@@ -35,8 +35,11 @@ def test_interactive_external_text_is_literal_and_cannot_change_success_border()
     output = _render(panel)
 
     for literal in (
-        "[red]Store[/red]", "[red]Region[/red]", "[blue]EU[/blue]",
-        "[red]Phone[/red]", "[blue]EUR[/blue]",
+        "[red]Store[/red]",
+        "[red]Region[/red]",
+        "[blue]EU[/blue]",
+        "[red]Phone[/red]",
+        "[blue]EUR[/blue]",
     ):
         assert literal in output
     assert str(panel.border_style) == "green"

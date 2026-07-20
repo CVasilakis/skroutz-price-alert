@@ -1,37 +1,38 @@
 import os
-import sys
 import signal
+import sys
 
 # Put src/ (the parent of the `core` package) on the path so the absolute
 # `core.*` imports below work when this file is invoked directly as a script.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.utils import check_env_file, is_valid_apprise_url, install_interrupt_handler
-from core.notifier import Notifier
-from core.logger import setup_global_logging
-from core.exceptions import EnvFileError
-from core.ui.panel import StatusPanelBuilder
-
 from rich.console import Console
 from rich.markup import escape
 
+from core.exceptions import EnvFileError
+from core.logger import setup_global_logging
+from core.notifier import Notifier
+from core.ui.panel import StatusPanelBuilder
+from core.utils import check_env_file, install_interrupt_handler, is_valid_apprise_url
+
+
 def obfuscate_invalid_url(url: str) -> str:
     """Obfuscates an invalid URL for display."""
-    schema_end = url.find('://')
+    schema_end = url.find("://")
     if schema_end != -1:
-        scheme = url[:schema_end + 3]
-        rest = url[schema_end + 3:]
+        scheme = url[: schema_end + 3]
+        rest = url[schema_end + 3 :]
     else:
         scheme = ""
         rest = url
 
-    first_slash = rest.find('/')
+    first_slash = rest.find("/")
     if first_slash != -1:
         token = rest[:first_slash]
-        path = '/...'
+        path = "/..."
     else:
         token = rest
-        path = ''
+        path = ""
 
     if len(token) > 2:
         obfuscated_token = f"{token[0]}...{token[-1]}"
@@ -43,6 +44,7 @@ def obfuscate_invalid_url(url: str) -> str:
     if not scheme and not obfuscated_token:
         return "***"
     return f"{scheme}{obfuscated_token}{path}"
+
 
 def build_ping_panel(
     url_entries: list[tuple[str, bool]],
@@ -104,6 +106,7 @@ def build_ping_panel(
 
     return panel, panel_color
 
+
 def main():
     """Main entry point for sending a test notification.
 
@@ -126,7 +129,7 @@ def main():
     url_entries = []  # Preserves .env order as (url_str, is_valid) tuples
 
     if notification_urls:
-        for u in notification_urls.split(','):
+        for u in notification_urls.split(","):
             u = u.strip()
             if u:
                 is_valid = is_valid_apprise_url(u)
@@ -148,6 +151,7 @@ def main():
     panel.render(console, panel_color=panel_color)
 
     console.print()
+
 
 if __name__ == "__main__":
     main()

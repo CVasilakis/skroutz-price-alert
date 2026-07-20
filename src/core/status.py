@@ -1,117 +1,46 @@
-import sys
 import os
-import glob
 import signal
-import subprocess
+import sys
 
 # Put src/ (the parent of the `core` package) on the path so the absolute
 # `core.*` imports below work when this file is invoked directly as a script.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+from rich.console import Console
+from rich.markup import escape
+from rich.panel import Panel
+from rich.table import Table
+
 from core.constants import CONFIG_DIR
 from core.exit_status import classify_service_state
+from core.logger import setup_global_logging
+from core.preflight import LoadFailureKind, load_targets
 from core.scrapers.intervals import oncalendar_for
 from core.scrapers.registry import PluginCatalog
 from core.scrapers.settings import KEY_INTERVAL
 from core.settings import SettingStatus
-from core.logger import setup_global_logging
+from core.systemd_inspection import (
+    SYSTEMCTL_QUERY_TIMEOUT_SECONDS as SYSTEMCTL_QUERY_TIMEOUT_SECONDS,
+)
+from core.systemd_inspection import (
+    get_installed_plugin_units,
+    get_systemd_properties,
+    read_timer_oncalendar,
+)
+from core.systemd_inspection import (
+    get_systemd_user_dir as get_systemd_user_dir,
+)
+from core.ui.config_check import (
+    ConfigView,
+    add_config_row,
+    add_setting_row,
+    config_view,
+    render_config_panel,
+)
 from core.ui.panel import StatusPanelBuilder
-from core.preflight import LoadFailureKind, load_targets
-from core.ui.config_check import render_config_panel, config_view, add_config_row, add_setting_row, ConfigView
 from core.utils import install_interrupt_handler
 
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.markup import escape
-
-# ``systemctl show`` normally returns immediately, but it crosses a subprocess / user
-# bus boundary and must not be able to hang the one-shot ``--status`` command forever.
-SYSTEMCTL_QUERY_TIMEOUT_SECONDS = 10
-
-def get_systemd_user_dir() -> str:
-    """Returns the systemd user unit directory, honoring ``XDG_CONFIG_HOME``.
-
-    Mirrors ``${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user`` from the shell
-    helpers (``common.sh``), so Python and the management scripts agree on where
-    units live even under a non-default ``XDG_CONFIG_HOME``.
-    """
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    return os.path.join(base, "systemd", "user")
-
-def get_installed_plugin_units() -> dict:
-    """Maps each installed scraper plugin to the set of unit suffixes it has.
-
-    Globs ``<plugin>-scraper.{timer,service}`` in the systemd user directory -
-    the same naming convention install.sh provisions and the shell helpers
-    enumerate. Glob-based (no registry), so it also finds units whose plugin was
-    removed from the source tree, which is exactly how orphans are detected.
-
-    Returns:
-        dict: ``{plugin_name: {"timer", "service"}}`` for every installed unit.
-    """
-    unit_dir = get_systemd_user_dir()
-
-    found: dict = {}
-    for suffix in ("timer", "service"):
-        marker = f"-scraper.{suffix}"
-        for path in glob.glob(os.path.join(unit_dir, f"*{marker}")):
-            name = os.path.basename(path)[:-len(marker)]
-            found.setdefault(name, set()).add(suffix)
-    return found
-
-def read_timer_oncalendar(target: str) -> str:
-    """Returns the ``OnCalendar`` value written in the target's installed timer unit.
-
-    Reads the generated ``<target>-scraper.timer`` file (the schedule actually on
-    disk) and returns its first ``OnCalendar=`` value, or ``""`` if the unit is
-    absent or declares none. Compared against the config-resolved schedule to detect
-    drift between the user's ``execution_interval`` and the live timer - the same
-    on-disk value ``schedule.sh`` reads and writes, so the two agree exactly.
-
-    Args:
-        target (str): The scraper target name (e.g. ``'skroutz'``).
-
-    Returns:
-        str: The unit's ``OnCalendar`` value, or ``""`` when none is present.
-    """
-    timer_path = os.path.join(get_systemd_user_dir(), f"{target}-scraper.timer")
-    try:
-        with open(timer_path, "r") as timer_file:
-            for line in timer_file:
-                stripped = line.strip()
-                if stripped.startswith("OnCalendar="):
-                    return stripped[len("OnCalendar="):].strip()
-    except OSError:
-        return ""
-    return ""
-
-def get_systemd_properties(unit: str, properties: str) -> dict:
-    """Retrieves specified properties for a given systemd user unit.
-
-    Args:
-        unit (str): The name of the systemd unit (e.g., 'service.timer').
-        properties (str): A comma-separated list of properties to query.
-
-    Returns:
-        dict: A dictionary mapping property names to their values.
-    """
-    service_file_path = os.path.join(get_systemd_user_dir(), unit)
-    if not os.path.exists(service_file_path) or os.path.getsize(service_file_path) == 0:
-        return {}
-
-    try:
-        output = subprocess.check_output(
-            ['systemctl', '--user', 'show', unit, f'--property={properties}'],
-            stderr=subprocess.DEVNULL,
-            timeout=SYSTEMCTL_QUERY_TIMEOUT_SECONDS,
-        ).decode('utf-8').strip()
-        if not output:
-            return {}
-        return dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
-        return {}
 
 def build_not_installed_panel(target: str, display_name: str | None = None) -> Panel:
     """Builds the red 'service not installed' panel for a registered-but-unprovisioned plugin.
@@ -137,6 +66,7 @@ def build_not_installed_panel(target: str, display_name: str | None = None) -> P
         width=75,
     )
 
+
 def build_orphan_panel(name: str) -> StatusPanelBuilder:
     """Builds the red 'orphaned unit' panel for an installed unit whose plugin is gone.
 
@@ -148,16 +78,25 @@ def build_orphan_panel(name: str) -> StatusPanelBuilder:
     """
     orphan_panel = StatusPanelBuilder(f"{name.capitalize()} Service Status (Orphaned)")
     ref = orphan_panel.add_note_ref(f"Run `./scripts/uninstall.sh --{name}` to remove it")
-    orphan_panel.add_row("❗", f"[red]This scraper was removed but is still scheduled.[/red]{ref}", "")
+    orphan_panel.add_row(
+        "❗", f"[red]This scraper was removed but is still scheduled.[/red]{ref}", ""
+    )
     return orphan_panel
 
-def build_service_panel(target: str, timer_props: dict, service_props: dict, resolved,
-                        config_filename: str, expected_oncalendar: str,
-                        active_oncalendar: str,
-                        config: ConfigView,
-                        display_name: str,
-                        interval_spec,
-                        state_failure_detail: str | None = None) -> StatusPanelBuilder:
+
+def build_service_panel(
+    target: str,
+    timer_props: dict,
+    service_props: dict,
+    resolved,
+    config_filename: str,
+    expected_oncalendar: str,
+    active_oncalendar: str,
+    config: ConfigView,
+    display_name: str,
+    interval_spec,
+    state_failure_detail: str | None = None,
+) -> StatusPanelBuilder:
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
     Pure presentation given the systemd property dicts, the resolved settings, the
@@ -247,6 +186,7 @@ def build_service_panel(target: str, timer_props: dict, service_props: dict, res
     service_panel.add_row(next_exec_icon, "Next Scheduled Execution", next_exec)
     return service_panel
 
+
 def main():
     """Main entry point for checking the status of the Scrooge Alert service.
 
@@ -280,8 +220,12 @@ def main():
     # --- Systemd Service Panels ---
     for target in registered_scrapers:
         plugin = catalog.get(target)
-        timer_props = get_systemd_properties(f'{target}-scraper.timer', 'ActiveState,NextElapseUSecRealtime')
-        service_props = get_systemd_properties(f'{target}-scraper.service', 'ActiveState,Result,ExecMainStartTimestamp,ExecMainStatus')
+        timer_props = get_systemd_properties(
+            f"{target}-scraper.timer", "ActiveState,NextElapseUSecRealtime"
+        )
+        service_props = get_systemd_properties(
+            f"{target}-scraper.service", "ActiveState,Result,ExecMainStartTimestamp,ExecMainStatus"
+        )
 
         if not timer_props and not service_props:
             console.print()
@@ -307,8 +251,13 @@ def main():
 
         config_filename = plugin.config_filename
         service_panel = build_service_panel(
-            target, timer_props, service_props, resolved,
-            config_filename, expected_oncalendar, active_oncalendar,
+            target,
+            timer_props,
+            service_props,
+            resolved,
+            config_filename,
+            expected_oncalendar,
+            active_oncalendar,
             config_view(
                 load.count,
                 load.faulty_indices,
@@ -346,6 +295,7 @@ def main():
         build_orphan_panel(name).render(console)
 
     console.print()
+
 
 if __name__ == "__main__":
     main()

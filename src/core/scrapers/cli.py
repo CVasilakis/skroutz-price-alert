@@ -44,23 +44,24 @@ def manifest(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
     rows: list[str] = []
     for plugin in catalog.plugins:
         schedule = resolve_schedule(plugin, config_dir)
-        rows.append("\t".join((
-            plugin.target,
-            plugin.display_name,
-            plugin.example_config_path,
-            plugin.requirements_path or "",
-            schedule.on_calendar,
-            schedule.status.value,
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    plugin.target,
+                    plugin.display_name,
+                    plugin.example_config_path,
+                    plugin.requirements_path or "",
+                    schedule.on_calendar,
+                    schedule.status.value,
+                )
+            )
+        )
     return tuple(rows)
 
 
 def requirements(catalog: PluginCatalog) -> tuple[str, ...]:
     """Return config-independent target/private-requirement pairs for dev tooling."""
-    return tuple(
-        f"{plugin.target}\t{plugin.requirements_path or ''}"
-        for plugin in catalog.plugins
-    )
+    return tuple(f"{plugin.target}\t{plugin.requirements_path or ''}" for plugin in catalog.plugins)
 
 
 def _diagnose() -> int:

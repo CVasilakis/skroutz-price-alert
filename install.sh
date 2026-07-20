@@ -224,6 +224,11 @@ for pair in $PLUGIN_REQS; do
 done
 IFS="$OLD_IFS"
 
+if ! "$VENV_DIR/bin/python3" -m pip check; then
+    printf "%b\n" "${RED}Error: Installed core and plugin dependencies are incompatible.${NC}\n"
+    exit 1
+fi
+
 # ------------------------------------------------------------------------------
 # SYSTEMD SETUP
 # ------------------------------------------------------------------------------

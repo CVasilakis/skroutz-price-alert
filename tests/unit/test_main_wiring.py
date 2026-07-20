@@ -20,15 +20,17 @@ class TestMainWiring(unittest.TestCase):
     def test_reminder_runs_once_before_the_orchestrator(self):
         order = []
 
-        with mock.patch.object(sys, "argv", ["main", "--quiet"]), \
-             mock.patch("core.main.setup_global_logging", autospec=True), \
-             mock.patch("core.main.PluginCatalog", autospec=True) as Catalog, \
-             mock.patch("core.main.ClientLoader", autospec=True), \
-             mock.patch("core.main.load_targets", autospec=True, return_value=[]), \
-             mock.patch("core.main.preflight", autospec=True, return_value=None), \
-             mock.patch("core.main.Notifier", autospec=True) as Notifier, \
-             mock.patch("core.main.ReminderService", autospec=True) as ReminderService, \
-             mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator:
+        with (
+            mock.patch.object(sys, "argv", ["main", "--quiet"]),
+            mock.patch("core.main.setup_global_logging", autospec=True),
+            mock.patch("core.main.PluginCatalog", autospec=True) as Catalog,
+            mock.patch("core.main.ClientLoader", autospec=True),
+            mock.patch("core.main.load_targets", autospec=True, return_value=[]),
+            mock.patch("core.main.preflight", autospec=True, return_value=None),
+            mock.patch("core.main.Notifier", autospec=True) as Notifier,
+            mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
+            mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator,
+        ):
             catalog = Catalog.discover.return_value
             catalog.targets = ("skroutz",)
             reminder = ReminderService.return_value
@@ -47,15 +49,17 @@ class TestMainWiring(unittest.TestCase):
     def test_reminder_not_run_when_preflight_aborts(self):
         # A fatal preflight (e.g. a missing .env in service mode) exits before the
         # reminder/orchestrator phase, so no heartbeat is attempted on an unusable config.
-        with mock.patch.object(sys, "argv", ["main", "--quiet"]), \
-             mock.patch("core.main.setup_global_logging", autospec=True), \
-             mock.patch("core.main.PluginCatalog", autospec=True) as Catalog, \
-             mock.patch("core.main.ClientLoader", autospec=True), \
-             mock.patch("core.main.load_targets", autospec=True, return_value=[]), \
-             mock.patch("core.main.preflight", autospec=True, return_value=3), \
-             mock.patch("core.main.Notifier", autospec=True), \
-             mock.patch("core.main.ReminderService", autospec=True) as ReminderService, \
-             mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator:
+        with (
+            mock.patch.object(sys, "argv", ["main", "--quiet"]),
+            mock.patch("core.main.setup_global_logging", autospec=True),
+            mock.patch("core.main.PluginCatalog", autospec=True) as Catalog,
+            mock.patch("core.main.ClientLoader", autospec=True),
+            mock.patch("core.main.load_targets", autospec=True, return_value=[]),
+            mock.patch("core.main.preflight", autospec=True, return_value=3),
+            mock.patch("core.main.Notifier", autospec=True),
+            mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
+            mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator,
+        ):
             Catalog.discover.return_value.targets = ("skroutz",)
             with self.assertRaises(SystemExit) as caught:
                 core.main.main()
@@ -65,19 +69,21 @@ class TestMainWiring(unittest.TestCase):
         Orchestrator.assert_not_called()
 
     def test_interactive_mode_installs_handler_and_uses_interactive_strategy(self):
-        with mock.patch.object(sys, "argv", ["main", "--skroutz"]), \
-             mock.patch("core.main.setup_global_logging"), \
-             mock.patch("core.main.PluginCatalog") as Catalog, \
-             mock.patch("core.main.ClientLoader") as ClientLoader, \
-             mock.patch("core.main.load_targets", return_value=[]) as load_targets, \
-             mock.patch("core.main.preflight", return_value=None) as preflight, \
-             mock.patch("core.main.install_interrupt_handler") as install_handler, \
-             mock.patch("core.main.Console"), \
-             mock.patch("core.main.signal.signal"), \
-             mock.patch("core.main.InteractiveRunReporter") as strategy_type, \
-             mock.patch("core.main.Notifier"), \
-             mock.patch("core.main.ReminderService"), \
-             mock.patch("core.main.ScrapingOrchestrator") as Orchestrator:
+        with (
+            mock.patch.object(sys, "argv", ["main", "--skroutz"]),
+            mock.patch("core.main.setup_global_logging"),
+            mock.patch("core.main.PluginCatalog") as Catalog,
+            mock.patch("core.main.ClientLoader") as ClientLoader,
+            mock.patch("core.main.load_targets", return_value=[]) as load_targets,
+            mock.patch("core.main.preflight", return_value=None) as preflight,
+            mock.patch("core.main.install_interrupt_handler") as install_handler,
+            mock.patch("core.main.Console"),
+            mock.patch("core.main.signal.signal"),
+            mock.patch("core.main.InteractiveRunReporter") as strategy_type,
+            mock.patch("core.main.Notifier"),
+            mock.patch("core.main.ReminderService"),
+            mock.patch("core.main.ScrapingOrchestrator") as Orchestrator,
+        ):
             plugin = mock.MagicMock(display_name="Skroutz")
             catalog = Catalog.discover.return_value
             catalog.targets = ("skroutz", "insomnia")

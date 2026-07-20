@@ -1,20 +1,24 @@
-import logging
 import datetime
+import logging
+import os
 import time
 import traceback
-import os
 from collections.abc import Mapping
 from logging.handlers import TimedRotatingFileHandler
+
 from rich.console import Console
 from rich.padding import Padding
 from rich.text import Text
+
 from core.constants import LOGS_DIR
 from core.settings import DEFAULT_LOG_RETENTION_DAYS
 
 console = Console()
 
+
 class RichConsoleHandler(logging.Handler):
     """Custom handler that uses Rich for console output and supports padding."""
+
     def emit(self, record):
         """Emits a formatted log record."""
         try:
@@ -32,11 +36,14 @@ class RichConsoleHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
+
 class NonEmptyFilter(logging.Filter):
     """Filter that prevents empty or whitespace-only log messages from being recorded."""
+
     def filter(self, record: logging.LogRecord) -> bool:
         """Filters a log record to ensure it is not empty."""
         return bool(record.getMessage().strip())
+
 
 def setup_global_logging(quiet: bool = False) -> None:
     """Configures the global fallback logging level and format.
@@ -55,13 +62,14 @@ def setup_global_logging(quiet: bool = False) -> None:
         logging.root.removeHandler(handler)
 
     rich_handler = RichConsoleHandler()
-    rich_handler.setFormatter(logging.Formatter('%(message)s'))
+    rich_handler.setFormatter(logging.Formatter("%(message)s"))
 
     logging.root.setLevel(level)
     logging.root.addHandler(rich_handler)
 
-    logging.getLogger('apprise').setLevel(logging.CRITICAL)
-    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+    logging.getLogger("apprise").setLevel(logging.CRITICAL)
+    logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+
 
 def get_target_logger(
     target_name: str,
@@ -95,8 +103,21 @@ def get_target_logger(
     # so we don't accidentally print to terminal
     logger.propagate = not quiet
 
-    # If handlers already exist, return the logger to prevent duplicate logs
-    if logger.handlers:
+    expected_path = os.path.abspath(os.path.join(LOGS_DIR, target_name, "output.log"))
+    reusable = False
+    for handler in logger.handlers[:]:
+        if (
+            quiet
+            and isinstance(handler, TimedRotatingFileHandler)
+            and os.path.abspath(handler.baseFilename) == expected_path
+        ):
+            handler.backupCount = retention_days
+            reusable = True
+            continue
+        handler.close()
+        logger.removeHandler(handler)
+
+    if reusable:
         return logger
 
     if quiet:
@@ -104,12 +125,12 @@ def get_target_logger(
         # match the UTC last_checked written to state and are immune to host
         # timezone/DST shifts. utc=True keeps the daily rollover boundary aligned
         # with those UTC timestamps.
-        log_format = '[%(asctime)s UTC] %(message)s'
-        date_format = '%Y-%m-%d %H:%M:%S'
+        log_format = "[%(asctime)s UTC] %(message)s"
+        date_format = "%Y-%m-%d %H:%M:%S"
 
         target_logs_dir = os.path.join(LOGS_DIR, target_name)
         os.makedirs(target_logs_dir, exist_ok=True)
-        log_path = os.path.join(target_logs_dir, "output.log")
+        log_path = expected_path
 
         # How many daily files to keep is the caller-supplied retention (resolved from
         # the scraper's configured log_retention_days; default 7). An invalid configured
@@ -117,7 +138,12 @@ def get_target_logger(
         # to apply here; the invalid value is reported to the user via the settings
         # section / silent settings log, not by this logger.
         rotating_handler = TimedRotatingFileHandler(
-            log_path, when="midnight", interval=1, backupCount=retention_days, encoding='utf-8', utc=True
+            log_path,
+            when="midnight",
+            interval=1,
+            backupCount=retention_days,
+            encoding="utf-8",
+            utc=True,
         )
         rotating_handler.addFilter(NonEmptyFilter())
         formatter = logging.Formatter(log_format, datefmt=date_format)
@@ -127,6 +153,7 @@ def get_target_logger(
         logger.addHandler(rotating_handler)
 
     return logger
+
 
 def save_traceback(
     logger: logging.Logger,
@@ -153,10 +180,12 @@ def save_traceback(
 
     log_path = os.path.join(target_logs_dir, "errors.txt")
     if log_to_console:
-        logger.critical(f"🛑 An error occurred! Check {log_path} for details.", extra={"pad_top": 1})
+        logger.critical(
+            f"🛑 An error occurred! Check {log_path} for details.", extra={"pad_top": 1}
+        )
 
     time_now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d (%H:%M:%S)")
-    with open(log_path, "a", newline='') as log_file:
+    with open(log_path, "a", newline="") as log_file:
         log_file.write(f"\n\nAn error occurred at {time_now} UTC:\n")
         if url:
             log_file.write(f"URL: {url}\n")
@@ -166,4 +195,4 @@ def save_traceback(
             )
             log_file.write(f"Diagnostic context: {details}\n")
         traceback.print_exc(file=log_file)
-        log_file.write(f"\n{'-'*100}")
+        log_file.write(f"\n{'-' * 100}")

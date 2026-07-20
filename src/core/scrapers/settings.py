@@ -5,10 +5,14 @@ from typing import Any
 from core.scrapers.api import SettingSpec
 from core.scrapers.intervals import SUPPORTED_INTERVALS, normalize_interval, oncalendar_for
 from core.scrapers.setting_messages import (
-    interval_warning_message, notify_errors_warning_message, retention_warning_message,
+    interval_warning_message,
+    notify_errors_warning_message,
+    retention_warning_message,
 )
 from core.settings import (
-    DEFAULT_LOG_RETENTION_DAYS, normalize_bool, normalize_retention_days,
+    DEFAULT_LOG_RETENTION_DAYS,
+    normalize_bool,
+    normalize_retention_days,
 )
 
 KEY_INTERVAL = "execution_interval"
@@ -55,6 +59,10 @@ def framework_setting_specs(default_interval: str) -> tuple[SettingSpec[Any], ..
 
 
 __all__ = [
-    "KEY_INTERVAL", "KEY_RETENTION", "KEY_NOTIFY", "SUPPORTED_INTERVALS",
-    "oncalendar_for", "framework_setting_specs",
+    "KEY_INTERVAL",
+    "KEY_RETENTION",
+    "KEY_NOTIFY",
+    "SUPPORTED_INTERVALS",
+    "oncalendar_for",
+    "framework_setting_specs",
 ]

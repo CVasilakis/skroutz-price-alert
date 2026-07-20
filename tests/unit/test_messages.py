@@ -16,7 +16,8 @@ from core import messages
 def _public_constants() -> dict[str, str]:
     """Returns the catalog's UPPER_CASE string constants, keyed by name."""
     return {
-        name: value for name, value in vars(messages).items()
+        name: value
+        for name, value in vars(messages).items()
         if name.isupper() and not name.startswith("_")
     }
 
@@ -24,7 +25,8 @@ def _public_constants() -> dict[str, str]:
 def _public_functions() -> dict[str, object]:
     """Returns the catalog's message functions, keyed by name."""
     return {
-        name: fn for name, fn in vars(messages).items()
+        name: fn
+        for name, fn in vars(messages).items()
         if not name.startswith("_") and inspect.isfunction(fn)
     }
 
@@ -43,8 +45,11 @@ class TestMessageCatalog(unittest.TestCase):
     def test_constants_are_pairwise_distinct(self):
         constants = _public_constants()
         values = list(constants.values())
-        self.assertEqual(len(values), len(set(values)),
-                         f"duplicate wording between constants in {sorted(constants)}")
+        self.assertEqual(
+            len(values),
+            len(set(values)),
+            f"duplicate wording between constants in {sorted(constants)}",
+        )
 
     def test_functions_return_nonempty_strings(self):
         # Every message function is exercised with placeholder arguments matched
@@ -60,6 +65,7 @@ class TestMessageCatalog(unittest.TestCase):
             "attempt_note": (1, "ServerError"),
             "errors_log_pointer": ("skroutz",),
             "plugin_dependency_detail": ("skroutz", "tls_client"),
+            "plugin_lifecycle_failed": ("RuntimeError",),
             "state_load_failed": ("skroutz",),
             "state_save_failed": ("skroutz",),
             "not_found_detail": (404,),
@@ -68,8 +74,11 @@ class TestMessageCatalog(unittest.TestCase):
             "http_failed_detail": (418,),
         }
         functions = _public_functions()
-        self.assertEqual(sorted(functions), sorted(sample_args),
-                         "sample_args must cover exactly the catalog's public functions")
+        self.assertEqual(
+            sorted(functions),
+            sorted(sample_args),
+            "sample_args must cover exactly the catalog's public functions",
+        )
         for name, fn in functions.items():
             with self.subTest(function=name):
                 result = fn(*sample_args[name])

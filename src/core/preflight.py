@@ -79,32 +79,38 @@ def load_targets(
             loaded = loader.load()
         except ConfigFileError as exc:
             settings = resolve_settings(plugin.setting_specs, None)
-            results.append(TargetLoad(
-                plugin,
-                settings,
-                failure=LoadFailure(LoadFailureKind.CONFIG, str(exc)),
-            ))
+            results.append(
+                TargetLoad(
+                    plugin,
+                    settings,
+                    failure=LoadFailure(LoadFailureKind.CONFIG, str(exc)),
+                )
+            )
             continue
 
         state = JsonStateRepository(resolved_state_dir / f"{plugin.target}.json")
         try:
             state.load()
         except StateFileError as exc:
-            results.append(TargetLoad(
+            results.append(
+                TargetLoad(
+                    plugin=plugin,
+                    settings=loaded.settings,
+                    items=loaded.items,
+                    row_issues=loaded.row_issues,
+                    failure=LoadFailure(LoadFailureKind.STATE, str(exc)),
+                )
+            )
+            continue
+        results.append(
+            TargetLoad(
                 plugin=plugin,
                 settings=loaded.settings,
                 items=loaded.items,
                 row_issues=loaded.row_issues,
-                failure=LoadFailure(LoadFailureKind.STATE, str(exc)),
-            ))
-            continue
-        results.append(TargetLoad(
-            plugin=plugin,
-            settings=loaded.settings,
-            items=loaded.items,
-            row_issues=loaded.row_issues,
-            state=state,
-        ))
+                state=state,
+            )
+        )
     return results
 
 

@@ -9,8 +9,6 @@ from collections.abc import Callable
 from types import FrameType
 
 from core import messages
-from core.constants import OLD_ENTRY_HOURS
-from core.exceptions import LockAcquisitionError, PluginDependencyError, StorageFileError
 from core.execution import ItemExecutor
 from core.locks import acquire_lock
 from core.logger import get_target_logger, save_traceback
@@ -19,7 +17,8 @@ from core.preflight import LoadFailureKind, TargetLoad
 from core.reporting import SilentRunReporter
 from core.run import ConfigOutcome, RunOutcome, RunReporter
 from core.scrapers.registry import ClientLoader
-from core.scrapers.settings import KEY_NOTIFY, KEY_RETENTION
+from core.scrapers.settings import KEY_RETENTION
+from core.target_runner import TargetRunner
 from core.utils import describe_signal
 
 
@@ -53,18 +52,6 @@ class ScrapingOrchestrator:
     def signal_handler(self, signum: int, _frame: FrameType | None) -> None:
         self._interrupt_message = f"Received signal {describe_signal(signum)}"
         self.interrupted = True
-
-    def _try_notification(self, operation: Callable[[], bool]) -> bool:
-        try:
-            return bool(operation())
-        except Exception:
-            if self._current_logger:
-                save_traceback(
-                    self._current_logger,
-                    target_name=self._current_target,
-                    log_to_console=False,
-                )
-            return False
 
     def _start_target(self, load: TargetLoad) -> logging.Logger:
         plugin = load.plugin
@@ -115,84 +102,22 @@ class ScrapingOrchestrator:
                 continue
             assert load.state is not None
 
-            failed_items = []
-            abort_target = False
-            executor: ItemExecutor | None = None
-            try:
-                with acquire_lock(plugin.target):
-                    client = None
-                    try:
-                        client = self.client_loader.load(plugin, load.settings)
-                        executor = ItemExecutor(
-                            target=plugin.target,
-                            display_name=plugin.display_name,
-                            client=client,
-                            state=load.state,
-                            notifier=self.notifier,
-                            reporter=self.reporter,
-                            logger=self._current_logger,
-                            interrupted=lambda: self.interrupted,
-                            now_fn=self.now_fn,
-                        )
-                        for item in load.items:
-                            if abort_target or self.interrupted:
-                                break
-                            item_outcome = executor.process(item)
-                            if item_outcome.reported_error:
-                                failed_items.append((item, item_outcome.reported_error))
-                            abort_target = abort_target or item_outcome.abort_target
-                            outcome.rate_limited |= item_outcome.rate_limited
-                            outcome.scrape_error |= item_outcome.affects_scrape_status
-                            outcome.notification_error |= item_outcome.notification_failed
-                        if load.state.has_pending:
-                            try:
-                                load.state.save()
-                            except StorageFileError as exc:
-                                self.reporter.log_error(
-                                    "Storage",
-                                    messages.state_save_failed(plugin.target),
-                                    str(exc),
-                                )
-                                outcome.storage_error = True
-                    finally:
-                        if client is not None:
-                            client.close()
-
-                stale_items = executor.stale_items if executor is not None else []
-                if (
-                    not self.interrupted
-                    and stale_items
-                    and self.notifier.has_services
-                ):
-                    delivered = self._try_notification(lambda: self.notifier.notify_old_entries(
-                        plugin.display_name, stale_items, OLD_ENTRY_HOURS
-                    ))
-                    if not delivered:
-                        outcome.notification_error = True
-                        self.reporter.log_warning(
-                            "Notifications", messages.WARN_STALE_NOTIFICATION_FAILED
-                        )
-                if not self.interrupted and failed_items:
-                    notify_errors = load.settings[plugin.setting(KEY_NOTIFY)]
-                    if notify_errors and self.notifier.has_services:
-                        delivered = self._try_notification(lambda: self.notifier.notify_errors(
-                            plugin.display_name, failed_items
-                        ))
-                        if not delivered:
-                            outcome.notification_error = True
-                            self.reporter.log_warning(
-                                "Notifications", messages.WARN_ERROR_NOTIFICATION_FAILED
-                            )
-            except LockAcquisitionError:
-                self.reporter.log_error("System", messages.ERR_LOCK_HELD)
-                self.reporter.complete_target()
-                outcome.skipped_count += 1
-                continue
-            except PluginDependencyError as exc:
-                self.reporter.log_error("System", str(exc))
-                self.reporter.complete_target()
-                outcome.dependency_error = True
-                continue
+            target_runner = TargetRunner(
+                client_loader=self.client_loader,
+                notifier=self.notifier,
+                reporter=self.reporter,
+                now_fn=self.now_fn,
+                executor_type=ItemExecutor,
+                acquire_lock_fn=acquire_lock,
+                save_traceback_fn=save_traceback,
+            )
+            target_outcome = target_runner.run(load, self._current_logger, lambda: self.interrupted)
+            outcome.storage_error |= target_outcome.storage_error
+            outcome.dependency_error |= target_outcome.dependency_error
+            outcome.scrape_error |= target_outcome.scrape_error
+            outcome.rate_limited |= target_outcome.rate_limited
+            outcome.notification_error |= target_outcome.notification_error
+            outcome.skipped_count += int(target_outcome.skipped)
 
             if self.interrupted:
                 self.reporter.log_interrupt(self._interrupt_message)

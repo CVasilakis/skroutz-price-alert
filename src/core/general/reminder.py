@@ -45,18 +45,20 @@ from typing import TYPE_CHECKING
 
 from core.constants import TIMESTAMP_FORMAT
 from core.exceptions import LockAcquisitionError
+from core.general.reminder_schedule import most_recent_slot, next_due_slot
 from core.general.settings import (
-    GENERAL_SETTING_SPECS, SPEC_REMINDER, SPEC_REMINDER_DAY, SPEC_REMINDER_TIME,
-    general_config_path, resolve_general_settings,
+    GENERAL_SETTING_SPECS,
+    SPEC_REMINDER,
+    SPEC_REMINDER_DAY,
+    SPEC_REMINDER_TIME,
+    general_config_path,
+    resolve_general_settings,
 )
-from core.general.vocab import (
-    DEFAULT_REMINDER_DAY, DEFAULT_REMINDER_TIME,
-    display_reminder, time_parts, weekday_index, weeks_for,
-)
+from core.general.vocab import display_reminder, time_parts, weekday_index, weeks_for
 from core.locks import acquire_lock
 from core.logger import get_target_logger, save_traceback
-from core.settings import SettingStatus
 from core.persistence import format_utc, parse_utc, write_json_atomically
+from core.settings import SettingStatus
 from core.utils import check_for_updates
 
 if TYPE_CHECKING:
@@ -74,57 +76,10 @@ REMINDER_LOCK_FILENAME = "reminder_check.lock"
 # Machine-owned state key holding the last delivered grid slot as RFC 3339 UTC.
 LAST_REMINDER_FIELD = "last_reminder"
 
-# The default grid anchor, *derived* from the settings defaults so the two can never
-# drift (the reminder grid and the settings panel agree on "Saturday 13:00" by
-# construction). Used only as the default arguments of ``most_recent_slot`` for callers
-# (e.g. unit tests) that do not pass an explicit schedule; the service always resolves
-# and passes the configured weekday/time.
-_DEFAULT_SLOT_WEEKDAY = weekday_index(DEFAULT_REMINDER_DAY)
-_DEFAULT_SLOT_HOUR, _DEFAULT_SLOT_MINUTE = time_parts(DEFAULT_REMINDER_TIME)
-
 
 def general_state_path(config_dir: str) -> str:
     """Return the machine-owned reminder state beside the config directory."""
     return str(Path(config_dir).resolve().parent / "state" / "general.json")
-
-
-def most_recent_slot(now: datetime.datetime, weekday: int = _DEFAULT_SLOT_WEEKDAY,
-                     hour: int = _DEFAULT_SLOT_HOUR, minute: int = _DEFAULT_SLOT_MINUTE) -> datetime.datetime:
-    """Returns the latest grid slot (the given weekday at the given time) at or before ``now``.
-
-    Args:
-        now (datetime.datetime): The current time, naive local.
-        weekday (int): The grid weekday as ``datetime.weekday()`` (Monday is 0).
-        hour (int): The grid hour (0-23).
-        minute (int): The grid minute (0-59).
-
-    Returns:
-        datetime.datetime: The most recent matching weekday-at-time, <= ``now``.
-    """
-    days_back = (now.weekday() - weekday) % 7
-    candidate = (now - datetime.timedelta(days=days_back)).replace(
-        hour=hour, minute=minute, second=0, microsecond=0
-    )
-    if candidate > now:  # it is the grid weekday, but before the grid time
-        candidate -= datetime.timedelta(days=7)
-    return candidate
-
-
-def next_due_slot(last_slot: datetime.datetime, weeks: int) -> datetime.datetime:
-    """Returns the grid slot at which the next reminder becomes due.
-
-    Because ``last_slot`` is a grid point and the cadence is a whole-week count, the
-    result is itself a grid point (the same weekday/time) - the grid is preserved
-    without any snapping.
-
-    Args:
-        last_slot (datetime.datetime): The persisted slot of the last reminder.
-        weeks (int): The cadence in whole weeks (see ``SUPPORTED_REMINDERS``).
-
-    Returns:
-        datetime.datetime: The first slot at/after which a reminder should be sent.
-    """
-    return last_slot + datetime.timedelta(weeks=weeks)
 
 
 class ReminderService:
@@ -144,9 +99,13 @@ class ReminderService:
     update check (``update_check_fn``) and the notifier.
     """
 
-    def __init__(self, config_dir: str, notifier: "Notifier",
-                 now_fn: Callable[[], datetime.datetime] = datetime.datetime.now,
-                 update_check_fn: Callable[[], bool] = check_for_updates) -> None:
+    def __init__(
+        self,
+        config_dir: str,
+        notifier: "Notifier",
+        now_fn: Callable[[], datetime.datetime] = datetime.datetime.now,
+        update_check_fn: Callable[[], bool] = check_for_updates,
+    ) -> None:
         """Initializes the service.
 
         Args:
@@ -249,8 +208,9 @@ class ReminderService:
         now = self._now_fn()
         return last_slot > now or now >= next_due_slot(last_slot, weeks)
 
-    def _check_and_send(self, weeks: int, canonical: str,
-                        weekday: int, hour: int, minute: int) -> None:
+    def _check_and_send(
+        self, weeks: int, canonical: str, weekday: int, hour: int, minute: int
+    ) -> None:
         """Performs one due-check and, when due, one send-then-persist (under the lock)."""
         now = self._now_fn()
         data, last_slot, problem = self._read_state()
@@ -288,7 +248,9 @@ class ReminderService:
                     f"Next reminder due at {first_due} local time."
                 )
             else:
-                self._log.info(f"Reminder schedule initialized; first reminder due at {first_due} local time.")
+                self._log.info(
+                    f"Reminder schedule initialized; first reminder due at {first_due} local time."
+                )
             return
 
         due_slot = next_due_slot(last_slot, weeks)
@@ -308,9 +270,13 @@ class ReminderService:
         next_due = next_due_slot(new_slot, weeks).strftime(TIMESTAMP_FORMAT)
 
         try:
-            delivered = bool(self.notifier.notify_reminder(
-                update_available, display_reminder(canonical), next_due,
-            ))
+            delivered = bool(
+                self.notifier.notify_reminder(
+                    update_available,
+                    display_reminder(canonical),
+                    next_due,
+                )
+            )
         except Exception:
             # A notifier bug/transport exception must obey the same state invariant as
             # a normal False result: leave last_reminder untouched so the next run retries.
@@ -378,8 +344,11 @@ class ReminderService:
         except (json.JSONDecodeError, UnicodeError):
             return None, None, "corrupt"
 
-        if (not isinstance(loaded, dict) or loaded.get("schema_version") != 1
-                or set(loaded) - {"schema_version", LAST_REMINDER_FIELD}):
+        if (
+            not isinstance(loaded, dict)
+            or loaded.get("schema_version") != 1
+            or set(loaded) - {"schema_version", LAST_REMINDER_FIELD}
+        ):
             return None, None, "corrupt"
         raw = loaded.get(LAST_REMINDER_FIELD)
         if raw is None:

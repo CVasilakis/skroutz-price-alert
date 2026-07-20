@@ -44,8 +44,9 @@ class TestGetTargetLogger(_LoggerCase):
         # The configured log_retention_days becomes the handler's backupCount.
         self.assertEqual(handler.backupCount, 12)
         self.assertTrue(handler.utc)  # rollover boundary matches the UTC timestamps
-        self.assertEqual(Path(handler.baseFilename),
-                         Path(core.logger.LOGS_DIR) / target / "output.log")
+        self.assertEqual(
+            Path(handler.baseFilename), Path(core.logger.LOGS_DIR) / target / "output.log"
+        )
 
     def test_quiet_log_lines_are_utc_labelled(self):
         target = self._target()
@@ -66,6 +67,18 @@ class TestGetTargetLogger(_LoggerCase):
         second = get_target_logger(target, quiet=True)
         self.assertIs(first, second)
         self.assertEqual(len(second.handlers), 1)  # no duplicate log lines
+
+    def test_second_call_updates_retention_and_mode(self):
+        target = self._target()
+        logger = get_target_logger(target, quiet=True, retention_days=7)
+        original = logger.handlers[0]
+        updated = get_target_logger(target, quiet=True, retention_days=19)
+        self.assertIs(updated.handlers[0], original)
+        self.assertEqual(updated.handlers[0].backupCount, 19)
+
+        interactive = get_target_logger(target, quiet=False)
+        self.assertEqual(interactive.handlers, [])
+        self.assertTrue(interactive.propagate)
 
 
 class TestNonEmptyFilter(unittest.TestCase):
@@ -90,10 +103,11 @@ class TestSaveTraceback(_LoggerCase):
 
     def test_writes_to_the_target_error_log_with_url_and_header_id(self):
         target = self._target()
-        self._trigger(target_name=target,
-                      url="https://x/s/1/p.html",
-                      diagnostic_context={"platform": '"Windows"',
-                                          "language": "en-US"})
+        self._trigger(
+            target_name=target,
+            url="https://x/s/1/p.html",
+            diagnostic_context={"platform": '"Windows"', "language": "en-US"},
+        )
         content = (Path(core.logger.LOGS_DIR) / target / "errors.txt").read_text()
         self.assertIn("URL: https://x/s/1/p.html", content)
         self.assertIn('Diagnostic context: language: en-US, platform: "Windows"', content)

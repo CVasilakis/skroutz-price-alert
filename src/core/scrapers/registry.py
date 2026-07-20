@@ -6,12 +6,12 @@ import importlib
 import os
 import pkgutil
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
-from urllib.parse import SplitResult, urlsplit
+from urllib.parse import urlsplit
 
 from core import messages
 from core.exceptions import (
@@ -19,18 +19,18 @@ from core.exceptions import (
     PluginDiscoveryError,
     PluginValidationError,
 )
-from core.scrapers.api import ItemField, ScraperClient, ScraperPlugin
+from core.scrapers.api import ItemField, ScraperClient, ScraperPlugin, TrackedItem, UrlField
 from core.scrapers.settings import SUPPORTED_INTERVALS, framework_setting_specs
 from core.scrapers.url import (
     canonicalize_url,
     normalize_domain,
-    parsed_matches_domains,
     parse_url,
+    parsed_matches_domains,
 )
-from core.settings import ResolvedSettings, SettingSpec
+from core.settings import MISSING, ResolvedSettings, SettingSpec
 
 RESERVED_PLUGIN_NAMES = frozenset({"general", "help", "quiet", "ping", "status", "update"})
-RESERVED_ITEM_KEYS = frozenset({"id", "name", "url", "target_price", "skip"})
+RESERVED_ITEM_KEYS = frozenset({"id", "name", "target_price", "skip"})
 RUNTIME_PLUGIN_FILES = ("__init__.py", "plugin.py", "client.py")
 SNAKE_CASE_KEY = re.compile(r"[a-z][a-z0-9_]*\Z")
 CONTROL_CHAR = re.compile(r"[\x00-\x1f\x7f]")
@@ -43,8 +43,10 @@ class RegisteredPlugin:
     target: str
     display_name: str
     domains: tuple[str, ...]
-    _accepts_url: Callable[[SplitResult], bool]
     item_fields: tuple[ItemField[Any], ...]
+    url_fields: tuple[UrlField, ...]
+    reference_url: UrlField | None
+    _url_domains: Mapping[UrlField, tuple[str, ...]]
     setting_specs: tuple[SettingSpec[Any], ...]
     settings_by_key: Mapping[str, SettingSpec[Any]]
     default_interval: str
@@ -57,14 +59,26 @@ class RegisteredPlugin:
     def config_filename(self) -> str:
         return f"{self.target}.json"
 
-    def canonicalize_url(self, value: object) -> str:
-        """Canonicalize and validate a URL through this plugin's complete contract."""
+    def canonicalize_url(self, field: UrlField | object, value: object = MISSING) -> str:
+        """Canonicalize a value through one declared URL field.
+
+        A one-argument call uses the declared reference URL. This is retained for
+        framework diagnostics; plugin code should use its field declaration.
+        """
+        if value is MISSING:
+            value = field
+            if self.reference_url is None:
+                raise ValueError("plugin has no reference URL field")
+            field = self.reference_url
+        if not isinstance(field, UrlField) or field not in self._url_domains:
+            raise ValueError("URL field is not declared by this plugin")
         canonical = canonicalize_url(value)
         parsed = parse_url(canonical)
-        if not parsed_matches_domains(parsed, self.domains):
+        domains = self._url_domains[field]
+        if not parsed_matches_domains(parsed, domains):
             raise ValueError("URL host is not registered for this plugin")
         try:
-            accepted = self._accepts_url(parsed)
+            accepted = field.accepts_url(parsed)
         except Exception as exc:
             raise ValueError(f"plugin URL matcher failed: {exc}") from exc
         if not isinstance(accepted, bool):
@@ -72,6 +86,18 @@ class RegisteredPlugin:
         if not accepted:
             raise ValueError("URL path is not accepted by this plugin")
         return canonical
+
+    def decode_field(self, field: ItemField[Any], value: object) -> Any:
+        """Decode one declared item input through its compiled contract."""
+        if field not in self.item_fields:
+            raise ValueError("item field is not declared by this plugin")
+        if isinstance(field, UrlField):
+            return self.canonicalize_url(field, value)
+        return field.decode(value)
+
+    def item_reference_url(self, item: TrackedItem) -> str | None:
+        """Return the plugin-selected diagnostic/notification URL, when any."""
+        return item[self.reference_url] if self.reference_url is not None else None
 
     def setting(self, key: str) -> SettingSpec[Any]:
         """Return a compiled setting declaration by key."""
@@ -120,52 +146,39 @@ def compile_plugin(
     """Validate and normalize one descriptor without changing catalog state."""
     context = where or package
     if not isinstance(definition, ScraperPlugin):
-        raise PluginValidationError(
-            f"Plugin '{context}' must export a ScraperPlugin as PLUGIN."
-        )
-    if not isinstance(target, str) or SNAKE_CASE_KEY.fullmatch(target) is None or target in RESERVED_PLUGIN_NAMES:
+        raise PluginValidationError(f"Plugin '{context}' must export a ScraperPlugin as PLUGIN.")
+    if (
+        not isinstance(target, str)
+        or SNAKE_CASE_KEY.fullmatch(target) is None
+        or target in RESERVED_PLUGIN_NAMES
+    ):
         raise PluginValidationError(f"Plugin package name '{target}' is invalid or reserved.")
     display_name = _safe_text(
         definition.display_name, context=f"Plugin '{target}' display_name"
     ).strip()
 
-    raw_domains = _sequence(definition.domains, target=target, field="domains")
-    if not raw_domains:
-        raise PluginValidationError(f"Plugin '{target}' domains must be non-empty.")
-    domains: list[str] = []
-    for raw in raw_domains:
-        try:
-            domain = normalize_domain(raw)
-        except (TypeError, ValueError) as exc:
-            raise PluginValidationError(f"Plugin '{target}' domain {raw!r}: {exc}.") from exc
-        if domain in domains:
-            raise PluginValidationError(f"Plugin '{target}' repeats domain '{domain}'.")
-        domains.append(domain)
-
-    if not callable(definition.accepts_url):
-        raise PluginValidationError(f"Plugin '{target}' accepts_url must be callable.")
-    for domain in domains:
-        try:
-            probe = definition.accepts_url(urlsplit(f"https://{domain}/"))
-        except Exception as exc:
-            raise PluginValidationError(
-                f"Plugin '{target}' accepts_url probe failed: {exc}"
-            ) from exc
-        if not isinstance(probe, bool):
-            raise PluginValidationError(f"Plugin '{target}' accepts_url must return bool.")
-
-    if not isinstance(definition.default_interval, str) or definition.default_interval not in SUPPORTED_INTERVALS:
+    if (
+        not isinstance(definition.default_interval, str)
+        or definition.default_interval not in SUPPORTED_INTERVALS
+    ):
         raise PluginValidationError(
             f"Plugin '{target}' default_interval must be one of {sorted(SUPPORTED_INTERVALS)}."
         )
 
     fields = _sequence(definition.item_fields, target=target, field="item_fields")
     seen_fields: set[str] = set()
+    url_fields: list[UrlField] = []
+    all_domains: list[str] = []
+    url_domains: dict[UrlField, tuple[str, ...]] = {}
     for declaration in fields:
         if not isinstance(declaration, ItemField):
             raise PluginValidationError(f"Plugin '{target}' item_fields contains a non-ItemField.")
         key = declaration.key
-        if not isinstance(key, str) or SNAKE_CASE_KEY.fullmatch(key) is None or key in RESERVED_ITEM_KEYS:
+        if (
+            not isinstance(key, str)
+            or SNAKE_CASE_KEY.fullmatch(key) is None
+            or key in RESERVED_ITEM_KEYS
+        ):
             raise PluginValidationError(
                 f"Plugin '{target}' item field key {key!r} is invalid or reserved."
             )
@@ -176,7 +189,72 @@ def compile_plugin(
             raise PluginValidationError(
                 f"Plugin '{target}' item field '{key}' decoder is not callable."
             )
-        _validate_canonical_default(target, "item field", key, declaration)
+        if isinstance(declaration, UrlField):
+            raw_domains = _sequence(
+                declaration.domains, target=target, field=f"URL field '{key}' domains"
+            )
+            if not raw_domains:
+                raise PluginValidationError(
+                    f"Plugin '{target}' URL field '{key}' domains must be non-empty."
+                )
+            domains: list[str] = []
+            for raw in raw_domains:
+                try:
+                    domain = normalize_domain(raw)
+                except (TypeError, ValueError) as exc:
+                    raise PluginValidationError(
+                        f"Plugin '{target}' URL field '{key}' domain {raw!r}: {exc}."
+                    ) from exc
+                if domain in domains:
+                    raise PluginValidationError(
+                        f"Plugin '{target}' URL field '{key}' repeats domain '{domain}'."
+                    )
+                domains.append(domain)
+                if domain not in all_domains:
+                    all_domains.append(domain)
+            if not callable(declaration.accepts_url):
+                raise PluginValidationError(
+                    f"Plugin '{target}' URL field '{key}' accepts_url must be callable."
+                )
+            for domain in domains:
+                try:
+                    probe = declaration.accepts_url(urlsplit(f"https://{domain}/"))
+                except Exception as exc:
+                    raise PluginValidationError(
+                        f"Plugin '{target}' URL field '{key}' accepts_url probe failed: {exc}"
+                    ) from exc
+                if not isinstance(probe, bool):
+                    raise PluginValidationError(
+                        f"Plugin '{target}' URL field '{key}' accepts_url must return bool."
+                    )
+            url_fields.append(declaration)
+            url_domains[declaration] = tuple(domains)
+            if not declaration.required:
+                try:
+                    canonical = canonicalize_url(declaration.default)
+                    parsed = parse_url(canonical)
+                    accepted = parsed_matches_domains(parsed, domains) and declaration.accepts_url(
+                        parsed
+                    )
+                except Exception as exc:
+                    raise PluginValidationError(
+                        f"Plugin '{target}' item field '{key}' default failed: {exc}"
+                    ) from exc
+                if canonical != declaration.default or accepted is not True:
+                    raise PluginValidationError(
+                        f"Plugin '{target}' item field '{key}' default is not canonical."
+                    )
+        elif not declaration.required:
+            _validate_canonical_default(target, "item field", key, declaration)
+
+    reference_url = definition.reference_url
+    if reference_url is not None and (
+        not isinstance(reference_url, UrlField)
+        or not any(reference_url is field for field in url_fields)
+    ):
+        raise PluginValidationError(
+            f"Plugin '{target}' reference_url must be one declared UrlField."
+        )
 
     custom_settings = _sequence(definition.settings, target=target, field="settings")
     framework_settings = framework_setting_specs(definition.default_interval)
@@ -186,31 +264,45 @@ def compile_plugin(
         if not isinstance(declaration, SettingSpec):
             raise PluginValidationError(f"Plugin '{target}' settings contains a non-SettingSpec.")
         key = declaration.key
-        if not isinstance(key, str) or SNAKE_CASE_KEY.fullmatch(key) is None or key in seen_settings:
+        if (
+            not isinstance(key, str)
+            or SNAKE_CASE_KEY.fullmatch(key) is None
+            or key in seen_settings
+        ):
             raise PluginValidationError(
                 f"Plugin '{target}' setting key {key!r} is blank or duplicated."
             )
         seen_settings.add(key)
-        if not callable(declaration.decode) or not callable(declaration.display) or not callable(declaration.is_unset):
+        if (
+            not callable(declaration.decode)
+            or not callable(declaration.display)
+            or not callable(declaration.is_unset)
+        ):
             raise PluginValidationError(
                 f"Plugin '{target}' setting '{key}' has a non-callable codec."
             )
-        _validate_canonical_default(target, "setting", key, declaration)
-        try:
-            displayed = declaration.display(declaration.default)
-        except Exception as exc:
+        if not isinstance(declaration.sensitive, bool):
             raise PluginValidationError(
-                f"Plugin '{target}' setting '{key}' display failed: {exc}"
-            ) from exc
-        if not isinstance(displayed, str):
-            raise PluginValidationError(
-                f"Plugin '{target}' setting '{key}' display must return str."
+                f"Plugin '{target}' setting '{key}' sensitive must be a boolean."
             )
-        _safe_text(
-            displayed,
-            context=f"Plugin '{target}' setting '{key}' display output",
-            nonblank=False,
-        )
+        if not declaration.required:
+            _validate_canonical_default(target, "setting", key, declaration)
+            if not declaration.sensitive:
+                try:
+                    displayed = declaration.display(declaration.default)
+                except Exception as exc:
+                    raise PluginValidationError(
+                        f"Plugin '{target}' setting '{key}' display failed: {exc}"
+                    ) from exc
+                if not isinstance(displayed, str):
+                    raise PluginValidationError(
+                        f"Plugin '{target}' setting '{key}' display must return str."
+                    )
+                _safe_text(
+                    displayed,
+                    context=f"Plugin '{target}' setting '{key}' display output",
+                    nonblank=False,
+                )
         try:
             label = declaration.display_label
             warning = declaration.warning
@@ -243,9 +335,11 @@ def compile_plugin(
     return RegisteredPlugin(
         target=target,
         display_name=display_name,
-        domains=tuple(domains),
-        _accepts_url=definition.accepts_url,
+        domains=tuple(all_domains),
         item_fields=tuple(fields),
+        url_fields=tuple(url_fields),
+        reference_url=reference_url,
+        _url_domains=MappingProxyType(url_domains),
         setting_specs=tuple(settings),
         settings_by_key=settings_by_key,
         default_interval=definition.default_interval,
@@ -297,17 +391,21 @@ class PluginCatalog:
                     raise PluginDiscoveryError(
                         f"Scraper descriptor '{module_name}' does not export PLUGIN."
                     ) from exc
-                records.append(compile_plugin(
-                    definition,
-                    target=target,
-                    package=f"{package}.{target}",
-                    source_dir=root / target,
-                    where=module_name,
-                ))
+                records.append(
+                    compile_plugin(
+                        definition,
+                        target=target,
+                        package=f"{package}.{target}",
+                        source_dir=root / target,
+                        where=module_name,
+                    )
+                )
         except (PluginDiscoveryError, PluginValidationError):
             raise
         except Exception as exc:
-            raise PluginDiscoveryError(f"Failed to discover scraper plugins in '{root}': {exc}") from exc
+            raise PluginDiscoveryError(
+                f"Failed to discover scraper plugins in '{root}': {exc}"
+            ) from exc
         return cls(records)
 
     @property
@@ -340,9 +438,7 @@ class ClientLoader:
             or missing.startswith("core.")
         )
         if internal:
-            return PluginValidationError(
-                f"Plugin '{plugin.target}' client import failed: {exc}"
-            )
+            return PluginValidationError(f"Plugin '{plugin.target}' client import failed: {exc}")
         return PluginDependencyError(messages.plugin_dependency_detail(plugin.target, missing))
 
     def load(self, plugin: RegisteredPlugin, settings: ResolvedSettings) -> ScraperClient:

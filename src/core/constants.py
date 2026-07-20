@@ -4,15 +4,17 @@ import os
 # Used to indicate failure states when running as a background service.
 EXIT_CODE_SUCCESS: int = 0
 EXIT_CODE_ERROR: int = 1
-EXIT_CODE_INTERRUPT: int = 130        # Script was interrupted (user or system termination)
-EXIT_CODE_PRODUCTS_ERROR: int = 15    # Issue with a plugin's products config file (e.g. config/skroutz.json)
-EXIT_CODE_ENV_ERROR: int = 16         # Issue with the .env file
+EXIT_CODE_INTERRUPT: int = 130  # Script was interrupted (user or system termination)
+EXIT_CODE_PRODUCTS_ERROR: int = (
+    15  # Issue with a plugin's products config file (e.g. config/skroutz.json)
+)
+EXIT_CODE_ENV_ERROR: int = 16  # Issue with the .env file
 EXIT_CODE_RATE_LIMIT_ERROR: int = 17  # Blocked by server due to rate limits
-EXIT_CODE_SCRAPE_ERROR: int = 18      # Parser failure or unexpected scraper fault
-EXIT_CODE_STORAGE_ERROR: int = 19     # Scraped state could not be persisted
+EXIT_CODE_SCRAPE_ERROR: int = 18  # Parser failure or unexpected scraper fault
+EXIT_CODE_STORAGE_ERROR: int = 19  # Scraped state could not be persisted
 EXIT_CODE_NOTIFICATION_ERROR: int = 20  # A configured notification failed to deliver
 EXIT_CODE_PLUGIN_DEPENDENCY_ERROR: int = 21  # A selected scraper's dependencies are missing
-EXIT_CODE_SKIPPED: int = 42           # Skipped execution (another instance running)
+EXIT_CODE_SKIPPED: int = 42  # Skipped execution (another instance running)
 
 # --- Base Directory Paths ---
 BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,7 +24,13 @@ LOGS_DIR: str = os.path.join(BASE_DIR, "logs")
 # --- Scraping Configuration ---
 
 # Unconfigured Apprise placeholders to ignore during URL validation
-APPRISE_PLACEHOLDERS: list[str] = ['<token>', '<bot_token>', '<chat_id>', '<webhook_id>', '<webhook_token>']
+APPRISE_PLACEHOLDERS: list[str] = [
+    "<token>",
+    "<bot_token>",
+    "<chat_id>",
+    "<webhook_id>",
+    "<webhook_token>",
+]
 
 # Maximum number of times to retry scraping a product if the request fails
 MAX_RETRIES: int = 3

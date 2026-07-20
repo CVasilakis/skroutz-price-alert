@@ -14,10 +14,18 @@ from core.constants import (
 from core.exceptions import RateLimitError, ScraperParseError, ServerError
 from core.execution import ItemExecutor, policy_for
 from core.run import PriceOutcome, RunOutcome, RunReporter
-from core.scrapers.api import ListingResult, Offer, PriceResult, ScraperClient, TrackedItem
+from core.scrapers.api import (
+    ListingResult,
+    Offer,
+    PriceResult,
+    ScraperClient,
+    TrackedItem,
+    UrlField,
+)
 from core.scrapers.state import JsonStateRepository, StateEntry
 
 NOW = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
+URL = UrlField("url", domains=("example.com",), accepts_url=lambda _url: True)
 
 
 def _executor(*, services=False, delivered=True):
@@ -38,22 +46,34 @@ def _executor(*, services=False, delivered=True):
         logger=mock.Mock(),
         interrupted=lambda: False,
         now_fn=lambda: NOW,
+        reference_url=lambda item: item[URL],
     )
     return executor, notifier, reporter, state
 
 
 def _item(**changes):
-    values = dict(id="one", name="One", url="https://example.com/one", target_price=10)
+    url = changes.pop("url", "https://example.com/one")
+    values = dict(
+        id="one",
+        name="One",
+        target_price=10,
+        _custom={URL: url},
+    )
     values.update(changes)
     return TrackedItem(**values)
 
 
 def test_run_outcome_exit_priority_and_skipped():
-    assert RunOutcome(products_error=True, storage_error=True).exit_code(
-        interrupted=False, target_count=1) == EXIT_CODE_PRODUCTS_ERROR
-    code = lambda outcome, interrupted=False: outcome.exit_code(
-        interrupted=interrupted, target_count=1,
+    assert (
+        RunOutcome(products_error=True, storage_error=True).exit_code(
+            interrupted=False, target_count=1
+        )
+        == EXIT_CODE_PRODUCTS_ERROR
     )
+
+    def code(outcome, interrupted=False):
+        return outcome.exit_code(interrupted=interrupted, target_count=1)
+
     assert code(RunOutcome(storage_error=True)) == EXIT_CODE_STORAGE_ERROR
     assert code(RunOutcome(dependency_error=True)) == EXIT_CODE_PLUGIN_DEPENDENCY_ERROR
     assert code(RunOutcome(scrape_error=True)) == EXIT_CODE_SCRAPE_ERROR
@@ -75,10 +95,23 @@ def test_price_result_updates_state_and_sends_repeated_drop_notification():
     item = _item()
     assert not executor._handle_success(item, PriceResult(5, "EUR"), 0, [])
     notifier.notify_low_price.assert_called_once_with(
-        "Test Store", "One", 10, 5.0, item.url, "EUR"
+        "Test Store", "One", 10, 5.0, item[URL], "EUR"
     )
     state.record_priced_check.assert_called_once_with("one", 5.0, NOW)
     assert reporter.log_price_result.call_args.args[4] is PriceOutcome.DROP
+
+
+def test_result_url_takes_precedence_and_url_free_result_omits_link():
+    executor, notifier, _, _ = _executor(services=True)
+    item = _item()
+    executor._handle_success(item, PriceResult(5, "EUR", "https://result.example/item"), 0, [])
+    assert notifier.notify_low_price.call_args.args[4] == "https://result.example/item"
+
+    notifier.reset_mock()
+    executor.reference_url = lambda _item: None
+    executor.result_handler.reference_url = executor.reference_url
+    executor._handle_success(item, PriceResult(5, "EUR"), 0, [])
+    assert notifier.notify_low_price.call_args.args[4] is None
 
 
 def test_listing_no_match_only_refreshes_timestamp():
@@ -95,11 +128,14 @@ def test_listing_alerts_each_below_target_and_reports_partial_failure():
     executor, notifier, reporter, state = _executor(services=True)
     notifier.notify_low_price.side_effect = [True, False]
     item = _item()
-    result = ListingResult("EUR", [
-        Offer("A", 5, "https://example.com/a"),
-        Offer("B", 6, "https://example.com/b"),
-        Offer("C", 12, "https://example.com/c"),
-    ])
+    result = ListingResult(
+        "EUR",
+        [
+            Offer("A", 5, "https://example.com/a"),
+            Offer("B", 6, "https://example.com/b"),
+            Offer("C", 12, "https://example.com/c"),
+        ],
+    )
     assert executor._handle_success(item, result, 0, [])
     assert notifier.notify_low_price.call_count == 2
     assert reporter.log_price_result.call_args.kwargs["delivery_failed"] is True

@@ -1,26 +1,28 @@
 import argparse
-import sys
-import os
 import logging
+import os
 import signal
+import sys
 
 # Put src/ (the parent of the `core` package) on the path so the absolute
 # `core.*` imports below work when this file is invoked directly as a script.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
-from core.utils import install_interrupt_handler
-from core.scrapers.registry import ClientLoader, PluginCatalog
-from core.notifier import Notifier
-from core.logger import setup_global_logging, save_traceback
-from core.orchestrator import ScrapingOrchestrator
-from core.reporting import SilentRunReporter
-from core.ui.tui import InteractiveRunReporter
-from core.preflight import load_targets
-from core.ui.config_check import preflight
-from core.general import ReminderService
-
 from rich.console import Console
+
+from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
+from core.general import ReminderService
+from core.logger import save_traceback, setup_global_logging
+from core.notifier import Notifier
+from core.orchestrator import ScrapingOrchestrator
+from core.preflight import load_targets
+from core.reporting import SilentRunReporter
+from core.scrapers.registry import ClientLoader, PluginCatalog
+from core.scrapers.settings import KEY_RETENTION
+from core.ui.config_check import preflight
+from core.ui.tui import InteractiveRunReporter
+from core.utils import install_interrupt_handler
+
 
 def main() -> None:
     """Main entry point for the Scrooge Alert application.
@@ -29,15 +31,17 @@ def main() -> None:
     checks for updates, loads products, and starts the scraping orchestrator.
     It delegates file locking and scraping execution to the ScrapingOrchestrator.
     """
-    parser = argparse.ArgumentParser(description='Scrooge Alert scraper')
-    parser.add_argument('--quiet', action='store_true', help='Run script with no console output')
+    parser = argparse.ArgumentParser(description="Scrooge Alert scraper")
+    parser.add_argument("--quiet", action="store_true", help="Run script with no console output")
 
     # Atomically discover and compile the immutable plugin catalog.
     catalog = PluginCatalog.discover()
     registered_scrapers = list(catalog.targets)
     for scraper in registered_scrapers:
         display_name = catalog.get(scraper).display_name
-        parser.add_argument(f'--{scraper}', action='store_true', help=f'Run the {display_name} scraper')
+        parser.add_argument(
+            f"--{scraper}", action="store_true", help=f"Run the {display_name} scraper"
+        )
 
     # Strict parsing: an unknown flag (e.g. a typo'd --<plugin>) must error out,
     # not be silently ignored — parse_known_args would fall through to running
@@ -74,7 +78,15 @@ def main() -> None:
 
         reporter = InteractiveRunReporter()
     else:
-        init_fatal_error = preflight(None, targets_to_run, quiet=True)
+        retention_by_target = {
+            load.target: load.settings[load.plugin.setting(KEY_RETENTION)] for load in load_results
+        }
+        init_fatal_error = preflight(
+            None,
+            targets_to_run,
+            quiet=True,
+            retention_by_target=retention_by_target,
+        )
         reporter = SilentRunReporter()
 
     if init_fatal_error:
@@ -93,18 +105,23 @@ def main() -> None:
     client_loader = ClientLoader()
     try:
         orchestrator = ScrapingOrchestrator(
-            load_results, client_loader, notifier, args.quiet, reporter,
+            load_results,
+            client_loader,
+            notifier,
+            args.quiet,
+            reporter,
         )
         exit_code = orchestrator.run()
 
         sys.exit(exit_code)
 
     except Exception:
-        if 'reporter' in locals():
+        if "reporter" in locals():
             reporter.complete_target()
         save_traceback(logging.root)
         notifier.notify_crash()
         sys.exit(EXIT_CODE_ERROR)
+
 
 if __name__ == "__main__":
     main()

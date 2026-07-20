@@ -14,12 +14,11 @@ so they render exactly like the terminal print, dodging any HTML reflow of the b
 """
 
 import html as _html
-import re
 
 from rich.cells import cell_len
 from rich.terminal_theme import TerminalTheme
 
-from ui.catalog._base import BuildResult, Scenario, Surface, SURFACE_INFO
+from ui.catalog._base import SURFACE_INFO, BuildResult, Scenario, Surface
 from ui.harness.rendering import make_recording_console, paint
 
 # The eight ANSI slots the panels actually use, in Rich order:
@@ -27,30 +26,30 @@ from ui.harness.rendering import make_recording_console, paint
 #
 # Light: High-contrast GitHub Light style
 LIGHT_THEME = TerminalTheme(
-    (255, 255, 255),   # bg
-    (36, 41, 46),      # fg
+    (255, 255, 255),  # bg
+    (36, 41, 46),  # fg
     [
-        (36, 41, 46),     # black
-        (215, 58, 73),    # red
-        (34, 134, 58),    # green
-        (176, 136, 0),    # yellow
-        (3, 102, 214),    # blue
-        (111, 66, 193),   # magenta
-        (27, 124, 131),   # cyan
+        (36, 41, 46),  # black
+        (215, 58, 73),  # red
+        (34, 134, 58),  # green
+        (176, 136, 0),  # yellow
+        (3, 102, 214),  # blue
+        (111, 66, 193),  # magenta
+        (27, 124, 131),  # cyan
         (106, 115, 125),  # white
     ],
 )
 DARK_THEME = TerminalTheme(
-    (26, 33, 43),      # background — --panel
-    (215, 222, 231),   # foreground — --text
+    (26, 33, 43),  # background — --panel
+    (215, 222, 231),  # foreground — --text
     [
-        (74, 86, 102),    # black   — muted slate
+        (74, 86, 102),  # black   — muted slate
         (255, 107, 107),  # red     — --red
         (111, 207, 115),  # green   — --green
-        (255, 207, 92),   # yellow  — --accent-2
+        (255, 207, 92),  # yellow  — --accent-2
         (130, 170, 255),  # blue
         (199, 146, 234),  # magenta
-        (92, 200, 255),   # cyan    — --accent
+        (92, 200, 255),  # cyan    — --accent
         (215, 222, 231),  # white   — --text
     ],
 )
@@ -372,13 +371,13 @@ def _pin_wide_glyphs(frag: str) -> str:
 
     Rich pads each panel line to a fixed cell count. Browsers render double-width glyphs
     at fractional advances, breaking the right border. We pin them to `2ch`.
-    
+
     (Note: Box drawing alignment for Android is handled dynamically via JS to avoid
     disrupting crisp subpixel rendering on desktop Windows/macOS).
     """
     for ch in {c for c in set(frag) if cell_len(c) == 2}:
         frag = frag.replace(ch, f'<span class="w2">{ch}</span>')
-        
+
     return frag
 
 
@@ -398,8 +397,16 @@ def _dot(color: str) -> str:
 def _search_text(sc: Scenario) -> str:
     """The lowercased haystack behind the sidebar filter — one definition shared by a
     scenario's card and its nav item, so the two can never match differently."""
-    return " ".join([sc.snapshot_key, sc.name, sc.description, " ".join(sc.tags),
-                     sc.surface.value, SURFACE_INFO[sc.surface].label]).lower()
+    return " ".join(
+        [
+            sc.snapshot_key,
+            sc.name,
+            sc.description,
+            " ".join(sc.tags),
+            sc.surface.value,
+            SURFACE_INFO[sc.surface].label,
+        ]
+    ).lower()
 
 
 def _scenario(sc: Scenario, result: BuildResult) -> str:
@@ -415,7 +422,7 @@ def _scenario(sc: Scenario, result: BuildResult) -> str:
         f'<span class="scn-desc">{_html.escape(sc.description)}</span>{tags}</div>'
         f'<pre class="panel panel--light">{_fragment(result, LIGHT_THEME)}</pre>'
         f'<pre class="panel panel--dark">{_fragment(result, DARK_THEME)}</pre>'
-        f'</article>'
+        f"</article>"
     )
 
 
@@ -435,11 +442,13 @@ def render_report(scenarios: list[Scenario]) -> str:
     all_tags = set()
     for sc in scenarios:
         all_tags.update(sc.tags)
-    
+
     tag_html = '<div class="tag-filters">'
     for tag in sorted(all_tags):
-        tag_html += f'<button class="tag-btn" data-tag="{_html.escape(tag)}">{_html.escape(tag)}</button>'
-    tag_html += '</div>'
+        tag_html += (
+            f'<button class="tag-btn" data-tag="{_html.escape(tag)}">{_html.escape(tag)}</button>'
+        )
+    tag_html += "</div>"
 
     nav, main = [], []
     for surface, items in groups.items():
@@ -462,30 +471,30 @@ def render_report(scenarios: list[Scenario]) -> str:
         # One-line section subtitle, reusing the existing muted description style so
         # no new CSS is introduced; collapses along with the section body.
         main.append(f'<div class="scn-desc">{_html.escape(info.blurb)}</div>')
-        
+
         # Build all items so we can sort them by color
         built_items = [(sc, sc.build()) for sc in items]
-        
+
         # Sort order: green(0), yellow(1), red(2), blue(3)
         color_order = {"green": 0, "yellow": 1, "red": 2, "blue": 3}
         built_items.sort(key=lambda x: color_order.get(x[1].border_color, 99))
-        
+
         for sc, result in built_items:
             tags_str = " ".join(sc.tags)
             data = _search_text(sc)
             nav.append(
                 f'<a class="nav-item" href="#{sc.snapshot_key}" data-text="{_html.escape(data, quote=True)}" data-tags=" {tags_str} ">'
-                f'{_dot(result.border_color)}<span>{_html.escape(sc.name)}</span></a>'
+                f"{_dot(result.border_color)}<span>{_html.escape(sc.name)}</span></a>"
             )
             main.append(_scenario(sc, result))
-        main.append('</div></section>')
+        main.append("</div></section>")
 
     total = len(scenarios)
     return (
-        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         "<title>Scrooge Alert — UI Gallery</title>\n"
-        f"<style>\n{_STYLE}</style>\n</head>\n<body class=\"theme-dark\">\n"
+        f'<style>\n{_STYLE}</style>\n</head>\n<body class="theme-dark">\n'
         '<div class="sidebar-backdrop" id="sidebar-backdrop"></div>\n'
         '<div class="layout">\n'
         '<nav class="sidebar">'
@@ -494,19 +503,19 @@ def render_report(scenarios: list[Scenario]) -> str:
         '<div class="controls">'
         '<input id="filter" type="search" placeholder="Filter scenarios…" autocomplete="off">'
         '<button id="theme-toggle" type="button"></button></div>'
-        f'{tag_html}'
+        f"{tag_html}"
         '<div class="nav-title">Surfaces</div>'
-        f'{"".join(nav)}</nav>\n'
+        f"{''.join(nav)}</nav>\n"
         '<main class="main">'
         '<div class="main-header">'
         '<button id="sidebar-toggle" class="icon-btn" title="Toggle Sidebar">&#9776;</button>'
-        '<div>'
-        '<h1>UI Scenario Gallery</h1>'
+        "<div>"
+        "<h1>UI Scenario Gallery</h1>"
         '<div class="sub">Every catalogued terminal panel, rendered with full color for review.</div>'
-        '</div></div>'
-        f'{"".join(main)}'
+        "</div></div>"
+        f"{''.join(main)}"
         '<div class="empty" id="empty">No scenarios match your filter.</div>'
-        '</main>\n</div>\n'
+        "</main>\n</div>\n"
         f"<script>\n{_SCRIPT}</script>\n</body>\n</html>\n"
     )
 

@@ -40,7 +40,10 @@ def tracked_shell_scripts() -> list[str]:
     """Every tracked or new nonignored ``*.sh`` path, relative to the repo root."""
     out = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.sh"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return [line for line in out.stdout.splitlines() if line]
 
@@ -60,10 +63,13 @@ class TestShellcheck(unittest.TestCase):
         # directives resolve exactly as in the CI job.
         result = subprocess.run(
             [shellcheck, *SHELLCHECK_ARGS, *scripts],
-            cwd=REPO_ROOT, capture_output=True, text=True,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
         )
         self.assertEqual(
-            result.returncode, 0,
+            result.returncode,
+            0,
             msg=f"shellcheck found issues:\n{result.stdout}{result.stderr}",
         )
 

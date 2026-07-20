@@ -14,8 +14,11 @@ import unittest
 from unittest import mock
 
 from core.status import (
-    SYSTEMCTL_QUERY_TIMEOUT_SECONDS, get_installed_plugin_units,
-    get_systemd_properties, get_systemd_user_dir, read_timer_oncalendar,
+    SYSTEMCTL_QUERY_TIMEOUT_SECONDS,
+    get_installed_plugin_units,
+    get_systemd_properties,
+    get_systemd_user_dir,
+    read_timer_oncalendar,
 )
 
 
@@ -46,8 +49,7 @@ class TestGetSystemdUserDir(unittest.TestCase):
     def test_falls_back_to_home_config(self):
         env = {k: v for k, v in os.environ.items() if k != "XDG_CONFIG_HOME"}
         with mock.patch.dict(os.environ, env, clear=True):
-            self.assertEqual(get_systemd_user_dir(),
-                             os.path.expanduser("~/.config/systemd/user"))
+            self.assertEqual(get_systemd_user_dir(), os.path.expanduser("~/.config/systemd/user"))
 
 
 class TestGetInstalledPluginUnits(_UnitDirCase):
@@ -58,10 +60,13 @@ class TestGetInstalledPluginUnits(_UnitDirCase):
         self._write_unit("ghost-scraper.timer")
         self._write_unit("unrelated.service")
 
-        self.assertEqual(get_installed_plugin_units(), {
-            "skroutz": {"timer", "service"},
-            "ghost": {"timer"},
-        })
+        self.assertEqual(
+            get_installed_plugin_units(),
+            {
+                "skroutz": {"timer", "service"},
+                "ghost": {"timer"},
+            },
+        )
 
     def test_empty_dir_yields_no_units(self):
         self.assertEqual(get_installed_plugin_units(), {})
@@ -69,9 +74,11 @@ class TestGetInstalledPluginUnits(_UnitDirCase):
 
 class TestReadTimerOncalendar(_UnitDirCase):
     def test_reads_the_oncalendar_value(self):
-        self._write_unit("skroutz-scraper.timer",
-                         "[Unit]\nDescription=x\n\n[Timer]\nOnCalendar=*-*-* 00/2:00:00\n"
-                         "RandomizedDelaySec=180s\n")
+        self._write_unit(
+            "skroutz-scraper.timer",
+            "[Unit]\nDescription=x\n\n[Timer]\nOnCalendar=*-*-* 00/2:00:00\n"
+            "RandomizedDelaySec=180s\n",
+        )
         self.assertEqual(read_timer_oncalendar("skroutz"), "*-*-* 00/2:00:00")
 
     def test_missing_unit_reads_as_empty(self):
@@ -89,14 +96,17 @@ class TestGetSystemdProperties(_UnitDirCase):
     def test_parses_key_value_output(self):
         self._write_unit("skroutz-scraper.timer", "[Timer]\nOnCalendar=hourly\n")
         with mock.patch.object(
-            subprocess, "check_output",
+            subprocess,
+            "check_output",
             return_value=b"ActiveState=active\nResult=success\n",
         ) as check:
-            self.assertEqual(self._props(),
-                             {"ActiveState": "active", "Result": "success"})
+            self.assertEqual(self._props(), {"ActiveState": "active", "Result": "success"})
         check.assert_called_once_with(
             [
-                "systemctl", "--user", "show", "skroutz-scraper.timer",
+                "systemctl",
+                "--user",
+                "show",
+                "skroutz-scraper.timer",
                 "--property=ActiveState,Result",
             ],
             stderr=subprocess.DEVNULL,
@@ -113,14 +123,16 @@ class TestGetSystemdProperties(_UnitDirCase):
 
     def test_systemctl_failure_degrades_to_empty(self):
         self._write_unit("skroutz-scraper.timer", "[Timer]\n")
-        with mock.patch.object(subprocess, "check_output",
-                               side_effect=subprocess.CalledProcessError(1, "systemctl")):
+        with mock.patch.object(
+            subprocess, "check_output", side_effect=subprocess.CalledProcessError(1, "systemctl")
+        ):
             self.assertEqual(self._props(), {})
 
     def test_systemctl_timeout_degrades_to_empty(self):
         self._write_unit("skroutz-scraper.timer", "[Timer]\n")
         with mock.patch.object(
-            subprocess, "check_output",
+            subprocess,
+            "check_output",
             side_effect=subprocess.TimeoutExpired("systemctl", 10),
         ):
             self.assertEqual(self._props(), {})

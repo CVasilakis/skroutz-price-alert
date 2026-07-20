@@ -5,10 +5,13 @@ import pytest
 from core.exceptions import RateLimitError, ScraperParseError
 from core.scrapers.api import TrackedItem
 from core.scrapers.insomnia.client import Client
-from core.scrapers.insomnia.plugin import MIN_ADVERT_PRICE, TITLE_EXCLUDE, TITLE_INCLUDE
+from core.scrapers.insomnia.plugin import (
+    TITLE_EXCLUDE,
+    TITLE_INCLUDE,
+    URL,
+)
 from core.scrapers.registry import PluginCatalog
 from core.settings import resolve_settings
-
 
 HTML = """
 <li class="insAdvertsList"><h4><a href="/classifieds/ad/1/">Pixel 9 128GB</a></h4><p class="cFilePrice">450,00 €</p></li>
@@ -37,9 +40,12 @@ def _search(include=(), exclude=()) -> TrackedItem:
     return TrackedItem(
         "id",
         "Name",
-        "https://www.insomnia.gr/classifieds/category/x/",
         500,
-        _custom={TITLE_INCLUDE: tuple(include), TITLE_EXCLUDE: tuple(exclude)},
+        _custom={
+            URL: "https://www.insomnia.gr/classifieds/category/x/",
+            TITLE_INCLUDE: tuple(include),
+            TITLE_EXCLUDE: tuple(exclude),
+        },
     )
 
 
@@ -54,8 +60,6 @@ def test_modeled_remote_and_parse_failures():
     with pytest.raises(ScraperParseError):
         _client("<p>blocked</p>").scrape(_search())
     with pytest.raises(ScraperParseError):
-        _client(
-            '<li class="insAdvertsList"><h4><a href="/x">Ad</a></h4></li>'
-        ).scrape(_search())
+        _client('<li class="insAdvertsList"><h4><a href="/x">Ad</a></h4></li>').scrape(_search())
     with pytest.raises(RateLimitError):
         _client(status=429).scrape(_search())

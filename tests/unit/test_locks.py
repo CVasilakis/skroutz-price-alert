@@ -11,8 +11,8 @@ import os
 import unittest
 
 import core.locks
-from core.locks import acquire_lock
 from core.exceptions import LockAcquisitionError
+from core.locks import acquire_lock
 
 
 class TestAcquireLock(unittest.TestCase):

@@ -1,16 +1,16 @@
 from dataclasses import dataclass, replace
 
 from core.constants import (
-    EXIT_CODE_SUCCESS,
-    EXIT_CODE_SKIPPED,
-    EXIT_CODE_PRODUCTS_ERROR,
     EXIT_CODE_ENV_ERROR,
-    EXIT_CODE_RATE_LIMIT_ERROR,
-    EXIT_CODE_SCRAPE_ERROR,
-    EXIT_CODE_STORAGE_ERROR,
+    EXIT_CODE_INTERRUPT,
     EXIT_CODE_NOTIFICATION_ERROR,
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_INTERRUPT,
+    EXIT_CODE_PRODUCTS_ERROR,
+    EXIT_CODE_RATE_LIMIT_ERROR,
+    EXIT_CODE_SCRAPE_ERROR,
+    EXIT_CODE_SKIPPED,
+    EXIT_CODE_STORAGE_ERROR,
+    EXIT_CODE_SUCCESS,
 )
 
 
@@ -25,6 +25,7 @@ class ServiceVerdict:
         note: An optional footnote; fully resolved (no placeholder) by the time a
             verdict is returned from :func:`classify_service_state`.
     """
+
     icon: str
     label: str
     color: str
@@ -37,34 +38,52 @@ class ServiceVerdict:
 # classify_service_state (e.g. with the offending config filename).
 _VERDICTS: dict[int, ServiceVerdict] = {
     EXIT_CODE_SUCCESS: ServiceVerdict("✅", "OK", "green"),
-    EXIT_CODE_SKIPPED: ServiceVerdict("🟡", "Skipped", "yellow", "Another instance of the scraper was running."),
-    EXIT_CODE_PRODUCTS_ERROR: ServiceVerdict("❗", "Failed", "red", "Issue with the `config/{detail}` file."),
+    EXIT_CODE_SKIPPED: ServiceVerdict(
+        "🟡", "Skipped", "yellow", "Another instance of the scraper was running."
+    ),
+    EXIT_CODE_PRODUCTS_ERROR: ServiceVerdict(
+        "❗", "Failed", "red", "Issue with the `config/{detail}` file."
+    ),
     EXIT_CODE_ENV_ERROR: ServiceVerdict("❗", "Failed", "red", "Issue with the `.env` file."),
-    EXIT_CODE_RATE_LIMIT_ERROR: ServiceVerdict("❗", "Failed", "red", "Blocked by server due to rate limits."),
+    EXIT_CODE_RATE_LIMIT_ERROR: ServiceVerdict(
+        "❗", "Failed", "red", "Blocked by server due to rate limits."
+    ),
     EXIT_CODE_SCRAPE_ERROR: ServiceVerdict(
-        "❗", "Scraping Failed", "red",
+        "❗",
+        "Scraping Failed",
+        "red",
         "A parser or unexpected scraper failure exhausted all retries. Check `logs/{target}/output.log`.",
     ),
     EXIT_CODE_STORAGE_ERROR: ServiceVerdict(
-        "❗", "Storage Failed", "red", "Could not update `config/{detail}` with the latest scrape state."
+        "❗",
+        "Storage Failed",
+        "red",
+        "Could not update `config/{detail}` with the latest scrape state.",
     ),
     EXIT_CODE_NOTIFICATION_ERROR: ServiceVerdict(
-        "🟡", "Notification Warning", "yellow",
+        "🟡",
+        "Notification Warning",
+        "yellow",
         "At least one configured notification could not be delivered. Run `./scripts/run.sh --ping`.",
     ),
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR: ServiceVerdict(
-        "❗", "Dependencies Missing", "red",
+        "❗",
+        "Dependencies Missing",
+        "red",
         "Install this scraper's dependencies with `./install.sh --{target}`.",
     ),
-    EXIT_CODE_INTERRUPT: ServiceVerdict("🟡", "Interrupted", "yellow", "Process was terminated by the user or system."),
+    EXIT_CODE_INTERRUPT: ServiceVerdict(
+        "🟡", "Interrupted", "yellow", "Process was terminated by the user or system."
+    ),
 }
 
 # Fallback for an exit code not in the table; the note carries the raw reason/code.
 _UNKNOWN_VERDICT = ServiceVerdict("❗", "Failed", "red", "{detail}")
 
 
-def classify_service_state(result: str, exec_status: str, target: str,
-                           config_filename: str) -> ServiceVerdict:
+def classify_service_state(
+    result: str, exec_status: str, target: str, config_filename: str
+) -> ServiceVerdict:
     """Maps a finished service's systemd outcome to a presentation verdict.
 
     A run counts as fully successful only when systemd reports ``Result=success``
@@ -96,7 +115,11 @@ def classify_service_state(result: str, exec_status: str, target: str,
         return replace(_UNKNOWN_VERDICT, note=detail)
 
     if verdict.note:
-        return replace(verdict, note=verdict.note.format(
-            detail=config_filename, target=target,
-        ))
+        return replace(
+            verdict,
+            note=verdict.note.format(
+                detail=config_filename,
+                target=target,
+            ),
+        )
     return verdict

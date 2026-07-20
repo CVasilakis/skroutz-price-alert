@@ -75,8 +75,7 @@ class JsonStateRepository:
             unknown_fields = set(raw) - STATE_ITEM_KEYS
             if unknown_fields:
                 raise ValueError(
-                    f"state for {item_id!r} has unknown keys: "
-                    f"{', '.join(sorted(unknown_fields))}"
+                    f"state for {item_id!r} has unknown keys: {', '.join(sorted(unknown_fields))}"
                 )
             price = _state_price(raw["last_price"]) if "last_price" in raw else None
             checked = parse_utc(raw["last_checked"]) if "last_checked" in raw else None
@@ -87,15 +86,11 @@ class JsonStateRepository:
         return self._pending.get(item_id, self._items.get(item_id, StateEntry()))
 
     def record_priced_check(self, item_id: str, price: float, checked_at: datetime) -> None:
-        self._pending[item_id] = StateEntry(
-            _state_price(price), parse_utc(format_utc(checked_at))
-        )
+        self._pending[item_id] = StateEntry(_state_price(price), parse_utc(format_utc(checked_at)))
 
     def record_no_price_check(self, item_id: str, checked_at: datetime) -> None:
         current = self._pending.get(item_id, self._items.get(item_id, StateEntry()))
-        self._pending[item_id] = StateEntry(
-            current.last_price, parse_utc(format_utc(checked_at))
-        )
+        self._pending[item_id] = StateEntry(current.last_price, parse_utc(format_utc(checked_at)))
 
     @property
     def has_pending(self) -> bool:
@@ -107,13 +102,11 @@ class JsonStateRepository:
         merged = {**self._items, **self._pending}
         serialized = {
             item_id: {
-                **(
-                    {"last_price": entry.last_price}
-                    if entry.last_price is not None else {}
-                ),
+                **({"last_price": entry.last_price} if entry.last_price is not None else {}),
                 **(
                     {"last_checked": format_utc(entry.last_checked)}
-                    if entry.last_checked is not None else {}
+                    if entry.last_checked is not None
+                    else {}
                 ),
             }
             for item_id, entry in merged.items()

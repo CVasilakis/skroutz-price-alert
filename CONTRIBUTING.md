@@ -32,6 +32,8 @@ and statically checks the plugin package. Run the full suite before submitting:
 ```sh
 ./venv/bin/python3 -m pytest
 ./venv/bin/basedpyright src
+./venv/bin/ruff check src tests
+./venv/bin/ruff format --check src tests
 git ls-files -z -- '*.sh' | xargs -0 ./venv/bin/shellcheck -x --exclude=SC2086,SC2046
 ```
 
@@ -65,23 +67,30 @@ derives `<package>.client:Client` and imports it only when that target runs.
 ```python
 from urllib.parse import SplitResult
 
-from core.scrapers.api import ScraperPlugin
+from core.scrapers.api import ScraperPlugin, UrlField
 
 
 def accepts_url(url: SplitResult) -> bool:
     return url.path.startswith("/products/")
 
 
-PLUGIN = ScraperPlugin(
-    display_name="Acme",
+PRODUCT_URL = UrlField(
+    key="url",
     domains=["acme.example"],
     accepts_url=accepts_url,
+)
+
+PLUGIN = ScraperPlugin(
+    display_name="Acme",
+    item_fields=(PRODUCT_URL,),
+    reference_url=PRODUCT_URL,
     default_interval="1h",
 )
 ```
 
-Domains are hostnames or IP addresses only—no scheme, credentials, port, path,
-query, or fragment. A declared DNS domain accepts that exact host and its
+Each `UrlField` owns its domains and parsed-URL predicate. Domains are hostnames
+or IP addresses only—no scheme, credentials, port, path, query, or fragment. A
+declared DNS domain accepts that exact host and its
 subdomains; an IP declaration matches only that IP. Multiple adapters may support
 different page shapes on the same domain. The framework validates and canonicalizes
 an item's absolute credential-free HTTP(S) URL, verifies its host against this plugin's domains,
@@ -89,8 +98,11 @@ then calls `accepts_url`. Queries are preserved; fragments are removed. The URL
 predicate must return a real `bool` and should inspect only the parsed page shape
 the client understands.
 
+`reference_url` may select one declared `UrlField` for diagnostics and price
+notifications. Plugins may instead declare multiple URL inputs or no URL at all.
+
 `default_interval` defaults to `1h` and must use a supported canonical interval.
-`domains`, `item_fields`, and `settings` accept ordinary sequences and are
+`item_fields` and `settings` accept ordinary sequences and are
 compiled into immutable tuples and lookup maps. Target, field, and setting keys
 must be snake_case. Contributor text must not contain control characters because
 the same catalog feeds terminal panels and a TSV shell bridge.
@@ -101,21 +113,23 @@ the same catalog feeds terminal panels and a TSV shell bridge.
 
 ```python
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
+from core.scrapers.acme_store.plugin import PRODUCT_URL
 
 
 class Client(ScraperClient):
     def scrape(self, item: TrackedItem) -> PriceResult:
-        price = fetch_price(item.url)
+        price = fetch_price(item[PRODUCT_URL])
         return PriceResult(price=price, currency="EUR")
 ```
 
-`TrackedItem` contains immutable configuration only: `id`, `name`, `url`,
-`target_price`, `skip`, and declared custom fields. Plugins do not receive or
+`TrackedItem` contains immutable configuration only: `id`, `name`,
+`target_price`, `skip`, and declared fields accessed as `item[FIELD]`. It has no
+universal URL attribute. Plugins do not receive or
 write historical state.
 
 Return one of two intentional variants:
 
-- `PriceResult(price, currency)` for one product price;
+- `PriceResult(price, currency, url=None)` for one product price;
 - `ListingResult(currency, offers)` for a listing/search, with one `Offer(title,
   price, url)` per independently alertable advert.
 
@@ -128,6 +142,9 @@ Result values reject blank currency/title strings, boolean, negative, or
 non-finite prices, non-`Offer` members, and non-absolute offer URLs. Listing
 iterables are snapshotted to immutable tuples.
 
+For single-price alerts, a result URL takes precedence over the item's declared
+reference URL. If neither exists, the notification is sent without a link.
+
 Raise modeled exceptions from `core.scrapers.api`: `ProductNotFoundError`,
 `ProductUnavailableError`, `InvalidURLError`, `RateLimitError`, `ServerError`,
 `ScraperParseError`, or the base `ScraperError`. Their retry preparation,
@@ -135,8 +152,9 @@ abort, traceback, notification, and exit-status policies are framework-owned.
 
 ## Custom item fields
 
-Declare a typed field once. Its decoder returns a canonical value or raises
-`TypeError`/`ValueError`; its default must already be canonical
+Declare a typed field once. Omitting `default` makes it required; providing one
+makes it optional. Its decoder returns a canonical value or raises
+`TypeError`/`ValueError`; an optional default must already be canonical
 (`decode(default) == default`). Compilation never rewrites declaration objects.
 
 ```python
@@ -144,40 +162,53 @@ from core.scrapers.api import ItemField
 
 TITLE_TERMS = ItemField(
     key="title_terms",
-    default=(),
     decode=decode_string_tuple,
+    default=(),
 )
+
+REGION = ItemField(key="region", decode=decode_region)  # required
 
 # In Client.scrape:
 terms = item[TITLE_TERMS]
 ```
 
 Lookup uses the exact declaration object. Keys must be unique and cannot collide
-with framework item keys. Do not add plugin-specific models or storage classes.
+with framework item keys. An identifier-only plugin can declare required `sku`
+and `region` fields, omit `UrlField` and `reference_url`, and return a
+`PriceResult(..., url=...)` when the upstream response provides a useful link.
+Do not add plugin-specific models or storage classes.
 
 ## Custom settings
 
-The normal declaration needs only `key`, `default`, and `decode`; its label,
-string display, and invalid-value warning are derived. Override presentation only
-when the setting needs specialized vocabulary.
+The normal declaration needs `key` and `decode`; add `default` when it is
+optional. Its label, string display, and invalid-value warning are derived.
+Override presentation only when the setting needs specialized vocabulary.
 
 ```python
 from core.scrapers.api import SettingSpec
 
 MIN_PRICE = SettingSpec(
     key="min_price",
-    default=0.0,
     decode=decode_nonnegative_float,
+    default=0.0,
     display=lambda value: f"{value:g} EUR" if value else "disabled",
 )
+
+API_TOKEN = SettingSpec(
+    key="api_token",
+    decode=decode_nonblank,
+    sensitive=True,
+)  # required; panels show only "configured" / "not configured"
 
 # In Client.scrape:
 floor = self.settings[MIN_PRICE]
 ```
 
-Invalid known values fall back to the compiled default and surface a warning.
-Unknown setting keys and malformed settings blocks are fatal configuration
-errors. The framework adds `execution_interval`, `log_retention_days`, and
+Invalid optional values fall back to the compiled default and surface a warning.
+A missing or invalid required value fails only that target's configuration.
+Sensitive values resolve normally for clients but are always redacted from
+framework views and diagnostics. Unknown setting keys and malformed settings
+blocks are fatal configuration errors. The framework adds `execution_interval`, `log_retention_days`, and
 `notify_scraping_errors`; plugins cannot declare systemd directives.
 
 ## Optional client helpers
@@ -200,8 +231,9 @@ dependencies and therefore belong in `client.py`, never the descriptor.
 The example config is a strict JSON object containing `settings` and at least one
 valid item. It must demonstrate every custom setting and item field so users do not
 need to infer store-specific configuration from Python code.
-Every item needs a unique, stable `id`, `name`, accepted `url`, and non-negative
-`target_price`; `skip` is optional. Unknown keys, including `metadata`, are rejected.
+Every item needs a unique, stable `id`, `name`, non-negative `target_price`, and
+every required plugin field; `skip` is optional. Unknown keys, including
+`metadata`, are rejected.
 User config is read-only. Schema-v1 machine state is owned by the framework in
 `state/<target>.json`.
 
@@ -213,8 +245,8 @@ errors, not dependency errors.
 
 Add target-owned tests under `tests/plugins/<target>/` with focused parser tests for
 representative success payloads, malformed markup, no-price/unavailable cases,
-relevant status codes, accepted and rejected URL shapes, field codecs, and custom
-setting codecs. Never call the live store. The generic verifier checks descriptor
+relevant status codes, accepted and rejected URL shapes when applicable, field
+and setting codecs, and cleanup. Never call the live store. The generic verifier checks descriptor
 imports, actual isolated import effects, contributor files, custom-schema examples,
 sibling-plugin isolation, canonical defaults, conventional client typing, URL
 acceptance, dependency guidance, schema-v1 state round trips, and clean shutdown.
@@ -230,6 +262,8 @@ Run the focused verifier and full acceptance suite:
 ./scripts/plugin-check.sh --<target>
 ./venv/bin/python3 -m pytest
 ./venv/bin/basedpyright src
+./venv/bin/ruff check src tests
+./venv/bin/ruff format --check src tests
 git ls-files -z -- '*.sh' | xargs -0 ./venv/bin/shellcheck -x --exclude=SC2086,SC2046
 ```
 

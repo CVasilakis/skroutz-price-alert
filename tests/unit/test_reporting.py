@@ -20,8 +20,13 @@ def test_silent_reporter_covers_config_settings_and_result_levels():
     reporter.log_result("✅", "Item", "Done", ["one", "two."])
     reporter.log_price_result("Item", 4, "EUR", 5, PriceOutcome.DROP)
     reporter.log_price_result(
-        "Item", None, "EUR", 5, PriceOutcome.NO_MATCH,
-        notes="delivery failed", delivery_failed=True,
+        "Item",
+        None,
+        "EUR",
+        5,
+        PriceOutcome.NO_MATCH,
+        notes="delivery failed",
+        delivery_failed=True,
     )
     reporter.log_warning("Item", "warning", "detail")
     reporter.log_error("Item", "error", ["detail"])

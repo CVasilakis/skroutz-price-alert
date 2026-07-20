@@ -10,7 +10,7 @@ one-offs (``whole``), and surfaces without a human-readable label.
 import unittest
 from collections import Counter
 
-from ui.catalog import ALL_SCENARIOS, Surface, SURFACE_INFO, TAG_VOCABULARY
+from ui.catalog import ALL_SCENARIOS, SURFACE_INFO, TAG_VOCABULARY, Surface
 
 
 class TestTagVocabulary(unittest.TestCase):
@@ -19,12 +19,16 @@ class TestTagVocabulary(unittest.TestCase):
         # both must fail loudly instead of silently minting a new filter chip.
         unknown = {
             (sc.snapshot_key, tag)
-            for sc in ALL_SCENARIOS for tag in sc.tags
+            for sc in ALL_SCENARIOS
+            for tag in sc.tags
             if tag not in TAG_VOCABULARY
         }
-        self.assertEqual(unknown, set(),
-                         "unknown tag(s); add to TAG_VOCABULARY (catalog/_base.py) "
-                         "with a one-line meaning, or fix the typo")
+        self.assertEqual(
+            unknown,
+            set(),
+            "unknown tag(s); add to TAG_VOCABULARY (catalog/_base.py) "
+            "with a one-line meaning, or fix the typo",
+        )
 
     def test_every_vocabulary_tag_is_used(self):
         # A vocabulary entry no scenario carries renders a dead filter button in the
@@ -35,8 +39,9 @@ class TestTagVocabulary(unittest.TestCase):
 
     def test_no_tag_duplicated_within_a_scenario(self):
         for sc in ALL_SCENARIOS:
-            self.assertEqual(len(sc.tags), len(set(sc.tags)),
-                             f"{sc.snapshot_key} repeats a tag: {sc.tags}")
+            self.assertEqual(
+                len(sc.tags), len(set(sc.tags)), f"{sc.snapshot_key} repeats a tag: {sc.tags}"
+            )
 
 
 class TestSurfaceInfo(unittest.TestCase):
@@ -62,6 +67,7 @@ class TestGalleryVisibility(unittest.TestCase):
 
     def test_hidden_scenarios_are_excluded_by_default(self):
         from ui.gallery import _filtered
+
         shown = _filtered(None, None)
         self.assertTrue(all(sc.in_gallery for sc in shown))
         # And something actually is hidden, so this test can't pass vacuously.
@@ -69,6 +75,7 @@ class TestGalleryVisibility(unittest.TestCase):
 
     def test_hidden_scenarios_render_when_their_surface_is_explicit(self):
         from ui.gallery import _filtered
+
         startup = _filtered("startup", None)
         self.assertTrue(startup, "explicit --surface startup should still render")
         self.assertTrue(all(sc.surface is Surface.STARTUP for sc in startup))
@@ -77,11 +84,13 @@ class TestGalleryVisibility(unittest.TestCase):
         # A tag audit (e.g. --tag layout) must not silently omit the hidden
         # scenarios that carry the tag — they are often the canonical guards.
         from ui.gallery import _filtered
+
         for sc in ALL_SCENARIOS:
             if not sc.in_gallery:
                 for tag in sc.tags:
-                    self.assertIn(sc, _filtered(None, tag),
-                                  f"--tag {tag} should reveal {sc.snapshot_key}")
+                    self.assertIn(
+                        sc, _filtered(None, tag), f"--tag {tag} should reveal {sc.snapshot_key}"
+                    )
 
 
 class TestSectionOrder(unittest.TestCase):

@@ -70,6 +70,11 @@ jobs:
       - name: Run basedpyright
         run: venv/bin/basedpyright src
 
+      - name: Run Ruff
+        run: |
+          venv/bin/ruff check src tests
+          venv/bin/ruff format --check src tests
+
   plugin-isolation:
     runs-on: ubuntu-latest
     steps:

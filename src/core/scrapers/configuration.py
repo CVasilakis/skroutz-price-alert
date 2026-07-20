@@ -11,12 +11,17 @@ from core.exceptions import ConfigFileError
 from core.persistence import read_json_object
 from core.scrapers.api import TrackedItem
 from core.scrapers.registry import RegisteredPlugin
-from core.settings import ResolvedSettings, resolve_settings
+from core.settings import MISSING, ResolvedSettings, validate_settings_block
 
 TOP_LEVEL_KEYS = frozenset({"settings", "items"})
-COMMON_ITEM_KEYS = frozenset({
-    "id", "name", "url", "target_price", "skip",
-})
+COMMON_ITEM_KEYS = frozenset(
+    {
+        "id",
+        "name",
+        "target_price",
+        "skip",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -63,21 +68,19 @@ class TargetConfigLoader:
                 f"Config file '{self.config_path}' has unknown top-level keys: "
                 f"{', '.join(sorted(unknown))}"
             )
-        if not isinstance(document.get("settings", {}), dict):
-            raise ConfigFileError("settings must be an object")
         if not isinstance(document.get("items"), list):
             raise ConfigFileError("items must be an array")
-        known_settings = {spec.key for spec in self.plugin.setting_specs}
-        unknown_settings = set(document.get("settings", {})) - known_settings
-        if unknown_settings:
-            raise ConfigFileError(
-                f"unknown settings: {', '.join(sorted(unknown_settings))}"
-            )
         return document
+
+    def _settings(self, document: dict[str, Any]) -> ResolvedSettings:
+        try:
+            return validate_settings_block(self.plugin.setting_specs, document.get("settings", {}))
+        except ValueError as exc:
+            raise ConfigFileError(str(exc)) from exc
 
     def load(self) -> LoadedTargetConfig:
         document = self.read_document()
-        settings = resolve_settings(self.plugin.setting_specs, document.get("settings", {}))
+        settings = self._settings(document)
         items: list[TrackedItem] = []
         issues: list[RowIssue] = []
         seen_ids: set[str] = set()
@@ -99,7 +102,7 @@ class TargetConfigLoader:
     def load_settings(self) -> ResolvedSettings:
         """Resolve a strict config document without loading state or a client."""
         document = self.read_document()
-        return resolve_settings(self.plugin.setting_specs, document.get("settings", {}))
+        return self._settings(document)
 
     def _decode_item(self, row: object) -> TrackedItem:
         if not isinstance(row, dict):
@@ -110,7 +113,6 @@ class TargetConfigLoader:
             raise ValueError(f"unknown item keys: {', '.join(sorted(unknown))}")
         item_id = _nonblank(row.get("id"), "id")
         name = _nonblank(row.get("name"), "name")
-        url = self.plugin.canonicalize_url(row.get("url"))
         target_price = _target_price(row.get("target_price"))
         skip = row.get("skip", False)
         if not isinstance(skip, bool):
@@ -118,11 +120,16 @@ class TargetConfigLoader:
         custom: dict[Any, Any] = {}
         for field in self.plugin.item_fields:
             raw = row[field.key] if field.key in row else field.default
+            if raw is MISSING:
+                raise ValueError(f"{field.key} is required")
             try:
-                custom[field] = field.decode(raw)
+                custom[field] = self.plugin.decode_field(field, raw)
             except (TypeError, ValueError, OverflowError) as exc:
                 raise ValueError(f"{field.key}: {exc}") from exc
         return TrackedItem(
-            id=item_id, name=name, url=url, target_price=target_price, skip=skip,
+            id=item_id,
+            name=name,
+            target_price=target_price,
+            skip=skip,
             _custom=custom,
         )

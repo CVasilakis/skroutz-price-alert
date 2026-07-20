@@ -1,11 +1,11 @@
 import os
-import sys
 import signal
 import subprocess
+import sys
+
 from dotenv import load_dotenv
 
-
-from core.constants import BASE_DIR, APPRISE_PLACEHOLDERS, EXIT_CODE_INTERRUPT
+from core.constants import APPRISE_PLACEHOLDERS, BASE_DIR, EXIT_CODE_INTERRUPT
 from core.exceptions import EnvFileError, UpdateCheckError
 
 # Upper bound (seconds) for the git subprocesses in :func:`check_for_updates`. The
@@ -37,7 +37,9 @@ def is_valid_apprise_url(url: str) -> bool:
     # Deferred so importing utils (pulled in almost everywhere via parse_price)
     # does not load apprise (~88ms) for commands that never validate a URL.
     import apprise
+
     return bool(apprise.Apprise.instantiate(url))
+
 
 def classify_notification_urls(notification_urls: str) -> tuple[list, list]:
     """Splits a comma-separated Apprise URL string into valid and invalid URLs.
@@ -52,7 +54,7 @@ def classify_notification_urls(notification_urls: str) -> tuple[list, list]:
         tuple[list, list]: A (valid_urls, invalid_urls) pair.
     """
     valid_urls, invalid_urls = [], []
-    for url in (notification_urls or "").split(','):
+    for url in (notification_urls or "").split(","):
         url = url.strip()
         if not url:
             continue
@@ -62,13 +64,14 @@ def classify_notification_urls(notification_urls: str) -> tuple[list, list]:
             invalid_urls.append(url)
     return valid_urls, invalid_urls
 
+
 def check_env_file() -> None:
     """Validates the existence and contents of the .env file.
 
     Raises:
         EnvFileError: If the .env file is missing, unreadable, or missing valid NOTIFICATION_URLS.
     """
-    env_path = os.path.join(BASE_DIR, '.env')
+    env_path = os.path.join(BASE_DIR, ".env")
     # Existence/readability is checked BEFORE load_dotenv: python-dotenv raises a
     # raw PermissionError on an unreadable file, which would escape as a crash
     # instead of the modeled EnvFileError (clean exit 16) this function promises.
@@ -83,11 +86,12 @@ def check_env_file() -> None:
     if not notification_urls:
         raise EnvFileError("No NOTIFICATION_URLS provided in .env file")
 
-    urls = [u.strip() for u in notification_urls.split(',') if u.strip()]
+    urls = [u.strip() for u in notification_urls.split(",") if u.strip()]
 
     valid_urls = [u for u in urls if is_valid_apprise_url(u)]
     if not valid_urls:
         raise EnvFileError("NOTIFICATION_URLS contains no valid notification URL(s)")
+
 
 def check_for_updates() -> bool:
     """Checks if there are new commits in the remote repository.
@@ -99,13 +103,40 @@ def check_for_updates() -> bool:
         UpdateCheckError: If there's an error communicating with the remote repository.
     """
     try:
-        remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url'], cwd=BASE_DIR, stderr=subprocess.DEVNULL, timeout=UPDATE_CHECK_TIMEOUT).decode('utf-8').strip()
+        remote_url = (
+            subprocess.check_output(
+                ["git", "config", "--get", "remote.origin.url"],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+                timeout=UPDATE_CHECK_TIMEOUT,
+            )
+            .decode("utf-8")
+            .strip()
+        )
 
-        if remote_url.startswith('git@github.com:'):
-            remote_url = remote_url.replace('git@github.com:', 'https://github.com/')
+        if remote_url.startswith("git@github.com:"):
+            remote_url = remote_url.replace("git@github.com:", "https://github.com/")
 
-        local_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=BASE_DIR, stderr=subprocess.DEVNULL, timeout=UPDATE_CHECK_TIMEOUT).decode('utf-8').strip()
-        remote_output = subprocess.check_output(['git', 'ls-remote', remote_url, 'HEAD'], cwd=BASE_DIR, stderr=subprocess.DEVNULL, timeout=UPDATE_CHECK_TIMEOUT).decode('utf-8').strip()
+        local_hash = (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+                timeout=UPDATE_CHECK_TIMEOUT,
+            )
+            .decode("utf-8")
+            .strip()
+        )
+        remote_output = (
+            subprocess.check_output(
+                ["git", "ls-remote", remote_url, "HEAD"],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+                timeout=UPDATE_CHECK_TIMEOUT,
+            )
+            .decode("utf-8")
+            .strip()
+        )
         if remote_output:
             remote_hash = remote_output.split()[0]
             return local_hash != remote_hash
@@ -113,6 +144,7 @@ def check_for_updates() -> bool:
             raise UpdateCheckError("Failed to retrieve remote repository version information")
     except Exception as e:
         raise UpdateCheckError(f"Could not check for updates: {e}")
+
 
 def describe_signal(signum) -> str:
     """Returns a human-readable name for a termination signal.
@@ -124,10 +156,11 @@ def describe_signal(signum) -> str:
         str: A friendly label (e.g. ``'SIGINT (Ctrl+C)'``), or the raw number as a string.
     """
     if signum == signal.SIGINT:
-        return 'SIGINT (Ctrl+C)'
+        return "SIGINT (Ctrl+C)"
     if signum == signal.SIGTERM:
-        return 'SIGTERM (System Shutdown/Termination)'
+        return "SIGTERM (System Shutdown/Termination)"
     return str(signum)
+
 
 def install_interrupt_handler() -> None:
     """Installs SIGINT/SIGTERM handlers that print a clean message and exit.

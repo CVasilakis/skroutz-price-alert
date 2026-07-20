@@ -180,21 +180,23 @@ The optional top-level `settings` holds per-scraper preferences, separate from y
 #### Monitored Products
 
 The `items` array lists the entries you want to monitor. Every row needs a unique,
-stable `id`; separate IDs may intentionally use the same URL.
+stable `id`; separate IDs may intentionally use the same source input.
 
 | Field | Type | Source | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | String | **User-defined** | Unique stable state key for this row. |
 | `name` | String | **User-defined** | A friendly naming label used inside the notifications. |
-| `url` | String | **User-defined** | An absolute HTTP(S) URL accepted by the selected plugin. |
 | `target_price` | Number | **User-defined** | The maximum price threshold. If the price drops below this, you get alerted; use `0` to monitor without an alert threshold. |
 | `skip` | Boolean | **User-defined** | Optional. Set to `true` to skip monitoring this product. Defaults to `false`. |
 Runtime `last_price` and `last_checked` values are written to `state/<target>.json`, not
 to user configuration. Timestamps are RFC 3339 UTC strings ending in `Z`.
 
-Plugins may add item fields and settings beyond the shared keys above. Those additions
-belong exclusively in the package-local guide and example config, so adding a new target
-does not require changing this document.
+Plugins declare every source input beyond the shared keys above. Most product-page
+plugins require a `url`; other adapters may use several URLs or identifiers such as a
+SKU, region, query, or category without any URL. They may also declare required,
+optional, or sensitive settings. These additions belong exclusively in the
+package-local guide and example config, so adding a new target does not require
+changing this document.
 
 ### File 3: General Settings (`config/general.json`)
 
@@ -569,7 +571,7 @@ New stores use the in-repository plugin contract: run
 `./scripts/plugin-check.sh --<target>`. The immutable plugin
 catalog and shell manifest discover the new adapter automatically, so framework,
 CLI, UI, and management-script edits are unnecessary. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the complete URL, field, setting, result,
+[CONTRIBUTING.md](CONTRIBUTING.md) for the complete input, URL, field, setting, result,
 exception, dependency, and testing contracts.
 
 Contributions are always welcome! If you have an idea to make this project better, feel free to fork the repository and submit a pull request.

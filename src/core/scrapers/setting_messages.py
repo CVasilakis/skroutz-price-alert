@@ -2,7 +2,9 @@
 
 from core.settings import unsupported_value_message
 from core.settings.normalizers import (
-    DEFAULT_LOG_RETENTION_DAYS, MAX_LOG_RETENTION_DAYS, MIN_LOG_RETENTION_DAYS,
+    DEFAULT_LOG_RETENTION_DAYS,
+    MAX_LOG_RETENTION_DAYS,
+    MIN_LOG_RETENTION_DAYS,
 )
 
 

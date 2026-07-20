@@ -9,8 +9,8 @@ from unittest import mock
 
 from core.general import general_config_path
 from core.notifier import Notifier
-from core.scrapers.api import ScraperClient, ScraperPlugin
 from core.run import RunReporter
+from core.scrapers.api import ScraperClient, ScraperPlugin, UrlField
 from core.scrapers.registry import PluginCatalog, RegisteredPlugin, compile_plugin
 
 
@@ -21,15 +21,28 @@ class PluginFixture:
     client_class: type[ScraperClient] | None = None
 
 
-def fake_plugin(name="fakestore", domains=("fake-store.example",),
-                display_name="Fake Store", specs=None, fields=None,
-                client_class=None, default_interval="1h", accepts_url=None) -> PluginFixture:
-    definition = ScraperPlugin(
-        display_name=display_name,
+def fake_plugin(
+    name="fakestore",
+    domains=("fake-store.example",),
+    display_name="Fake Store",
+    specs=None,
+    fields=None,
+    client_class=None,
+    default_interval="1h",
+    accepts_url=None,
+    url_field=None,
+) -> PluginFixture:
+    url = url_field or UrlField(
+        key="url",
         domains=tuple(domains),
         accepts_url=accepts_url or (lambda _url: True),
-        item_fields=tuple(fields or ()), settings=tuple(specs or ()),
+    )
+    definition = ScraperPlugin(
+        display_name=display_name,
+        item_fields=(url, *tuple(fields or ())),
+        settings=tuple(specs or ()),
         default_interval=default_interval,
+        reference_url=url,
     )
     return PluginFixture(name, definition, client_class)
 
@@ -48,9 +61,13 @@ def catalog_sandbox(*plugins: PluginFixture | RegisteredPlugin):
                     module.Client = plugin.client_class
                     sys.modules[module_name] = module
                     added_modules.append(module_name)
-                records.append(compile_plugin(
-                    plugin.definition, target=plugin.target, package=package,
-                ))
+                records.append(
+                    compile_plugin(
+                        plugin.definition,
+                        target=plugin.target,
+                        package=package,
+                    )
+                )
             else:
                 records.append(plugin)
         yield PluginCatalog(records)

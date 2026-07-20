@@ -29,3 +29,7 @@ env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
 "$plugin_check_python" -m pytest --no-cov "$BASE_DIR/tests/plugins/$target"
 "$plugin_check_python" -m basedpyright --venvpath "$plugin_venv_parent" \
     "$BASE_DIR/src/core/scrapers/$target"
+"$plugin_check_python" -m ruff check \
+    "$BASE_DIR/src/core/scrapers/$target" "$BASE_DIR/tests/plugins/$target"
+"$plugin_check_python" -m ruff format --check \
+    "$BASE_DIR/src/core/scrapers/$target" "$BASE_DIR/tests/plugins/$target"

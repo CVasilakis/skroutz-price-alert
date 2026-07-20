@@ -50,7 +50,10 @@ def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None
             env[key] = value
     full = f'BASE_DIR="{base_dir}"\n. "{COMMON_SH}"\n{script}'
     return subprocess.run(
-        ["sh", "-eu", "-c", full], capture_output=True, text=True, env=env,
+        ["sh", "-eu", "-c", full],
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
 
@@ -63,9 +66,14 @@ class TestColorGuard(unittest.TestCase):
 
     def _red(self, **env):
         # capture_output pipes stdout, so [ -t 1 ] is false in every test here.
-        return run_sh('printf %s "$RED"', extra_env={
-            "NO_COLOR": None, "CLICOLOR_FORCE": None, **env,
-        }).stdout
+        return run_sh(
+            'printf %s "$RED"',
+            extra_env={
+                "NO_COLOR": None,
+                "CLICOLOR_FORCE": None,
+                **env,
+            },
+        ).stdout
 
     def test_piped_output_is_colorless(self):
         self.assertEqual(self._red(), "")
@@ -80,19 +88,19 @@ class TestColorGuard(unittest.TestCase):
 
 class TestNamingHelpers(unittest.TestCase):
     def test_unit_name(self):
-        result = run_sh('unit_name skroutz timer')
+        result = run_sh("unit_name skroutz timer")
         self.assertEqual(result.stdout, "skroutz-scraper.timer")
 
     def test_plugin_in_list_hit_and_miss(self):
-        self.assertEqual(run_sh('plugin_in_list b a b c').returncode, 0)
-        self.assertEqual(run_sh('plugin_in_list z a b c').returncode, 1)
+        self.assertEqual(run_sh("plugin_in_list b a b c").returncode, 0)
+        self.assertEqual(run_sh("plugin_in_list z a b c").returncode, 1)
 
     def test_plugin_in_list_with_empty_list(self):
-        self.assertEqual(run_sh('plugin_in_list z').returncode, 1)
+        self.assertEqual(run_sh("plugin_in_list z").returncode, 1)
 
     def test_plugin_stream_value_preserves_spaces(self):
         result = run_sh(
-            'rows="$(printf \'foo\\tcustom feed.json\\nbar\\tother.json\')"\n'
+            "rows=\"$(printf 'foo\\tcustom feed.json\\nbar\\tother.json')\"\n"
             'plugin_stream_value foo "$rows"'
         )
         self.assertEqual(result.stdout, "custom feed.json")
@@ -105,14 +113,14 @@ class TestManifestSnapshot(unittest.TestCase):
         counter = temp_dir / "calls"
         script = (
             f'registry_cli() {{ printf x >> "{counter}"; '
-            'printf \'alpha\\tAlpha Store\\t/example.json\\t/req.txt\\thourly\\tok\\n\'; }\n'
-            'load_plugin_manifest\n'
-            'list_plugins >/dev/null\n'
-            'plugin_display_name alpha >/dev/null\n'
-            'list_plugin_examples >/dev/null\n'
-            'list_plugin_requirements >/dev/null\n'
-            'list_plugin_schedules >/dev/null\n'
-            'list_interval_status >/dev/null\n'
+            "printf 'alpha\\tAlpha Store\\t/example.json\\t/req.txt\\thourly\\tok\\n'; }\n"
+            "load_plugin_manifest\n"
+            "list_plugins >/dev/null\n"
+            "plugin_display_name alpha >/dev/null\n"
+            "list_plugin_examples >/dev/null\n"
+            "list_plugin_requirements >/dev/null\n"
+            "list_plugin_schedules >/dev/null\n"
+            "list_interval_status >/dev/null\n"
         )
         result = run_sh(script)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -129,15 +137,14 @@ class TestUnitFileRoundTrip(unittest.TestCase):
 
     def _write(self, plugin, calendar):
         return run_sh(
-            f'mkdir -p "$SYSTEMD_USER_DIR"\n'
-            f'write_plugin_units {plugin} "{calendar}"',
+            f'mkdir -p "$SYSTEMD_USER_DIR"\nwrite_plugin_units {plugin} "{calendar}"',
             xdg_config_home=self.tmp,
         )
 
     def test_round_trip_recovers_the_trigger_block(self):
         calendar = "*-*-* 00/2:00:00"
         self.assertEqual(self._write("foo", calendar).returncode, 0)
-        read = run_sh('read_timer_oncalendar foo', xdg_config_home=self.tmp)
+        read = run_sh("read_timer_oncalendar foo", xdg_config_home=self.tmp)
         self.assertEqual(read.stdout, calendar)
 
     def test_framework_keys_are_appended_but_not_read_back(self):
@@ -146,7 +153,7 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         self.assertIn("RandomizedDelaySec=180s", timer_text)
         self.assertIn("Persistent=true", timer_text)
         self.assertIn("Unit=foo-scraper.service", timer_text)
-        read = run_sh('read_timer_oncalendar foo', xdg_config_home=self.tmp)
+        read = run_sh("read_timer_oncalendar foo", xdg_config_home=self.tmp)
         self.assertEqual(read.stdout, "hourly")
 
     def test_service_dispatches_through_run_sh(self):
@@ -155,7 +162,7 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         self.assertIn(f'ExecStart="{REPO_ROOT}/scripts/run.sh" --quiet --foo', service_text)
 
     def test_read_timer_calendar_missing_unit_is_empty_success(self):
-        read = run_sh('read_timer_oncalendar ghost', xdg_config_home=self.tmp)
+        read = run_sh("read_timer_oncalendar ghost", xdg_config_home=self.tmp)
         self.assertEqual((read.returncode, read.stdout), (0, ""))
 
     def test_failed_render_does_not_masquerade_as_success_when_old_files_exist(self):
@@ -166,8 +173,7 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         old_timer = timer.read_text()
 
         failed = run_sh(
-            'render_plugin_service() { return 1; }\n'
-            'write_plugin_units foo "daily"',
+            'render_plugin_service() { return 1; }\nwrite_plugin_units foo "daily"',
             xdg_config_home=self.tmp,
         )
         self.assertNotEqual(failed.returncode, 0)
@@ -186,7 +192,7 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         self.assertEqual(updated.returncode, 0)
         self.assertTrue(service.read_text().endswith("# preserved\n"))
         self.assertEqual(
-            run_sh('read_timer_oncalendar foo', xdg_config_home=self.tmp).stdout,
+            run_sh("read_timer_oncalendar foo", xdg_config_home=self.tmp).stdout,
             "daily",
         )
 
@@ -195,23 +201,23 @@ class TestKnownTargets(unittest.TestCase):
     """The teardown validation set: registered ∪ installed, de-duplicated."""
 
     STUBS = (
-        'list_plugins() { printf \'%s\\n\' skroutz amazon; }\n'
-        'list_installed_plugins() { printf \'%s\\n\' amazon ghost; }\n'
+        "list_plugins() { printf '%s\\n' skroutz amazon; }\n"
+        "list_installed_plugins() { printf '%s\\n' amazon ghost; }\n"
     )
 
     def test_union_preserves_first_seen_order_and_dedups(self):
-        result = run_sh(self.STUBS + 'known_targets timer')
+        result = run_sh(self.STUBS + "known_targets timer")
         self.assertEqual(result.stdout.split(), ["skroutz", "amazon", "ghost"])
 
     def test_orphan_unit_is_a_known_target(self):
         # A unit whose plugin was removed upstream must stay tear-downable.
-        self.assertEqual(run_sh(self.STUBS + 'is_known_target ghost timer').returncode, 0)
+        self.assertEqual(run_sh(self.STUBS + "is_known_target ghost timer").returncode, 0)
 
     def test_registered_but_uninstalled_is_a_known_target(self):
-        self.assertEqual(run_sh(self.STUBS + 'is_known_target skroutz timer').returncode, 0)
+        self.assertEqual(run_sh(self.STUBS + "is_known_target skroutz timer").returncode, 0)
 
     def test_typo_is_rejected(self):
-        self.assertEqual(run_sh(self.STUBS + 'is_known_target skrutz timer').returncode, 1)
+        self.assertEqual(run_sh(self.STUBS + "is_known_target skrutz timer").returncode, 1)
 
     def test_installed_target_union_includes_service_only_unit(self):
         tmp = Path(tempfile.mkdtemp())
@@ -220,7 +226,7 @@ class TestKnownTargets(unittest.TestCase):
         unit_dir.mkdir(parents=True)
         (unit_dir / "timeronly-scraper.timer").touch()
         (unit_dir / "serviceonly-scraper.service").touch()
-        result = run_sh('list_installed_targets', xdg_config_home=tmp)
+        result = run_sh("list_installed_targets", xdg_config_home=tmp)
         self.assertEqual(result.stdout.split(), ["timeronly", "serviceonly"])
 
 
@@ -233,7 +239,7 @@ class TestRegistryDiagnose(unittest.TestCase):
 
     def test_missing_venv_reports_reinstall_hint(self):
         # A BASE_DIR with no venv at all -> the reinstall hint, not a discovery error.
-        result = run_sh('registry_diagnose', base_dir=self.tmp)
+        result = run_sh("registry_diagnose", base_dir=self.tmp)
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing or broken", result.stderr)
         self.assertIn("./install.sh", result.stderr)
@@ -255,7 +261,7 @@ class TestRegistryDiagnose(unittest.TestCase):
         broken.mkdir()
         (broken / "__init__.py").write_text('raise RuntimeError("boom")\n')
 
-        result = run_sh('registry_diagnose', base_dir=self.tmp)
+        result = run_sh("registry_diagnose", base_dir=self.tmp)
         self.assertEqual(result.returncode, 1)
         self.assertIn("discovery failed", result.stderr)
         self.assertIn("PluginDiscoveryError", result.stderr)
@@ -269,7 +275,7 @@ class TestListSupportedIntervals(unittest.TestCase):
             self.skipTest("project venv not available")
         from core.scrapers.settings import SUPPORTED_INTERVALS
 
-        result = run_sh('list_supported_intervals')
+        result = run_sh("list_supported_intervals")
         self.assertEqual(result.stdout.strip(), ", ".join(SUPPORTED_INTERVALS))
 
 
@@ -294,16 +300,16 @@ class TestRealRegistryBridge(unittest.TestCase):
         (self.base_dir / "config").mkdir()
 
     def test_list_plugins_yields_registered_names(self):
-        result = run_sh('list_plugins', base_dir=self.base_dir)
+        result = run_sh("list_plugins", base_dir=self.base_dir)
         self.assertIn("skroutz", result.stdout.split())
 
     def test_list_plugin_examples_pairs_names_with_package_paths(self):
-        result = run_sh('list_plugin_examples', base_dir=self.base_dir)
+        result = run_sh("list_plugin_examples", base_dir=self.base_dir)
         pairs = dict(line.split("\t", 1) for line in result.stdout.splitlines())
         self.assertTrue(pairs.get("skroutz", "").endswith("/skroutz/config.example.json"))
 
     def test_list_plugin_schedules_is_a_value_stream(self):
-        result = run_sh('list_plugin_schedules', base_dir=self.base_dir)
+        result = run_sh("list_plugin_schedules", base_dir=self.base_dir)
         lines = result.stdout.splitlines()
         self.assertTrue(lines)
         for line in lines:
@@ -314,7 +320,7 @@ class TestRealRegistryBridge(unittest.TestCase):
         self.assertTrue(any(line.startswith("skroutz\t") for line in lines))
 
     def test_list_interval_status_reports_a_known_status(self):
-        result = run_sh('list_interval_status', base_dir=self.base_dir)
+        result = run_sh("list_interval_status", base_dir=self.base_dir)
         statuses = dict(line.split("\t") for line in result.stdout.splitlines())
         self.assertEqual(statuses.get("skroutz"), "nocfg")
 
@@ -329,19 +335,21 @@ class TestVenvResponderMarkers(unittest.TestCase):
         # Load the catalog package first: entering via ui.harness.shell directly
         # would re-enter it mid-import through the sh_* scenario modules.
         import ui.catalog  # noqa: F401
-        from ui.harness.shell import VENV_RESPONDER_MARKERS, _VENV_PYTHON_SHIM
+        from ui.harness.shell import _VENV_PYTHON_SHIM, VENV_RESPONDER_MARKERS
 
         common_text = COMMON_SH.read_text()
         for marker in VENV_RESPONDER_MARKERS:
             with self.subTest(marker=marker):
                 self.assertIn(
-                    marker, common_text,
+                    marker,
+                    common_text,
                     f"marker {marker!r} no longer appears in common.sh - update the "
                     f"venv responder in tests/ui/harness/shell.py (and this list) to "
                     f"match the reworded heredoc",
                 )
                 self.assertIn(
-                    marker, _VENV_PYTHON_SHIM,
+                    marker,
+                    _VENV_PYTHON_SHIM,
                     f"marker {marker!r} is declared but the shim does not match it - "
                     f"keep VENV_RESPONDER_MARKERS and the case patterns in sync",
                 )

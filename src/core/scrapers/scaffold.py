@@ -58,13 +58,15 @@ def _source_files(request: ScaffoldRequest) -> dict[str, str]:
             "log_retention_days": 7,
             "notify_scraping_errors": True,
         },
-        "items": [{
-            "id": "sample-item",
-            "name": "Sample item",
-            "url": sample_url,
-            "target_price": 100.0,
-            "skip": False,
-        }],
+        "items": [
+            {
+                "id": "sample-item",
+                "name": "Sample item",
+                "url": sample_url,
+                "target_price": 100.0,
+                "skip": False,
+            }
+        ],
     }
     return {
         "__init__.py": '"""Import-light package marker."""\n',
@@ -72,38 +74,48 @@ def _source_files(request: ScaffoldRequest) -> dict[str, str]:
 
 from urllib.parse import SplitResult
 
-from core.scrapers.api import ScraperPlugin
+from core.scrapers.api import ScraperPlugin, UrlField
 
 
 def accepts_url(url: SplitResult) -> bool:
     return url.path.startswith({request.url_prefix!r})
 
 
-PLUGIN = ScraperPlugin(
-    display_name={request.display_name!r},
+URL = UrlField(
+    key="url",
     domains=({request.domain!r},),
     accepts_url=accepts_url,
+)
+
+
+PLUGIN = ScraperPlugin(
+    display_name={request.display_name!r},
+    item_fields=(URL,),
+    reference_url=URL,
     default_interval="1h",
 )
 ''',
         "client.py": f'''"""Client implementation for {request.display_name}."""
 
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
+from core.scrapers.{request.target}.plugin import URL
 
 
 class Client(ScraperClient):
     def scrape(self, item: TrackedItem) -> PriceResult:
+        _product_url = item[URL]
         raise NotImplementedError("replace the scaffold with a mocked, tested scraper")
 ''',
-        "README.md": f'''# {request.display_name} plugin
+        "README.md": f"""# {request.display_name} plugin
 
 Tracks product pages on `{request.domain}` whose paths begin with
 `{request.url_prefix}` and returns a `PriceResult`.
 
 ## Configuration
 
-Rows use the shared `id`, `name`, `url`, `target_price`, and optional `skip`
-fields. Copy `config.example.json` to `config/{request.target}.json`.
+Rows use shared `id`, `name`, `target_price`, and optional `skip` fields. This
+plugin declares a required `url` input through `URL`. Copy
+`config.example.json` to `config/{request.target}.json`.
 
 ## Implementation and dependencies
 
@@ -114,8 +126,9 @@ needs dependencies outside the core environment.
 ## Tests
 
 Replace the generated failing test with mocked success, malformed response,
-unavailable/no-price, relevant HTTP status, and URL-shape cases.
-''',
+unavailable/no-match, relevant HTTP statuses, field and setting codec cases,
+URL-shape cases, and clean client shutdown.
+""",
         "config.example.json": json.dumps(config, indent=2) + "\n",
     }
 
@@ -129,7 +142,10 @@ import pytest
 
 
 def test_replace_scaffold_with_mocked_scraper_behavior() -> None:
-    pytest.fail("replace this scaffold with representative parser/client tests")
+    pytest.fail(
+        "cover success, malformed response, unavailable/no-match, relevant HTTP "
+        "statuses, field/setting codecs, and clean client shutdown"
+    )
 ''',
     }
 
@@ -174,8 +190,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--display-name", required=True)
     parser.add_argument("--domain", required=True)
     parser.add_argument("--url-prefix", required=True)
-    parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]),
-                        help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--repo-root", default=str(Path(__file__).resolve().parents[3]), help=argparse.SUPPRESS
+    )
     args = parser.parse_args(argv)
     try:
         source, tests = create_plugin(

@@ -26,8 +26,10 @@ DISCOVERY_ERROR = "PluginDiscoveryError: plugin package 'zzzbroken' failed to im
 
 #: skroutz installed and armed: timer enabled and active (the steady state).
 WORLD_HEALTHY = ShellWorld(
-    installed_timers=("skroutz",), installed_services=("skroutz",),
-    enabled_timers=("skroutz",), active_timers=("skroutz",),
+    installed_timers=("skroutz",),
+    installed_services=("skroutz",),
+    enabled_timers=("skroutz",),
+    active_timers=("skroutz",),
 )
 
 #: skroutz installed but not armed (fresh install.sh output, timer never enabled).
@@ -40,12 +42,14 @@ WORLD_EMPTY = ShellWorld()
 #: "registered but not installed" foil for the teardown/enable/schedule notices.
 WORLD_AMAZON_UNINSTALLED = ShellWorld(
     plugins=("skroutz", "amazon"),
-    installed_timers=("skroutz",), installed_services=("skroutz",),
+    installed_timers=("skroutz",),
+    installed_services=("skroutz",),
 )
 
 #: skroutz healthy plus the 'ghost' orphan (units on disk, plugin de-registered).
 WORLD_ORPHAN = ShellWorld(
-    installed_timers=("skroutz", "ghost"), installed_services=("skroutz", "ghost"),
+    installed_timers=("skroutz", "ghost"),
+    installed_services=("skroutz", "ghost"),
 )
 
 #: Only the 'ghost' orphan remains installed.
@@ -54,13 +58,16 @@ WORLD_ALL_ORPHANS = ShellWorld(installed_timers=("ghost",), installed_services=(
 #: Units installed but the venv is gone - registry_diagnose's "environment missing" branch.
 WORLD_NO_VENV = ShellWorld(
     venv=False,
-    installed_timers=("skroutz",), installed_services=("skroutz",),
+    installed_timers=("skroutz",),
+    installed_services=("skroutz",),
 )
 
 #: Units installed, venv fine, but plugin discovery raises - diagnose branch 2.
 WORLD_BROKEN_REG = ShellWorld(
-    plugins=(), discovery_error=DISCOVERY_ERROR,
-    installed_timers=("skroutz",), installed_services=("skroutz",),
+    plugins=(),
+    discovery_error=DISCOVERY_ERROR,
+    installed_timers=("skroutz",),
+    installed_services=("skroutz",),
 )
 
 
@@ -76,9 +83,15 @@ def shell_case(surface: Surface, script: str):
         _case = shell_case(Surface.SH_ENABLE, "scripts/enable.sh")
         _case("enable_success", "Arms an installed timer.", world=WORLD_INSTALLED)
     """
-    def register(name: str, description: str, *args: str,
-                 world: ShellWorld = ShellWorld(), stdin: str = "",
-                 tags: tuple[str, ...] = ()) -> None:
+
+    def register(
+        name: str,
+        description: str,
+        *args: str,
+        world: ShellWorld = ShellWorld(),
+        stdin: str = "",
+        tags: tuple[str, ...] = (),
+    ) -> None:
         @scenario(surface, name, description, tags)
         @cache
         def _build():

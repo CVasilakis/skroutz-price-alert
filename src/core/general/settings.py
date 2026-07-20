@@ -14,17 +14,24 @@ vocabulary, so it is safe to import from ``--status`` and the config panel.
 import os
 
 from core.exceptions import ConfigFileError
+from core.general.vocab import (
+    DEFAULT_REMINDER,
+    DEFAULT_REMINDER_DAY,
+    DEFAULT_REMINDER_TIME,
+    display_reminder,
+    display_reminder_row,
+    normalize_reminder,
+    normalize_reminder_day,
+    normalize_reminder_time,
+)
 from core.persistence import read_json_object
 from core.settings import (
-    ResolvedSettings, SettingSpec, resolve_settings,
+    ResolvedSettings,
+    SettingSpec,
+    resolve_settings,
     unsupported_value_message,
+    validate_settings_block,
 )
-from core.general.vocab import (
-    DEFAULT_REMINDER, DEFAULT_REMINDER_DAY, DEFAULT_REMINDER_TIME,
-    normalize_reminder, normalize_reminder_day, normalize_reminder_time,
-    display_reminder, display_reminder_row,
-)
-
 
 GENERAL_CONFIG_FILENAME = "general.json"
 
@@ -60,14 +67,15 @@ def resolve_general_settings(config_dir: str) -> ResolvedSettings:
     unknown_top = set(document) - {"settings"}
     if unknown_top:
         raise ConfigFileError(f"Unknown general config keys: {', '.join(sorted(unknown_top))}")
-    block = document.get("settings", {})
-    if not isinstance(block, dict):
-        raise ConfigFileError("General settings must be an object")
-    known = {spec.key for spec in GENERAL_SETTING_SPECS}
-    unknown_settings = set(block) - known
-    if unknown_settings:
-        raise ConfigFileError(f"Unknown general settings: {', '.join(sorted(unknown_settings))}")
-    return resolve_settings(GENERAL_SETTING_SPECS, block)
+    try:
+        return validate_settings_block(GENERAL_SETTING_SPECS, document.get("settings", {}))
+    except ValueError as exc:
+        message = str(exc)
+        if message == "settings must be an object":
+            message = "General settings must be an object"
+        elif message.startswith("unknown settings:"):
+            message = "Unknown general settings:" + message.removeprefix("unknown settings:")
+        raise ConfigFileError(message) from exc
 
 
 def _decode(normalizer, raw):

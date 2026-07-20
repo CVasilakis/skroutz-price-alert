@@ -1,6 +1,8 @@
-import apprise
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
+
+import apprise
+
 from core.utils import is_valid_apprise_url
 
 if TYPE_CHECKING:
@@ -9,14 +11,15 @@ if TYPE_CHECKING:
 # The fixed notification titles, exported so tests assert against the same
 # constants the sends use (one home per wording; the per-site titles below
 # stay inline as f-strings).
-TITLE_PRICE_DROP = 'Scrooge Alert - Price Drop!'
-TITLE_STATUS_UPDATE = 'Scrooge Alert - Status Update'
-TITLE_CRASH = 'Scrooge Alert - Script Crash'
-TITLE_TEST = 'Scrooge Alert - Test Notification'
+TITLE_PRICE_DROP = "Scrooge Alert - Price Drop!"
+TITLE_STATUS_UPDATE = "Scrooge Alert - Status Update"
+TITLE_CRASH = "Scrooge Alert - Script Crash"
+TITLE_TEST = "Scrooge Alert - Test Notification"
 
 
 class Notifier:
     """Handles sending notifications via configured Apprise URLs."""
+
     def __init__(self, notification_urls: str):
         """Initializes the Notifier with a list of notification URLs.
 
@@ -26,7 +29,7 @@ class Notifier:
         self.app_notif = apprise.Apprise()
         self.has_services = False
         if notification_urls:
-            for url in notification_urls.split(','):
+            for url in notification_urls.split(","):
                 url = url.strip()
                 if is_valid_apprise_url(url) and self.app_notif.add(url):
                     self.has_services = True
@@ -48,9 +51,16 @@ class Notifier:
             # report False without confusing a transport fault with a scrape fault.
             return False
 
-    def notify_low_price(self, site: str, product_name: str, target_price: float,
-                         current_price: float, url: str, currency: str = '€',
-                         advert_title: str | None = None) -> bool:
+    def notify_low_price(
+        self,
+        site: str,
+        product_name: str,
+        target_price: float,
+        current_price: float,
+        url: str | None,
+        currency: str = "€",
+        advert_title: str | None = None,
+    ) -> bool:
         """Sends a notification about a price drop below the target price.
 
         Args:
@@ -67,13 +77,23 @@ class Notifier:
         Returns:
             bool: True if the notification was sent successfully, False otherwise.
         """
-        advert_line = f'\nAdvert: {advert_title}' if advert_title else ''
+        advert_line = f"\nAdvert: {advert_title}" if advert_title else ""
+        link_line = f"\nView it here: {url}" if url else ""
         return self.notify(
             title=TITLE_PRICE_DROP,
-            body=f'{product_name} is now available for {current_price}{currency} in {site}, which is below your target of {target_price}{currency}.{advert_line}\nView it here: {url}'
+            body=f"{product_name} is now available for {current_price}{currency} in {site}, which is below your target of {target_price}{currency}.{advert_line}{link_line}",
         )
 
-    def _build_summary(self, title: str, header: str, items: Sequence[Any], format_item: Callable[[Any], str], footer: str, more_noun: str = "", max_show: int = 3) -> bool:
+    def _build_summary(
+        self,
+        title: str,
+        header: str,
+        items: Sequence[Any],
+        format_item: Callable[[Any], str],
+        footer: str,
+        more_noun: str = "",
+        max_show: int = 3,
+    ) -> bool:
         """Builds and sends one aggregated summary notification.
 
         Shared shape for the aggregated notifications: a header line, up to
@@ -107,7 +127,13 @@ class Notifier:
 
         return self.notify(title=title, body="\n".join(body_lines))
 
-    def notify_old_entries(self, site: str, stale_items: Sequence['TrackedItem'], hours: int) -> bool:
+    def notify_old_entries(
+        self,
+        site: str,
+        stale_items: Sequence["TrackedItem"],
+        hours: int,
+        reference_url: Callable[["TrackedItem"], str | None] | None = None,
+    ) -> bool:
         """Sends a single notification summarizing products that have gone stale.
 
         Aggregates every product that hasn't been successfully scraped within the
@@ -126,15 +152,20 @@ class Notifier:
             return False
 
         return self._build_summary(
-            title=f'Scrooge Alert - Tracking Stale on {site}',
+            title=f"Scrooge Alert - Tracking Stale on {site}",
             header=f"{len(stale_items)} product(s) on {site} haven't been successfully scraped in over {hours} hours:\n",
             items=stale_items,
-            format_item=lambda item: f"{item.name}: {item.url}",
+            format_item=lambda item: (
+                f"{item.name}: {reference_url(item)}"
+                if reference_url is not None and reference_url(item)
+                else item.name
+            ),
             footer="\nPlease check the error logs or verify the URLs are still valid.",
         )
 
-    def notify_errors(self, site: str,
-                      failed_items: Sequence[tuple['TrackedItem', Exception]]) -> bool:
+    def notify_errors(
+        self, site: str, failed_items: Sequence[tuple["TrackedItem", Exception]]
+    ) -> bool:
         """Sends a notification indicating that specific errors occurred during scraping.
 
         Formats a summary of the failed products and their corresponding errors.
@@ -151,7 +182,7 @@ class Notifier:
             return False
 
         return self._build_summary(
-            title=f'Scrooge Alert - Scraping Errors on {site}',
+            title=f"Scrooge Alert - Scraping Errors on {site}",
             header=f"The script encountered errors while checking {len(failed_items)} product(s) on {site}:\n",
             items=failed_items,
             format_item=lambda pair: f"{pair[0].name}: {type(pair[1]).__name__}",
@@ -159,7 +190,9 @@ class Notifier:
             more_noun=" errors",
         )
 
-    def notify_reminder(self, update_available: bool | None, interval_display: str, next_due: str) -> bool:
+    def notify_reminder(
+        self, update_available: bool | None, interval_display: str, next_due: str
+    ) -> bool:
         """Sends the periodic liveness reminder.
 
         Args:
@@ -172,20 +205,22 @@ class Notifier:
             bool: True if the notification was sent successfully, False otherwise.
         """
         if update_available is True:
-            update_line = 'A project update is available — run ./update.sh to install it.'
+            update_line = "A project update is available — run ./update.sh to install it."
         elif update_available is False:
-            update_line = 'You are running the latest version.'
+            update_line = "You are running the latest version."
         else:
-            update_line = 'The update check failed; could not determine whether an update is available.'
+            update_line = (
+                "The update check failed; could not determine whether an update is available."
+            )
 
         return self.notify(
             title=TITLE_STATUS_UPDATE,
             body=(
-                f'This is your {interval_display} reminder that the scrapers are still running in the background.\n'
-                f'{update_line}\n'
-                f'Next reminder: on or shortly after {next_due} (local time).\n'
+                f"This is your {interval_display} reminder that the scrapers are still running in the background.\n"
+                f"{update_line}\n"
+                f"Next reminder: on or shortly after {next_due} (local time).\n"
                 'To disable these reminders, set "reminder": "off" in config/general.json.'
-            )
+            ),
         )
 
     def notify_crash(self) -> bool:
@@ -196,7 +231,7 @@ class Notifier:
         """
         return self.notify(
             title=TITLE_CRASH,
-            body='The script failed unexpectedly. Please review the error logs for more details on the crash.'
+            body="The script failed unexpectedly. Please review the error logs for more details on the crash.",
         )
 
     def notify_test(self) -> list:
@@ -206,16 +241,16 @@ class Notifier:
             list: A list of tuples containing the identifier and the success status (bool).
         """
         title = TITLE_TEST
-        body = 'This is a test message to confirm that your Scrooge Alert notifications are configured correctly!'
+        body = "This is a test message to confirm that your Scrooge Alert notifications are configured correctly!"
 
         results = []
         for server in self.app_notif.servers:
             identifier = server.url(privacy=True)
-            schema_end = identifier.find('://')
+            schema_end = identifier.find("://")
             if schema_end != -1:
-                first_slash = identifier.find('/', schema_end + 3)
+                first_slash = identifier.find("/", schema_end + 3)
                 if first_slash != -1:
-                    identifier = identifier[:first_slash] + '/...'
+                    identifier = identifier[:first_slash] + "/..."
 
             try:
                 success = server.notify(title=title, body=body)

@@ -15,7 +15,10 @@ from typing import cast
 from unittest import mock
 
 from core.exceptions import (
-    ScraperError, RateLimitError, ServerError, ProductNotFoundError,
+    ProductNotFoundError,
+    RateLimitError,
+    ScraperError,
+    ServerError,
 )
 
 try:
@@ -23,6 +26,7 @@ try:
 
     class _ConcreteClient(HttpScraperClient):
         """Minimal concrete client (HttpScraperClient.scrape is abstract)."""
+
         HEADERS_POOL = [{"User-Agent": "test"}]
 
         def scrape(self, item):  # never called in these tests
@@ -37,6 +41,7 @@ def _make_client():
     """Builds a concrete client with tls_client.Session patched inert."""
     from core.scrapers.settings import framework_setting_specs
     from core.settings import resolve_settings
+
     with mock.patch("core.scrapers.http.tls_client.Session"):
         return _ConcreteClient(resolve_settings(framework_setting_specs("1h"), {}))
 
@@ -44,6 +49,7 @@ def _make_client():
 def _settings():
     from core.scrapers.settings import framework_setting_specs
     from core.settings import resolve_settings
+
     return resolve_settings(framework_setting_specs("1h"), {})
 
 
@@ -72,6 +78,7 @@ class TestBoundedGet(unittest.TestCase):
         with mock.patch("core.scrapers.http.tls_client.Session"):
             from core.scrapers.settings import framework_setting_specs
             from core.settings import resolve_settings
+
             client = SlowClient(resolve_settings(framework_setting_specs("1h"), {}))
         session = cast(mock.Mock, client.session)
 
@@ -123,6 +130,7 @@ class TestRaiseForStatus(unittest.TestCase):
         with mock.patch("core.scrapers.http.tls_client.Session"):
             from core.scrapers.settings import framework_setting_specs
             from core.settings import resolve_settings
+
             client = OddClient(resolve_settings(framework_setting_specs("1h"), {}))
         with self.assertRaises(ProductNotFoundError):
             client.raise_for_status(418)
@@ -134,32 +142,40 @@ class TestRaiseForStatus(unittest.TestCase):
 @unittest.skipUnless(_HAS_TLS, "tls_client not installed")
 class TestRetryPreparation(unittest.TestCase):
     def test_diagnostics_exclude_request_and_identity_details(self):
-        with mock.patch("core.scrapers.http.tls_client.Session"), \
-             mock.patch("core.scrapers.http.random.choice", return_value={
-                 "accept-language": "el-GR",
-                 "sec-ch-ua-platform": '"Linux"',
-                 "user-agent": "secret-ish fingerprint",
-                 "referer": "https://example.test/private-query",
-             }):
+        with (
+            mock.patch("core.scrapers.http.tls_client.Session"),
+            mock.patch(
+                "core.scrapers.http.random.choice",
+                return_value={
+                    "accept-language": "el-GR",
+                    "sec-ch-ua-platform": '"Linux"',
+                    "user-agent": "secret-ish fingerprint",
+                    "referer": "https://example.test/private-query",
+                },
+            ),
+        ):
             client = _ConcreteClient(_settings())
-        self.assertEqual(client.diagnostic_context(), {
-            "accept-language": "el-GR",
-            "sec-ch-ua-platform": '"Linux"',
-        })
+        self.assertEqual(
+            client.diagnostic_context(),
+            {
+                "accept-language": "el-GR",
+                "sec-ch-ua-platform": '"Linux"',
+            },
+        )
 
     def test_rotates_headers_and_replaces_session(self):
         s1, s2 = mock.Mock(name="session1"), mock.Mock(name="session2")
-        with mock.patch("core.scrapers.http.tls_client.Session",
-                        side_effect=[s1, s2]), \
-             mock.patch("core.scrapers.http.random.choice",
-                        return_value={"User-Agent": "probe"}):
+        with (
+            mock.patch("core.scrapers.http.tls_client.Session", side_effect=[s1, s2]),
+            mock.patch("core.scrapers.http.random.choice", return_value={"User-Agent": "probe"}),
+        ):
             client = _ConcreteClient(_settings())
             self.assertIs(client.session, s1)
 
             client.prepare_retry()
 
-            s1.close.assert_called_once()          # old session is closed
-            self.assertIs(client.session, s2)      # a fresh session is installed
+            s1.close.assert_called_once()  # old session is closed
+            self.assertIs(client.session, s2)  # a fresh session is installed
             self.assertEqual(client.current_headers, {"User-Agent": "probe"})
 
     def test_mutating_current_headers_never_pollutes_the_pool(self):

@@ -22,9 +22,7 @@ def read_json_object(
         with source.open(encoding="utf-8") as file:
             document = json.load(file)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ConfigFileError(
-            f"Config file '{source}' is invalid or unreadable: {exc}"
-        ) from exc
+        raise ConfigFileError(f"Config file '{source}' is invalid or unreadable: {exc}") from exc
     if not isinstance(document, dict):
         raise ConfigFileError(f"Config file '{source}' must contain an object")
     return document

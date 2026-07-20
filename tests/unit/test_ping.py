@@ -17,8 +17,7 @@ from core.ping import build_ping_panel, obfuscate_invalid_url
 
 class TestObfuscateInvalidUrl(unittest.TestCase):
     def test_long_token_keeps_first_and_last_char(self):
-        self.assertEqual(obfuscate_invalid_url("tgram://secrettoken/chat123"),
-                         "tgram://s...n/...")
+        self.assertEqual(obfuscate_invalid_url("tgram://secrettoken/chat123"), "tgram://s...n/...")
 
     def test_two_char_token_keeps_only_first_char(self):
         self.assertEqual(obfuscate_invalid_url("tgram://ab/chat"), "tgram://a.../...")
@@ -42,7 +41,8 @@ class TestBuildPingPanel(unittest.TestCase):
         panel, color = build_ping_panel(
             url_entries=[("json://a", True), ("json://b", True)],
             test_results=[("json://a/...", True), ("json://b/...", True)],
-            env_error_msg="")
+            env_error_msg="",
+        )
         self.assertEqual(color, "green")
         self.assertEqual(panel.icons, ["✅", "✅"])
 
@@ -50,14 +50,16 @@ class TestBuildPingPanel(unittest.TestCase):
         panel, color = build_ping_panel(
             url_entries=[("bad", False), ("json://a", True)],
             test_results=[("json://a/...", True)],
-            env_error_msg="")
+            env_error_msg="",
+        )
         self.assertEqual(color, "yellow")
 
     def test_all_failed_is_red(self):
         panel, color = build_ping_panel(
             url_entries=[("json://a", True)],
             test_results=[("json://a/...", False)],
-            env_error_msg="")
+            env_error_msg="",
+        )
         self.assertEqual(color, "red")
         self.assertEqual(panel.icons, ["🛑"])
 
@@ -73,7 +75,8 @@ class TestBuildPingPanel(unittest.TestCase):
         panel, _ = build_ping_panel(
             url_entries=[("json://first", True), ("broken", False), ("json://second", True)],
             test_results=[("json://first/...", True), ("json://second/...", False)],
-            env_error_msg="")
+            env_error_msg="",
+        )
         self.assertEqual(panel.icons, ["✅", "❗", "🛑"])
 
 
@@ -84,20 +87,27 @@ class TestPingMain(unittest.TestCase):
         status_context.__enter__.return_value = None
         status_context.__exit__.return_value = None
 
-        with mock.patch.dict(os.environ, {
-            "NOTIFICATION_URLS": " json://first , broken , , json://second "
-        }, clear=False), \
-             mock.patch("core.ping.install_interrupt_handler"), \
-             mock.patch("core.ping.setup_global_logging"), \
-             mock.patch("core.ping.check_env_file"), \
-             mock.patch("core.ping.is_valid_apprise_url",
-                        side_effect=lambda value: value.startswith("json://")), \
-             mock.patch("core.ping.Notifier") as notifier_type, \
-             mock.patch("core.ping.Console", return_value=console), \
-             mock.patch("core.ping.signal.signal"), \
-             mock.patch("core.ping.build_ping_panel") as build_panel:
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"NOTIFICATION_URLS": " json://first , broken , , json://second "},
+                clear=False,
+            ),
+            mock.patch("core.ping.install_interrupt_handler"),
+            mock.patch("core.ping.setup_global_logging"),
+            mock.patch("core.ping.check_env_file"),
+            mock.patch(
+                "core.ping.is_valid_apprise_url",
+                side_effect=lambda value: value.startswith("json://"),
+            ),
+            mock.patch("core.ping.Notifier") as notifier_type,
+            mock.patch("core.ping.Console", return_value=console),
+            mock.patch("core.ping.signal.signal"),
+            mock.patch("core.ping.build_ping_panel") as build_panel,
+        ):
             notifier_type.return_value.notify_test.return_value = [
-                ("first", True), ("second", False)
+                ("first", True),
+                ("second", False),
             ]
             panel = mock.MagicMock()
             build_panel.return_value = (panel, "yellow")
@@ -113,15 +123,16 @@ class TestPingMain(unittest.TestCase):
 
     def test_main_reports_env_error_without_constructing_notifier(self):
         console = mock.MagicMock()
-        with mock.patch.dict(os.environ, {}, clear=True), \
-             mock.patch("core.ping.install_interrupt_handler"), \
-             mock.patch("core.ping.setup_global_logging"), \
-             mock.patch("core.ping.check_env_file",
-                        side_effect=EnvFileError("missing env")), \
-             mock.patch("core.ping.Notifier") as notifier_type, \
-             mock.patch("core.ping.Console", return_value=console), \
-             mock.patch("core.ping.signal.signal"), \
-             mock.patch("core.ping.build_ping_panel") as build_panel:
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch("core.ping.install_interrupt_handler"),
+            mock.patch("core.ping.setup_global_logging"),
+            mock.patch("core.ping.check_env_file", side_effect=EnvFileError("missing env")),
+            mock.patch("core.ping.Notifier") as notifier_type,
+            mock.patch("core.ping.Console", return_value=console),
+            mock.patch("core.ping.signal.signal"),
+            mock.patch("core.ping.build_ping_panel") as build_panel,
+        ):
             panel = mock.MagicMock()
             build_panel.return_value = (panel, "red")
             core.ping.main()

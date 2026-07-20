@@ -27,21 +27,22 @@ from unittest import mock
 from rich.console import Console
 from rich.text import Text
 
-from core.ui import tui
-from core import status
-from core import ping
-from core.ui import config_check
 from core import logger as core_logger
-from core.exceptions import UpdateCheckError, EnvFileError
+from core import ping, status
+from core.exceptions import EnvFileError, UpdateCheckError
 from core.general import ReminderService
 from core.general.settings import (
-    GENERAL_SETTING_SPECS, KEY_REMINDER, KEY_REMINDER_DAY, KEY_REMINDER_TIME,
+    GENERAL_SETTING_SPECS,
+    KEY_REMINDER,
+    KEY_REMINDER_DAY,
+    KEY_REMINDER_TIME,
 )
 from core.logger import setup_global_logging
+from core.settings import ResolvedSettings
+from core.ui import config_check, tui
 from core.ui.panel import StatusPanelBuilder
-from core.settings import ResolvedSettings, resolve_spec
-
 from ui.catalog._base import BuildResult
+
 # NB: ``ui.harness.rendering`` is imported lazily inside drive_startup, not here:
 # rendering imports ui.catalog._base, whose package __init__ imports the scenario modules,
 # which import this module — a top-level import here would close that cycle.
@@ -53,6 +54,7 @@ _DEFAULT_CONFIG = config_check.config_view(5)
 
 
 # --- RUN: interactive scraping panel ------------------------------------------------
+
 
 class _FakeLive:
     """A no-op stand-in for ``rich.live.Live`` so the strategy accumulates state without
@@ -95,10 +97,14 @@ def drive_run(script: Callable[[tui.InteractiveRunReporter], None]) -> BuildResu
 
 # --- E2E_RUN: the same panel, driven by the real orchestrator ------------------------
 
-def drive_orchestrated_run(products: list[dict],
-                           results_by_url: dict[str, list],
-                           *, has_services: bool = False,
-                           delivery_ok: bool = True) -> BuildResult:
+
+def drive_orchestrated_run(
+    products: list[dict],
+    results_by_url: dict[str, list],
+    *,
+    has_services: bool = False,
+    delivery_ok: bool = True,
+) -> BuildResult:
     """Runs the *real* ``ScrapingOrchestrator`` over a scripted store and captures the
     finished interactive panel.
 
@@ -120,18 +126,20 @@ def drive_orchestrated_run(products: list[dict],
     Returns:
         BuildResult: the finished panel and its settled border color.
     """
-    from core import orchestrator as orchestrator_module
-    from core.orchestrator import ScrapingOrchestrator
-    from core.scrapers.api import ScraperClient
-    from core.scrapers.registry import ClientLoader
-    from core.preflight import load_targets
     from support import catalog_sandbox, fake_plugin, mock_notifier
 
+    from core import orchestrator as orchestrator_module
+    from core.orchestrator import ScrapingOrchestrator
+    from core.preflight import load_targets
+    from core.scrapers.api import ScraperClient, UrlField
+    from core.scrapers.registry import ClientLoader
+
     scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
+    url_field = UrlField("url", domains=("fake-store.example",), accepts_url=lambda _url: True)
 
     class _ScriptedClient(ScraperClient):
         def scrape(self, item):
-            script = scripts[item.url]
+            script = scripts[item[url_field]]
             outcome = script.pop(0) if len(script) > 1 else script[0]
             if isinstance(outcome, Exception):
                 raise outcome
@@ -147,13 +155,18 @@ def drive_orchestrated_run(products: list[dict],
         for index, product in enumerate(products, 1):
             canonical_products.append(
                 {"id": f"item-{index}", "skip": False, **product}
-                if isinstance(product, dict) else product
+                if isinstance(product, dict)
+                else product
             )
         with open(os.path.join(cfg_dir, "fakestore.json"), "w") as f:
             json.dump({"settings": {}, "items": canonical_products}, f)
 
-        plugin = fake_plugin(name="fakestore", domains=("fake-store.example",),
-                             client_class=_ScriptedClient)
+        plugin = fake_plugin(
+            name="fakestore",
+            domains=("fake-store.example",),
+            client_class=_ScriptedClient,
+            url_field=url_field,
+        )
         with catalog_sandbox(plugin) as catalog, mock.patch.object(tui, "Live", _FakeLive):
             strat = tui.InteractiveRunReporter()
             strat.console = Console(file=io.StringIO())
@@ -161,14 +174,17 @@ def drive_orchestrated_run(products: list[dict],
             loader = ClientLoader()
             loads = load_targets([catalog.get("fakestore")], cfg_dir)
             orch = ScrapingOrchestrator(
-                target_loads=loads, client_loader=loader,
+                target_loads=loads,
+                client_loader=loader,
                 notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
-                quiet=False, reporter=strat,
+                quiet=False,
+                reporter=strat,
             )
-            with mock.patch("core.execution.ItemExecutor.sleep_with_jitter"), \
-                 mock.patch.object(orchestrator_module.signal, "signal"), \
-                 mock.patch.object(orchestrator_module, "get_target_logger",
-                                   lambda *a, **k: stub):
+            with (
+                mock.patch("core.execution.ItemExecutor.sleep_with_jitter"),
+                mock.patch.object(orchestrator_module.signal, "signal"),
+                mock.patch.object(orchestrator_module, "get_target_logger", lambda *a, **k: stub),
+            ):
                 orch.run()
             panel = strat._generate_panel()
         return BuildResult(panel, str(panel.border_style))
@@ -178,10 +194,17 @@ def drive_orchestrated_run(products: list[dict],
 
 # --- STATUS: service / not-installed / orphan panels --------------------------------
 
-def drive_service(target: str, timer: dict, service: dict, resolved: ResolvedSettings,
-                  config_filename: str = "skroutz.json",
-                  expected_oncalendar: str = "", active_oncalendar: str = "",
-                  config: config_check.ConfigView = _DEFAULT_CONFIG) -> BuildResult:
+
+def drive_service(
+    target: str,
+    timer: dict,
+    service: dict,
+    resolved: ResolvedSettings,
+    config_filename: str = "skroutz.json",
+    expected_oncalendar: str = "",
+    active_oncalendar: str = "",
+    config: config_check.ConfigView = _DEFAULT_CONFIG,
+) -> BuildResult:
     """Builds a per-plugin Service Status panel via ``status.build_service_panel``.
 
     ``config`` is the leading 'Config' row (products-config health); it defaults to a
@@ -189,8 +212,14 @@ def drive_service(target: str, timer: dict, service: dict, resolved: ResolvedSet
     :class:`ConfigView` per scenario.
     """
     panel = status.build_service_panel(
-        target, timer, service, resolved,
-        config_filename, expected_oncalendar, active_oncalendar, config,
+        target,
+        timer,
+        service,
+        resolved,
+        config_filename,
+        expected_oncalendar,
+        active_oncalendar,
+        config,
         display_name=target.capitalize(),
         interval_spec=__import__("ui.catalog.inputs", fromlist=["SPEC_INTERVAL"]).SPEC_INTERVAL,
     )
@@ -210,9 +239,12 @@ def drive_orphan(name: str) -> BuildResult:
 
 # --- PING: notification check panel -------------------------------------------------
 
-def drive_ping(url_entries: Sequence[tuple[str, bool]],
-               test_results: Sequence[tuple[str, bool]] = (),
-               env_error_msg: str = "") -> BuildResult:
+
+def drive_ping(
+    url_entries: Sequence[tuple[str, bool]],
+    test_results: Sequence[tuple[str, bool]] = (),
+    env_error_msg: str = "",
+) -> BuildResult:
     """Builds the Notification Check Results panel via ``ping.build_ping_panel``."""
     panel, color = ping.build_ping_panel(list(url_entries), list(test_results), env_error_msg)
     return BuildResult(panel, color)
@@ -220,11 +252,16 @@ def drive_ping(url_entries: Sequence[tuple[str, bool]],
 
 # --- CONFIG: configuration check panel ----------------------------------------------
 
-def drive_config(version_state: str = "uptodate",
-                 valid_count: int = 0, invalid_count: int = 0,
-                 env_error: str = "", reminder_raw: object = None,
-                 reminder_day_raw: object = None,
-                 reminder_time_raw: object = None) -> BuildResult:
+
+def drive_config(
+    version_state: str = "uptodate",
+    valid_count: int = 0,
+    invalid_count: int = 0,
+    env_error: str = "",
+    reminder_raw: object = None,
+    reminder_day_raw: object = None,
+    reminder_time_raw: object = None,
+) -> BuildResult:
     """Builds the Configuration Check panel (global checks only), patching its seams.
 
     Per-scraper products-config health is no longer on this panel — it now leads each
@@ -264,6 +301,7 @@ def drive_config(version_state: str = "uptodate",
         # renders with production status/default/invalid logic but no file I/O. The
         # Use the production resolver so valid/default/invalid rows match runtime.
         from core.settings import resolve_settings
+
         block = {
             KEY_REMINDER: reminder_raw,
             KEY_REMINDER_DAY: reminder_day_raw,
@@ -271,10 +309,12 @@ def drive_config(version_state: str = "uptodate",
         }
         return resolve_settings(GENERAL_SETTING_SPECS, block)
 
-    with mock.patch.object(config_check, "check_for_updates", check_for_updates), \
-         mock.patch.object(config_check, "check_env_file", check_env_file), \
-         mock.patch.object(config_check, "classify_notification_urls", classify), \
-         mock.patch.object(config_check, "resolve_general_settings", resolve_general):
+    with (
+        mock.patch.object(config_check, "check_for_updates", check_for_updates),
+        mock.patch.object(config_check, "check_env_file", check_env_file),
+        mock.patch.object(config_check, "classify_notification_urls", classify),
+        mock.patch.object(config_check, "resolve_general_settings", resolve_general),
+    ):
         config_check._append_version_row(panel)
         config_check._append_env_row(panel)
         config_check._append_general_rows(panel)
@@ -283,6 +323,7 @@ def drive_config(version_state: str = "uptodate",
 
 
 # --- STARTUP: full interactive pre-scrape console transcript -------------------------
+
 
 def _emit_reminder(console: Console, reminder_raw: object) -> None:
     """Runs the *real* ``ReminderService.run_once()`` with root logging wired to ``console``.
@@ -311,17 +352,23 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
         reminder_logger.handlers[:] = []
         with mock.patch.object(core_logger, "console", console):
             setup_global_logging(quiet=False)  # interactive: root Rich handler -> console
-            ReminderService(cfg_dir, notifier=mock.Mock(),
-                            now_fn=lambda: now, update_check_fn=lambda: False).run_once()
+            ReminderService(
+                cfg_dir, notifier=mock.Mock(), now_fn=lambda: now, update_check_fn=lambda: False
+            ).run_once()
     finally:
         logging.root.handlers[:], logging.root.level, reminder_logger.handlers[:] = saved
         shutil.rmtree(cfg_dir, ignore_errors=True)
 
 
-def drive_startup(run_script: Callable[[tui.InteractiveRunReporter], None], *,
-                  reminder_raw: object = None, version_state: str = "uptodate",
-                  valid_count: int = 1, invalid_count: int = 0,
-                  env_error: str = "") -> BuildResult:
+def drive_startup(
+    run_script: Callable[[tui.InteractiveRunReporter], None],
+    *,
+    reminder_raw: object = None,
+    version_state: str = "uptodate",
+    valid_count: int = 1,
+    invalid_count: int = 0,
+    env_error: str = "",
+) -> BuildResult:
     """Captures the full interactive pre-scrape console transcript, as ``main()`` emits it.
 
     Reproduces the console output of an interactive run's startup onto *one* recording
@@ -342,16 +389,20 @@ def drive_startup(run_script: Callable[[tui.InteractiveRunReporter], None], *,
     # Lazy import to avoid a module-load cycle (see the note at the top of this file).
     from ui.harness.rendering import make_recording_console, paint
 
-    config_result = drive_config(version_state, valid_count=valid_count,
-                                 invalid_count=invalid_count, env_error=env_error,
-                                 reminder_raw=reminder_raw)
+    config_result = drive_config(
+        version_state,
+        valid_count=valid_count,
+        invalid_count=invalid_count,
+        env_error=env_error,
+        reminder_raw=reminder_raw,
+    )
     run_result = drive_run(run_script)
 
     console = make_recording_console()
-    console.print()                          # main() prints a leading blank line
+    console.print()  # main() prints a leading blank line
     paint(console, config_result)
-    console.print()                          # blank between preflight and the run
-    _emit_reminder(console, reminder_raw)    # logs to file only; a leak would land here
+    console.print()  # blank between preflight and the run
+    _emit_reminder(console, reminder_raw)  # logs to file only; a leak would land here
     paint(console, run_result)
 
     text = console.export_text(styles=False)

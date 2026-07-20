@@ -33,8 +33,8 @@ from core.persistence import format_utc
 from core.run import ItemRunOutcome, Notes, PriceOutcome, RunReporter
 from core.scrapers.api import (
     ListingResult,
-    ScrapeResult,
     ScraperClient,
+    ScrapeResult,
     TrackedItem,
     validate_scrape_result,
 )
@@ -61,11 +61,14 @@ DEFAULT_POLICY = ErrorPolicy(
 )
 
 RETRY_POLICIES: tuple[tuple[type[Exception], ErrorPolicy], ...] = (
-    (RateLimitError, ErrorPolicy(
-        abort=True,
-        save_traceback=True,
-        extra_notes=(messages.NOTE_RATE_LIMIT_ABORTED, ERRORS_LOG_TOKEN),
-    )),
+    (
+        RateLimitError,
+        ErrorPolicy(
+            abort=True,
+            save_traceback=True,
+            extra_notes=(messages.NOTE_RATE_LIMIT_ABORTED, ERRORS_LOG_TOKEN),
+        ),
+    ),
     (ServerError, ErrorPolicy(prepare_before_retry=False, counts_as_failure=False)),
     (ScraperParseError, ErrorPolicy(affects_exit_status=True)),
     (ScraperError, ErrorPolicy(save_traceback=True, extra_notes=(ERRORS_LOG_TOKEN,))),
@@ -73,53 +76,71 @@ RETRY_POLICIES: tuple[tuple[type[Exception], ErrorPolicy], ...] = (
 
 
 def policy_for(exc: Exception) -> ErrorPolicy:
-    return next((policy for exc_type, policy in RETRY_POLICIES if isinstance(exc, exc_type)), DEFAULT_POLICY)
+    return next(
+        (policy for exc_type, policy in RETRY_POLICIES if isinstance(exc, exc_type)), DEFAULT_POLICY
+    )
 
 
-class ItemExecutor:
-    """Execute validated items for one already-selected plugin target."""
+class Pacer:
+    """Interruptible request pacing with injectable clock, sleep, and jitter."""
+
+    def __init__(
+        self,
+        reporter: RunReporter,
+        interrupted: Callable[[], bool],
+        *,
+        monotonic_fn: Callable[[], float] = time.monotonic,
+        sleep_fn: Callable[[float], None] = time.sleep,
+        jitter_fn: Callable[[float, float], float] = random.uniform,
+    ) -> None:
+        self.reporter = reporter
+        self.interrupted = interrupted
+        self.monotonic_fn = monotonic_fn
+        self.sleep_fn = sleep_fn
+        self.jitter_fn = jitter_fn
+
+    def sleep(self, base_delay: float, attempt: int = 0, *, is_retry: bool = False) -> None:
+        jitter = self.jitter_fn(RANDOM_DELAY_MIN, RANDOM_DELAY_MAX)
+        total_delay = base_delay + RETRY_DELAY_MULTIPLIER * attempt + jitter
+        start_time = self.monotonic_fn()
+        retry_attempt = attempt + 2 if is_retry else 0
+        self.reporter.start_sleep(total_delay, retry_attempt, MAX_RETRIES if is_retry else 0)
+        while self.monotonic_fn() - start_time < total_delay:
+            if self.interrupted():
+                break
+            remaining = max(0.0, total_delay - (self.monotonic_fn() - start_time))
+            self.reporter.update_sleep(remaining)
+            self.sleep_fn(0.05)
+        if not self.interrupted():
+            self.reporter.complete_sleep(self.monotonic_fn() - start_time)
+
+
+class ResultHandler:
+    """Evaluate typed scrape results, notify, and stage state updates."""
 
     def __init__(
         self,
         *,
         target: str,
         display_name: str,
-        client: ScraperClient,
         state: JsonStateRepository,
         notifier: Notifier,
         reporter: RunReporter,
         logger: logging.Logger,
-        interrupted: Callable[[], bool],
         now_fn: Callable[[], datetime.datetime],
+        reference_url: Callable[[TrackedItem], str | None],
     ) -> None:
         self.target = target
         self.display_name = display_name
-        self.client = client
         self.state = state
         self.notifier = notifier
         self.reporter = reporter
         self.logger = logger
-        self.interrupted = interrupted
         self.now_fn = now_fn
+        self.reference_url = reference_url
         self.stale_items: list[TrackedItem] = []
 
-    def sleep_with_jitter(self, base_delay: float, attempt: int = 0,
-                          *, is_retry: bool = False) -> None:
-        jitter = random.uniform(RANDOM_DELAY_MIN, RANDOM_DELAY_MAX)
-        total_delay = base_delay + RETRY_DELAY_MULTIPLIER * attempt + jitter
-        start_time = time.monotonic()
-        retry_attempt = attempt + 2 if is_retry else 0
-        self.reporter.start_sleep(total_delay, retry_attempt, MAX_RETRIES if is_retry else 0)
-        while time.monotonic() - start_time < total_delay:
-            if self.interrupted():
-                break
-            remaining = max(0.0, total_delay - (time.monotonic() - start_time))
-            self.reporter.update_sleep(remaining)
-            time.sleep(0.05)
-        if not self.interrupted():
-            self.reporter.complete_sleep(time.monotonic() - start_time)
-
-    def _stale_note(self, item: TrackedItem) -> str | None:
+    def stale_note(self, item: TrackedItem) -> str | None:
         last_checked = self.state.get(item.id).last_checked
         if last_checked is None:
             return None
@@ -127,16 +148,6 @@ class ItemExecutor:
             self.stale_items.append(item)
             return messages.stale_note(format_utc(last_checked), OLD_ENTRY_HOURS)
         return None
-
-    @staticmethod
-    def _combine_notes(*notes: Notes) -> list[str] | None:
-        flattened: list[str] = []
-        for note in notes:
-            if isinstance(note, str):
-                flattened.append(note)
-            elif note:
-                flattened.extend(note)
-        return flattened or None
 
     def _try_notification(self, operation: Callable[[], bool]) -> bool:
         try:
@@ -159,15 +170,17 @@ class ItemExecutor:
         failed = 0
         if self.notifier.has_services:
             for match in below:
-                delivered = self._try_notification(lambda match=match: self.notifier.notify_low_price(
-                    self.display_name,
-                    item.name,
-                    item.target_price,
-                    match.price,
-                    match.url,
-                    result.currency,
-                    advert_title=match.title,
-                ))
+                delivered = self._try_notification(
+                    lambda match=match: self.notifier.notify_low_price(
+                        self.display_name,
+                        item.name,
+                        item.target_price,
+                        match.price,
+                        match.url,
+                        result.currency,
+                        advert_title=match.title,
+                    )
+                )
                 failed += not delivered
             notes.append(
                 messages.advert_notified_ok(len(below))
@@ -178,7 +191,7 @@ class ItemExecutor:
             notes.append(messages.NOTE_NOTIFIED_NONE)
         return PriceOutcome.DROP, failed > 0
 
-    def _handle_success(
+    def handle(
         self,
         item: TrackedItem,
         result: ScrapeResult,
@@ -186,8 +199,7 @@ class ItemExecutor:
         attempt_notes: list[str],
     ) -> bool:
         notes = (
-            [messages.succeeded_on_attempt(retries_used + 1, MAX_RETRIES)]
-            if retries_used else []
+            [messages.succeeded_on_attempt(retries_used + 1, MAX_RETRIES)] if retries_used else []
         )
         checked_at = self.now_fn()
         if isinstance(result, ListingResult) and not result.offers:
@@ -212,15 +224,20 @@ class ItemExecutor:
             if current_price < item.target_price:
                 outcome = PriceOutcome.DROP
                 if self.notifier.has_services:
-                    delivered = self._try_notification(lambda: self.notifier.notify_low_price(
-                        self.display_name,
-                        item.name,
-                        item.target_price,
-                        current_price,
-                        item.url,
-                        result.currency,
-                    ))
-                    notes.append(messages.NOTE_NOTIFIED_OK if delivered else messages.NOTE_NOTIFIED_FAIL)
+                    link = result.url or self.reference_url(item)
+                    delivered = self._try_notification(
+                        lambda: self.notifier.notify_low_price(
+                            self.display_name,
+                            item.name,
+                            item.target_price,
+                            current_price,
+                            link,
+                            result.currency,
+                        )
+                    )
+                    notes.append(
+                        messages.NOTE_NOTIFIED_OK if delivered else messages.NOTE_NOTIFIED_FAIL
+                    )
                     notification_failed = not delivered
                 else:
                     notes.append(messages.NOTE_NOTIFIED_NONE)
@@ -241,6 +258,86 @@ class ItemExecutor:
         )
         self.state.record_priced_check(item.id, current_price, checked_at)
         return notification_failed
+
+
+class ItemExecutor:
+    """Execute validated items for one already-selected plugin target."""
+
+    def __init__(
+        self,
+        *,
+        target: str,
+        display_name: str,
+        client: ScraperClient,
+        state: JsonStateRepository,
+        notifier: Notifier,
+        reporter: RunReporter,
+        logger: logging.Logger,
+        interrupted: Callable[[], bool],
+        now_fn: Callable[[], datetime.datetime],
+        reference_url: Callable[[TrackedItem], str | None] | None = None,
+        pacer: Pacer | None = None,
+    ) -> None:
+        self.target = target
+        self.display_name = display_name
+        self.client = client
+        self.state = state
+        self.notifier = notifier
+        self.reporter = reporter
+        self.logger = logger
+        self.interrupted = interrupted
+        self.now_fn = now_fn
+        self.reference_url = reference_url or (lambda _item: None)
+        self.pacer = pacer or Pacer(reporter, interrupted)
+        self.result_handler = ResultHandler(
+            target=target,
+            display_name=display_name,
+            state=state,
+            notifier=notifier,
+            reporter=reporter,
+            logger=logger,
+            now_fn=now_fn,
+            reference_url=self.reference_url,
+        )
+
+    @property
+    def stale_items(self) -> list[TrackedItem]:
+        return self.result_handler.stale_items
+
+    def sleep_with_jitter(
+        self, base_delay: float, attempt: int = 0, *, is_retry: bool = False
+    ) -> None:
+        self.pacer.sleep(base_delay, attempt, is_retry=is_retry)
+
+    def _stale_note(self, item: TrackedItem) -> str | None:
+        return self.result_handler.stale_note(item)
+
+    @staticmethod
+    def _combine_notes(*notes: Notes) -> list[str] | None:
+        flattened: list[str] = []
+        for note in notes:
+            if isinstance(note, str):
+                flattened.append(note)
+            elif note:
+                flattened.extend(note)
+        return flattened or None
+
+    def _try_notification(self, operation: Callable[[], bool]) -> bool:
+        return self.result_handler._try_notification(operation)
+
+    def _notify_matching_offers(
+        self, item: TrackedItem, result: ListingResult, notes: list[str]
+    ) -> tuple[PriceOutcome, bool]:
+        return self.result_handler._notify_matching_offers(item, result, notes)
+
+    def _handle_success(
+        self,
+        item: TrackedItem,
+        result: ScrapeResult,
+        retries_used: int,
+        attempt_notes: list[str],
+    ) -> bool:
+        return self.result_handler.handle(item, result, retries_used, attempt_notes)
 
     def process(self, item: TrackedItem) -> ItemRunOutcome:
         if item.skip:
@@ -285,7 +382,8 @@ class ItemExecutor:
                 if attempt == MAX_RETRIES - 1:
                     extra = [
                         messages.errors_log_pointer(self.target)
-                        if note == ERRORS_LOG_TOKEN else note
+                        if note == ERRORS_LOG_TOKEN
+                        else note
                         for note in policy.extra_notes
                     ]
                     self.reporter.log_failure(
@@ -298,7 +396,7 @@ class ItemExecutor:
                         save_traceback(
                             self.logger,
                             target_name=self.target,
-                            url=item.url,
+                            url=self.reference_url(item),
                             diagnostic_context=self.client.diagnostic_context(),
                             log_to_console=False,
                         )
@@ -315,4 +413,10 @@ class ItemExecutor:
         return ItemRunOutcome(item)
 
 
-__all__ = ["ErrorPolicy", "ItemExecutor", "policy_for"]
+__all__ = [
+    "ErrorPolicy",
+    "ItemExecutor",
+    "Pacer",
+    "ResultHandler",
+    "policy_for",
+]

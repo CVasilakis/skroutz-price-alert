@@ -1,17 +1,18 @@
-import os
 import logging
+import os
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from collections.abc import Sequence
 
 from rich.console import Console
 from rich.markup import escape
 
 from core.constants import CONFIG_DIR, EXIT_CODE_ENV_ERROR
 from core.exceptions import ConfigFileError, EnvFileError, UpdateCheckError
-from core.utils import check_env_file, check_for_updates, classify_notification_urls
 from core.general import resolve_general_settings
 from core.logger import get_target_logger
+from core.settings import DEFAULT_LOG_RETENTION_DAYS
 from core.ui.panel import StatusPanelBuilder
+from core.utils import check_env_file, check_for_updates, classify_notification_urls
 
 
 @dataclass(frozen=True)
@@ -29,13 +30,16 @@ class ConfigView:
         footnote (str | None): The explanatory note, or ``None`` when healthy.
         has_warning (bool): True for a faulty or failed load (drives the silent-log level).
     """
+
     icon: str
     value: str
     footnote: str | None = None
     has_warning: bool = False
 
 
-def config_view(count: int, faulty_indices: Sequence[int] = (), error: str | None = None) -> ConfigView:
+def config_view(
+    count: int, faulty_indices: Sequence[int] = (), error: str | None = None
+) -> ConfigView:
     """Builds the :class:`ConfigView` for a target from its load outcome.
 
     Args:
@@ -138,7 +142,11 @@ def _append_env_row(panel: StatusPanelBuilder) -> None:
             panel.add_row("✅", "Notifications", f"{len(valid_urls)} valid URL(s)")
         else:
             ref = panel.add_note_ref("Run `./scripts/run.sh --ping` for more details.")
-            panel.add_row("🟡", "Notifications", f"{len(valid_urls)} valid URL(s), [yellow]{len(invalid_urls)} invalid{ref}[/yellow]")
+            panel.add_row(
+                "🟡",
+                "Notifications",
+                f"{len(valid_urls)} valid URL(s), [yellow]{len(invalid_urls)} invalid{ref}[/yellow]",
+            )
     else:
         ref = panel.add_note_ref(env_error_msg or "No notification URLs found.")
         panel.add_row("❗", "Notifications", f"[red]Not configured{ref}[/red]")
@@ -168,7 +176,10 @@ def render_config_panel(console: Console) -> None:
     panel.render(console)
 
 
-def _silent_preflight(targets_to_run: list) -> int | None:
+def _silent_preflight(
+    targets_to_run: list,
+    retention_by_target: Mapping[str, int] | None = None,
+) -> int | None:
     """Validates the .env for a background (``--quiet``) run, logging to file.
 
     A missing/invalid ``.env`` is fatal for a service (it cannot notify), so it gates
@@ -186,21 +197,28 @@ def _silent_preflight(targets_to_run: list) -> int | None:
         check_env_file()
     except EnvFileError as e:
         for target in targets_to_run:
-            get_target_logger(target, True).error(f"❗ Env configuration failed: {e}")
+            retention = (retention_by_target or {}).get(target, DEFAULT_LOG_RETENTION_DAYS)
+            get_target_logger(target, True, retention).error(f"❗ Env configuration failed: {e}")
         logging.critical(f"Env configuration failed: {e}")
         return EXIT_CODE_ENV_ERROR
 
     _, invalid_urls = classify_notification_urls(os.environ.get("NOTIFICATION_URLS", ""))
     if invalid_urls:
         for target in targets_to_run:
-            get_target_logger(target, True).warning(
+            retention = (retention_by_target or {}).get(target, DEFAULT_LOG_RETENTION_DAYS)
+            get_target_logger(target, True, retention).warning(
                 f"❗ {len(invalid_urls)} invalid notification URL(s) detected in .env file."
             )
 
     return None
 
 
-def preflight(console: Console | None, targets_to_run: list, quiet: bool) -> int | None:
+def preflight(
+    console: Console | None,
+    targets_to_run: list,
+    quiet: bool,
+    retention_by_target: Mapping[str, int] | None = None,
+) -> int | None:
     """Single preflight-validation entry point shared by both run modes.
 
     Renders/logs the global configuration verdict and decides whether to abort. Storage
@@ -223,7 +241,7 @@ def preflight(console: Console | None, targets_to_run: list, quiet: bool) -> int
         int | None: A fatal exit code to abort on, or None to proceed.
     """
     if quiet:
-        return _silent_preflight(targets_to_run)
+        return _silent_preflight(targets_to_run, retention_by_target)
     assert console is not None, "console is required for interactive (non-quiet) preflight"
     render_config_panel(console)
     return None

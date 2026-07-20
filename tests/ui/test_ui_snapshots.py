@@ -29,7 +29,9 @@ class TestScenarioRegistry(unittest.TestCase):
     def test_keys_are_unique(self):
         keys = [s.snapshot_key for s in ALL_SCENARIOS]
         dupes = sorted({k for k in keys if keys.count(k) > 1})
-        self.assertEqual(dupes, [], f"Duplicate scenario keys (surface+name must be unique): {dupes}")
+        self.assertEqual(
+            dupes, [], f"Duplicate scenario keys (surface+name must be unique): {dupes}"
+        )
 
 
 class TestNoTextOutsidePanels(unittest.TestCase):
@@ -49,7 +51,8 @@ class TestNoTextOutsidePanels(unittest.TestCase):
             with self.subTest(scenario=sc.snapshot_key):
                 stray = lines_outside_panels(capture_text(sc.build()))
                 self.assertEqual(
-                    stray, [],
+                    stray,
+                    [],
                     f"'{sc.snapshot_key}' printed text outside a panel: {stray}",
                 )
 
@@ -58,9 +61,7 @@ class TestSnapshotRenderingDeterminism(unittest.TestCase):
     """Ambient terminal preferences must not change committed snapshot text."""
 
     def test_no_color_environment_does_not_change_progress_bar_glyphs(self):
-        scenario = next(
-            sc for sc in ALL_SCENARIOS if sc.snapshot_key == "run__sleeping_pacing"
-        )
+        scenario = next(sc for sc in ALL_SCENARIOS if sc.snapshot_key == "run__sleeping_pacing")
 
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("NO_COLOR", None)
@@ -94,7 +95,8 @@ class TestUISnapshots(unittest.TestCase):
                 with open(path, encoding="utf-8") as f:
                     expected = f.read()
                 self.assertEqual(
-                    body, expected,
+                    body,
+                    expected,
                     f"UI output changed for '{sc.snapshot_key}'. "
                     f"If this is intended, review the diff and regenerate. {_REGEN_HINT}",
                 )
@@ -108,7 +110,8 @@ class TestUISnapshots(unittest.TestCase):
             if filename.endswith(".txt"):
                 with self.subTest(snapshot=filename):
                     self.assertIn(
-                        filename[:-4], keys,
+                        filename[:-4],
+                        keys,
                         f"Orphan snapshot '{filename}' has no scenario. "
                         f"Delete it, or restore the scenario it belonged to.",
                     )

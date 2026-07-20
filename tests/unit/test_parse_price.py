@@ -20,30 +20,58 @@ class TestParsePrice(unittest.TestCase):
     # US grouping, sign, and the single-separator "reads as decimal" rule.
     VALID = [
         # Numeric passthrough.
-        (0, 0.0), (25, 25.0), (25.5, 25.5), (-3, -3.0),
+        (0, 0.0),
+        (25, 25.0),
+        (25.5, 25.5),
+        (-3, -3.0),
         # Bare strings.
-        ("5", 5.0), ("5.0", 5.0), ("  5.00  ", 5.0),
+        ("5", 5.0),
+        ("5.0", 5.0),
+        ("  5.00  ", 5.0),
         # Currency symbols, quotes and whitespace are stripped.
-        ("1.299,50 €", 1299.50), ("€1299.50", 1299.50),
-        ('"1299,50"', 1299.50), ("$1,299.00", 1299.00),
+        ("1.299,50 €", 1299.50),
+        ("€1299.50", 1299.50),
+        ('"1299,50"', 1299.50),
+        ("$1,299.00", 1299.00),
         # European grouping (right-most separator is the decimal).
-        ("1.299,00", 1299.00), ("1.234.567,89", 1234567.89),
+        ("1.299,00", 1299.00),
+        ("1.234.567,89", 1234567.89),
         # US grouping.
-        ("1,299.00", 1299.00), ("1,234,567.89", 1234567.89),
+        ("1,299.00", 1299.00),
+        ("1,234,567.89", 1234567.89),
         # Single separator is the decimal, NOT a thousands group (documented rule).
-        ("1,234", 1.234), ("1.234", 1.234),
+        ("1,234", 1.234),
+        ("1.234", 1.234),
         # Sign is preserved through the cleaning pass.
-        ("-5,00", -5.0), ("-1.299,50 €", -1299.50),
+        ("-5,00", -5.0),
+        ("-1.299,50 €", -1299.50),
         # No fractional digits after the separator.
-        ("1.000,", 1000.0), ("1,299.", 1299.0),
+        ("1.000,", 1000.0),
+        ("1,299.", 1299.0),
     ]
     # Anything that cannot be read as a number degrades to None (the callers turn that
     # into their own sentinel / skip behavior).
     INVALID = [
-        None, True, False, "", "   ", "abc", "not-a-price",
-        "€", "-", ",", ".", [1, 2], {"price": 5}, object(),
-        float("nan"), float("inf"), float("-inf"), "NaN", "Infinity",
-        10 ** 1000,
+        None,
+        True,
+        False,
+        "",
+        "   ",
+        "abc",
+        "not-a-price",
+        "€",
+        "-",
+        ",",
+        ".",
+        [1, 2],
+        {"price": 5},
+        object(),
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+        "NaN",
+        "Infinity",
+        10**1000,
     ]
 
     def test_valid(self):

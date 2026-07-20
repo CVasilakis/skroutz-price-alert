@@ -13,17 +13,18 @@ deterministically (spinners, sleeps, interrupts, stale timestamps) stay in
 ``run_scenarios``.
 """
 
-from core.exceptions import ProductNotFoundError, ScraperParseError, ServerError
 from core import messages
+from core.exceptions import ProductNotFoundError, ScraperParseError, ServerError
 from core.scrapers.api import PriceResult
-
-from ui.catalog._base import scenario, Surface
+from ui.catalog._base import Surface, scenario
 from ui.harness.drivers import drive_orchestrated_run
 
 _URL = "https://fake-store.example/p/{}"
 
 
-@scenario(Surface.E2E_RUN, "drop_notified", "Price drop, notification delivered", tags=("price_drop",))
+@scenario(
+    Surface.E2E_RUN, "drop_notified", "Price drop, notification delivered", tags=("price_drop",)
+)
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
@@ -32,16 +33,27 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "drop_notify_failed", "Price drop, notification delivery failed", tags=("price_drop",))
+@scenario(
+    Surface.E2E_RUN,
+    "drop_notify_failed",
+    "Price drop, notification delivery failed",
+    tags=("price_drop",),
+)
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
         results_by_url={_URL.format(1): [PriceResult(price=248.0, currency="€")]},
-        has_services=True, delivery_ok=False,
+        has_services=True,
+        delivery_ok=False,
     )
 
 
-@scenario(Surface.E2E_RUN, "drop_not_configured", "Price drop with no notification services configured", tags=("price_drop",))
+@scenario(
+    Surface.E2E_RUN,
+    "drop_not_configured",
+    "Price drop with no notification services configured",
+    tags=("price_drop",),
+)
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
@@ -50,14 +62,18 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "retry_then_success", "5xx on attempt 1, success on attempt 2", tags=("retry",))
+@scenario(
+    Surface.E2E_RUN, "retry_then_success", "5xx on attempt 1, success on attempt 2", tags=("retry",)
+)
 def _():
     return drive_orchestrated_run(
         products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
-        results_by_url={_URL.format(1): [
-            ServerError(messages.server_error_detail(503)),
-            PriceResult(price=320.0, currency="€"),
-        ]},
+        results_by_url={
+            _URL.format(1): [
+                ServerError(messages.server_error_detail(503)),
+                PriceResult(price=320.0, currency="€"),
+            ]
+        },
     )
 
 
@@ -69,7 +85,12 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "mixed_skip_warning_zero_target", "Skip, 404 warning, and an explicit zero target", tags=("combined",))
+@scenario(
+    Surface.E2E_RUN,
+    "mixed_skip_warning_zero_target",
+    "Skip, 404 warning, and an explicit zero target",
+    tags=("combined",),
+)
 def _():
     return drive_orchestrated_run(
         products=[
@@ -84,7 +105,12 @@ def _():
     )
 
 
-@scenario(Surface.E2E_RUN, "mixed_unsafe_and_valid", "A null row is reported while a valid row completes", tags=("products", "combined"))
+@scenario(
+    Surface.E2E_RUN,
+    "mixed_unsafe_and_valid",
+    "A null row is reported while a valid row completes",
+    tags=("products", "combined"),
+)
 def _():
     return drive_orchestrated_run(
         products=[

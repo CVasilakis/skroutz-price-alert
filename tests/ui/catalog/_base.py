@@ -10,9 +10,9 @@ This module is the import leaf of the catalog: it depends only on stdlib, so the
 and rendering layers can import :class:`BuildResult` from here without a cycle.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from collections.abc import Callable
 from typing import Any
 
 
@@ -26,21 +26,22 @@ class Surface(Enum):
     prefixes; never rename them (that would rename every snapshot file). The
     human-readable section labels live in :data:`SURFACE_INFO` instead.
     """
-    RUN = "run"        # the interactive scraping panel (tui.InteractiveRunReporter)
+
+    RUN = "run"  # the interactive scraping panel (tui.InteractiveRunReporter)
     E2E_RUN = "e2e-run"  # the same panel, driven end-to-end by the real ScrapingOrchestrator
     CONFIG = "config"  # the shared Configuration Check panel
     STARTUP = "startup"  # the full interactive pre-scrape console transcript (multi-panel)
     STATUS = "status"  # a --status panel (service / not-installed / orphan)
-    PING = "ping"      # the --ping Notification Check Results panel
+    PING = "ping"  # the --ping Notification Check Results panel
     # Shell surfaces: the transcript a management script prints to the terminal.
     # The "sh-" prefix groups them in the gallery and keeps "sh-run" clear of RUN.
-    SH_INSTALL = "sh-install"      # install.sh (repo root)
-    SH_RUN = "sh-run"              # scripts/run.sh
-    SH_SCHEDULE = "sh-schedule"    # scripts/schedule.sh
-    SH_ENABLE = "sh-enable"        # scripts/enable.sh
-    SH_DISABLE = "sh-disable"      # scripts/disable.sh
-    SH_STOP = "sh-stop"            # scripts/stop.sh
-    SH_UPDATE = "sh-update"        # update.sh (repo root)
+    SH_INSTALL = "sh-install"  # install.sh (repo root)
+    SH_RUN = "sh-run"  # scripts/run.sh
+    SH_SCHEDULE = "sh-schedule"  # scripts/schedule.sh
+    SH_ENABLE = "sh-enable"  # scripts/enable.sh
+    SH_DISABLE = "sh-disable"  # scripts/disable.sh
+    SH_STOP = "sh-stop"  # scripts/stop.sh
+    SH_UPDATE = "sh-update"  # update.sh (repo root)
     SH_UNINSTALL = "sh-uninstall"  # scripts/uninstall.sh
 
 
@@ -53,6 +54,7 @@ class SurfaceInfo:
             gallery (e.g. ``"install.sh"`` instead of the raw ``"sh-install"``).
         blurb (str): A one-line subtitle explaining what the section shows.
     """
+
     label: str
     blurb: str
 
@@ -63,48 +65,44 @@ class SurfaceInfo:
 SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     Surface.RUN: SurfaceInfo(
         "Scraping panel (interactive)",
-        "The live panel a manual ./scripts/run.sh draws while checking products."),
+        "The live panel a manual ./scripts/run.sh draws while checking products.",
+    ),
     Surface.E2E_RUN: SurfaceInfo(
         "Scraping panel (end-to-end)",
-        "The same panel painted by the real orchestrator against a fake store."),
+        "The same panel painted by the real orchestrator against a fake store.",
+    ),
     Surface.CONFIG: SurfaceInfo(
         "Configuration Check panel",
-        "The global checks: software version, notifications (.env), general settings."),
+        "The global checks: software version, notifications (.env), general settings.",
+    ),
     Surface.STARTUP: SurfaceInfo(
         "Full startup transcript",
         "Everything printed before scraping: Configuration Check, reminder, and "
-        "Scraping panels stacked as one console."),
+        "Scraping panels stacked as one console.",
+    ),
     Surface.STATUS: SurfaceInfo(
         "Health check (--status)",
-        "The per-scraper Service Status panels and global checks from "
-        "./scripts/run.sh --status."),
+        "The per-scraper Service Status panels and global checks from ./scripts/run.sh --status.",
+    ),
     Surface.PING: SurfaceInfo(
-        "Notification check (--ping)",
-        "The delivery test results from ./scripts/run.sh --ping."),
+        "Notification check (--ping)", "The delivery test results from ./scripts/run.sh --ping."
+    ),
     Surface.SH_INSTALL: SurfaceInfo(
-        "install.sh",
-        "First-time installation transcript (venv, dependencies, systemd units)."),
+        "install.sh", "First-time installation transcript (venv, dependencies, systemd units)."
+    ),
     Surface.SH_RUN: SurfaceInfo(
-        "run.sh",
-        "Argument handling and dispatch of the main wrapper script."),
+        "run.sh", "Argument handling and dispatch of the main wrapper script."
+    ),
     Surface.SH_SCHEDULE: SurfaceInfo(
-        "schedule.sh",
-        "Re-applying a configured execution interval to the installed timers."),
-    Surface.SH_ENABLE: SurfaceInfo(
-        "enable.sh",
-        "Resuming the background timers."),
-    Surface.SH_DISABLE: SurfaceInfo(
-        "disable.sh",
-        "Pausing the background timers."),
-    Surface.SH_STOP: SurfaceInfo(
-        "stop.sh",
-        "Aborting a running scrape."),
-    Surface.SH_UPDATE: SurfaceInfo(
-        "update.sh",
-        "Updating the installation in place."),
+        "schedule.sh", "Re-applying a configured execution interval to the installed timers."
+    ),
+    Surface.SH_ENABLE: SurfaceInfo("enable.sh", "Resuming the background timers."),
+    Surface.SH_DISABLE: SurfaceInfo("disable.sh", "Pausing the background timers."),
+    Surface.SH_STOP: SurfaceInfo("stop.sh", "Aborting a running scrape."),
+    Surface.SH_UPDATE: SurfaceInfo("update.sh", "Updating the installation in place."),
     Surface.SH_UNINSTALL: SurfaceInfo(
-        "uninstall.sh",
-        "Removing services and the environment (user data kept)."),
+        "uninstall.sh", "Removing services and the environment (user data kept)."
+    ),
 }
 
 
@@ -151,6 +149,7 @@ class BuildResult:
         exit_code (int | None): The script's exit status for shell scenarios, recorded
             as a ``# exit:`` snapshot-header line. ``None`` for the Rich-panel surfaces.
     """
+
     renderable: Any
     border_color: str
     exit_code: int | None = None
@@ -177,6 +176,7 @@ class Scenario:
             when an explicit filter matches it: its surface via ``--surface``, or
             one of its tags via ``--tag``.
     """
+
     name: str
     surface: Surface
     description: str
@@ -193,8 +193,13 @@ class Scenario:
 _REGISTRY: list[Scenario] = []
 
 
-def scenario(surface: Surface, name: str, description: str, tags: tuple[str, ...] = (),
-             in_gallery: bool = True):
+def scenario(
+    surface: Surface,
+    name: str,
+    description: str,
+    tags: tuple[str, ...] = (),
+    in_gallery: bool = True,
+):
     """Registers the decorated zero-arg ``build`` function as a :class:`Scenario`.
 
     Usage::
@@ -208,12 +213,20 @@ def scenario(surface: Surface, name: str, description: str, tags: tuple[str, ...
     but hidden from the gallery/report unless an explicit ``--surface``/``--tag``
     filter matches it).
     """
+
     def decorator(build_fn: Callable[[], BuildResult]) -> Callable[[], BuildResult]:
-        _REGISTRY.append(Scenario(
-            name=name, surface=surface, description=description,
-            build=build_fn, tags=tuple(tags), in_gallery=in_gallery,
-        ))
+        _REGISTRY.append(
+            Scenario(
+                name=name,
+                surface=surface,
+                description=description,
+                build=build_fn,
+                tags=tuple(tags),
+                in_gallery=in_gallery,
+            )
+        )
         return build_fn
+
     return decorator
 
 

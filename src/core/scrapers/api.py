@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from types import MappingProxyType
 from typing import Any, Generic, TypeVar, cast
 from urllib.parse import SplitResult
@@ -25,18 +25,32 @@ from core.exceptions import (
     ScraperParseError,
     ServerError,
 )
-from core.settings.model import ResolvedSettings, SettingSpec
+from core.settings.model import MISSING, ResolvedSettings, SettingSpec, _MissingDefault
 
 T = TypeVar("T")
 
 
 @dataclass(frozen=True, eq=False)
 class ItemField(Generic[T]):
-    """One plugin-owned item field, including its only decoder and default."""
+    """One plugin-owned item field. Omitting ``default`` makes it required."""
 
     key: str
     decode: Callable[[object], T]
-    default: T
+    _: KW_ONLY
+    default: T | _MissingDefault = MISSING
+
+    @property
+    def required(self) -> bool:
+        return self.default is MISSING
+
+
+@dataclass(frozen=True, eq=False)
+class UrlField(ItemField[str]):
+    """A URL input with its complete validation and canonicalization contract."""
+
+    decode: Callable[[object], str] = field(default=str, init=False, compare=False, repr=False)
+    domains: Sequence[str]
+    accepts_url: Callable[[SplitResult], bool]
 
 
 @dataclass(frozen=True)
@@ -45,12 +59,9 @@ class TrackedItem:
 
     id: str
     name: str
-    url: str
     target_price: float
     skip: bool = False
-    _custom: Mapping[ItemField[Any], Any] = field(
-        default_factory=dict, repr=False, compare=False
-    )
+    _custom: Mapping[ItemField[Any], Any] = field(default_factory=dict, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_custom", MappingProxyType(dict(self._custom)))
@@ -81,14 +92,14 @@ def _nonblank(value: object, field_name: str) -> str:
     return value.strip()
 
 
-def _absolute_offer_url(value: object) -> str:
+def _absolute_result_url(value: object, field_name: str) -> str:
     from core.scrapers.url import canonicalize_url
 
     try:
         return canonicalize_url(value)
     except ValueError as exc:
         raise InvalidScrapeResultError(
-            "offer URL must be an absolute credential-free HTTP(S) URL"
+            f"{field_name} must be an absolute credential-free HTTP(S) URL"
         ) from exc
 
 
@@ -103,7 +114,7 @@ class Offer:
     def __post_init__(self) -> None:
         object.__setattr__(self, "title", _nonblank(self.title, "offer title"))
         object.__setattr__(self, "price", _price(self.price, "offer price"))
-        object.__setattr__(self, "url", _absolute_offer_url(self.url))
+        object.__setattr__(self, "url", _absolute_result_url(self.url, "offer URL"))
 
 
 @dataclass(frozen=True)
@@ -112,10 +123,13 @@ class PriceResult:
 
     price: float
     currency: str
+    url: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "price", _price(self.price, "price"))
         object.__setattr__(self, "currency", _nonblank(self.currency, "currency"))
+        if self.url is not None:
+            object.__setattr__(self, "url", _absolute_result_url(self.url, "result URL"))
 
 
 @dataclass(frozen=True)
@@ -174,17 +188,29 @@ class ScraperPlugin:
     """A plugin's declarative, stdlib-only descriptor."""
 
     display_name: str
-    domains: Sequence[str]
-    accepts_url: Callable[[SplitResult], bool]
     item_fields: Sequence[ItemField[Any]] = ()
     settings: Sequence[SettingSpec[Any]] = ()
     default_interval: str = "1h"
+    reference_url: UrlField | None = None
 
 
 __all__ = [
-    "ScraperPlugin", "ItemField", "SettingSpec", "TrackedItem", "ScraperClient",
-    "PriceResult", "ListingResult", "Offer", "ScrapeResult",
-    "InvalidScrapeResultError", "ScraperError", "RateLimitError", "ServerError",
-    "ScraperParseError", "ProductNotFoundError", "ProductUnavailableError",
+    "ScraperPlugin",
+    "ItemField",
+    "UrlField",
+    "SettingSpec",
+    "TrackedItem",
+    "ScraperClient",
+    "PriceResult",
+    "ListingResult",
+    "Offer",
+    "ScrapeResult",
+    "InvalidScrapeResultError",
+    "ScraperError",
+    "RateLimitError",
+    "ServerError",
+    "ScraperParseError",
+    "ProductNotFoundError",
+    "ProductUnavailableError",
     "InvalidURLError",
 ]

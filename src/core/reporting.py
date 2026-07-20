@@ -52,16 +52,24 @@ class SilentRunReporter(RunReporter):
     def complete_scraping(self) -> None:
         pass
 
-    def log_result(self, icon: str, name: str, value: str, notes: Notes = None,
-                   attempt_notes: Notes = None) -> None:
+    def log_result(
+        self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None:
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.info(f"{icon} {name}: {value}{suffix}")
 
-    def log_price_result(self, name: str, price: float | None, currency: str,
-                         target: float, outcome: PriceOutcome, notes: Notes = None,
-                         attempt_notes: Notes = None,
-                         delivery_failed: bool = False) -> None:
+    def log_price_result(
+        self,
+        name: str,
+        price: float | None,
+        currency: str,
+        target: float,
+        outcome: PriceOutcome,
+        notes: Notes = None,
+        attempt_notes: Notes = None,
+        delivery_failed: bool = False,
+    ) -> None:
         if self.target_logger:
             price_str = (
                 messages.ROW_NO_MATCH
@@ -75,14 +83,16 @@ class SilentRunReporter(RunReporter):
             )
             (self.target_logger.warning if delivery_failed else self.target_logger.info)(message)
 
-    def log_warning(self, name: str, warning_str: str, notes: Notes = None,
-                    attempt_notes: Notes = None) -> None:
+    def log_warning(
+        self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None:
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.warning(f"❗ {name}: {warning_str}{suffix}")
 
-    def log_error(self, name: str, error_str: str, notes: Notes = None,
-                  attempt_notes: Notes = None) -> None:
+    def log_error(
+        self, name: str, error_str: str, notes: Notes = None, attempt_notes: Notes = None
+    ) -> None:
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.error(f"❗ {name}: {error_str}{suffix}")
@@ -93,14 +103,14 @@ class SilentRunReporter(RunReporter):
                 f"❗ {name}: Attempt {attempt}/{max_retries} FAILED ({detail})"
             )
 
-    def log_failure(self, name: str, error_type: str, attempt_notes: Notes = None,
-                    extra_notes: Notes = None) -> None:
+    def log_failure(
+        self, name: str, error_type: str, attempt_notes: Notes = None, extra_notes: Notes = None
+    ) -> None:
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(extra_notes))
             self.target_logger.error(f"❗ {name}: All attempts failed ({error_type}){suffix}")
 
-    def start_sleep(self, total_delay: float, retry_attempt: int = 0,
-                    max_retries: int = 0) -> None:
+    def start_sleep(self, total_delay: float, retry_attempt: int = 0, max_retries: int = 0) -> None:
         pass
 
     def update_sleep(self, remaining: float) -> None:

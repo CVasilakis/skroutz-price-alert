@@ -1,14 +1,17 @@
 import re
 from collections.abc import Iterable, Sequence
+
 from rich.console import Console, Group
-from rich.table import Table
+from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.table import Table
 from rich.text import Text
-from rich.markup import escape
 
 
-def uniform_column_widths(rows: Iterable[Sequence], columns: tuple[int, ...] = (0, 1)) -> dict[int, int]:
+def uniform_column_widths(
+    rows: Iterable[Sequence], columns: tuple[int, ...] = (0, 1)
+) -> dict[int, int]:
     """Max rendered cell width per column index across all rows (non-str cells ignored).
 
     Used to give every section table in a panel identical icon/label column widths so the
@@ -116,8 +119,8 @@ class StatusPanelBuilder:
             str: The Rich markup string for the footnote reference.
         """
         note_stripped = note.strip()
-        if note_stripped and not note_stripped.endswith('.'):
-            note_stripped += '.'
+        if note_stripped and not note_stripped.endswith("."):
+            note_stripped += "."
         self.notes.append(note_stripped)
         return f" [dim default][{len(self.notes)}][/dim default]"
 
@@ -189,15 +192,17 @@ class StatusPanelBuilder:
             notes_lines = [""]
             for i, note in enumerate(self.notes, 1):
                 escaped_note = escape(note)
-                escaped_note = re.sub(r'`([^`]+)`', r'[cyan]\1[/cyan]', escaped_note)
+                escaped_note = re.sub(r"`([^`]+)`", r"[cyan]\1[/cyan]", escaped_note)
                 notes_lines.append(f"  [{i}] {escaped_note}")
             blocks.append(Text.from_markup("\n".join(notes_lines), style="dim"))
 
         renderable = blocks[0] if len(blocks) == 1 else Group(*blocks)
 
-        console.print(Panel(
-            renderable,
-            title=f"[bold]{escape(self.title)}[/bold]",
-            border_style=color,
-            width=self.width,
-        ))
+        console.print(
+            Panel(
+                renderable,
+                title=f"[bold]{escape(self.title)}[/bold]",
+                border_style=color,
+                width=self.width,
+            )
+        )

@@ -7,30 +7,41 @@ from unittest import mock
 import pytest
 
 from core.exceptions import PluginDependencyError, PluginValidationError
-from core.scrapers.api import ItemField, ScraperClient, ScraperPlugin, SettingSpec
+from core.scrapers.api import (
+    ItemField,
+    ScraperClient,
+    ScraperPlugin,
+    SettingSpec,
+    UrlField,
+)
 from core.scrapers.check import check_plugin
-from core.scrapers.cli import main as cli_main, resolve_schedule
+from core.scrapers.cli import main as cli_main
+from core.scrapers.cli import resolve_schedule
 from core.scrapers.registry import ClientLoader, PluginCatalog, compile_plugin
 from core.settings import SettingStatus, resolve_settings
 
 
 def _plugin(**changes):
+    domains = changes.pop("domains", ("example.test",))
+    accepts_url = changes.pop("accepts_url", lambda _url: True)
+    custom_fields = changes.pop("item_fields", ())
+    url = UrlField("url", domains=domains, accepts_url=accepts_url)
+    item_fields = (
+        (url, *tuple(custom_fields)) if isinstance(custom_fields, (list, tuple)) else custom_fields
+    )
     values = dict(
         display_name="Test",
-        domains=("example.test",),
-        accepts_url=lambda _url: True,
-        item_fields=(),
+        item_fields=item_fields,
         settings=(),
         default_interval="1h",
+        reference_url=url,
     )
     values.update(changes)
     return ScraperPlugin(**values)
 
 
 def _compile(definition=None, target="teststore"):
-    return compile_plugin(
-        definition or _plugin(), target=target, package=f"tests.plugins.{target}"
-    )
+    return compile_plugin(definition or _plugin(), target=target, package=f"tests.plugins.{target}")
 
 
 @pytest.mark.parametrize("target", ["Bad", "1bad", "general"])
@@ -39,26 +50,29 @@ def test_invalid_or_reserved_target_rejected(target):
         _compile(target=target)
 
 
-@pytest.mark.parametrize("changes", [
-    {"display_name": " "},
-    {"domains": ()},
-    {"domains": "example.test"},
-    {"domains": ("https://x.test",)},
-    {"default_interval": "3h"},
-    {"accepts_url": lambda _url: "yes"},
-    {"item_fields": 1},
-    {"settings": 1},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"display_name": " "},
+        {"domains": ()},
+        {"domains": "example.test"},
+        {"domains": ("https://x.test",)},
+        {"default_interval": "3h"},
+        {"accepts_url": lambda _url: "yes"},
+        {"item_fields": 1},
+        {"settings": 1},
+    ],
+)
 def test_malformed_descriptor_values_are_contextual(changes):
     with pytest.raises(PluginValidationError, match="Plugin 'teststore'"):
         _compile(_plugin(**changes))
 
 
 def test_fields_settings_and_canonical_defaults_are_compiled_without_mutation():
-    field = ItemField("sku", lambda raw: str(raw).strip(), "x")
-    setting = SettingSpec("region", "global", lambda raw: str(raw).strip())
+    field = ItemField("sku", lambda raw: str(raw).strip(), default="x")
+    setting = SettingSpec("region", lambda raw: str(raw).strip(), default="global")
     record = _compile(_plugin(item_fields=[field], settings=[setting]))
-    assert record.item_fields == (field,)
+    assert record.item_fields[-1] is field
     assert field.default == "x"
     assert setting.default == "global"
     assert setting.display_label == "Region"
@@ -68,35 +82,54 @@ def test_fields_settings_and_canonical_defaults_are_compiled_without_mutation():
     with pytest.raises(TypeError):
         record.settings_by_key["new"] = setting
     with pytest.raises(PluginValidationError, match="not canonical"):
-        _compile(_plugin(item_fields=[ItemField("sku", str.strip, " x ")]))
+        _compile(_plugin(item_fields=[ItemField("sku", str.strip, default=" x ")]))
     with pytest.raises(PluginValidationError):
         _compile(_plugin(item_fields=[field, field]))
     with pytest.raises(PluginValidationError):
         _compile(_plugin(settings=[setting, setting]))
 
 
-@pytest.mark.parametrize("field", [
-    object(),
-    ItemField("id", str, "x"),
-    ItemField("", str, "x"),
-    ItemField("sku", None, "x"),
-    ItemField("sku", lambda _raw: (_ for _ in ()).throw(ValueError("bad")), "x"),
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        object(),
+        ItemField("id", str, default="x"),
+        ItemField("", str, default="x"),
+        ItemField("sku", None, default="x"),
+        ItemField(
+            "sku",
+            lambda _raw: (_ for _ in ()).throw(ValueError("bad")),
+            default="x",
+        ),
+    ],
+)
 def test_malformed_item_field_is_rejected(field):
     with pytest.raises(PluginValidationError, match="Plugin 'teststore'"):
         _compile(_plugin(item_fields=[field]))
 
 
-@pytest.mark.parametrize("setting", [
-    object(),
-    SettingSpec("", 1, int),
-    SettingSpec("limit", 1, None),
-    SettingSpec("limit", 1, lambda _raw: (_ for _ in ()).throw(ValueError("bad"))),
-    SettingSpec("limit", 1, int, display=lambda _value: 2),
-    SettingSpec("limit", 1, int, display=lambda _value: (_ for _ in ()).throw(ValueError("bad"))),
-    SettingSpec("limit", 1, int, label=5),
-    SettingSpec("limit", 1, int, warning=5),
-])
+@pytest.mark.parametrize(
+    "setting",
+    [
+        object(),
+        SettingSpec("", int, default=1),
+        SettingSpec("limit", None, default=1),
+        SettingSpec(
+            "limit",
+            lambda _raw: (_ for _ in ()).throw(ValueError("bad")),
+            default=1,
+        ),
+        SettingSpec("limit", int, default=1, display=lambda _value: 2),
+        SettingSpec(
+            "limit",
+            int,
+            default=1,
+            display=lambda _value: (_ for _ in ()).throw(ValueError("bad")),
+        ),
+        SettingSpec("limit", int, default=1, label=5),
+        SettingSpec("limit", int, default=1, warning=5),
+    ],
+)
 def test_malformed_setting_is_rejected(setting):
     with pytest.raises(PluginValidationError, match="Plugin 'teststore'"):
         _compile(_plugin(settings=[setting]))
@@ -118,10 +151,38 @@ def test_overlapping_domains_are_allowed_between_adapters():
         PluginCatalog([first, first])
 
 
+def test_url_free_and_multiple_url_plugins_compile():
+    sku = ItemField("sku", str)
+    url_free = _compile(ScraperPlugin(display_name="Identifiers", item_fields=(sku,)))
+    assert url_free.domains == ()
+    assert url_free.url_fields == ()
+    assert url_free.reference_url is None
+
+    product = UrlField("product_url", domains=("products.test",), accepts_url=lambda _url: True)
+    seller = UrlField("seller_url", domains=("sellers.test",), accepts_url=lambda _url: True)
+    multiple = _compile(
+        ScraperPlugin(
+            display_name="Multiple",
+            item_fields=(product, seller),
+            reference_url=seller,
+        )
+    )
+    assert multiple.url_fields == (product, seller)
+    assert (
+        multiple.canonicalize_url(product, "https://products.test/p#fragment")
+        == "https://products.test/p"
+    )
+    with pytest.raises(ValueError, match="not registered"):
+        multiple.canonicalize_url(product, "https://sellers.test/p")
+
+
 def test_source_package_requires_production_files(tmp_path):
     with pytest.raises(PluginValidationError, match="missing required file"):
         compile_plugin(
-            _plugin(), target="teststore", package="teststore", source_dir=tmp_path,
+            _plugin(),
+            target="teststore",
+            package="teststore",
+            source_dir=tmp_path,
         )
 
 
@@ -129,19 +190,25 @@ def test_runtime_compilation_does_not_require_contributor_docs(tmp_path):
     for name in ("__init__.py", "plugin.py", "client.py"):
         (tmp_path / name).write_text("", encoding="utf-8")
     record = compile_plugin(
-        _plugin(), target="teststore", package="teststore", source_dir=tmp_path,
+        _plugin(),
+        target="teststore",
+        package="teststore",
+        source_dir=tmp_path,
     )
     assert record.example_config_path.endswith("config.example.json")
 
 
-@pytest.mark.parametrize("changes", [
-    {"display_name": "Bad\tName"},
-    {"item_fields": [ItemField("not-kebab", str, "x")]},
-    {"item_fields": [ItemField("CamelCase", str, "x")]},
-    {"settings": [SettingSpec("bad\nkey", "x", str)]},
-    {"settings": [SettingSpec("safe", "x", str, label="Bad\x7fLabel")]},
-    {"settings": [SettingSpec("safe", "x", str, display=lambda _value: "Bad\tValue")]},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"display_name": "Bad\tName"},
+        {"item_fields": [ItemField("not-kebab", str, default="x")]},
+        {"item_fields": [ItemField("CamelCase", str, default="x")]},
+        {"settings": [SettingSpec("bad\nkey", str, default="x")]},
+        {"settings": [SettingSpec("safe", str, default="x", label="Bad\x7fLabel")]},
+        {"settings": [SettingSpec("safe", str, default="x", display=lambda _value: "Bad\tValue")]},
+    ],
+)
 def test_catalog_strings_and_keys_are_shell_and_terminal_safe(changes):
     with pytest.raises(PluginValidationError):
         _compile(_plugin(**changes))
@@ -152,9 +219,14 @@ def test_schedule_missing_and_valid_config(tmp_path):
     missing = resolve_schedule(plugin, str(tmp_path))
     assert missing.status is SettingStatus.NO_CONFIG
     assert missing.on_calendar == "hourly"
-    (tmp_path / "skroutz.json").write_text(json.dumps({
-        "settings": {"execution_interval": "2 hours"}, "items": [],
-    }))
+    (tmp_path / "skroutz.json").write_text(
+        json.dumps(
+            {
+                "settings": {"execution_interval": "2 hours"},
+                "items": [],
+            }
+        )
+    )
     valid = resolve_schedule(plugin, str(tmp_path))
     assert valid.status is SettingStatus.OK
     assert valid.on_calendar == "*-*-* 00/2:00:00"

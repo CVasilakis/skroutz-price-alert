@@ -40,9 +40,7 @@ def test_verifier_rejects_an_empty_example_config(tmp_path):
     target_dir = discovery_root / "empty_store"
     shutil.copytree(Path("src/core/scrapers/_example"), target_dir)
     example = target_dir / "config.example.json"
-    example.write_text(
-        '{"settings":{"execution_interval":"1h"},"items":[]}', encoding="utf-8"
-    )
+    example.write_text('{"settings":{"execution_interval":"1h"},"items":[]}', encoding="utf-8")
     tests = tmp_path / "tests" / "plugins" / "empty_store"
     tests.mkdir(parents=True)
     (tests / "test_client.py").write_text("def test_placeholder(): pass\n", encoding="utf-8")
@@ -56,9 +54,7 @@ def test_verifier_rejects_an_empty_example_config(tmp_path):
     finally:
         scraper_package.__path__[:] = saved_path
         for name in tuple(sys.modules):
-            if name == "core.scrapers.empty_store" or name.startswith(
-                "core.scrapers.empty_store."
-            ):
+            if name == "core.scrapers.empty_store" or name.startswith("core.scrapers.empty_store."):
                 sys.modules.pop(name, None)
 
 
@@ -79,23 +75,26 @@ def test_verifier_requires_examples_to_demonstrate_custom_schema(
     source.mkdir(parents=True)
     (source / "__init__.py").write_text("", encoding="utf-8")
     (source / "plugin.py").write_text(
-        '''from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec
-TAG = ItemField("tag", str, "plain")
-REGION = SettingSpec("region", "global", str)
-PLUGIN = ScraperPlugin(
-    display_name="Custom Store", domains=("store.example",),
+        """from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec, UrlField
+TAG = ItemField("tag", str, default="plain")
+REGION = SettingSpec("region", str, default="global")
+URL = UrlField(
+    "url", domains=("store.example",),
     accepts_url=lambda url: url.path.startswith("/products/"),
-    item_fields=(TAG,), settings=(REGION,),
 )
-''',
+PLUGIN = ScraperPlugin(
+    display_name="Custom Store", item_fields=(URL, TAG), settings=(REGION,),
+    reference_url=URL,
+)
+""",
         encoding="utf-8",
     )
     (source / "client.py").write_text(
-        '''from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
+        """from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
 class Client(ScraperClient):
     def scrape(self, item: TrackedItem) -> PriceResult:
         return PriceResult(1, "EUR")
-''',
+""",
         encoding="utf-8",
     )
     (source / "README.md").write_text(
@@ -104,12 +103,18 @@ class Client(ScraperClient):
     )
     document = {
         "settings": settings,
-        "items": [{
-            "id": "one", "name": "One", "url": "https://store.example/products/1",
-            "target_price": 2, **item,
-        }],
+        "items": [
+            {
+                "id": "one",
+                "name": "One",
+                "url": "https://store.example/products/1",
+                "target_price": 2,
+                **item,
+            }
+        ],
     }
     import json
+
     (source / "config.example.json").write_text(json.dumps(document), encoding="utf-8")
     tests = tmp_path / "tests" / "plugins" / "custom_store"
     tests.mkdir(parents=True)

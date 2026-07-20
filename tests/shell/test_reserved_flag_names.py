@@ -20,8 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #: Every script that parses command-line flags. lib/common.sh is sourced, not executed,
 #: and parses no arguments.
 SCRIPTS = sorted(
-    [REPO_ROOT / "install.sh", REPO_ROOT / "update.sh"]
-    + list((REPO_ROOT / "scripts").glob("*.sh"))
+    [REPO_ROOT / "install.sh", REPO_ROOT / "update.sh"] + list((REPO_ROOT / "scripts").glob("*.sh"))
 )
 
 # A case branch whose pattern is made of literal flags, e.g. "-h|--help)" or "--ping)".
@@ -50,7 +49,8 @@ class TestReservedFlagNames(unittest.TestCase):
         for script in SCRIPTS:
             claimed |= builtin_flags_of(script)
         self.assertEqual(
-            claimed | {"general"}, set(RESERVED_PLUGIN_NAMES),
+            claimed | {"general"},
+            set(RESERVED_PLUGIN_NAMES),
             "RESERVED_PLUGIN_NAMES (registry.py) and the scripts' built-in '--<flag>' "
             "case branches have drifted apart. Add the new name to whichever side is "
             "missing it - an unreserved built-in flag silently shadows any plugin "

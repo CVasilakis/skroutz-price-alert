@@ -29,18 +29,18 @@ EXPECTED_COLORS = {
     "run__skip_invalid_url_error": "red",
     "run__system_lock_held": "red",
     "run__interrupt_during_scraping": "red",
-    "run__config_faulty": "yellow",         # a faulty 'Config' row tints the panel yellow
-    "run__config_failed_skip": "red",       # a failed 'Config' row (skipped target) -> red
+    "run__config_faulty": "yellow",  # a faulty 'Config' row tints the panel yellow
+    "run__config_failed_skip": "red",  # a failed 'Config' row (skipped target) -> red
     "e2e-run__mixed_unsafe_and_valid": "yellow",
     "run__scraping_spinner": "blue",
     "run__sleeping_pacing": "blue",
     # STATUS
     "status__service_healthy": "green",
     "status__service_invalid_retention": "yellow",
-    "status__config_faulty": "yellow",      # a faulty 'Config' row tints the panel yellow
-    "status__config_failed": "red",         # a failed 'Config' row -> red
+    "status__config_faulty": "yellow",  # a faulty 'Config' row tints the panel yellow
+    "status__config_failed": "red",  # a failed 'Config' row -> red
     "status__exec_notification_error": "yellow",
-    "status__schedule_drift": "green",      # drift is a footnote on a ✅ row, not a warning
+    "status__schedule_drift": "green",  # drift is a footnote on a ✅ row, not a warning
     "status__timer_inactive": "red",
     "status__not_installed": "red",
     "status__orphan": "red",

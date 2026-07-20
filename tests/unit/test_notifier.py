@@ -1,12 +1,16 @@
 from unittest import mock
 
-from core.notifier import Notifier, TITLE_PRICE_DROP, TITLE_STATUS_UPDATE
-from core.scrapers.api import TrackedItem
+from core.notifier import TITLE_PRICE_DROP, TITLE_STATUS_UPDATE, Notifier
+from core.scrapers.api import TrackedItem, UrlField
+
+URL = UrlField("url", domains=("x",), accepts_url=lambda _url: True)
 
 
 def _notifier(urls="x://y", *, valid=True, added=True):
-    with mock.patch("core.notifier.apprise.Apprise") as cls, \
-         mock.patch("core.notifier.is_valid_apprise_url", return_value=valid):
+    with (
+        mock.patch("core.notifier.apprise.Apprise") as cls,
+        mock.patch("core.notifier.is_valid_apprise_url", return_value=valid),
+    ):
         app = cls.return_value
         app.add.return_value = added
         notifier = Notifier(urls)
@@ -14,7 +18,12 @@ def _notifier(urls="x://y", *, valid=True, added=True):
 
 
 def _item(index=1):
-    return TrackedItem(str(index), f"P{index}", f"https://x/{index}", 0)
+    return TrackedItem(
+        str(index),
+        f"P{index}",
+        0,
+        _custom={URL: f"https://x/{index}"},
+    )
 
 
 def test_service_gate_and_dispatch_exception():
@@ -40,8 +49,11 @@ def test_price_drop_uses_selected_plugin_display_name():
 def test_reminder_variants_and_error_summary_truncation():
     notifier, app = _notifier()
     app.notify.return_value = True
-    for update, phrase in ((True, "update is available"), (False, "latest version"),
-                           (None, "update check failed")):
+    for update, phrase in (
+        (True, "update is available"),
+        (False, "latest version"),
+        (None, "update check failed"),
+    ):
         assert notifier.notify_reminder(update, "1 month", "soon")
         assert phrase in app.notify.call_args.kwargs["body"]
         assert app.notify.call_args.kwargs["title"] == TITLE_STATUS_UPDATE

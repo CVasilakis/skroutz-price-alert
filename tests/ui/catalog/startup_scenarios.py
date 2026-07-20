@@ -15,11 +15,9 @@ assertion keep running; render on demand with ``gallery.py --surface startup`` o
 matching ``--tag`` (e.g. ``layout``).
 """
 
-from core.run import PriceOutcome
-from core.run import ConfigOutcome
-
-from ui.catalog._base import scenario, Surface
-from ui.catalog.inputs import CURRENCY, config_ok, stub_logger, views_all_ok
+from core.run import ConfigOutcome, PriceOutcome
+from ui.catalog._base import Surface, scenario
+from ui.catalog.inputs import CURRENCY, stub_logger, views_all_ok
 from ui.harness.drivers import drive_startup
 
 LOGGER = stub_logger()
@@ -34,11 +32,23 @@ def _run_script(s):
     s.complete_target()
 
 
-@scenario(Surface.STARTUP, "clean", "Valid config: panels stack with no stray text", tags=("layout",), in_gallery=False)
+@scenario(
+    Surface.STARTUP,
+    "clean",
+    "Valid config: panels stack with no stray text",
+    tags=("layout",),
+    in_gallery=False,
+)
 def _():
     return drive_startup(_run_script, valid_count=1)
 
 
-@scenario(Surface.STARTUP, "invalid_reminder", "Invalid reminder value must not leak a line between panels", tags=("reminder", "layout"), in_gallery=False)
+@scenario(
+    Surface.STARTUP,
+    "invalid_reminder",
+    "Invalid reminder value must not leak a line between panels",
+    tags=("reminder", "layout"),
+    in_gallery=False,
+)
 def _():
     return drive_startup(_run_script, valid_count=1, reminder_raw="fortnightly")
