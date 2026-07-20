@@ -9,8 +9,8 @@ blindly regenerated snapshot.
 import unittest
 
 from core.constants import (
-    EXIT_CODE_ENV_ERROR,
     EXIT_CODE_INTERRUPT,
+    EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
     EXIT_CODE_NOTIFICATION_ERROR,
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
     EXIT_CODE_PRODUCTS_ERROR,
@@ -51,7 +51,7 @@ class TestClassifyServiceState(unittest.TestCase):
 
     def test_known_codes_map_to_their_verdicts(self):
         for code, icon, label in [
-            (EXIT_CODE_ENV_ERROR, "❗", "Failed"),
+            (EXIT_CODE_NOTIFICATION_CONFIG_ERROR, "❗", "Failed"),
             (EXIT_CODE_RATE_LIMIT_ERROR, "❗", "Failed"),
             (EXIT_CODE_SCRAPE_ERROR, "❗", "Scraping Failed"),
             (EXIT_CODE_STORAGE_ERROR, "❗", "Storage Failed"),

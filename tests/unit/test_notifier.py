@@ -6,7 +6,7 @@ from core.scrapers.api import TrackedItem, UrlField
 URL = UrlField("url", domains=("x",), accepts_url=lambda _url: True)
 
 
-def _notifier(urls="x://y", *, valid=True, added=True):
+def _notifier(urls=("x://y",), *, valid=True, added=True):
     with (
         mock.patch("core.notifier.apprise.Apprise") as cls,
         mock.patch("core.notifier.is_valid_apprise_url", return_value=valid),

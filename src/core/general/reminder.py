@@ -32,7 +32,7 @@ Delivery safety:
 
 State:
     ``last_reminder`` is a machine-written field of ``state/general.json``. The
-    user-authored, settings-only ``config/general.json`` is never written at runtime.
+    user-authored ``config/general.json`` is never written at runtime.
 """
 
 import datetime
@@ -51,14 +51,12 @@ from core.general.settings import (
     SPEC_REMINDER,
     SPEC_REMINDER_DAY,
     SPEC_REMINDER_TIME,
-    general_config_path,
-    resolve_general_settings,
 )
 from core.general.vocab import display_reminder, time_parts, weekday_index, weeks_for
 from core.locks import acquire_lock
 from core.logger import get_target_logger, save_traceback
 from core.persistence import format_utc, parse_utc, write_json_atomically
-from core.settings import SettingStatus
+from core.settings import ResolvedSettings, SettingStatus
 from core.utils import check_for_updates
 
 if TYPE_CHECKING:
@@ -101,25 +99,30 @@ class ReminderService:
 
     def __init__(
         self,
-        config_dir: str,
+        settings: ResolvedSettings | None,
+        state_path: str,
         notifier: "Notifier",
+        settings_error: str | None = None,
         now_fn: Callable[[], datetime.datetime] = datetime.datetime.now,
         update_check_fn: Callable[[], bool] = check_for_updates,
     ) -> None:
         """Initializes the service.
 
         Args:
-            config_dir (str): The directory holding the config files.
+            settings (ResolvedSettings | None): The already-resolved general settings.
+            state_path (str): The machine-owned reminder state path.
             notifier (Notifier): The service used to send the reminder.
+            settings_error (str | None): A redacted settings-load failure that disables
+                only the reminder.
             now_fn (Callable): Returns the current time as a naive *local* datetime (the
                 grid is anchored to the host's local wall clock). Defaults to
                 ``datetime.datetime.now``; a test seam.
             update_check_fn (Callable): Returns whether an update is available; may
                 raise (test seam; defaults to ``check_for_updates``).
         """
-        self.config_dir = config_dir
-        self.config_path = general_config_path(config_dir)
-        self.state_path = general_state_path(config_dir)
+        self.settings = settings
+        self.settings_error = settings_error
+        self.state_path = state_path
         self.notifier = notifier
         self._now_fn = now_fn
         self._update_check_fn = update_check_fn
@@ -162,8 +165,13 @@ class ReminderService:
                 pass  # last resort: never let reminder diagnostics abort the run
 
     def _run_once(self) -> None:
-        """Resolves the settings, gates on "off"/no-services, and runs the check under the lock."""
-        resolved = resolve_general_settings(self.config_dir)
+        """Gate on the injected settings and run the reminder check under the lock."""
+        if self.settings is None:
+            detail = self.settings_error or "general settings could not be resolved"
+            self._log.warning(f"🟡 config/general.json: {detail}; reminder skipped.")
+            return
+
+        resolved = self.settings
         for spec in GENERAL_SETTING_SPECS:
             if resolved.status(spec) is SettingStatus.INVALID:
                 self._log.warning(f"🟡 config/general.json: {spec.invalid_warning}")

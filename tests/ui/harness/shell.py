@@ -97,7 +97,7 @@ class ShellWorld:
 
     git (update.sh): git_branch, git_dirty, git_fail (("checkout"|"fetch"|"reset", ...)).
 
-    User config artifacts: config_files (created under config/), env_file (.env exists).
+    User config artifacts: config_files created under config/.
 
     tools: which shims exist. "full" = all four; "no-systemctl"/"no-python3" drops
         that one shim (PATH is sandbox-only in every mode, with _REAL_TOOLS symlinked in).
@@ -135,7 +135,6 @@ class ShellWorld:
     git_fail: tuple[str, ...] = ()
 
     config_files: tuple[str, ...] = ()
-    env_file: bool = False
 
     tools: str = "full"
 
@@ -385,9 +384,6 @@ def _build_sandbox(world: ShellWorld) -> Path:
         (sandbox / "config" / cfg).touch()
     if world.requirements_txt:
         (sandbox / "requirements.txt").touch()
-    if world.env_file:
-        (sandbox / ".env").touch()
-
     bin_dir = sandbox / "bin"
     bin_dir.mkdir()
     _write_shims(bin_dir, world)

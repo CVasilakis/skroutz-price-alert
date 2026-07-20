@@ -107,7 +107,7 @@ def _():
 @scenario(
     Surface.RUN,
     "success_drop_not_configured",
-    "Price drop; .env has no notification URLs",
+    "Price drop; no notification URLs are configured",
     tags=("price_drop",),
 )
 def _():

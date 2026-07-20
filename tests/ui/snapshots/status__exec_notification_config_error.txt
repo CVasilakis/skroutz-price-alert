@@ -11,5 +11,5 @@
 │   ❗    Last Execution Status       Failed [1]                          │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
-│   [1] Issue with the .env file.                                         │
+│   [1] Issue with notification configuration in config/general.json.     │
 ╰─────────────────────────────────────────────────────────────────────────╯

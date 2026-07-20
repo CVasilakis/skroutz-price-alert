@@ -1,4 +1,10 @@
 {
+  "notifications": {
+    "urls": [
+      "tgram://<token>/<chat_id>",
+      "discord://<webhook_id>/<webhook_token>"
+    ]
+  },
   "settings": {
     "reminder": "1 month",
     "reminder_day": "Saturday",

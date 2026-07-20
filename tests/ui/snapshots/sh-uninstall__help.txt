@@ -4,8 +4,8 @@
 Usage: uninstall.sh [-h] [--<target> ...]
 
 With no flag, performs a full teardown: removes every installed systemd
-timer/service and deletes the Python virtual environment (your .env and
-config/*.json are kept). With one or more --<target> flags, removes only
+timer/service and deletes the Python virtual environment (your config
+and state data are kept). With one or more --<target> flags, removes only
 those scrapers' units, leaving the virtual environment and other targets
 intact.
 

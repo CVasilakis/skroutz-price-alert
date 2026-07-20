@@ -26,6 +26,7 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.PluginCatalog", autospec=True) as Catalog,
             mock.patch("core.main.ClientLoader", autospec=True),
             mock.patch("core.main.load_targets", autospec=True, return_value=[]),
+            mock.patch("core.main.load_general_config", autospec=True) as load_general,
             mock.patch("core.main.preflight", autospec=True, return_value=None),
             mock.patch("core.main.Notifier", autospec=True) as Notifier,
             mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
@@ -33,6 +34,9 @@ class TestMainWiring(unittest.TestCase):
         ):
             catalog = Catalog.discover.return_value
             catalog.targets = ("skroutz",)
+            general = load_general.return_value
+            general.notifications.valid_urls = ("json://localhost",)
+            general.settings_error = None
             reminder = ReminderService.return_value
             reminder.run_once.side_effect = lambda: order.append("reminder")
             orchestrator = Orchestrator.return_value
@@ -43,11 +47,12 @@ class TestMainWiring(unittest.TestCase):
         self.assertEqual(caught.exception.code, 0)
         reminder.run_once.assert_called_once()
         self.assertEqual(order, ["reminder", "orchestrator"])
-        # Constructed with the config dir and the shared notifier instance.
-        self.assertEqual(ReminderService.call_args.args[1], Notifier.return_value)
+        load_general.assert_called_once_with(core.main.CONFIG_DIR)
+        self.assertEqual(ReminderService.call_args.args[2], Notifier.return_value)
+        Notifier.assert_called_once_with(("json://localhost",))
 
     def test_reminder_not_run_when_preflight_aborts(self):
-        # A fatal preflight (e.g. a missing .env in service mode) exits before the
+        # A fatal preflight (e.g. missing notifications in service mode) exits before the
         # reminder/orchestrator phase, so no heartbeat is attempted on an unusable config.
         with (
             mock.patch.object(sys, "argv", ["main", "--quiet"]),
@@ -55,6 +60,7 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.PluginCatalog", autospec=True) as Catalog,
             mock.patch("core.main.ClientLoader", autospec=True),
             mock.patch("core.main.load_targets", autospec=True, return_value=[]),
+            mock.patch("core.main.load_general_config", autospec=True),
             mock.patch("core.main.preflight", autospec=True, return_value=3),
             mock.patch("core.main.Notifier", autospec=True),
             mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
@@ -75,6 +81,7 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.PluginCatalog") as Catalog,
             mock.patch("core.main.ClientLoader") as ClientLoader,
             mock.patch("core.main.load_targets", return_value=[]) as load_targets,
+            mock.patch("core.main.load_general_config") as load_general,
             mock.patch("core.main.preflight", return_value=None) as preflight,
             mock.patch("core.main.install_interrupt_handler") as install_handler,
             mock.patch("core.main.Console"),
@@ -88,13 +95,19 @@ class TestMainWiring(unittest.TestCase):
             catalog = Catalog.discover.return_value
             catalog.targets = ("skroutz", "insomnia")
             catalog.get.return_value = plugin
+            load_general.return_value.notifications.valid_urls = ("json://localhost",)
             Orchestrator.return_value.run.return_value = 0
             with self.assertRaises(SystemExit) as caught:
                 core.main.main()
 
         self.assertEqual(caught.exception.code, 0)
         load_targets.assert_called_once_with([plugin], core.main.CONFIG_DIR)
-        preflight.assert_called_once_with(mock.ANY, ["skroutz"], quiet=False)
+        preflight.assert_called_once_with(
+            mock.ANY,
+            ["skroutz"],
+            quiet=False,
+            general=load_general.return_value,
+        )
         install_handler.assert_called_once()
         Orchestrator.assert_called_once_with(
             [], ClientLoader.return_value, mock.ANY, False, strategy_type.return_value

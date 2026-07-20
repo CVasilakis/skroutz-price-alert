@@ -1,8 +1,7 @@
 """``--ping`` scenarios: the Notification Check Results panel.
 
-``drive_ping`` feeds ``ping.build_ping_panel`` the .env-ordered ``(url, is_valid)`` entries
-and the ``(identifier, success)`` delivery results for the valid ones, exercising the real
-row icons (✅ / ❗ / 🛑), the URL obfuscation, and the custom mixed/green/red border logic.
+``drive_ping`` feeds ``ping.build_ping_panel`` configuration-ordered URL entries and
+delivery results, exercising row icons, URL obfuscation, and panel coloring.
 """
 
 from ui.catalog._base import Surface, scenario
@@ -91,18 +90,20 @@ def _():
     Surface.PING, "not_configured_default", "No URLs configured (default message)", tags=("error",)
 )
 def _():
-    return drive_ping(url_entries=[], test_results=[], env_error_msg="")
+    return drive_ping(url_entries=[], test_results=[], config_error_msg="")
 
 
 @scenario(
     Surface.PING,
-    "not_configured_env_error",
-    "No URLs configured (.env error message)",
+    "not_configured_config_error",
+    "No URLs configured (general-config error message)",
     tags=("error",),
 )
 def _():
     return drive_ping(
-        url_entries=[], test_results=[], env_error_msg="No .env file found or unreadable"
+        url_entries=[],
+        test_results=[],
+        config_error_msg="Config file 'config/general.json' is invalid or unreadable",
     )
 
 

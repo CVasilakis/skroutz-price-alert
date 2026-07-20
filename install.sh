@@ -294,7 +294,7 @@ printf "%b\n" "${GREEN}Systemd timer(s) configured successfully.${NC}"
 # LAST CHECKS
 # ------------------------------------------------------------------------------
 # Report any plugin whose products config file is still missing (non-fatal), and
-# whether the shared .env is missing. Config filenames are derived from targets.
+# whether the shared general configuration is missing.
 
 MISSING_CONFIGS=""
 if ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
@@ -309,10 +309,10 @@ for plugin in $PLUGINS; do
 done
 IFS="$OLD_IFS"
 
-ENV_MISSING=0
-[ -f ".env" ] || ENV_MISSING=1
+GENERAL_CONFIG_MISSING=0
+[ -f "config/general.json" ] || GENERAL_CONFIG_MISSING=1
 
-if [ -n "$MISSING_CONFIGS" ] || [ "$ENV_MISSING" -eq 1 ]; then
+if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
     printf "%b\n" "\n${YELLOW}Note: Configuration required!${NC}"
 
     for plugin in $MISSING_CONFIGS; do
@@ -321,9 +321,9 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$ENV_MISSING" -eq 1 ]; then
         printf "%b\n" "  and fill it with your desired products."
     done
 
-    if [ "$ENV_MISSING" -eq 1 ]; then
-        printf "%b\n" "- Copy .env.example to .env"
-        printf "%b\n" "  and configure your apprise notification URLs."
+    if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
+        printf "%b\n" "- Copy src/core/general/config.example.json to config/general.json"
+        printf "%b\n" "  and configure your Apprise notification URLs and preferences."
     fi
 
     printf "%b\n" "- Read the README.md file for more information."

@@ -12,7 +12,7 @@ from ui.catalog.shell_inputs import DISCOVERY_ERROR, ShellWorld, shell_case
 _case = shell_case(Surface.SH_INSTALL, "install.sh")
 
 #: Everything already configured, so the transcript has no trailing config notes.
-_CONFIGURED = ShellWorld(config_files=("skroutz.json",), env_file=True)
+_CONFIGURED = ShellWorld(config_files=("skroutz.json", "general.json"))
 
 _case(
     "help",

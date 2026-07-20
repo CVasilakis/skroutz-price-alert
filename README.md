@@ -20,11 +20,12 @@
 3. [Prerequisites](#-prerequisites)
 4. [Installation](#-installation)
 5. [Configuration](#%EF%B8%8F-configuration)
-   - [Notification Settings (.env)](#file-1-notification-settings-env)
-   - [Scraper Configuration (config/<target>.json)](#file-2-scraper-configuration-configtargetjson)
+   - [Scraper Configuration (config/<target>.json)](#file-1-scraper-configuration-configtargetjson)
      - [Scraper Settings](#scraper-settings)
      - [Monitored Products](#monitored-products)
-   - [General Settings (config/general.json)](#file-3-general-settings-configgeneraljson)
+   - [General Configuration (config/general.json)](#file-2-general-configuration-configgeneraljson)
+     - [Notification Settings](#notification-settings)
+     - [General Settings](#general-settings)
 6. [Usage](#-usage)
    - [Automated Systemd Execution](#automated-systemd-execution)
    - [Manual Execution](#manual-execution)
@@ -110,28 +111,15 @@ documented in `src/core/scrapers/<target>/README.md` beside its implementation.
 
 4. **Configure your settings:**
 
-    Proceed to the [Configuration](#%EF%B8%8F-configuration) section for more information regarding your [Push Notification Settings](#file-1-notification-settings-env) and your [Scraper Configuration](#file-2-scraper-configuration-configtargetjson)
+    Proceed to the [Configuration](#%EF%B8%8F-configuration) section for scraper,
+    notification, and project-wide settings.
 
 ## ⚙️ Configuration
 
-All custom user parameters reside outside the source code logic. Apprise Notification URLs go in the `.env` file, and the entries you want to monitor go inside a `config/<target>.json` file.
+All user parameters live in strict, unversioned JSON files under `config/`. Runtime
+never modifies them; machine-owned data is stored separately under `state/`.
 
-### File 1: Notification Settings (`.env`)
-
-This script leverages the [Apprise library](https://github.com/caronc/apprise) to deliver push notifications across numerous platforms, including Discord, Telegram, Slack, and Email. To format your specific Apprise URL, consult the [Apprise Supported Services Documentation](https://appriseit.com/services/) or use their interactive [URL Builder Tool](https://appriseit.com/tools/url-builder/). Copy the provided `.env.example` template to a new `.env` file and configure the `NOTIFICATION_URLS` variable:
-
-```sh
-cp .env.example .env
-nano .env
-```
-
-You can specify multiple platforms by separating their URLs with commas. For instance, to receive alerts on both Telegram and Discord simultaneously, your `.env` file would look like this:
-
-```env
-NOTIFICATION_URLS = tgram://<token>/<chat_id>, discord://<webhook_id>/<webhook_token>
-```
-
-### File 2: Scraper Configuration (`config/<target>.json`)
+### File 1: Scraper Configuration (`config/<target>.json`)
 
 Each scraper reads a strict, unversioned, read-only JSON file in `config/` (for example,
 `config/<target>.json`) containing its settings and monitored items. Machine state is
@@ -198,17 +186,26 @@ optional, or sensitive settings. These additions belong exclusively in the
 package-local guide and example config, so adding a new target does not require
 changing this document.
 
-### File 3: General Settings (`config/general.json`)
+### File 2: General Configuration (`config/general.json`)
 
-Project-wide preferences that are not tied to any single scraper live in `config/general.json`. The file is optional — every setting falls back to its default when the file or a key is missing. Copy the provided template to customize it:
+Notification endpoints and preferences not tied to a single scraper live in
+`config/general.json`. Copy the provided template and restrict access because Apprise
+URLs commonly contain credentials:
 
 ```sh
 cp src/core/general/config.example.json config/general.json
+chmod 600 config/general.json
 nano config/general.json
 ```
 
 ```json
 {
+  "notifications": {
+    "urls": [
+      "tgram://<token>/<chat_id>",
+      "discord://<webhook_id>/<webhook_token>"
+    ]
+  },
   "settings": {
     "reminder": "1 month",
     "reminder_day": "Saturday",
@@ -217,6 +214,25 @@ nano config/general.json
 }
 ```
 
+#### Notification Settings
+
+Scrooge Alert uses [Apprise](https://github.com/caronc/apprise) to deliver push
+notifications through Discord, Telegram, Slack, email, and many other services. Consult
+the [supported-services documentation](https://appriseit.com/services/) or
+[URL builder](https://appriseit.com/tools/url-builder/) for the URL required by a
+service. Add each endpoint as a separate string in `notifications.urls`; order is
+preserved by `--ping`.
+
+At least one valid URL is required for background/systemd execution. An interactive run
+may continue without one so configuration problems can be inspected. Invalid entries are
+ignored when a valid endpoint also exists and are detailed by `./scripts/run.sh --ping`.
+The Configuration Check panel recommends `chmod 600` when the file is accessible to
+group or other users, but this permission warning never prevents a run.
+
+#### General Settings
+
+Every general setting falls back to its default when the file or key is absent:
+
 | Setting | Type | Source | Description |
 | :--- | :--- | :--- | :--- |
 | `reminder` | String | **User-defined** | How often to send a short notification confirming the scrapers are still active in the background and whether a project update is available. One of `off`, `1 week`, `1 month` (default), `3 months`, `6 months`, `1 year`. Set it to `off` to disable these reminders. If an unsupported value is used, the default (`1 month`) applies. |
@@ -224,7 +240,7 @@ nano config/general.json
 | `reminder_time` | String | **User-defined** | The time of day the reminder is sent, in your server's local time. A 24-hour `HH:MM` (or bare hour), or a 12-hour am/pm value — e.g. `13:00` (default), `13`, `1pm`, `9:30am`. Delivery is approximate (see note below), so minutes are a hint, not an exact send time. If an unsupported value is used, the default (`13:00`) applies. |
 Reminder state is stored in `state/general.json` as an RFC 3339 UTC timestamp. The
 schema-versioned state file is machine-owned; `config/general.json` remains unversioned
-and settings-only.
+and read-only.
 
 > [!NOTE]
 > With the defaults above you get a reminder about once a month, on a Saturday around 13:00 in your server's local time. The time is approximate: the reminder goes out on the first scraper run at or after the chosen day and time, so if your scrapers only run every few hours it might arrive a little later that day (or the next morning), but never earlier. Months are counted in weeks, so `1 month` means every 4th Saturday, `3 months` means every 13th, and so on, which keeps every reminder on the same day and time.
@@ -255,7 +271,7 @@ These flags modify the overall behavior of the script or trigger user assistance
 | `-h`, `--help` | Displays the help message with all available script arguments. |
 | `--quiet` | Suppresses all console output and redirects execution logs to the `logs/` directory. This is utilized by the systemd setup to ensure silent background operation. |
 | `--status` | Performs a comprehensive health check. It validates the configuration, and verifies the background systemd service and timer status. |
-| `--ping` | Sends a test notification directly to your configured Apprise URLs, then immediately exits. Helps pinpoint `.env` misconfigurations. |
+| `--ping` | Sends a test notification directly to the Apprise URLs in `config/general.json`, then immediately exits. |
 
 **Target Scraper Flags:**
 These flags allow you to isolate execution to specific platforms. If no target flags are provided, the script defaults to running all registered scrapers sequentially. They can be combined with `--quiet`.
@@ -269,7 +285,9 @@ These flags allow you to isolate execution to specific platforms. If no target f
 
 #### Status Check:
 
-If you run the script using the `--status` flag, the script verifies the integrity of your `config/<target>.json` files, validates your notification URLs in `.env` file, and queries systemd to display the following background execution details:
+If you run the script using the `--status` flag, the script verifies the integrity of
+your JSON configuration, validates notification URLs, and queries systemd to display the
+following background execution details:
 
 ```
 ./scripts/run.sh --status
@@ -285,7 +303,7 @@ Background runs expose precise exit statuses through **Last Execution Status**:
 | Code | Meaning |
 | :--- | :--- |
 | `15` | A scraper products config could not be loaded. |
-| `16` | The `.env` notification configuration is unusable. |
+| `16` | Notification configuration in `config/general.json` is unusable. |
 | `17` | The store blocked or rate-limited the scraper. |
 | `18` | A parser or unexpected scraper fault exhausted all retries. |
 | `19` | Scraped state could not be saved atomically. |
@@ -296,7 +314,8 @@ Background runs expose precise exit statuses through **Last Execution Status**:
 
 #### Test Notifications:
 
-If you want to test whether your `.env` notification URLs are configured correctly without waiting for a scheduled run or a real price drop, you can use the `--ping` flag.
+To test notification URLs without waiting for a scheduled run or price drop, use
+`--ping`:
 
 ```
 ./scripts/run.sh --ping
@@ -400,7 +419,7 @@ You might receive the following push notification alerts throughout the lifecycl
 | **Scrooge Alert - Tracking Stale** | Sent if a specific product continuously fails the scrape. |
 | **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_error](#scraper-settings) setting. |
 | **Scrooge Alert - Script Crash** | Sent if the script completely failed to run. |
-| **Scrooge Alert - Status Update** | Periodic liveness reminder confirming the scrapers still run in the background, as well as notifying you of any available updates. Can be turned off via the project-wide [reminder](#file-3-general-settings-configgeneraljson) setting. |
+| **Scrooge Alert - Status Update** | Periodic liveness reminder confirming the scrapers still run in the background, as well as notifying you of any available updates. Can be turned off via the project-wide [reminder](#general-settings) setting. |
 | **Scrooge Alert - Test Notification** | Sent when manually invoking the script with the `--ping` flag. |
 
 ## 🗑️ Uninstallation
@@ -417,7 +436,7 @@ The uninstallation process safely performs the following actions:
 * Deletes the Python virtual environment (`venv`).
 
 > [!NOTE]
-> **User Data:** `.env`, `config/`, and `state/` are preserved by uninstallation. Delete
+> **User Data:** `config/` and `state/` are preserved by uninstallation. Delete
 > the project directory only if you also want to remove configuration, price history,
 > check timestamps, and reminder state.
 > 
@@ -435,7 +454,8 @@ If the URLs are correct but failures persist across multiple products, your conn
 
 **2. Not Receiving Notifications:**
 
-If you do not receive a test message, carefully review the [Notification Settings](#file-1-notification-settings-env) section and verify that your Apprise URLs inside the `.env` file are formatted correctly.
+If you do not receive a test message, review the [Notification Settings](#notification-settings)
+section and verify the Apprise URLs in `config/general.json`.
 You can easily test your notification setup using the `--ping` flag:
 
 ```sh
@@ -481,7 +501,10 @@ If the command reveals any warnings, please run `./update.sh` which re-installs 
 <summary><b>2. Can I get notifications sent to Discord, Telegram, or other specific services?</b></summary>
 <br>
 
-Most likely, yes! The script uses the [Apprise](https://github.com/caronc/apprise) push notification library, which supports almost every major platform available. As long as you can configure your target URL(s) inside your `.env` file, it will work perfectly. Check out their [Supported Services](https://appriseit.com/services/) page for the full list.
+Most likely, yes! The script uses the [Apprise](https://github.com/caronc/apprise) push
+notification library, which supports almost every major platform. Add the service URL to
+`notifications.urls` in `config/general.json` and check the
+[Supported Services](https://appriseit.com/services/) page for the full list.
 </details>
 
 <details>
@@ -525,7 +548,7 @@ To mimic human behavior, the script spaces out its requests. It applies a base d
 
 1. Run `./scripts/uninstall.sh` in the old folder to clean up the existing background processes.
 2. Clone the repository into your new desired folder using Git.
-3. Move your `config/`, `state/`, and `.env` data from the old folder to the new one.
+3. Move your `config/` and `state/` data from the old folder to the new one.
 4. Run `./install.sh` in the new location to rebuild the environment and background timers.
 5. Safely delete the old project folder.
 </details>

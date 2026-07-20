@@ -8,7 +8,7 @@ EXIT_CODE_INTERRUPT: int = 130  # Script was interrupted (user or system termina
 EXIT_CODE_PRODUCTS_ERROR: int = (
     15  # Issue with a plugin's products config file (e.g. config/skroutz.json)
 )
-EXIT_CODE_ENV_ERROR: int = 16  # Issue with the .env file
+EXIT_CODE_NOTIFICATION_CONFIG_ERROR: int = 16  # Unusable notification configuration
 EXIT_CODE_RATE_LIMIT_ERROR: int = 17  # Blocked by server due to rate limits
 EXIT_CODE_SCRAPE_ERROR: int = 18  # Parser failure or unexpected scraper fault
 EXIT_CODE_STORAGE_ERROR: int = 19  # Scraped state could not be persisted

@@ -49,7 +49,8 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         mock.patch("core.status.PluginCatalog.discover", return_value=catalog),
         mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar,
         mock.patch("core.status.load_targets", return_value=(load,)),
-        mock.patch("core.status.render_config_panel"),
+        mock.patch("core.status.load_general_config") as load_general,
+        mock.patch("core.status.render_config_panel") as render_config,
         mock.patch("core.status.signal.signal"),
         mock.patch("core.status.get_systemd_properties", side_effect=systemd_properties),
         mock.patch("core.status.read_timer_oncalendar", return_value="daily"),
@@ -67,6 +68,8 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         core.status.main()
 
     oncalendar.assert_called_once_with("1h")
+    load_general.assert_called_once_with(core.status.CONFIG_DIR)
+    render_config.assert_called_once_with(console, load_general.return_value)
     build_service.assert_called_once()
     service_panel.render.assert_called_once_with(console)
     build_missing.assert_called_once_with("beta", "Beta")

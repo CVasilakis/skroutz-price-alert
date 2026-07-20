@@ -8,5 +8,5 @@
 │ ─────────────────────────────────────────────────────────────────────── │
 │   🎉    Sony WH-1000XM5       248.0 € (Target: 300.0 €) [1]             │
 │                                                                         │
-│   [1] No notification sent (.env not configured).                       │
+│   [1] No notification sent (notifications not configured).              │
 ╰─────────────────────────────────────────────────────────────────────────╯

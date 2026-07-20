@@ -1,5 +1,6 @@
 # border: red
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   🛑    Not Configured    No notification URLs found.                   │
+│   🛑    Not Configured    No notification URLs found in                 │
+│                           config/general.json.                          │
 ╰─────────────────────────────────────────────────────────────────────────╯

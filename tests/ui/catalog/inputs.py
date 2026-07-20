@@ -28,12 +28,11 @@ STATUS_INVALID = SettingStatus.INVALID
 # A throwaway currency symbol used across price scenarios (matches the scraper default).
 CURRENCY = "€"
 
-# Faithful persistence/environment error messages, shared across UI scenarios.
-# by the CONFIG (.env), STATUS and RUN (products-config) scenarios.
+# Faithful persistence/configuration error messages shared across UI scenarios.
 STORAGE_MISSING = "The config/skroutz.json file is missing or not a file"
 STORAGE_PERMS = "The config/skroutz.json file has wrong permissions"
 STORAGE_BAD_JSON = "The config/skroutz.json file contains invalid JSON format"
-ENV_NONE = "No .env file found or unreadable"
+NOTIFICATIONS_NONE = "No notification URLs found in config/general.json"
 
 
 def stub_logger() -> logging.Logger:

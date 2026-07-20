@@ -1,18 +1,16 @@
 """Configuration Check panel scenarios (shared by ``--status`` and the interactive run).
 
-``drive_config`` patches the four external seams (update check, general-settings
-resolution, env check, URL classification) and calls the real ``config_check._append_*``
-helpers, so the version row, the general settings rows and the .env row render with
-production logic. Per-scraper products-config health is no longer on this panel — it now
-leads each Service Status panel (STATUS surface) and each Scraping panel (RUN surface).
+``drive_config`` feeds an immutable general-config outcome to the real
+``config_check._append_*`` helpers. Per-scraper products-config health is shown on each
+Service Status and Scraping panel instead.
 """
 
 from ui.catalog._base import Surface, scenario
-from ui.catalog.inputs import ENV_NONE
+from ui.catalog.inputs import NOTIFICATIONS_NONE
 from ui.harness.drivers import drive_config
 
 
-@scenario(Surface.CONFIG, "all_good", "Up to date, valid .env", tags=("ok",))
+@scenario(Surface.CONFIG, "all_good", "Up to date, valid notifications", tags=("ok",))
 def _():
     return drive_config("uptodate", valid_count=2)
 
@@ -77,21 +75,62 @@ def _():
     )
 
 
-@scenario(Surface.CONFIG, "env_mixed", "Some notification URLs are invalid", tags=("error",))
+@scenario(
+    Surface.CONFIG,
+    "notifications_mixed",
+    "Some notification URLs are invalid",
+    tags=("error",),
+)
 def _():
     return drive_config("uptodate", valid_count=1, invalid_count=2)
 
 
-@scenario(Surface.CONFIG, "env_not_configured", "No usable notification URLs", tags=("error",))
+@scenario(
+    Surface.CONFIG,
+    "notifications_not_configured",
+    "No usable notification URLs",
+    tags=("error",),
+)
 def _():
-    return drive_config("uptodate", valid_count=0, invalid_count=0, env_error=ENV_NONE)
+    return drive_config("uptodate", valid_count=0, invalid_count=0, config_error=NOTIFICATIONS_NONE)
+
+
+@scenario(
+    Surface.CONFIG,
+    "unsafe_permissions",
+    "Valid notifications in a group-readable general config",
+    tags=("error",),
+)
+def _():
+    return drive_config(
+        "uptodate",
+        valid_count=2,
+        permission_warning=(
+            "Notification URLs may contain credentials and config/general.json is accessible "
+            "to group or other users. Run `chmod 600 config/general.json`."
+        ),
+    )
+
+
+@scenario(
+    Surface.CONFIG,
+    "settings_failed_notifications_healthy",
+    "Reminder settings fail without disabling notifications",
+    tags=("combined", "error"),
+)
+def _():
+    return drive_config(
+        "uptodate",
+        valid_count=2,
+        settings_error="Unknown general settings: typo",
+    )
 
 
 @scenario(
     Surface.CONFIG,
     "worst_case",
-    "Update error + no .env (all global issues)",
+    "Update error + no notification configuration",
     tags=("combined", "error"),
 )
 def _():
-    return drive_config("error", valid_count=0, invalid_count=0, env_error=ENV_NONE)
+    return drive_config("error", valid_count=0, invalid_count=0, config_error=NOTIFICATIONS_NONE)

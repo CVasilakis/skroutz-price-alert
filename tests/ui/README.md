@@ -264,8 +264,8 @@ real production builder:
 | `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `tui.InteractiveRunReporter` panel    |
 | `E2E_RUN`| Scraping panel (end-to-end) | `drive_orchestrated_run(products, results_by_url)`          | the real `ScrapingOrchestrator` driving that same panel |
 | `STATUS` | Health check (--status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
-| `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, env_error_msg)`      | `ping.build_ping_panel`                              |
-| `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers (version + .env) |
+| `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, config_error_msg)`   | `ping.build_ping_panel`                              |
+| `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers                 |
 | `STARTUP`| Full startup transcript (test-only; hidden from gallery/report) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript on one console: Configuration Check + the real `ReminderService.run_once()` + the Scraping panel (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
 | `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
 
@@ -476,7 +476,7 @@ Quick self-check before committing new scenarios/snapshots:
 grep -rIn -e 'xoxb-' -e 'https://' -e '@gmail' -e '/home/' tests/ui/snapshots tests/ui/catalog
 ```
 
-This is safe *by construction* today: no driver ever reads your real `.env`, config,
+This is safe *by construction* today: no driver ever reads your real config,
 environment, or `systemctl` — `drive_config` patches those seams, the others take
 literal fixtures, and `drive_shell` builds a from-scratch environment inside a temp
 sandbox (fake HOME, fake PATH, canned shim output — the transcripts are fully

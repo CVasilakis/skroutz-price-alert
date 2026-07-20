@@ -11,7 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from rich.console import Console
 
 from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
-from core.general import ReminderService
+from core.general import ReminderService, load_general_config
+from core.general.reminder import general_state_path
 from core.logger import save_traceback, setup_global_logging
 from core.notifier import Notifier
 from core.orchestrator import ScrapingOrchestrator
@@ -61,6 +62,7 @@ def main() -> None:
     # outcomes drive each scraper's 'Config' row and its per-target broken-config skip.
     selected_plugins = [catalog.get(target) for target in targets_to_run]
     load_results = load_targets(selected_plugins, CONFIG_DIR)
+    general = load_general_config(CONFIG_DIR)
 
     if not args.quiet:
         install_interrupt_handler()
@@ -68,7 +70,7 @@ def main() -> None:
         console = Console()
         console.print()
 
-        init_fatal_error = preflight(console, targets_to_run, quiet=False)
+        init_fatal_error = preflight(console, targets_to_run, quiet=False, general=general)
 
         # Restore default handlers immediately after the spinner vanishes
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -85,6 +87,7 @@ def main() -> None:
             None,
             targets_to_run,
             quiet=True,
+            general=general,
             retention_by_target=retention_by_target,
         )
         reporter = SilentRunReporter()
@@ -92,15 +95,19 @@ def main() -> None:
     if init_fatal_error:
         sys.exit(init_fatal_error)
 
-    notification_urls = os.environ.get("NOTIFICATION_URLS", "")
-    notifier = Notifier(notification_urls)
+    notifier = Notifier(general.notifications.valid_urls)
 
     # Periodic liveness reminder: checked once per invocation (not per scraper), right
     # after the preflight/update-check phase. run_once never raises, and it runs before
     # the orchestrator so an aborted scrape cannot suppress the heartbeat. It logs only to
     # its own file (logs/reminder/), never the console, so it can't break the panel layout
     # of an interactive run.
-    ReminderService(CONFIG_DIR, notifier).run_once()
+    ReminderService(
+        general.settings,
+        general_state_path(CONFIG_DIR),
+        notifier,
+        settings_error=general.settings_error,
+    ).run_once()
 
     client_loader = ClientLoader()
     try:

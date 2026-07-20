@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any
 
 import apprise
 
-from core.utils import is_valid_apprise_url
+from core.general.notifications import is_valid_apprise_url
 
 if TYPE_CHECKING:
     from core.scrapers.api import TrackedItem
@@ -20,19 +20,18 @@ TITLE_TEST = "Scrooge Alert - Test Notification"
 class Notifier:
     """Handles sending notifications via configured Apprise URLs."""
 
-    def __init__(self, notification_urls: str):
-        """Initializes the Notifier with a list of notification URLs.
+    def __init__(self, notification_urls: Sequence[str]):
+        """Initialize the notifier from an ordered sequence of notification URLs.
 
         Args:
-            notification_urls (str): A comma-separated list of Apprise notification URLs.
+            notification_urls (Sequence[str]): Apprise notification URLs.
         """
         self.app_notif = apprise.Apprise()
         self.has_services = False
-        if notification_urls:
-            for url in notification_urls.split(","):
-                url = url.strip()
-                if is_valid_apprise_url(url) and self.app_notif.add(url):
-                    self.has_services = True
+        for raw_url in tuple(notification_urls):
+            url = raw_url.strip()
+            if is_valid_apprise_url(url) and self.app_notif.add(url):
+                self.has_services = True
 
     def notify(self, title: str, body: str) -> bool:
         """Sends a notification with the given title and body.

@@ -1,12 +1,13 @@
-# border: red
+# border: yellow
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   🟡    Software Version    Could not check for updates [1]             │
-│   ❗    Notifications       Not configured [2]                          │
+│   ✅    Software Version    Up to date                                  │
+│   🟡    Notifications       2 valid URL(s) [1]                          │
 │   ✅    Reminder            Every 1 month (default)                     │
 │   ✅    Reminder Day        Saturday (default)                          │
 │   ✅    Reminder Time       13:00 (default)                             │
 │                                                                         │
-│   [1] Check your internet connection and retry shortly.                 │
-│   [2] No notification URLs found in config/general.json.                │
+│   [1] Notification URLs may contain credentials and config/general.json │
+│ is accessible to group or other users. Run chmod 600                    │
+│ config/general.json.                                                    │
 ╰─────────────────────────────────────────────────────────────────────────╯

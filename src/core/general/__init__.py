@@ -1,8 +1,9 @@
 """Project-wide settings and reminder service.
 
-``config/general.json`` is an optional, read-only settings document::
+``config/general.json`` is an optional, read-only project configuration document::
 
     {
+      "notifications": { "urls": ["json://localhost"] },
       "settings": { "reminder": "1 month" }
     }
 
@@ -23,11 +24,13 @@ tooling that reach for the vocabulary, keys or specs import them from the submod
 owns them (``core.general.vocab`` / ``core.general.settings`` / ``core.general.reminder``).
 """
 
+from core.general.configuration import GeneralConfigLoad, load_general_config
 from core.general.reminder import ReminderService
-from core.general.settings import general_config_path, resolve_general_settings
+from core.general.settings import general_config_path
 
 __all__ = [
+    "GeneralConfigLoad",
     "general_config_path",
-    "resolve_general_settings",
+    "load_general_config",
     "ReminderService",
 ]

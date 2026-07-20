@@ -14,6 +14,7 @@ from rich.table import Table
 
 from core.constants import CONFIG_DIR
 from core.exit_status import classify_service_state
+from core.general import load_general_config
 from core.logger import setup_global_logging
 from core.preflight import LoadFailureKind, load_targets
 from core.scrapers.intervals import oncalendar_for
@@ -206,12 +207,13 @@ def main():
     catalog = PluginCatalog.discover()
     registered_scrapers = list(catalog.targets)
 
-    # --- Configuration Checks Panel (global checks only: version + .env) ---
+    # --- Configuration Checks Panel (global checks only) ---
     # load_targets is still the single config-file read; its per-target outcomes now feed
     # the 'Config' row atop each Service Status panel below, not this shared panel.
     load_results = load_targets(list(catalog.plugins), CONFIG_DIR)
     loads_by_target = {tl.target: tl for tl in load_results}
-    render_config_panel(console)
+    general = load_general_config(CONFIG_DIR)
+    render_config_panel(console, general)
 
     # Disable custom signal handling after the update/test phase is complete
     signal.signal(signal.SIGINT, signal.SIG_DFL)

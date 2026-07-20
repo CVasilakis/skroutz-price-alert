@@ -28,8 +28,8 @@ print_help() {
     printf '%s\n' "Usage: uninstall.sh [-h] [--<target> ...]"
     printf '\n'
     printf '%s\n' "With no flag, performs a full teardown: removes every installed systemd"
-    printf '%s\n' "timer/service and deletes the Python virtual environment (your .env and"
-    printf '%s\n' "config/*.json are kept). With one or more --<target> flags, removes only"
+    printf '%s\n' "timer/service and deletes the Python virtual environment (your config"
+    printf '%s\n' "and state data are kept). With one or more --<target> flags, removes only"
     printf '%s\n' "those scrapers' units, leaving the virtual environment and other targets"
     printf '%s\n' "intact."
     printf '\n'
@@ -186,7 +186,7 @@ else
 fi
 
 printf "%b\n" "\n${GREEN}Uninstallation complete!${NC}"
-printf "%b\n" "\nUser configurations (.env, config/*.json) were NOT removed."
+printf "%b\n" "\nUser configuration (config/*.json) was NOT removed."
 printf "%b\n" "User lingering (loginctl) was left enabled as other services might rely on it.\n"
 printf "%b\n" "To re-install the application, run: ${CYAN}./install.sh${NC}"
 printf "%b\n" "To completely purge everything, you can safely delete this folder.\n"

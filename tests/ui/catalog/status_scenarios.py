@@ -211,7 +211,10 @@ def _():
 
 
 @scenario(
-    Surface.STATUS, "exec_env_error", "Last run failed on the .env (exit 16)", tags=("last_run",)
+    Surface.STATUS,
+    "exec_notification_config_error",
+    "Last run failed on notification configuration (exit 16)",
+    tags=("last_run",),
 )
 def _():
     return drive_service(

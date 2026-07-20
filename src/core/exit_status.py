@@ -1,8 +1,8 @@
 from dataclasses import dataclass, replace
 
 from core.constants import (
-    EXIT_CODE_ENV_ERROR,
     EXIT_CODE_INTERRUPT,
+    EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
     EXIT_CODE_NOTIFICATION_ERROR,
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
     EXIT_CODE_PRODUCTS_ERROR,
@@ -44,7 +44,12 @@ _VERDICTS: dict[int, ServiceVerdict] = {
     EXIT_CODE_PRODUCTS_ERROR: ServiceVerdict(
         "❗", "Failed", "red", "Issue with the `config/{detail}` file."
     ),
-    EXIT_CODE_ENV_ERROR: ServiceVerdict("❗", "Failed", "red", "Issue with the `.env` file."),
+    EXIT_CODE_NOTIFICATION_CONFIG_ERROR: ServiceVerdict(
+        "❗",
+        "Failed",
+        "red",
+        "Issue with notification configuration in `config/general.json`.",
+    ),
     EXIT_CODE_RATE_LIMIT_ERROR: ServiceVerdict(
         "❗", "Failed", "red", "Blocked by server due to rate limits."
     ),

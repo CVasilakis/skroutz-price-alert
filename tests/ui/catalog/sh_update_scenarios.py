@@ -16,8 +16,7 @@ _case = shell_case(Surface.SH_UPDATE, "update.sh")
 _BASE = ShellWorld(
     installed_timers=("skroutz",),
     installed_services=("skroutz",),
-    config_files=("skroutz.json",),
-    env_file=True,
+    config_files=("skroutz.json", "general.json"),
 )
 
 _case("help", "The short usage text.", "--help", world=_BASE, tags=("help",))

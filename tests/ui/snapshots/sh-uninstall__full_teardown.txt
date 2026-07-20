@@ -9,7 +9,7 @@ Python virtual environment (venv) removed.
 
 Uninstallation complete!
 
-User configurations (.env, config/*.json) were NOT removed.
+User configuration (config/*.json) was NOT removed.
 User lingering (loginctl) was left enabled as other services might rely on it.
 
 To re-install the application, run: ./install.sh

@@ -1,5 +1,6 @@
 # border: red
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   🛑    Not Configured    No .env file found or unreadable              │
+│   🛑    Not Configured    Config file 'config/general.json' is          │
+│                           invalid or unreadable                         │
 ╰─────────────────────────────────────────────────────────────────────────╯

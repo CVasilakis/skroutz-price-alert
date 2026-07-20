@@ -7,5 +7,5 @@
 │   ✅    Reminder Day        Saturday (default)                          │
 │   ✅    Reminder Time       13:00 (default)                             │
 │                                                                         │
-│   [1] No .env file found or unreadable.                                 │
+│   [1] No notification URLs found in config/general.json.                │
 ╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,18 +1,17 @@
 import logging
-import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from rich.console import Console
 from rich.markup import escape
 
-from core.constants import CONFIG_DIR, EXIT_CODE_ENV_ERROR
-from core.exceptions import ConfigFileError, EnvFileError, UpdateCheckError
-from core.general import resolve_general_settings
+from core.constants import EXIT_CODE_NOTIFICATION_CONFIG_ERROR
+from core.exceptions import UpdateCheckError
+from core.general.configuration import GeneralConfigLoad
 from core.logger import get_target_logger
 from core.settings import DEFAULT_LOG_RETENTION_DAYS
 from core.ui.panel import StatusPanelBuilder
-from core.utils import check_env_file, check_for_updates, classify_notification_urls
+from core.utils import check_for_updates
 
 
 @dataclass(frozen=True)
@@ -110,54 +109,66 @@ def _append_version_row(panel: StatusPanelBuilder) -> None:
         panel.add_row("🟡", "Software Version", f"Could not check for updates{ref}")
 
 
-def _append_general_rows(panel: StatusPanelBuilder) -> None:
-    """Appends one row per project-wide setting, resolved from ``config/general.json``.
+def _append_general_rows(panel: StatusPanelBuilder, general: GeneralConfigLoad) -> None:
+    """Append already-resolved project-wide settings from ``config/general.json``.
 
     Mirrors the per-scraper settings section of the Service Status panels, so the general
     settings get the same invalid-value UX. Malformed blocks and unknown keys fail the
     strict general-config boundary. Iterates whatever ``GENERAL_SETTING_SPECS`` declares.
     """
-    try:
-        resolved = resolve_general_settings(CONFIG_DIR)
-    except ConfigFileError as exc:
-        ref = panel.add_note_ref(str(exc))
+    if general.settings is None:
+        ref = panel.add_note_ref(general.settings_error or "General settings are unavailable.")
         panel.add_row("❗", "General Config", f"[red]Failed{ref}[/red]")
         return
-    for view in resolved.views():
+    for view in general.settings.views():
         add_setting_row(panel, view)
 
 
-def _append_env_row(panel: StatusPanelBuilder) -> None:
-    """Appends the .env row summarizing configured Apprise notification URLs."""
-    env_error_msg = ""
-    try:
-        check_env_file()
-    except EnvFileError as e:
-        env_error_msg = str(e)
+def _append_notifications_row(panel: StatusPanelBuilder, general: GeneralConfigLoad) -> None:
+    """Append the redacted notification health and advisory permission footnote."""
+    notifications = general.notifications
+    permission_ref = (
+        panel.add_note_ref(general.permission_warning) if general.permission_warning else ""
+    )
 
-    valid_urls, invalid_urls = classify_notification_urls(os.environ.get("NOTIFICATION_URLS", ""))
-
-    if valid_urls or invalid_urls:
-        if not invalid_urls:
-            panel.add_row("✅", "Notifications", f"{len(valid_urls)} valid URL(s)")
-        else:
-            ref = panel.add_note_ref("Run `./scripts/run.sh --ping` for more details.")
+    if notifications.valid_urls:
+        if notifications.invalid_urls or permission_ref:
+            invalid_ref = (
+                panel.add_note_ref("Run `./scripts/run.sh --ping` for more details.")
+                if notifications.invalid_urls
+                else ""
+            )
+            invalid_text = (
+                f", [yellow]{len(notifications.invalid_urls)} invalid{invalid_ref}[/yellow]"
+                if notifications.invalid_urls
+                else ""
+            )
             panel.add_row(
                 "🟡",
                 "Notifications",
-                f"{len(valid_urls)} valid URL(s), [yellow]{len(invalid_urls)} invalid{ref}[/yellow]",
+                f"{len(notifications.valid_urls)} valid URL(s){invalid_text}{permission_ref}",
             )
+        else:
+            panel.add_row("✅", "Notifications", f"{len(notifications.valid_urls)} valid URL(s)")
+    elif notifications.invalid_urls:
+        detail_ref = panel.add_note_ref("Run `./scripts/run.sh --ping` for more details.")
+        panel.add_row(
+            "❗",
+            "Notifications",
+            f"[red]0 valid URL(s), {len(notifications.invalid_urls)} invalid"
+            f"{detail_ref}{permission_ref}[/red]",
+        )
     else:
-        ref = panel.add_note_ref(env_error_msg or "No notification URLs found.")
-        panel.add_row("❗", "Notifications", f"[red]Not configured{ref}[/red]")
+        detail = notifications.error or "No notification URLs found in config/general.json."
+        ref = panel.add_note_ref(detail)
+        panel.add_row("❗", "Notifications", f"[red]Not configured{ref}{permission_ref}[/red]")
 
 
-def render_config_panel(console: Console) -> None:
+def render_config_panel(console: Console, general: GeneralConfigLoad) -> None:
     """Builds and renders the shared 'Configuration Check' panel (global checks only).
 
-    Runs the update check, the .env check and the general (project-wide) settings
-    resolution behind a single spinner, then renders the panel (the general settings
-    rows follow the .env row).
+    Runs the update check and renders the already-loaded project-wide notification and
+    settings results behind a single spinner.
     Per-scraper products-config health is intentionally not shown here — it is surfaced
     as a 'Config' row atop each Service Status panel (``--status``) and Scraping panel
     (a run). This is the single presentation path shared by the interactive scraper run
@@ -170,22 +181,21 @@ def render_config_panel(console: Console) -> None:
 
     with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
         _append_version_row(panel)
-        _append_env_row(panel)
-        _append_general_rows(panel)
+        _append_notifications_row(panel, general)
+        _append_general_rows(panel, general)
 
     panel.render(console)
 
 
 def _silent_preflight(
     targets_to_run: list,
+    general: GeneralConfigLoad,
     retention_by_target: Mapping[str, int] | None = None,
 ) -> int | None:
-    """Validates the .env for a background (``--quiet``) run, logging to file.
+    """Validate notification configuration for a background run, logging failures.
 
-    A missing/invalid ``.env`` is fatal for a service (it cannot notify), so it gates
-    here. Per-target products-config failures are handled by the orchestrator — it skips
-    just the broken target and surfaces the error in that scraper's log/panel, matching
-    the interactive run — so they are not gated globally here.
+    Missing or unusable notifications are fatal for a service because it cannot report
+    failures. Per-target product-config failures remain target-scoped.
 
     Args:
         targets_to_run (list): The targets being run (for per-target logging).
@@ -193,21 +203,23 @@ def _silent_preflight(
     Returns:
         int | None: A fatal exit code to abort on, or None to proceed.
     """
-    try:
-        check_env_file()
-    except EnvFileError as e:
+    notifications = general.notifications
+    if not notifications.usable:
+        detail = notifications.error or "No valid notification URLs found in config/general.json"
         for target in targets_to_run:
             retention = (retention_by_target or {}).get(target, DEFAULT_LOG_RETENTION_DAYS)
-            get_target_logger(target, True, retention).error(f"❗ Env configuration failed: {e}")
-        logging.critical(f"Env configuration failed: {e}")
-        return EXIT_CODE_ENV_ERROR
+            get_target_logger(target, True, retention).error(
+                f"❗ Notification configuration failed: {detail}"
+            )
+        logging.critical(f"Notification configuration failed: {detail}")
+        return EXIT_CODE_NOTIFICATION_CONFIG_ERROR
 
-    _, invalid_urls = classify_notification_urls(os.environ.get("NOTIFICATION_URLS", ""))
-    if invalid_urls:
+    if notifications.invalid_urls:
         for target in targets_to_run:
             retention = (retention_by_target or {}).get(target, DEFAULT_LOG_RETENTION_DAYS)
             get_target_logger(target, True, retention).warning(
-                f"❗ {len(invalid_urls)} invalid notification URL(s) detected in .env file."
+                f"❗ {len(notifications.invalid_urls)} invalid notification URL(s) "
+                "detected in config/general.json."
             )
 
     return None
@@ -217,6 +229,7 @@ def preflight(
     console: Console | None,
     targets_to_run: list,
     quiet: bool,
+    general: GeneralConfigLoad,
     retention_by_target: Mapping[str, int] | None = None,
 ) -> int | None:
     """Single preflight-validation entry point shared by both run modes.
@@ -224,24 +237,24 @@ def preflight(
     Renders/logs the global configuration verdict and decides whether to abort. Storage
     was already read by ``load_targets``; per-target products-config failures are handled
     per-target by the orchestrator (skip just that scraper), so the only fatal gate here
-    is a missing/invalid ``.env`` in quiet/service mode.
+    is unusable notification configuration in quiet/service mode.
 
     Gating policy (intentionally mode-specific):
-        * A missing/invalid ``.env`` is fatal only in quiet/service mode
-          (``EXIT_CODE_ENV_ERROR``); interactively it is surfaced as a panel row so
-          the user can see it and still proceed.
+        * Missing/unusable notification configuration is fatal only in quiet/service
+          mode; interactively it is surfaced as a panel row and scraping continues.
 
     Args:
         console (Console | None): The console for interactive rendering; unused
             (may be None) in quiet mode.
         targets_to_run (list): The targets being run.
         quiet (bool): Whether this is a silent/background run.
+        general (GeneralConfigLoad): The single-read general configuration outcome.
 
     Returns:
         int | None: A fatal exit code to abort on, or None to proceed.
     """
     if quiet:
-        return _silent_preflight(targets_to_run, retention_by_target)
+        return _silent_preflight(targets_to_run, general, retention_by_target)
     assert console is not None, "console is required for interactive (non-quiet) preflight"
-    render_config_panel(console)
+    render_config_panel(console, general)
     return None

@@ -24,7 +24,6 @@ from core.general.vocab import (
     normalize_reminder_day,
     normalize_reminder_time,
 )
-from core.persistence import read_json_object
 from core.settings import (
     ResolvedSettings,
     SettingSpec,
@@ -47,28 +46,12 @@ def general_config_path(config_dir: str) -> str:
     return os.path.join(config_dir, GENERAL_CONFIG_FILENAME)
 
 
-def resolve_general_settings(config_dir: str) -> ResolvedSettings:
-    """Resolves every project-wide setting against ``config/general.json`` in one read.
-
-    A missing file, a missing key, or an invalid value all degrade to each spec's
-    default with the matching ``STATUS_*`` code, exactly like a scraper's settings -
-    ``general.json`` is entirely optional.
-
-    Args:
-        config_dir (str): The directory holding the config files.
-
-    Returns:
-        ResolvedSettings: The resolved settings, queryable by key and as views.
-    """
-    path = general_config_path(config_dir)
-    document = read_json_object(path, required=False)
-    if document is None:
+def resolve_general_settings(block: object | None) -> ResolvedSettings:
+    """Resolve the already-loaded ``settings`` section without performing file I/O."""
+    if block is None:
         return resolve_settings(GENERAL_SETTING_SPECS, None)
-    unknown_top = set(document) - {"settings"}
-    if unknown_top:
-        raise ConfigFileError(f"Unknown general config keys: {', '.join(sorted(unknown_top))}")
     try:
-        return validate_settings_block(GENERAL_SETTING_SPECS, document.get("settings", {}))
+        return validate_settings_block(GENERAL_SETTING_SPECS, block)
     except ValueError as exc:
         message = str(exc)
         if message == "settings must be an object":

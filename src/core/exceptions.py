@@ -46,12 +46,6 @@ class InvalidURLError(ScraperError):
     pass
 
 
-class EnvFileError(Exception):
-    """Raised when there is an issue with the environment configuration."""
-
-    pass
-
-
 class StorageFileError(Exception):
     """Raised when there is an issue with a storage data file."""
 

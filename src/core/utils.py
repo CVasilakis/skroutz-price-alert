@@ -3,10 +3,8 @@ import signal
 import subprocess
 import sys
 
-from dotenv import load_dotenv
-
-from core.constants import APPRISE_PLACEHOLDERS, BASE_DIR, EXIT_CODE_INTERRUPT
-from core.exceptions import EnvFileError, UpdateCheckError
+from core.constants import BASE_DIR, EXIT_CODE_INTERRUPT
+from core.exceptions import UpdateCheckError
 
 # Upper bound (seconds) for the git subprocesses in :func:`check_for_updates`. The
 # ``ls-remote`` call reaches the network, so without a cap a hung connection would block
@@ -14,83 +12,6 @@ from core.exceptions import EnvFileError, UpdateCheckError
 # scrape. A timeout raises ``subprocess.TimeoutExpired`` (an ``Exception``), which the
 # function already folds into ``UpdateCheckError`` (degrading to "could not check").
 UPDATE_CHECK_TIMEOUT = 10
-
-
-def is_valid_apprise_url(url: str) -> bool:
-    """Returns whether a single Apprise URL is usable.
-
-    A URL is valid when it is non-empty, contains no unconfigured placeholder
-    (e.g. ``<token>``), and Apprise can instantiate it. This is the single
-    predicate used everywhere notification URLs are validated.
-
-    Args:
-        url (str): A single Apprise URL (surrounding whitespace is ignored).
-
-    Returns:
-        bool: True if the URL is a usable Apprise endpoint.
-    """
-    url = (url or "").strip()
-    if not url:
-        return False
-    if any(p in url for p in APPRISE_PLACEHOLDERS):
-        return False
-    # Deferred so importing utils (pulled in almost everywhere via parse_price)
-    # does not load apprise (~88ms) for commands that never validate a URL.
-    import apprise
-
-    return bool(apprise.Apprise.instantiate(url))
-
-
-def classify_notification_urls(notification_urls: str) -> tuple[list, list]:
-    """Splits a comma-separated Apprise URL string into valid and invalid URLs.
-
-    A URL is considered valid when it contains no unconfigured placeholder and
-    Apprise can instantiate it. Empty entries are ignored.
-
-    Args:
-        notification_urls (str): The raw, comma-separated NOTIFICATION_URLS value.
-
-    Returns:
-        tuple[list, list]: A (valid_urls, invalid_urls) pair.
-    """
-    valid_urls, invalid_urls = [], []
-    for url in (notification_urls or "").split(","):
-        url = url.strip()
-        if not url:
-            continue
-        if is_valid_apprise_url(url):
-            valid_urls.append(url)
-        else:
-            invalid_urls.append(url)
-    return valid_urls, invalid_urls
-
-
-def check_env_file() -> None:
-    """Validates the existence and contents of the .env file.
-
-    Raises:
-        EnvFileError: If the .env file is missing, unreadable, or missing valid NOTIFICATION_URLS.
-    """
-    env_path = os.path.join(BASE_DIR, ".env")
-    # Existence/readability is checked BEFORE load_dotenv: python-dotenv raises a
-    # raw PermissionError on an unreadable file, which would escape as a crash
-    # instead of the modeled EnvFileError (clean exit 16) this function promises.
-    if not os.path.isfile(env_path) or not os.access(env_path, os.R_OK):
-        raise EnvFileError("No .env file found or unreadable")
-    try:
-        load_dotenv(dotenv_path=env_path)
-    except (OSError, UnicodeError) as e:
-        raise EnvFileError(f"The .env file is unreadable or not valid UTF-8: {e}") from None
-
-    notification_urls = os.environ.get("NOTIFICATION_URLS", "").strip()
-    if not notification_urls:
-        raise EnvFileError("No NOTIFICATION_URLS provided in .env file")
-
-    urls = [u.strip() for u in notification_urls.split(",") if u.strip()]
-
-    valid_urls = [u for u in urls if is_valid_apprise_url(u)]
-    if not valid_urls:
-        raise EnvFileError("NOTIFICATION_URLS contains no valid notification URL(s)")
 
 
 def check_for_updates() -> bool:

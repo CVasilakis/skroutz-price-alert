@@ -17,7 +17,7 @@ production place and is pinned by the snapshots.
 
 NOTE_NOTIFIED_OK = "Notification delivered to all valid apprise URL(s)."
 NOTE_NOTIFIED_FAIL = "Notification delivery failed for some apprise URL(s)."
-NOTE_NOTIFIED_NONE = "No notification sent (.env not configured)."
+NOTE_NOTIFIED_NONE = "No notification sent (notifications not configured)."
 
 
 def stale_note(last_checked: str, hours: int) -> str:

@@ -9,9 +9,8 @@ the captured snapshot reflects exactly what the application renders:
 * ``drive_service`` / ``drive_not_installed`` / ``drive_orphan`` call the pure builders
   extracted into ``status.py``.
 * ``drive_ping`` calls the pure builder extracted into ``ping.py``.
-* ``drive_config`` calls the existing ``config_check._append_*`` helpers with the four
-  external seams (update check, general-settings resolution, env check, URL
-  classification) patched.
+* ``drive_config`` calls the existing ``config_check._append_*`` helpers with an
+  immutable synthetic general-config load.
 """
 
 import datetime
@@ -29,8 +28,10 @@ from rich.text import Text
 
 from core import logger as core_logger
 from core import ping, status
-from core.exceptions import EnvFileError, UpdateCheckError
+from core.exceptions import UpdateCheckError
 from core.general import ReminderService
+from core.general.configuration import GeneralConfigLoad
+from core.general.notifications import NotificationConfig
 from core.general.settings import (
     GENERAL_SETTING_SPECS,
     KEY_REMINDER,
@@ -243,10 +244,10 @@ def drive_orphan(name: str) -> BuildResult:
 def drive_ping(
     url_entries: Sequence[tuple[str, bool]],
     test_results: Sequence[tuple[str, bool]] = (),
-    env_error_msg: str = "",
+    config_error_msg: str = "",
 ) -> BuildResult:
     """Builds the Notification Check Results panel via ``ping.build_ping_panel``."""
-    panel, color = ping.build_ping_panel(list(url_entries), list(test_results), env_error_msg)
+    panel, color = ping.build_ping_panel(list(url_entries), list(test_results), config_error_msg)
     return BuildResult(panel, color)
 
 
@@ -257,7 +258,9 @@ def drive_config(
     version_state: str = "uptodate",
     valid_count: int = 0,
     invalid_count: int = 0,
-    env_error: str = "",
+    config_error: str = "",
+    settings_error: str = "",
+    permission_warning: str = "",
     reminder_raw: object = None,
     reminder_day_raw: object = None,
     reminder_time_raw: object = None,
@@ -266,16 +269,16 @@ def drive_config(
 
     Per-scraper products-config health is no longer on this panel — it now leads each
     Service Status (STATUS surface) and Scraping (RUN surface) panel — so this drives
-    the version row, the ``.env`` row, and the general (project-wide) settings rows (in
-    that on-panel order: the general settings follow the .env row).
+    the version row, notification row, and general settings rows in production order.
 
     Args:
         version_state (str): ``"uptodate"`` / ``"available"`` / ``"error"`` — controls the
             patched ``check_for_updates`` (return False / return True / raise).
-        valid_count (int): number of valid notification URLs the .env row reports.
+        valid_count (int): number of valid notification URLs.
         invalid_count (int): number of invalid notification URLs.
-        env_error (str): a ``.env`` error message; when set (and no URLs), the .env row
-            renders the 'Not configured' state with this message.
+        config_error (str): notification-section failure shown when no URLs are usable.
+        settings_error (str): isolated general-settings failure.
+        permission_warning (str): advisory general-config permission footnote.
         reminder_raw (object): the raw ``reminder`` value the patched general-settings
             resolution sees; ``None`` (unset) renders the active default, an unsupported
             value renders the invalid-value row.
@@ -289,35 +292,30 @@ def drive_config(
             raise UpdateCheckError("could not reach the update endpoint")
         return version_state == "available"
 
-    def check_env_file() -> None:
-        if env_error:
-            raise EnvFileError(env_error)
+    from core.settings import resolve_settings
 
-    def classify(_urls):
-        return (["valid"] * valid_count, ["invalid"] * invalid_count)
+    block = {
+        KEY_REMINDER: reminder_raw,
+        KEY_REMINDER_DAY: reminder_day_raw,
+        KEY_REMINDER_TIME: reminder_time_raw,
+    }
+    resolved = resolve_settings(GENERAL_SETTING_SPECS, block)
+    general = GeneralConfigLoad(
+        notifications=NotificationConfig(
+            configured_urls=tuple(["valid"] * valid_count + ["invalid"] * invalid_count),
+            valid_urls=tuple(["valid"] * valid_count),
+            invalid_urls=tuple(["invalid"] * invalid_count),
+            error=config_error or None,
+        ),
+        settings=None if settings_error else resolved,
+        settings_error=settings_error or None,
+        permission_warning=permission_warning or None,
+    )
 
-    def resolve_general(_config_dir) -> ResolvedSettings:
-        # The real resolve machinery against a synthetic settings block, so each row
-        # renders with production status/default/invalid logic but no file I/O. The
-        # Use the production resolver so valid/default/invalid rows match runtime.
-        from core.settings import resolve_settings
-
-        block = {
-            KEY_REMINDER: reminder_raw,
-            KEY_REMINDER_DAY: reminder_day_raw,
-            KEY_REMINDER_TIME: reminder_time_raw,
-        }
-        return resolve_settings(GENERAL_SETTING_SPECS, block)
-
-    with (
-        mock.patch.object(config_check, "check_for_updates", check_for_updates),
-        mock.patch.object(config_check, "check_env_file", check_env_file),
-        mock.patch.object(config_check, "classify_notification_urls", classify),
-        mock.patch.object(config_check, "resolve_general_settings", resolve_general),
-    ):
+    with mock.patch.object(config_check, "check_for_updates", check_for_updates):
         config_check._append_version_row(panel)
-        config_check._append_env_row(panel)
-        config_check._append_general_rows(panel)
+        config_check._append_notifications_row(panel, general)
+        config_check._append_general_rows(panel, general)
 
     return BuildResult(panel, panel.get_panel_color())
 
@@ -341,9 +339,12 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
     """
     cfg_dir = tempfile.mkdtemp()
     now = datetime.datetime(2026, 7, 4, 14, 0, 0)  # Saturday 14:00, just after the 13:00 slot
-    settings = {} if reminder_raw is None else {"reminder": reminder_raw}
-    with open(os.path.join(cfg_dir, "general.json"), "w") as f:
-        json.dump({"settings": settings, "last_reminder": "04-07-2026 13:00:00"}, f)
+    from core.settings import resolve_settings
+
+    settings = resolve_settings(
+        GENERAL_SETTING_SPECS,
+        {} if reminder_raw is None else {"reminder": reminder_raw},
+    )
 
     reminder_logger = logging.getLogger("scraper.reminder")
     saved = (logging.root.handlers[:], logging.root.level, reminder_logger.handlers[:])
@@ -353,7 +354,11 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
         with mock.patch.object(core_logger, "console", console):
             setup_global_logging(quiet=False)  # interactive: root Rich handler -> console
             ReminderService(
-                cfg_dir, notifier=mock.Mock(), now_fn=lambda: now, update_check_fn=lambda: False
+                settings,
+                os.path.join(cfg_dir, "general.json"),
+                notifier=mock.Mock(),
+                now_fn=lambda: now,
+                update_check_fn=lambda: False,
             ).run_once()
     finally:
         logging.root.handlers[:], logging.root.level, reminder_logger.handlers[:] = saved
@@ -367,7 +372,7 @@ def drive_startup(
     version_state: str = "uptodate",
     valid_count: int = 1,
     invalid_count: int = 0,
-    env_error: str = "",
+    config_error: str = "",
 ) -> BuildResult:
     """Captures the full interactive pre-scrape console transcript, as ``main()`` emits it.
 
@@ -383,7 +388,7 @@ def drive_startup(
         run_script: The ``drive_run``-style script driving the Scraping panel.
         reminder_raw: The raw ``reminder`` value the Configuration Check panel and the live
             reminder check both see (``None`` = unset/default).
-        version_state / valid_count / invalid_count / env_error: Forwarded to
+        version_state / valid_count / invalid_count / config_error: Forwarded to
             :func:`drive_config` for the Configuration Check panel.
     """
     # Lazy import to avoid a module-load cycle (see the note at the top of this file).
@@ -393,7 +398,7 @@ def drive_startup(
         version_state,
         valid_count=valid_count,
         invalid_count=invalid_count,
-        env_error=env_error,
+        config_error=config_error,
         reminder_raw=reminder_raw,
     )
     run_result = drive_run(run_script)

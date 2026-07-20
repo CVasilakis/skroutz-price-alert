@@ -4,5 +4,4 @@
 # own requirements file: src/core/scrapers/<plugin>/requirements.txt.
 apprise
 filelock
-python-dotenv
 rich
