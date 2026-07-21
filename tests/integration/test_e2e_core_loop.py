@@ -17,9 +17,9 @@ from integration.fake_store import URL, FakeStoreClient, fake_store_server
 NOW = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
 
 
-def _write_config(config_dir, url, *, extra=None):
+def _write_config(config_dir, url, *, extra=None, settings=None):
     document = {
-        "settings": {},
+        "settings": settings or {},
         "items": [
             {
                 "id": "widget",
@@ -78,11 +78,12 @@ def test_real_http_scrape_keeps_config_read_only_and_writes_state(tmp_path):
     assert config_path.read_bytes() == original_config
     state = json.loads((state_dir / "fakestore.json").read_text())
     assert state == {
-        "schema_version": 1,
+        "schema_version": 2,
         "items": {
             "widget": {
                 "last_price": 79.0,
                 "last_checked": "2026-07-18T18:30:00Z",
+                "price_alert_delivered": True,
             }
         },
     }
@@ -108,3 +109,33 @@ def test_malformed_row_never_reaches_the_network_or_creates_state(tmp_path):
     assert server.request_count == 0
     assert not (state_dir / "fakestore.json").exists()
     notifier.notify_low_price.assert_not_called()
+
+
+def test_successful_alert_history_suppresses_the_next_run(tmp_path):
+    with fake_store_server({"/widget": [(200, {"price": 79, "currency": "EUR"})]}) as (
+        server,
+        netloc,
+    ):
+        plugin = fake_plugin(
+            name="fakestore",
+            domains=("127.0.0.1",),
+            client_class=FakeStoreClient,
+            url_field=URL,
+        )
+        with catalog_sandbox(plugin) as catalog:
+            config_dir, state_dir = tmp_path / "config", tmp_path / "state"
+            config_dir.mkdir()
+            _write_config(
+                config_dir,
+                f"http://{netloc}/widget",
+                settings={"suppress_repeated_price_alerts": True},
+            )
+            notifier, ui = mock_notifier(True), mock_ui()
+
+            assert _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_SUCCESS
+            assert _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_SUCCESS
+
+    assert server.request_count == 2
+    notifier.notify_low_price.assert_called_once()
+    state = json.loads((state_dir / "fakestore.json").read_text())
+    assert state["items"]["widget"]["price_alert_delivered"] is True

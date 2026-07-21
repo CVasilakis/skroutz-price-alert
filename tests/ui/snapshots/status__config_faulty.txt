@@ -1,15 +1,17 @@
 # border: yellow
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   🟡    Monitored Items             8 loaded, 2 misconfigured [1]       │
-│   ✅    Execution Interval          1h                                  │
-│   ✅    Log Retention               7 days                              │
-│   ✅    Notify On Errors            true                                │
+│   🟡    Monitored Items                   8 loaded, 2 misconfigured     │
+│                                           [1]                           │
+│   ✅    Execution Interval                1h                            │
+│   ✅    Log Retention                     7 days                        │
+│   ✅    Notify On Errors                  true                          │
+│   ✅    Suppress Repeated Price Alerts    false                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Systemd Timer Active        Yes                                 │
-│   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
-│   ✅    Last Execution Status       OK                                  │
-│   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
+│   ✅    Systemd Timer Active              Yes                           │
+│   ✅    Last Execution Time               Sun 2026-06-28 13:00:00 UTC   │
+│   ✅    Last Execution Status             OK                            │
+│   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
 │                                                                         │
 │   [1] Problematic items found at JSON index: 2, 5.                      │
 ╰─────────────────────────────────────────────────────────────────────────╯

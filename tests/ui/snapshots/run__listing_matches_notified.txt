@@ -1,12 +1,14 @@
 # border: green
 
 ╭─────────────────────────── Insomnia Scraping ───────────────────────────╮
-│   ✅    Monitored Items            5 loaded                             │
-│   ✅    Execution Interval         1h (default)                         │
-│   ✅    Log Retention              7 days (default)                     │
-│   ✅    Notify On Errors           true (default)                       │
+│   ✅    Monitored Items                   5 loaded                      │
+│   ✅    Execution Interval                1h (default)                  │
+│   ✅    Log Retention                     7 days (default)              │
+│   ✅    Notify On Errors                  true (default)                │
+│   ✅    Suppress Repeated Price Alerts    false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🎉    Google Pixel 9 (128 GB)    185.0 € (Target: 200.0 €) [1] [2]    │
+│   🎉    Google Pixel 9 (128 GB)           185.0 € (Target: 200.0 €)     │
+│                                           [1] [2]                       │
 │                                                                         │
 │   [1] 3 advert(s) matched the filters; 2 below target.                  │
 │   [2] Notification delivered for 2 advert(s).                           │

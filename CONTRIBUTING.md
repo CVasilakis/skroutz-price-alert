@@ -135,9 +135,13 @@ Return one of two intentional variants:
   price, url)` per independently alertable advert.
 
 An empty `ListingResult` is a successful no-match check. It refreshes
-`last_checked`, preserves `last_price`, and sends no alert. Every listing offer
-below the target triggers its own alert on every run. Single prices below target
-also alert on every run; historical price does not suppress them.
+`last_checked`, preserves `last_price`, clears active listing-alert history, and sends no
+alert. By default every listing offer below the target triggers its own alert on every run,
+and single prices below target do the same. The framework-owned
+`suppress_repeated_price_alerts` setting can instead suppress successfully delivered
+single-price alerts during one continuous below-target episode and listing alerts by
+canonical offer URL. Failed deliveries remain eligible for retry; plugins never manage
+this state.
 
 Result values reject blank currency/title strings, boolean, negative, or
 non-finite prices, non-`Offer` members, and non-absolute offer URLs. Listing
@@ -209,8 +213,9 @@ Invalid optional values fall back to the compiled default and surface a warning.
 A missing or invalid required value fails only that target's configuration.
 Sensitive values resolve normally for clients but are always redacted from
 framework views and diagnostics. Unknown setting keys and malformed settings
-blocks are fatal configuration errors. The framework adds `execution_interval`, `log_retention_days`, and
-`notify_scraping_errors`; plugins cannot declare systemd directives.
+blocks are fatal configuration errors. The framework adds `execution_interval`,
+`log_retention_days`, `notify_scraping_errors`, and
+`suppress_repeated_price_alerts`; plugins cannot declare systemd directives.
 
 ## Optional client helpers
 
@@ -250,7 +255,7 @@ relevant status codes, accepted and rejected URL shapes when applicable, field
 and setting codecs, and cleanup. Never call the live store. The generic verifier checks descriptor
 imports, actual isolated import effects, contributor files, custom-schema examples,
 sibling-plugin isolation, canonical defaults, conventional client typing, URL
-acceptance, dependency guidance, schema-v1 state round trips, and clean shutdown.
+acceptance, dependency guidance, schema-v2 state round trips, and clean shutdown.
 
 CI additionally creates a clean environment for every plugin and installs only core
 plus that plugin's own `requirements.txt`. This prevents an undeclared dependency

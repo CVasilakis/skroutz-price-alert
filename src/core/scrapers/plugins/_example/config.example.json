@@ -2,7 +2,8 @@
   "settings": {
     "execution_interval": "1h",
     "log_retention_days": 7,
-    "notify_scraping_errors": true
+    "notify_scraping_errors": true,
+    "suppress_repeated_price_alerts": false
   },
   "items": [
     {

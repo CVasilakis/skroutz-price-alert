@@ -1,10 +1,11 @@
 # border: blue
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items        5 loaded                                 │
-│   ✅    Execution Interval     1h (default)                             │
-│   ✅    Log Retention          7 days (default)                         │
-│   ✅    Notify On Errors       true (default)                           │
+│   ✅    Monitored Items                   5 loaded                      │
+│   ✅    Execution Interval                1h (default)                  │
+│   ✅    Log Retention                     7 days (default)              │
+│   ✅    Notify On Errors                  true (default)                │
+│   ✅    Suppress Repeated Price Alerts    false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ⠋     Apple AirPods Pro 2    Scraping (2/3)...                        │
+│   ⠋     Apple AirPods Pro 2               Scraping (2/3)...             │
 ╰─────────────────────────────────────────────────────────────────────────╯

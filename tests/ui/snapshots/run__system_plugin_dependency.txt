@@ -1,13 +1,16 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
+│   ✅    Monitored Items                   5 loaded                      │
+│   ✅    Execution Interval                1h (default)                  │
+│   ✅    Log Retention                     7 days (default)              │
+│   ✅    Notify On Errors                  true (default)                │
+│   ✅    Suppress Repeated Price Alerts    false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    System                Scraper 'skroutz' requires dependencies   │
-│                               that are not installed (missing module:   │
-│                               tls_client). Install them with:           │
-│                               ./install.sh --skroutz                    │
+│   ❗    System                            Scraper 'skroutz' requires    │
+│                                           dependencies that are not     │
+│                                           installed (missing module:    │
+│                                           tls_client). Install them     │
+│                                           with: ./install.sh            │
+│                                           --skroutz                     │
 ╰─────────────────────────────────────────────────────────────────────────╯

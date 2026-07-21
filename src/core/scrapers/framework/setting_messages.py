@@ -21,3 +21,7 @@ def retention_warning_message() -> str:
 
 def notify_errors_warning_message() -> str:
     return "Invalid notify_scraping_errors setting. Defaulting to true."
+
+
+def suppress_repeated_price_alerts_warning_message() -> str:
+    return "Invalid suppress_repeated_price_alerts setting. Defaulting to false."

@@ -57,6 +57,7 @@ def _source_files(request: ScaffoldRequest) -> dict[str, str]:
             "execution_interval": "1h",
             "log_retention_days": 7,
             "notify_scraping_errors": True,
+            "suppress_repeated_price_alerts": False,
         },
         "items": [
             {

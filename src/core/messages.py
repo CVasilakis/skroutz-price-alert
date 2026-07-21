@@ -18,6 +18,7 @@ production place and is pinned by the snapshots.
 NOTE_NOTIFIED_OK = "Notification delivered to all valid apprise URL(s)."
 NOTE_NOTIFIED_FAIL = "Notification delivery failed for some apprise URL(s)."
 NOTE_NOTIFIED_NONE = "No notification sent (notifications not configured)."
+NOTE_REPEATED_PRICE_ALERT_SUPPRESSED = "Repeated price alert suppressed."
 
 
 def stale_note(last_checked: str, hours: int) -> str:
@@ -89,6 +90,11 @@ def advert_notified_fail(failed: int, total: int) -> str:
         str: The note wording.
     """
     return f"Notification delivery failed for {failed} of {total} advert(s)."
+
+
+def advert_alerts_suppressed(count: int) -> str:
+    """The note recording listing alerts suppressed by canonical offer URL."""
+    return f"Repeated notification suppressed for {count} advert(s)."
 
 
 # --- Skips, warnings, and failures (application execution) ----------------------------

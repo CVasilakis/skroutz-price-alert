@@ -61,6 +61,7 @@ class TestMessageCatalog(unittest.TestCase):
             "advert_matches_note": (3, 2),
             "advert_notified_ok": (2,),
             "advert_notified_fail": (1, 2),
+            "advert_alerts_suppressed": (1,),
             "skipping_warning": ("ProductNotFoundError",),
             "attempt_note": (1, "ServerError"),
             "errors_log_pointer": ("skroutz",),

@@ -169,7 +169,9 @@ def drive_orchestrated_run(
             reporter.console = Console(file=io.StringIO())
 
             loader = ClientLoader()
-            loads = load_targets([catalog.get("fakestore")], cfg_dir)
+            loads = load_targets(
+                [catalog.get("fakestore")], cfg_dir, os.path.join(cfg_dir, "state")
+            )
             orch = ScrapingOrchestrator(
                 target_loads=loads,
                 client_loader=loader,

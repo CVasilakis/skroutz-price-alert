@@ -1,16 +1,20 @@
 # border: green
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items          5 loaded                               │
-│   ✅    Execution Interval       1h (default)                           │
-│   ✅    Log Retention            7 days (default)                       │
-│   ✅    Notify On Errors         true (default)                         │
+│   ✅    Monitored Items                   5 loaded                      │
+│   ✅    Execution Interval                1h (default)                  │
+│   ✅    Log Retention                     7 days (default)              │
+│   ✅    Notify On Errors                  true (default)                │
+│   ✅    Suppress Repeated Price Alerts    false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🎉    Sony WH-1000XM5          248.0 € (Target: 300.0 €) [1]          │
-│   ✅    Logitech MX Master 3S    79.0 € (Target: 70.0 €)                │
-│   🟡    Removed Product          Skipping (ProductNotFoundError) [2]    │
-│   🟡    Untargeted Product       55.0 € (Target: 0.0 €)                 │
-│   ❗    Flaky Product            ConnectionError [3] [4] [5] [6]        │
+│   🎉    Sony WH-1000XM5                   248.0 € (Target: 300.0 €)     │
+│                                           [1]                           │
+│   ✅    Logitech MX Master 3S             79.0 € (Target: 70.0 €)       │
+│   🟡    Removed Product                   Skipping                      │
+│                                           (ProductNotFoundError) [2]    │
+│   🟡    Untargeted Product                55.0 € (Target: 0.0 €)        │
+│   ❗    Flaky Product                     ConnectionError [3] [4] [5]   │
+│                                           [6]                           │
 │                                                                         │
 │   [1] Notification delivered to all valid apprise URL(s).               │
 │   [2] Product not found or removed (HTTP 404).                          │

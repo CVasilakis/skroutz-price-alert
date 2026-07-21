@@ -1,16 +1,17 @@
-# border: red
+# border: yellow
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
 │   ✅    Monitored Items                   5 loaded                      │
 │   ✅    Execution Interval                1h                            │
 │   ✅    Log Retention                     7 days                        │
 │   ✅    Notify On Errors                  true                          │
-│   ✅    Suppress Repeated Price Alerts    false                         │
+│   🟡    Suppress Repeated Price Alerts    false [1]                     │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Systemd Timer Active              Yes                           │
 │   ✅    Last Execution Time               Sun 2026-06-28 13:00:00 UTC   │
-│   ❗    Last Execution Status             Storage Failed [1]            │
+│   ✅    Last Execution Status             OK                            │
 │   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
 │                                                                         │
-│   [1] Could not update state/skroutz.json with the latest scrape state. │
+│   [1] Invalid suppress_repeated_price_alerts setting. Defaulting to     │
+│ false.                                                                  │
 ╰─────────────────────────────────────────────────────────────────────────╯

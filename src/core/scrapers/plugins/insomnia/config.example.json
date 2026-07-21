@@ -3,6 +3,7 @@
     "execution_interval": "1h",
     "log_retention_days": 7,
     "notify_scraping_errors": true,
+    "suppress_repeated_price_alerts": false,
     "min_advert_price": 30
   },
   "items": [

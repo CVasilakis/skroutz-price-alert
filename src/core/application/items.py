@@ -34,6 +34,7 @@ class ItemExecutor:
         logger: logging.Logger,
         interrupted: Callable[[], bool],
         now_fn: Callable[[], datetime.datetime],
+        suppress_repeated_price_alerts: bool = False,
         reference_url: Callable[[TrackedItem], str | None] | None = None,
         pacer: Pacer | None = None,
     ) -> None:
@@ -52,6 +53,7 @@ class ItemExecutor:
             reporter=reporter,
             logger=logger,
             now_fn=now_fn,
+            suppress_repeated_price_alerts=suppress_repeated_price_alerts,
             reference_url=self.reference_url,
         )
 

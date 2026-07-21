@@ -22,6 +22,7 @@ from ui.catalog.inputs import (
     notify_view,
     retention_view,
     stub_logger,
+    suppress_repeated_view,
     views_all_default,
     views_all_ok,
     views_one_invalid_each,
@@ -73,6 +74,34 @@ def _():
         s.complete_scraping()
         s.log_price_result(
             "Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP, notes=[NOTIFIED_OK]
+        )
+        s.complete_target()
+
+    return drive_run(script)
+
+
+@scenario(
+    Surface.RUN,
+    "success_drop_suppressed",
+    "Repeated price-drop notification suppressed",
+    tags=("price_drop",),
+)
+def _():
+    def script(s):
+        settings = [
+            *views_all_default()[:-1],
+            suppress_repeated_view(True, STATUS_OK, True),
+        ]
+        _start(s, settings)
+        s.start_scraping("Sony WH-1000XM5", 1, 3)
+        s.complete_scraping()
+        s.log_price_result(
+            "Sony WH-1000XM5",
+            248.0,
+            CURRENCY,
+            300.0,
+            PriceOutcome.DROP,
+            notes=[messages.NOTE_REPEATED_PRICE_ALERT_SUPPRESSED],
         )
         s.complete_target()
 
@@ -178,6 +207,38 @@ def _():
             PriceOutcome.DROP,
             notes=[messages.advert_matches_note(3, 2), messages.advert_notified_fail(1, 2)],
             delivery_failed=True,
+        )
+        s.complete_target()
+
+    return drive_run(script)
+
+
+@scenario(
+    Surface.RUN,
+    "listing_matches_partly_suppressed",
+    "Listing search: old advert suppressed and new advert notified",
+    tags=("price_drop", "listing"),
+)
+def _():
+    def script(s):
+        settings = [
+            *views_all_default()[:-1],
+            suppress_repeated_view(True, STATUS_OK, True),
+        ]
+        _start(s, settings, target="Insomnia")
+        s.start_scraping("Google Pixel 9 (128 GB)", 1, 3)
+        s.complete_scraping()
+        s.log_price_result(
+            "Google Pixel 9 (128 GB)",
+            185.0,
+            CURRENCY,
+            200.0,
+            PriceOutcome.DROP,
+            notes=[
+                messages.advert_matches_note(3, 2),
+                messages.advert_notified_ok(1),
+                messages.advert_alerts_suppressed(1),
+            ],
         )
         s.complete_target()
 
@@ -753,6 +814,7 @@ def _():
             interval_view("1h", STATUS_OK, "1h"),
             retention_view(7, STATUS_INVALID, 99),
             notify_view(True, STATUS_DEFAULT, None),
+            suppress_repeated_view(False, STATUS_OK, False),
         ]
         _start(s, settings)
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)

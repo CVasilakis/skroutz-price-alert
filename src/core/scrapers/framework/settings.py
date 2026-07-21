@@ -12,6 +12,7 @@ from core.scrapers.framework.setting_messages import (
     interval_warning_message,
     notify_errors_warning_message,
     retention_warning_message,
+    suppress_repeated_price_alerts_warning_message,
 )
 from core.settings import (
     DEFAULT_LOG_RETENTION_DAYS,
@@ -22,6 +23,7 @@ from core.settings import (
 KEY_INTERVAL = "execution_interval"
 KEY_RETENTION = "log_retention_days"
 KEY_NOTIFY = "notify_scraping_errors"
+KEY_SUPPRESS_REPEATED_PRICE_ALERTS = "suppress_repeated_price_alerts"
 
 
 def _decoded(normalizer, raw: object) -> Any:
@@ -59,6 +61,14 @@ def framework_setting_specs(default_interval: str) -> tuple[SettingSpec[Any], ..
             warning=notify_errors_warning_message(),
             default=True,
         ),
+        SettingSpec(
+            key=KEY_SUPPRESS_REPEATED_PRICE_ALERTS,
+            label="Suppress Repeated Price Alerts",
+            decode=lambda raw: _decoded(normalize_bool, raw),
+            display=lambda value: "true" if value else "false",
+            warning=suppress_repeated_price_alerts_warning_message(),
+            default=False,
+        ),
     )
 
 
@@ -66,6 +76,7 @@ __all__ = [
     "KEY_INTERVAL",
     "KEY_RETENTION",
     "KEY_NOTIFY",
+    "KEY_SUPPRESS_REPEATED_PRICE_ALERTS",
     "SUPPORTED_INTERVALS",
     "oncalendar_for",
     "framework_setting_specs",

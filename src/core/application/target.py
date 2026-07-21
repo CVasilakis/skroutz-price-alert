@@ -20,7 +20,7 @@ from core.infrastructure.logging import save_traceback
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.clients import ClientLoader
-from core.scrapers.framework.settings import KEY_NOTIFY
+from core.scrapers.framework.settings import KEY_NOTIFY, KEY_SUPPRESS_REPEATED_PRICE_ALERTS
 
 
 @dataclass
@@ -101,6 +101,9 @@ class TargetRunner:
                         logger=logger,
                         interrupted=interrupted,
                         now_fn=self.now_fn,
+                        suppress_repeated_price_alerts=load.settings[
+                            plugin.setting(KEY_SUPPRESS_REPEATED_PRICE_ALERTS)
+                        ],
                         reference_url=plugin.item_reference_url,
                     )
                     abort_target = False

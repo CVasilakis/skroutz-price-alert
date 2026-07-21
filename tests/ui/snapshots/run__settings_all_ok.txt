@@ -1,10 +1,11 @@
 # border: green
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
-│   ✅    Execution Interval    2h                                        │
-│   ✅    Log Retention         14 days                                   │
-│   ✅    Notify On Errors      false                                     │
+│   ✅    Monitored Items                   5 loaded                      │
+│   ✅    Execution Interval                2h                            │
+│   ✅    Log Retention                     14 days                       │
+│   ✅    Notify On Errors                  false                         │
+│   ✅    Suppress Repeated Price Alerts    true                          │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Sony WH-1000XM5       320.0 € (Target: 300.0 €)                 │
+│   ✅    Sony WH-1000XM5                   320.0 € (Target: 300.0 €)     │
 ╰─────────────────────────────────────────────────────────────────────────╯

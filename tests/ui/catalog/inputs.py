@@ -20,7 +20,7 @@ from core.settings import (
 )
 from core.tui.config_check import ConfigView, config_view
 
-SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY = framework_setting_specs("1h")
+SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY, SPEC_SUPPRESS_REPEATED = framework_setting_specs("1h")
 STATUS_OK = SettingStatus.OK
 STATUS_DEFAULT = SettingStatus.DEFAULT
 STATUS_INVALID = SettingStatus.INVALID
@@ -68,12 +68,19 @@ def notify_view(
     return _view(SPEC_NOTIFY, value, status, raw)
 
 
+def suppress_repeated_view(
+    value: bool = False, status: SettingStatus = STATUS_OK, raw: Any = False
+) -> SettingView:
+    return _view(SPEC_SUPPRESS_REPEATED, value, status, raw)
+
+
 def views_all_ok() -> list[SettingView]:
     """Every built-in setting explicitly set to a valid value."""
     return [
         interval_view("2h", STATUS_OK, "2h"),
         retention_view(14, STATUS_OK, 14),
         notify_view(False, STATUS_OK, False),
+        suppress_repeated_view(True, STATUS_OK, True),
     ]
 
 
@@ -83,6 +90,7 @@ def views_all_default() -> list[SettingView]:
         interval_view("1h", STATUS_DEFAULT, None),
         retention_view(7, STATUS_DEFAULT, None),
         notify_view(True, STATUS_DEFAULT, None),
+        suppress_repeated_view(False, STATUS_DEFAULT, None),
     ]
 
 
@@ -92,6 +100,7 @@ def views_one_invalid_each() -> list[SettingView]:
         interval_view("1h", STATUS_INVALID, "3h"),
         retention_view(7, STATUS_INVALID, 99),
         notify_view(True, STATUS_INVALID, "maybe"),
+        suppress_repeated_view(False, STATUS_INVALID, "maybe"),
     ]
 
 
@@ -104,12 +113,17 @@ def resolved_settings(
     interval: _Triple = ("1h", STATUS_OK, "1h"),
     retention: _Triple = (7, STATUS_OK, 7),
     notify: _Triple = (True, STATUS_OK, True),
+    suppress_repeated: _Triple = (False, STATUS_OK, False),
 ) -> ResolvedSettings:
     """A ``ResolvedSettings`` for ``--status``, built from synthetic ``(value, status, raw)``."""
     pairs = [
         (SPEC_INTERVAL, ResolvedSetting(interval[0], interval[1])),
         (SPEC_RETENTION, ResolvedSetting(retention[0], retention[1])),
         (SPEC_NOTIFY, ResolvedSetting(notify[0], notify[1])),
+        (
+            SPEC_SUPPRESS_REPEATED,
+            ResolvedSetting(suppress_repeated[0], suppress_repeated[1]),
+        ),
     ]
     return ResolvedSettings(pairs)
 

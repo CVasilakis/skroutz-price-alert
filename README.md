@@ -139,7 +139,8 @@ A complete file is structured like this:
   "settings": {
     "execution_interval": "1h",
     "log_retention_days": 7,
-    "notify_scraping_errors": true
+    "notify_scraping_errors": true,
+    "suppress_repeated_price_alerts": false
   },
   "items": [
     {
@@ -161,6 +162,7 @@ The optional top-level `settings` holds per-scraper preferences, separate from y
 | `execution_interval` | String | How often the scraper's background timer runs. One of `15m`, `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `24h`. If omitted, the scraper's built-in default is used. |
 | `log_retention_days` | Integer / String | How many days of log files each scraper keeps. It should be an integer between **1–30**, written as a number or a day string (`"7d"`, `"7 days"`). Only days are supported (no hours/weeks/months), and logging cannot be disabled. If omitted or an unsupported value is used, the default of 7 days is used. |
 | `notify_scraping_errors` | Boolean | Whether to send the **Scraping Errors** notification for a scraper. Defaults to `true`. Set it to `false` to stop those alerts. The scraping errors are still logged, and the **Tracking Stale** and **Script Crash** alerts are unaffected — so a persistent problem still surfaces. If omitted or an unsupported value is used, the default (`true`, notify) applies. |
+| `suppress_repeated_price_alerts` | Boolean | Whether to suppress a price alert that was already delivered successfully for the same active deal. Defaults to `false`, so below-target prices alert on every run. When `true`, single-product alerts resume only after the price is observed at or above the target and later drops again; listing alerts are deduplicated by canonical offer URL and resume if an offer leaves the below-target result set and later returns. Failed deliveries remain eligible for retry. |
 
 > [!NOTE]
 > Changing `execution_interval` does not take effect on its own. After editing it, apply it to the live timer with the [Set Execution Interval](#set-execution-interval) script: `./scripts/schedule.sh`.
@@ -176,8 +178,14 @@ stable `id`; separate IDs may intentionally use the same source input.
 | `name` | String | **User-defined** | A friendly naming label used inside the notifications. |
 | `target_price` | Number | **User-defined** | The maximum price threshold. If the price drops below this, you get alerted; use `0` to monitor without an alert threshold. |
 | `skip` | Boolean | **User-defined** | Optional. Set to `true` to skip monitoring this item. Defaults to `false`. |
-Runtime `last_price` and `last_checked` values are written to `state/<target>.json`, not
-to user configuration. Timestamps are RFC 3339 UTC strings ending in `Z`.
+Runtime price, check, and successful price-alert history is written to
+`state/<target>.json`, not to user configuration. Timestamps are RFC 3339 UTC strings
+ending in `Z`.
+
+> [!IMPORTANT]
+> Scraper state uses schema version 2. State files created by versions using schema 1
+> are intentionally not migrated. Remove the affected `state/<target>.json` once after
+> updating so the application can recreate it; invalid existing state is never overwritten.
 
 Plugins declare every source input beyond the shared keys above. Most product-page
 plugins require a `url`; other adapters may use several URLs or identifiers such as a
@@ -415,7 +423,7 @@ You might receive the following push notification alerts throughout the lifecycl
 
 | Notification&nbsp;Title&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Trigger Condition |
 | :--- | :--- |
-| **Scrooge Alert - Price Drop!** | Sent when an item's observed price falls below your price limit. Listing-result plugins send one alert per matching offer, each linking directly to that offer. |
+| **Scrooge Alert - Price Drop!** | Sent when an item's observed price falls below your price limit. Listing-result plugins send one alert per matching offer, each linking directly to that offer. Successfully delivered repeats can be suppressed per scraper with [`suppress_repeated_price_alerts`](#scraper-settings). |
 | **Scrooge Alert - Tracking Stale** | Sent if a specific item continuously fails the scrape. |
 | **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_errors](#scraper-settings) setting. |
 | **Scrooge Alert - Script Crash** | Sent if the script completely failed to run. |

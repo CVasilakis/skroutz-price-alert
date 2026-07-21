@@ -1,18 +1,14 @@
-# border: red
+# border: green
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
 │   ✅    Monitored Items                   5 loaded                      │
 │   ✅    Execution Interval                1h (default)                  │
 │   ✅    Log Retention                     7 days (default)              │
 │   ✅    Notify On Errors                  true (default)                │
-│   ✅    Suppress Repeated Price Alerts    false (default)               │
+│   ✅    Suppress Repeated Price Alerts    true                          │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Flaky Stale Item                  ConnectionError [1] [2] [3]   │
-│                                           [4] [5]                       │
+│   🎉    Sony WH-1000XM5                   248.0 € (Target: 300.0 €)     │
+│                                           [1]                           │
 │                                                                         │
-│   [1] Attempt 1: ConnectionError.                                       │
-│   [2] Attempt 2: ConnectionError.                                       │
-│   [3] Attempt 3: ConnectionError.                                       │
-│   [4] See logs/skroutz/errors.txt for details.                          │
-│   [5] Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago).       │
+│   [1] Repeated price alert suppressed.                                  │
 ╰─────────────────────────────────────────────────────────────────────────╯

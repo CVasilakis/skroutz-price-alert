@@ -1,12 +1,14 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
+│   ✅    Monitored Items                   5 loaded                      │
+│   ✅    Execution Interval                1h (default)                  │
+│   ✅    Log Retention                     7 days (default)              │
+│   ✅    Notify On Errors                  true (default)                │
+│   ✅    Suppress Repeated Price Alerts    false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Removed Product       Skipping (ProductNotFoundError) [1]       │
+│   ❗    Removed Product                   Skipping                      │
+│                                           (ProductNotFoundError) [1]    │
 │                                                                         │
 │   [1] Product not found or removed (HTTP 404).                          │
 ╰─────────────────────────────────────────────────────────────────────────╯

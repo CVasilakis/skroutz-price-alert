@@ -11,6 +11,8 @@ from core.scrapers.api import (
 )
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.compiler import compile_plugin
+from core.scrapers.framework.settings import KEY_SUPPRESS_REPEATED_PRICE_ALERTS
+from core.settings import SettingStatus, resolve_settings
 
 
 def _plugin(**changes):
@@ -79,6 +81,22 @@ def test_fields_settings_and_canonical_defaults_are_compiled_without_mutation():
         _compile(_plugin(item_fields=[field, field]))
     with pytest.raises(PluginValidationError):
         _compile(_plugin(settings=[setting, setting]))
+
+
+def test_repeated_price_alert_suppression_is_a_framework_setting_defaulting_false():
+    plugin = _compile()
+    spec = plugin.setting(KEY_SUPPRESS_REPEATED_PRICE_ALERTS)
+
+    default = resolve_settings(plugin.setting_specs, {})
+    assert default[spec] is False
+    assert default.status(spec) is SettingStatus.DEFAULT
+
+    enabled = resolve_settings(plugin.setting_specs, {spec.key: "yes"})
+    assert enabled[spec] is True
+
+    invalid = resolve_settings(plugin.setting_specs, {spec.key: "sometimes"})
+    assert invalid[spec] is False
+    assert invalid.status(spec) is SettingStatus.INVALID
 
 
 @pytest.mark.parametrize(

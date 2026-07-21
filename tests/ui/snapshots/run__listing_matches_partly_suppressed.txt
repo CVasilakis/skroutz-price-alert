@@ -1,18 +1,16 @@
-# border: red
+# border: green
 
-╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
+╭─────────────────────────── Insomnia Scraping ───────────────────────────╮
 │   ✅    Monitored Items                   5 loaded                      │
 │   ✅    Execution Interval                1h (default)                  │
 │   ✅    Log Retention                     7 days (default)              │
 │   ✅    Notify On Errors                  true (default)                │
-│   ✅    Suppress Repeated Price Alerts    false (default)               │
+│   ✅    Suppress Repeated Price Alerts    true                          │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Flaky Stale Item                  ConnectionError [1] [2] [3]   │
-│                                           [4] [5]                       │
+│   🎉    Google Pixel 9 (128 GB)           185.0 € (Target: 200.0 €)     │
+│                                           [1] [2] [3]                   │
 │                                                                         │
-│   [1] Attempt 1: ConnectionError.                                       │
-│   [2] Attempt 2: ConnectionError.                                       │
-│   [3] Attempt 3: ConnectionError.                                       │
-│   [4] See logs/skroutz/errors.txt for details.                          │
-│   [5] Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago).       │
+│   [1] 3 advert(s) matched the filters; 2 below target.                  │
+│   [2] Notification delivered for 1 advert(s).                           │
+│   [3] Repeated notification suppressed for 1 advert(s).                 │
 ╰─────────────────────────────────────────────────────────────────────────╯

@@ -59,6 +59,7 @@ def _():
         interval=("1h", STATUS_DEFAULT, None),
         retention=(7, STATUS_DEFAULT, None),
         notify=(True, STATUS_DEFAULT, None),
+        suppress_repeated=(False, STATUS_DEFAULT, None),
     )
     return drive_service(
         TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly"
@@ -76,6 +77,7 @@ def _():
         interval=("1h", STATUS_NOCFG, None),
         retention=(7, STATUS_NOCFG, None),
         notify=(True, STATUS_NOCFG, None),
+        suppress_repeated=(False, STATUS_NOCFG, None),
     )
     return drive_service(
         TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly"
@@ -116,6 +118,19 @@ def _():
 )
 def _():
     resolved = resolved_settings(notify=(True, STATUS_INVALID, "maybe"))
+    return drive_service(
+        TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly"
+    )
+
+
+@scenario(
+    Surface.STATUS,
+    "service_invalid_suppress_repeated",
+    "An unrecognized suppress_repeated_price_alerts value",
+    tags=("settings",),
+)
+def _():
+    resolved = resolved_settings(suppress_repeated=(False, STATUS_INVALID, "maybe"))
     return drive_service(
         TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly"
     )

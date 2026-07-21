@@ -20,6 +20,7 @@ from core.exceptions import LockAcquisitionError, PluginDependencyError, StateFi
 from core.scrapers.api import ScraperPlugin, TrackedItem, UrlField
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.compiler import compile_plugin
+from core.scrapers.framework.settings import KEY_SUPPRESS_REPEATED_PRICE_ALERTS
 from core.scrapers.framework.state import JsonStateRepository
 from core.settings import resolve_settings
 
@@ -39,14 +40,14 @@ def _plugin():
     )
 
 
-def _load(*, items=(), state=None, error=None, failure_kind=LoadFailureKind.CONFIG):
+def _load(*, items=(), state=None, error=None, failure_kind=LoadFailureKind.CONFIG, settings=None):
     plugin = _plugin()
     failure = None
     if error is not None:
         failure = LoadFailure(failure_kind, error)
     return TargetLoad(
         plugin=plugin,
-        settings=resolve_settings(plugin.setting_specs, {}),
+        settings=resolve_settings(plugin.setting_specs, settings or {}),
         items=tuple(items),
         state=state,
         failure=failure,
@@ -114,7 +115,13 @@ def test_one_state_commit_failure_is_storage_error(monkeypatch):
     state = mock.create_autospec(JsonStateRepository, instance=True)
     state.has_pending = True
     state.save.side_effect = StateFileError("disk full")
-    run, _, _, reporter = _orchestrator(_load(items=[item], state=state))
+    run, _, _, reporter = _orchestrator(
+        _load(
+            items=[item],
+            state=state,
+            settings={KEY_SUPPRESS_REPEATED_PRICE_ALERTS: True},
+        )
+    )
     monkeypatch.setattr(
         "core.application.orchestrator.acquire_lock", lambda _target: contextlib.nullcontext()
     )
@@ -125,6 +132,7 @@ def test_one_state_commit_failure_is_storage_error(monkeypatch):
 
     assert run.run() == EXIT_CODE_STORAGE_ERROR
     state.save.assert_called_once()
+    assert executor_type.call_args.kwargs["suppress_repeated_price_alerts"] is True
     assert "state/store.json" in reporter.log_error.call_args.args[1]
 
 

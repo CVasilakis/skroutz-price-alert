@@ -64,7 +64,13 @@ def test_retry_prepares_transport_then_succeeds():
     executor.client.prepare_retry.assert_called_once()
     assert pacer.sleep.call_count == 2
     reporter.log_attempt.assert_called_once()
-    state.record_priced_check.assert_called_once_with("one", 12.0, NOW)
+    state.record_priced_check.assert_called_once_with(
+        "one",
+        12.0,
+        NOW,
+        price_alert_delivered=False,
+        notified_offer_urls=(),
+    )
 
 
 def test_unexpected_fault_exhausts_retries_and_affects_exit_status(monkeypatch):

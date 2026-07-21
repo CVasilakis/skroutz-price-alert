@@ -102,16 +102,17 @@ def test_state_missing_is_healthy_and_round_trips_aware_utc(tmp_path, plugin):
     assert parse_utc(format_utc(now)) == now
 
 
-def test_schema_v1_no_price_check_preserves_historical_price(tmp_path):
+def test_schema_v2_no_price_check_preserves_historical_price_and_clears_alerts(tmp_path):
     path = tmp_path / "state" / "x.json"
     _write(
         path,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "items": {
                 "phone": {
                     "last_price": 190.0,
                     "last_checked": "2026-07-17T18:30:00Z",
+                    "notified_offer_urls": ["https://example.com/offer"],
                 }
             },
         },
@@ -177,12 +178,27 @@ def test_invalid_rows_are_structured_and_never_loaded(tmp_path, changes, plugin)
     "document",
     [
         [],
-        {"schema_version": 2, "items": {}},
-        {"schema_version": 1, "items": {}, "extra": 1},
-        {"schema_version": 1, "items": []},
-        {"schema_version": 1, "items": {"x": []}},
-        {"schema_version": 1, "items": {"x": {"last_price": True}}},
-        {"schema_version": 1, "items": {"x": {"last_checked": "yesterday"}}},
+        {"schema_version": 1, "items": {}},
+        {"schema_version": 2, "items": {}, "extra": 1},
+        {"schema_version": 2, "items": []},
+        {"schema_version": 2, "items": {"x": []}},
+        {"schema_version": 2, "items": {"x": {"last_price": True}}},
+        {"schema_version": 2, "items": {"x": {"last_checked": "yesterday"}}},
+        {"schema_version": 2, "items": {"x": {"price_alert_delivered": 1}}},
+        {"schema_version": 2, "items": {"x": {"notified_offer_urls": "bad"}}},
+        {
+            "schema_version": 2,
+            "items": {"x": {"notified_offer_urls": ["https://example.com/a#fragment"]}},
+        },
+        {
+            "schema_version": 2,
+            "items": {
+                "x": {
+                    "price_alert_delivered": True,
+                    "notified_offer_urls": ["https://example.com/a"],
+                }
+            },
+        },
     ],
 )
 def test_state_rejects_every_malformed_shape(tmp_path, document):
@@ -202,6 +218,31 @@ def test_state_noop_and_save_failure_are_explicit(tmp_path):
     ):
         with pytest.raises(StateFileError, match="disk full"):
             repo.save()
+
+
+def test_schema_v2_round_trips_alert_delivery_history(tmp_path):
+    path = tmp_path / "state" / "x.json"
+    now = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
+    repo = JsonStateRepository(path)
+    repo.load()
+    repo.record_priced_check("product", 5, now, price_alert_delivered=True)
+    repo.record_priced_check(
+        "listing",
+        6,
+        now,
+        notified_offer_urls=("https://example.com/a", "https://example.com/b?q=1"),
+    )
+    repo.save()
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["schema_version"] == 2
+    reloaded = JsonStateRepository(path)
+    reloaded.load()
+    assert reloaded.get("product").price_alert_delivered is True
+    assert reloaded.get("listing").notified_offer_urls == (
+        "https://example.com/a",
+        "https://example.com/b?q=1",
+    )
 
 
 def test_url_free_required_fields_and_required_settings(tmp_path):

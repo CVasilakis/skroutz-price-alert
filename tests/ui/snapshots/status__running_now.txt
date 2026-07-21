@@ -1,15 +1,16 @@
 # border: green
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   ✅    Monitored Items             5 loaded                            │
-│   ✅    Execution Interval          1h                                  │
-│   ✅    Log Retention               7 days                              │
-│   ✅    Notify On Errors            true                                │
+│   ✅    Monitored Items                   5 loaded                      │
+│   ✅    Execution Interval                1h                            │
+│   ✅    Log Retention                     7 days                        │
+│   ✅    Notify On Errors                  true                          │
+│   ✅    Suppress Repeated Price Alerts    false                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Systemd Timer Active        Yes                                 │
-│   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
-│   ✅    Last Execution Status       OK                                  │
-│   ✅    Next Scheduled Execution    Running Now [1]                     │
+│   ✅    Systemd Timer Active              Yes                           │
+│   ✅    Last Execution Time               Sun 2026-06-28 13:00:00 UTC   │
+│   ✅    Last Execution Status             OK                            │
+│   ✅    Next Scheduled Execution          Running Now [1]               │
 │                                                                         │
 │   [1] Script is currently running in the background.                    │
 ╰─────────────────────────────────────────────────────────────────────────╯
