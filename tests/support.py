@@ -7,11 +7,13 @@ import types
 from dataclasses import dataclass
 from unittest import mock
 
+from core.application.contracts import RunReporter
 from core.general import general_config_path
 from core.notifier import Notifier
-from core.run import RunReporter
 from core.scrapers.api import ScraperClient, ScraperPlugin, UrlField
-from core.scrapers.registry import PluginCatalog, RegisteredPlugin, compile_plugin
+from core.scrapers.framework.catalog import PluginCatalog
+from core.scrapers.framework.compiler import compile_plugin
+from core.scrapers.framework.model import RegisteredPlugin
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,7 @@ def catalog_sandbox(*plugins: PluginFixture | RegisteredPlugin):
         records = []
         for plugin in plugins:
             if isinstance(plugin, PluginFixture):
-                package = f"core.scrapers.{plugin.target}"
+                package = f"core.scrapers.plugins.{plugin.target}"
                 if plugin.client_class is not None:
                     module_name = f"{package}.client"
                     module = types.ModuleType(module_name)

@@ -257,7 +257,7 @@ class TestRegistryDiagnose(unittest.TestCase):
         # adjacent pyvenv.cfg, or site-packages would be missing and discovery
         # would fail on the framework imports before reaching the broken plugin.
         os.symlink(REPO_ROOT / "venv", self.tmp / "venv")
-        broken = self.tmp / "src" / "core" / "scrapers" / "zzzbroken"
+        broken = self.tmp / "src" / "core" / "scrapers" / "plugins" / "zzzbroken"
         broken.mkdir()
         (broken / "__init__.py").write_text('raise RuntimeError("boom")\n')
 
@@ -273,7 +273,7 @@ class TestListSupportedIntervals(unittest.TestCase):
         venv_python = REPO_ROOT / "venv" / "bin" / "python3"
         if not venv_python.exists():  # pragma: no cover - core-only checkout
             self.skipTest("project venv not available")
-        from core.scrapers.settings import SUPPORTED_INTERVALS
+        from core.scrapers.framework.settings import SUPPORTED_INTERVALS
 
         result = run_sh("list_supported_intervals")
         self.assertEqual(result.stdout.strip(), ", ".join(SUPPORTED_INTERVALS))

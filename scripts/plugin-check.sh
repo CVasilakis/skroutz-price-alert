@@ -25,11 +25,11 @@ plugin_check_python="$(
 plugin_venv_parent="$(dirname -- "$(dirname -- "$(dirname -- "$plugin_check_python")")")"
 
 env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
-    -m core.scrapers.cli plugin-check "$target"
+    -m core.scrapers.tooling.cli plugin-check "$target"
 "$plugin_check_python" -m pytest --no-cov "$BASE_DIR/tests/plugins/$target"
 "$plugin_check_python" -m basedpyright --venvpath "$plugin_venv_parent" \
-    "$BASE_DIR/src/core/scrapers/$target"
+    "$BASE_DIR/src/core/scrapers/plugins/$target"
 "$plugin_check_python" -m ruff check \
-    "$BASE_DIR/src/core/scrapers/$target" "$BASE_DIR/tests/plugins/$target"
+    "$BASE_DIR/src/core/scrapers/plugins/$target" "$BASE_DIR/tests/plugins/$target"
 "$plugin_check_python" -m ruff format --check \
-    "$BASE_DIR/src/core/scrapers/$target" "$BASE_DIR/tests/plugins/$target"
+    "$BASE_DIR/src/core/scrapers/plugins/$target" "$BASE_DIR/tests/plugins/$target"

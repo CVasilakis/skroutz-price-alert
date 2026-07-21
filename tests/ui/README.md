@@ -77,12 +77,11 @@ approved last time?" You approve the output once (by generating the golden file 
 reviewing it), and from then on any drift is flagged automatically.
 
 **Why drive the real code instead of mocking the panels?** Fidelity. The drivers call the
-actual functions the app uses at runtime (`ping.build_ping_panel`,
-`status.build_service_panel`, the real `InteractiveRunReporter`, the real
+actual functions the app uses at runtime (`core.tui.ping.build_ping_panel`,
+`core.tui.status.build_service_panel`, the real `InteractiveRunReporter`, the real
 `config_check` row helpers). A reimplementation could pass its own tests while the real UI
-is broken. (These builder functions were deliberately extracted from the `main()` bodies
-of `ping.py`/`status.py` so they could be called in isolation — same pattern
-`config_check.py` already used.)
+is broken. The root entry points collect inputs and delegate all rendering to these
+presentation-only builders.
 
 ---
 
@@ -140,8 +139,9 @@ the complete development toolchain once with `./scripts/dev-setup.sh`.
 ./venv/bin/python3 -m pytest
 ```
 
-The `pythonpath` setting lets the scenarios import the production modules (`core.ui.tui`, `core.status`,
-`core.ping`, …) and the `ui.*` test packages the same way the app does — no `PYTHONPATH=` prefix
+The `pythonpath` setting lets the scenarios import the production modules
+(`core.tui.run_reporter`, `core.tui.status`,
+`core.tui.ping`, …) and the `ui.*` test packages the same way the app does — no `PYTHONPATH=` prefix
 needed. This runs the existing project tests **and** the UI snapshot + color tests together
 (`pytest tests/ui` runs just this suite).
 
@@ -261,11 +261,11 @@ real production builder:
 
 | Surface  | Gallery label | Driver(s)                                                   | Drives (production code)                              |
 |----------|---------------|-------------------------------------------------------------|------------------------------------------------------|
-| `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `tui.InteractiveRunReporter` panel    |
+| `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `run_reporter.InteractiveRunReporter` panel    |
 | `E2E_RUN`| Scraping panel (end-to-end) | `drive_orchestrated_run(products, results_by_url)`          | the real `ScrapingOrchestrator` driving that same panel |
 | `STATUS` | Health check (--status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
 | `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, config_error_msg)`   | `ping.build_ping_panel`                              |
-| `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check._append_*` row helpers                 |
+| `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check.build_config_panel`                    |
 | `STARTUP`| Full startup transcript (test-only; hidden from gallery/report) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript on one console: Configuration Check + the real `ReminderService.run_once()` + the Scraping panel (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
 | `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
 

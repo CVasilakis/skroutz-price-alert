@@ -53,11 +53,11 @@ from core.general.settings import (
     SPEC_REMINDER_TIME,
 )
 from core.general.vocab import display_reminder, time_parts, weekday_index, weeks_for
-from core.locks import acquire_lock
-from core.logger import get_target_logger, save_traceback
-from core.persistence import format_utc, parse_utc, write_json_atomically
+from core.infrastructure.locking import acquire_lock
+from core.infrastructure.logging import get_target_logger, save_traceback
+from core.infrastructure.persistence import format_utc, parse_utc, write_json_atomically
+from core.infrastructure.updates import check_for_updates
 from core.settings import ResolvedSettings, SettingStatus
-from core.utils import check_for_updates
 
 if TYPE_CHECKING:
     from core.notifier import Notifier

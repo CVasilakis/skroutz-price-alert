@@ -13,7 +13,7 @@ import re
 import unittest
 from pathlib import Path
 
-from core.scrapers.registry import RESERVED_PLUGIN_NAMES
+from core.scrapers.framework.naming import RESERVED_PLUGIN_NAMES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

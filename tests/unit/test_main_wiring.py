@@ -5,7 +5,7 @@ Everything main() touches is patched with ``autospec=True``, so this asserts the
 (that the reminder is constructed and run, in the right order) *and* that every
 constructor/function call still matches the real signatures — a parameter added to
 ``ScrapingOrchestrator``, ``ReminderService``, ``Notifier``, ``load_targets`` or
-``preflight`` fails here instead of passing silently. It does not test any scraping
+``validate_notification_preflight`` fails here instead of passing silently. It does not test any scraping
 behavior.
 """
 
@@ -27,7 +27,9 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.ClientLoader", autospec=True),
             mock.patch("core.main.load_targets", autospec=True, return_value=[]),
             mock.patch("core.main.load_general_config", autospec=True) as load_general,
-            mock.patch("core.main.preflight", autospec=True, return_value=None),
+            mock.patch(
+                "core.main.validate_notification_preflight", autospec=True, return_value=None
+            ),
             mock.patch("core.main.Notifier", autospec=True) as Notifier,
             mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
             mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator,
@@ -61,7 +63,7 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.ClientLoader", autospec=True),
             mock.patch("core.main.load_targets", autospec=True, return_value=[]),
             mock.patch("core.main.load_general_config", autospec=True),
-            mock.patch("core.main.preflight", autospec=True, return_value=3),
+            mock.patch("core.main.validate_notification_preflight", autospec=True, return_value=3),
             mock.patch("core.main.Notifier", autospec=True),
             mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
             mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator,
@@ -82,9 +84,10 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.ClientLoader") as ClientLoader,
             mock.patch("core.main.load_targets", return_value=[]) as load_targets,
             mock.patch("core.main.load_general_config") as load_general,
-            mock.patch("core.main.preflight", return_value=None) as preflight,
             mock.patch("core.main.install_interrupt_handler") as install_handler,
-            mock.patch("core.main.Console"),
+            mock.patch("core.main.check_for_updates", return_value=False),
+            mock.patch("core.main.render_config_panel") as render_config,
+            mock.patch("core.main.Console") as Console,
             mock.patch("core.main.signal.signal"),
             mock.patch("core.main.InteractiveRunReporter") as strategy_type,
             mock.patch("core.main.Notifier"),
@@ -102,11 +105,8 @@ class TestMainWiring(unittest.TestCase):
 
         self.assertEqual(caught.exception.code, 0)
         load_targets.assert_called_once_with([plugin], core.main.CONFIG_DIR)
-        preflight.assert_called_once_with(
-            mock.ANY,
-            ["skroutz"],
-            quiet=False,
-            general=load_general.return_value,
+        render_config.assert_called_once_with(
+            Console.return_value, load_general.return_value, False
         )
         install_handler.assert_called_once()
         Orchestrator.assert_called_once_with(

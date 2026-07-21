@@ -10,7 +10,7 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from core.scrapers.settings import framework_setting_specs
+from core.scrapers.framework.settings import framework_setting_specs
 from core.settings import (
     ResolvedSetting,
     ResolvedSettings,
@@ -18,7 +18,7 @@ from core.settings import (
     SettingView,
     setting_view,
 )
-from core.ui.config_check import ConfigView, config_view
+from core.tui.config_check import ConfigView, config_view
 
 SPEC_INTERVAL, SPEC_RETENTION, SPEC_NOTIFY = framework_setting_specs("1h")
 STATUS_OK = SettingStatus.OK

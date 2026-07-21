@@ -1,0 +1,58 @@
+"""Conventional, one-shot scraper client loading."""
+
+from __future__ import annotations
+
+import importlib
+
+from core import messages
+from core.exceptions import PluginDependencyError, PluginValidationError
+from core.scrapers.api import ScraperClient
+from core.scrapers.framework.model import RegisteredPlugin
+from core.settings import ResolvedSettings
+
+
+class ClientLoader:
+    """Load one conventional client without retaining lifecycle state."""
+
+    @staticmethod
+    def _import_failure(plugin: RegisteredPlugin, exc: ImportError) -> Exception:
+        missing = getattr(exc, "name", None)
+        internal = (
+            not missing
+            or missing == plugin.package
+            or plugin.package.startswith(f"{missing}.")
+            or missing.startswith(f"{plugin.package}.")
+            or missing == "core"
+            or missing.startswith("core.")
+        )
+        if internal:
+            return PluginValidationError(f"Plugin '{plugin.target}' client import failed: {exc}")
+        return PluginDependencyError(messages.plugin_dependency_detail(plugin.target, missing))
+
+    def load(self, plugin: RegisteredPlugin, settings: ResolvedSettings) -> ScraperClient:
+        module_name = f"{plugin.package}.client"
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError as exc:
+            raise self._import_failure(plugin, exc) from exc
+        except Exception as exc:
+            raise PluginValidationError(
+                f"Plugin '{plugin.target}' client import failed: {exc}"
+            ) from exc
+        try:
+            client_type = module.Client
+        except AttributeError as exc:
+            raise PluginValidationError(
+                f"Plugin '{plugin.target}' must export Client from client.py."
+            ) from exc
+        if not isinstance(client_type, type) or not issubclass(client_type, ScraperClient):
+            raise PluginValidationError(
+                f"Plugin '{plugin.target}' Client must be a ScraperClient subclass."
+            )
+        try:
+            return client_type(settings)
+        except ImportError as exc:
+            raise self._import_failure(plugin, exc) from exc
+
+
+__all__ = ["ClientLoader"]

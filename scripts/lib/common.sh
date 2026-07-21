@@ -84,7 +84,7 @@ plugin_in_list() {
 # list_installed_plugins.
 registry_cli() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" -m core.scrapers.cli "$@"
+    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" -m core.scrapers.tooling.cli "$@"
 }
 
 # Acquire one immutable manifest snapshot for the current command. A failed
@@ -179,7 +179,7 @@ registry_diagnose() {
     fi
     printf "%b\n" "${RED}Error: Scraper plugin discovery failed:${NC}" >&2
     registry_cli diagnose >&2 || :
-    printf "%b\n" "Fix (or remove) the offending plugin package under ${CYAN}src/core/scrapers/${NC}, then retry." >&2
+    printf "%b\n" "Fix (or remove) the offending plugin package under ${CYAN}src/core/scrapers/plugins/${NC}, then retry." >&2
     return 1
 }
 

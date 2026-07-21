@@ -54,7 +54,7 @@
 Supported targets are discovered from the checked-in plugin packages. Run
 `./scripts/run.sh --help` to see the exact target flags available in your checkout.
 Each target's accepted URLs, custom fields, settings, dependencies, and examples are
-documented in `src/core/scrapers/<target>/README.md` beside its implementation.
+documented in `src/core/scrapers/plugins/<target>/README.md` beside its implementation.
 
 ## 📋 Prerequisites
 
@@ -128,7 +128,7 @@ live beside their plugins:
 
 ```sh
 target=TARGET_NAME  # replace with a target shown by ./scripts/run.sh --help
-cp "src/core/scrapers/$target/config.example.json" "config/$target.json"
+cp "src/core/scrapers/plugins/$target/config.example.json" "config/$target.json"
 nano "config/$target.json"
 ```
 

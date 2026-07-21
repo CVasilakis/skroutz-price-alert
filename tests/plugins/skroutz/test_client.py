@@ -4,9 +4,9 @@ import pytest
 
 from core.exceptions import InvalidURLError
 from core.scrapers.api import TrackedItem
-from core.scrapers.registry import PluginCatalog
-from core.scrapers.skroutz.client import Client
-from core.scrapers.skroutz.plugin import URL
+from core.scrapers.framework.catalog import PluginCatalog
+from core.scrapers.plugins.skroutz.client import Client
+from core.scrapers.plugins.skroutz.plugin import URL
 from core.settings import resolve_settings
 
 
@@ -23,7 +23,7 @@ def _item(url: str) -> TrackedItem:
 
 def test_request_and_price_parsing_keeps_defensive_id_extraction():
     plugin = PluginCatalog.discover().get("skroutz")
-    with mock.patch("core.scrapers.http.tls_client.Session"):
+    with mock.patch("core.scrapers.support.http.tls_client.Session"):
         client = Client(resolve_settings(plugin.setting_specs, {}))
     client.get = mock.Mock(return_value=Response())
 

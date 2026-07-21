@@ -16,7 +16,7 @@ addopts = "--cov=src/core --cov-report=term-missing:skip-covered"
 [tool.coverage.run]
 # The underscore-prefixed package is a copyable contributor template, deliberately
 # excluded from runtime discovery and therefore not part of production coverage.
-omit = ["src/core/scrapers/_example/*"]
+omit = ["src/core/scrapers/plugins/_example/*"]
 
 # Static-analysis configuration for Pyright / Pylance / basedpyright (basedpyright
 # reads [tool.pyright] as a fallback). extraPaths mirrors pytest's `pythonpath`

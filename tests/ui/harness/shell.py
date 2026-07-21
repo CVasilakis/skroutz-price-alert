@@ -279,11 +279,11 @@ case "${1:-}" in
     -m)
         shift
         case "$*" in
-            "core.scrapers.cli manifest --config-dir "*)
+            "core.scrapers.tooling.cli manifest --config-dir "*)
                 [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
                 [ -n "${FAKE_PLUGIN_MANIFEST:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_MANIFEST" ;;
-            "core.scrapers.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
-            "core.scrapers.cli diagnose")
+            "core.scrapers.tooling.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
+            "core.scrapers.tooling.cli diagnose")
                 if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
                     printf '  %s\\n' "$FAKE_DISCOVERY_ERROR"
                     exit 1
@@ -445,7 +445,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "CLICOLOR_FORCE": "1",
         "FAKE_PLUGINS": " ".join(plugins),
         "FAKE_PLUGIN_EXAMPLES": "\n".join(
-            f"{p}\t{sandbox}/src/core/scrapers/{p}/config.example.json" for p in plugins
+            f"{p}\t{sandbox}/src/core/scrapers/plugins/{p}/config.example.json" for p in plugins
         ),
         "FAKE_PLUGIN_REQUIREMENTS": "\n".join(
             f"{p}\t{r}" for p, r in (world.requirements or {}).items()
@@ -457,7 +457,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
                 (
                     plugin,
                     plugin.capitalize(),
-                    f"{sandbox}/src/core/scrapers/{plugin}/config.example.json",
+                    f"{sandbox}/src/core/scrapers/plugins/{plugin}/config.example.json",
                     (world.requirements or {}).get(plugin, ""),
                     schedules.get(plugin, ""),
                     interval_status.get(plugin, ""),

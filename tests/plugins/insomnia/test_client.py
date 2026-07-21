@@ -4,13 +4,13 @@ import pytest
 
 from core.exceptions import RateLimitError, ScraperParseError
 from core.scrapers.api import TrackedItem
-from core.scrapers.insomnia.client import Client
-from core.scrapers.insomnia.plugin import (
+from core.scrapers.framework.catalog import PluginCatalog
+from core.scrapers.plugins.insomnia.client import Client
+from core.scrapers.plugins.insomnia.plugin import (
     TITLE_EXCLUDE,
     TITLE_INCLUDE,
     URL,
 )
-from core.scrapers.registry import PluginCatalog
 from core.settings import resolve_settings
 
 HTML = """
@@ -30,7 +30,7 @@ class Response:
 def _client(html: str = HTML, status: int = 200, floor: float = 30) -> Client:
     plugin = PluginCatalog.discover().get("insomnia")
     settings = resolve_settings(plugin.setting_specs, {"min_advert_price": floor})
-    with mock.patch("core.scrapers.http.tls_client.Session"):
+    with mock.patch("core.scrapers.support.http.tls_client.Session"):
         client = Client(settings)
     client.get = mock.Mock(return_value=Response(text=html, status=status))
     return client

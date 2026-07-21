@@ -50,6 +50,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar,
         mock.patch("core.status.load_targets", return_value=(load,)),
         mock.patch("core.status.load_general_config") as load_general,
+        mock.patch("core.status._check_for_updates", return_value=False),
         mock.patch("core.status.render_config_panel") as render_config,
         mock.patch("core.status.signal.signal"),
         mock.patch("core.status.get_systemd_properties", side_effect=systemd_properties),
@@ -69,7 +70,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
 
     oncalendar.assert_called_once_with("1h")
     load_general.assert_called_once_with(core.status.CONFIG_DIR)
-    render_config.assert_called_once_with(console, load_general.return_value)
+    render_config.assert_called_once_with(console, load_general.return_value, False)
     build_service.assert_called_once()
     service_panel.render.assert_called_once_with(console)
     build_missing.assert_called_once_with("beta", "Beta")

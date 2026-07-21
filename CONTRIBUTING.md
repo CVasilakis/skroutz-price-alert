@@ -1,7 +1,7 @@
 # Contributing a scraper plugin
 
 Scrapers are checked-in price adapters. A contribution is strictly additive: it
-creates `src/core/scrapers/<target>/` and `tests/plugins/<target>/` and does not edit
+creates `src/core/scrapers/plugins/<target>/` and `tests/plugins/<target>/` and does not edit
 the framework, registry, shell tools, UI, root documentation, workflows, or snapshots.
 The package name becomes the CLI flag and the stem for config, state, logs, and
 systemd units.
@@ -113,7 +113,7 @@ the same catalog feeds terminal panels and a TSV shell bridge.
 
 ```python
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
-from core.scrapers.acme_store.plugin import PRODUCT_URL
+from core.scrapers.plugins.acme_store.plugin import PRODUCT_URL
 
 
 class Client(ScraperClient):
@@ -219,9 +219,9 @@ a non-secret string mapping for traceback logs, and `close()` to release resourc
 The orchestrator creates one client per target and closes it in that target's
 `finally` block.
 
-HTTP clients may subclass the documented `core.scrapers.http.HttpScraperClient`
+HTTP clients may subclass the documented `core.scrapers.support.http.HttpScraperClient`
 for bounded requests, TLS identity rotation, clean shutdown, and standard HTTP
-status mapping. Use `core.scrapers.pricing.parse_price` for finite price parsing
+status mapping. Use `core.scrapers.support.pricing.parse_price` for finite price parsing
 with European or US separators. A plugin using this optional helper must declare
 `tls-client` in its own `requirements.txt`. Transport/parser modules may load private
 dependencies and therefore belong in `client.py`, never the descriptor.

@@ -7,9 +7,9 @@ the captured snapshot reflects exactly what the application renders:
   ``rich.live.Live`` stubbed) and captures the resulting panel — the same panel the
   orchestrator drives at runtime.
 * ``drive_service`` / ``drive_not_installed`` / ``drive_orphan`` call the pure builders
-  extracted into ``status.py``.
-* ``drive_ping`` calls the pure builder extracted into ``ping.py``.
-* ``drive_config`` calls the existing ``config_check._append_*`` helpers with an
+  in ``core.tui.status``.
+* ``drive_ping`` calls the pure builder in ``core.tui.ping``.
+* ``drive_config`` calls ``config_check.build_config_panel`` with an
   immutable synthetic general-config load.
 """
 
@@ -26,9 +26,7 @@ from unittest import mock
 from rich.console import Console
 from rich.text import Text
 
-from core import logger as core_logger
-from core import ping, status
-from core.exceptions import UpdateCheckError
+from core.application import orchestrator as orchestrator_module
 from core.general import ReminderService
 from core.general.configuration import GeneralConfigLoad
 from core.general.notifications import NotificationConfig
@@ -38,10 +36,10 @@ from core.general.settings import (
     KEY_REMINDER_DAY,
     KEY_REMINDER_TIME,
 )
-from core.logger import setup_global_logging
+from core.infrastructure import logging as core_logger
+from core.infrastructure.logging import setup_global_logging
 from core.settings import ResolvedSettings
-from core.ui import config_check, tui
-from core.ui.panel import StatusPanelBuilder
+from core.tui import config_check, ping, run_reporter, status
 from ui.catalog._base import BuildResult
 
 # NB: ``ui.harness.rendering`` is imported lazily inside drive_startup, not here:
@@ -74,7 +72,7 @@ class _FakeLive:
         pass
 
 
-def drive_run(script: Callable[[tui.InteractiveRunReporter], None]) -> BuildResult:
+def drive_run(script: Callable[[run_reporter.InteractiveRunReporter], None]) -> BuildResult:
     """Runs ``script`` against a real strategy and captures its final panel.
 
     The script calls the strategy's public methods (``start_target``, ``log_price_result``,
@@ -86,8 +84,8 @@ def drive_run(script: Callable[[tui.InteractiveRunReporter], None]) -> BuildResu
     Returns:
         BuildResult: the panel from ``_generate_panel()`` and its ``border_style``.
     """
-    with mock.patch.object(tui, "Live", _FakeLive):
-        strat = tui.InteractiveRunReporter()
+    with mock.patch.object(run_reporter, "Live", _FakeLive):
+        strat = run_reporter.InteractiveRunReporter()
         # Absorb the blank line complete_target prints; the captured panel comes from
         # _generate_panel(), not this console.
         strat.console = Console(file=io.StringIO())
@@ -129,11 +127,10 @@ def drive_orchestrated_run(
     """
     from support import catalog_sandbox, fake_plugin, mock_notifier
 
-    from core import orchestrator as orchestrator_module
-    from core.orchestrator import ScrapingOrchestrator
-    from core.preflight import load_targets
+    from core.application.orchestrator import ScrapingOrchestrator
+    from core.application.preflight import load_targets
     from core.scrapers.api import ScraperClient, UrlField
-    from core.scrapers.registry import ClientLoader
+    from core.scrapers.framework.clients import ClientLoader
 
     scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
     url_field = UrlField("url", domains=("fake-store.example",), accepts_url=lambda _url: True)
@@ -168,8 +165,8 @@ def drive_orchestrated_run(
             client_class=_ScriptedClient,
             url_field=url_field,
         )
-        with catalog_sandbox(plugin) as catalog, mock.patch.object(tui, "Live", _FakeLive):
-            strat = tui.InteractiveRunReporter()
+        with catalog_sandbox(plugin) as catalog, mock.patch.object(run_reporter, "Live", _FakeLive):
+            strat = run_reporter.InteractiveRunReporter()
             strat.console = Console(file=io.StringIO())
 
             loader = ClientLoader()
@@ -182,7 +179,7 @@ def drive_orchestrated_run(
                 reporter=strat,
             )
             with (
-                mock.patch("core.execution.ItemExecutor.sleep_with_jitter"),
+                mock.patch("core.application.execution.ItemExecutor.sleep_with_jitter"),
                 mock.patch.object(orchestrator_module.signal, "signal"),
                 mock.patch.object(orchestrator_module, "get_target_logger", lambda *a, **k: stub),
             ):
@@ -265,7 +262,7 @@ def drive_config(
     reminder_day_raw: object = None,
     reminder_time_raw: object = None,
 ) -> BuildResult:
-    """Builds the Configuration Check panel (global checks only), patching its seams.
+    """Build the Configuration Check panel from synthetic collected inputs.
 
     Per-scraper products-config health is no longer on this panel — it now leads each
     Service Status (STATUS surface) and Scraping (RUN surface) panel — so this drives
@@ -285,13 +282,6 @@ def drive_config(
         reminder_day_raw (object): the raw ``reminder_day`` value (same semantics).
         reminder_time_raw (object): the raw ``reminder_time`` value (same semantics).
     """
-    panel = StatusPanelBuilder("Configuration Check")
-
-    def check_for_updates() -> bool:
-        if version_state == "error":
-            raise UpdateCheckError("could not reach the update endpoint")
-        return version_state == "available"
-
     from core.settings import resolve_settings
 
     block = {
@@ -312,10 +302,8 @@ def drive_config(
         permission_warning=permission_warning or None,
     )
 
-    with mock.patch.object(config_check, "check_for_updates", check_for_updates):
-        config_check._append_version_row(panel)
-        config_check._append_notifications_row(panel, general)
-        config_check._append_general_rows(panel, general)
+    update_available = {"uptodate": False, "available": True, "error": None}[version_state]
+    panel = config_check.build_config_panel(general, update_available)
 
     return BuildResult(panel, panel.get_panel_color())
 
@@ -366,7 +354,7 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
 
 
 def drive_startup(
-    run_script: Callable[[tui.InteractiveRunReporter], None],
+    run_script: Callable[[run_reporter.InteractiveRunReporter], None],
     *,
     reminder_raw: object = None,
     version_state: str = "uptodate",

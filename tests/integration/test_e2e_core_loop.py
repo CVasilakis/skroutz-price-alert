@@ -7,11 +7,11 @@ from unittest import mock
 
 from support import catalog_sandbox, fake_plugin, mock_notifier, mock_ui
 
+from core.application.contracts import PriceOutcome
+from core.application.orchestrator import ScrapingOrchestrator
+from core.application.preflight import load_targets
 from core.constants import EXIT_CODE_SUCCESS
-from core.orchestrator import ScrapingOrchestrator
-from core.preflight import load_targets
-from core.run import PriceOutcome
-from core.scrapers.registry import ClientLoader
+from core.scrapers.framework.clients import ClientLoader
 from integration.fake_store import URL, FakeStoreClient, fake_store_server
 
 NOW = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
@@ -48,9 +48,9 @@ def _run(catalog, config_dir, state_dir, notifier, ui):
     )
     logger = logging.getLogger("e2e")
     with (
-        mock.patch("core.execution.ItemExecutor.sleep_with_jitter"),
-        mock.patch("core.orchestrator.signal.signal"),
-        mock.patch("core.orchestrator.get_target_logger", return_value=logger),
+        mock.patch("core.application.execution.ItemExecutor.sleep_with_jitter"),
+        mock.patch("core.application.orchestrator.signal.signal"),
+        mock.patch("core.application.orchestrator.get_target_logger", return_value=logger),
     ):
         return orchestrator.run()
 

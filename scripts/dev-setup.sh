@@ -32,7 +32,7 @@ command -v python3 >/dev/null 2>&1 || {
     exit 1
 }
 PLUGIN_REQUIREMENTS="$(
-    PYTHONPATH="$SCRIPT_DIR/src" python3 -m core.scrapers.cli requirements
+    PYTHONPATH="$SCRIPT_DIR/src" python3 -m core.scrapers.tooling.cli requirements
 )"
 FOUND=0
 OLD_IFS="$IFS"

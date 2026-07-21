@@ -9,7 +9,7 @@ pins the final rendered text (regenerate with ``UPDATE_SNAPSHOTS=1``).
 Import-light on purpose (no Rich, no transport libraries): the UI catalog and any
 test can import this module without a plugin's dependency stack. Fixed strings are
 UPPER_CASE constants; parametrized strings are functions. Presentation-only text
-(panel titles, spinner labels) stays in ``ui/`` — it already lives in exactly one
+(panel titles, spinner labels) stays in ``tui/`` — it already lives in exactly one
 production place and is pinned by the snapshots.
 """
 

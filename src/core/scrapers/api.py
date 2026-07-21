@@ -93,7 +93,7 @@ def _nonblank(value: object, field_name: str) -> str:
 
 
 def _absolute_result_url(value: object, field_name: str) -> str:
-    from core.scrapers.url import canonicalize_url
+    from core.scrapers.framework.url import canonicalize_url
 
     try:
         return canonicalize_url(value)

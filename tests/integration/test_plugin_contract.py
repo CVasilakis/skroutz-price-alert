@@ -8,11 +8,12 @@ from unittest import mock
 import pytest
 from support import mock_notifier, mock_ui
 
-from core.orchestrator import ScrapingOrchestrator
-from core.preflight import load_targets
+from core.application.orchestrator import ScrapingOrchestrator
+from core.application.preflight import load_targets
 from core.scrapers.api import ScraperClient
-from core.scrapers.check import check_plugin
-from core.scrapers.registry import ClientLoader, PluginCatalog
+from core.scrapers.framework.catalog import PluginCatalog
+from core.scrapers.framework.clients import ClientLoader
+from core.scrapers.tooling.check import check_plugin
 
 CATALOG = PluginCatalog.discover()
 
@@ -47,19 +48,19 @@ def test_client_binding_is_lazy_and_typed(target, tmp_path):
 
 def test_copyable_template_runs_end_to_end_without_framework_edits(tmp_path):
     """A copied package reaches state persistence through the production bindings."""
-    import core.scrapers as scraper_package
+    import core.scrapers.plugins as plugin_package
 
-    discovery_root = tmp_path / "core" / "scrapers"
+    discovery_root = tmp_path / "core" / "scrapers" / "plugins"
     target_dir = discovery_root / "template_store"
-    shutil.copytree(Path("src/core/scrapers/_example"), target_dir)
+    shutil.copytree(Path("src/core/scrapers/plugins/_example"), target_dir)
     test_dir = tmp_path / "tests" / "plugins" / "template_store"
     test_dir.mkdir(parents=True)
     (test_dir / "test_client.py").write_text("def test_placeholder(): pass\n")
 
-    saved_path = list(scraper_package.__path__)
-    scraper_package.__path__.append(str(discovery_root))
+    saved_path = list(plugin_package.__path__)
+    plugin_package.__path__.append(str(discovery_root))
     try:
-        catalog = PluginCatalog.discover(discovery_root, package="core.scrapers")
+        catalog = PluginCatalog.discover(discovery_root, package="core.scrapers.plugins")
         checks = check_plugin("template_store", catalog, repo_root=tmp_path)
         assert "state round-trip" in checks
         assert "conventional lazy Client" in checks
@@ -76,10 +77,10 @@ def test_copyable_template_runs_end_to_end_without_framework_edits(tmp_path):
             reporter=mock_ui(),
         )
         with (
-            mock.patch("core.execution.ItemExecutor.sleep_with_jitter"),
-            mock.patch("core.orchestrator.signal.signal"),
+            mock.patch("core.application.execution.ItemExecutor.sleep_with_jitter"),
+            mock.patch("core.application.orchestrator.signal.signal"),
             mock.patch(
-                "core.orchestrator.get_target_logger",
+                "core.application.orchestrator.get_target_logger",
                 return_value=logging.getLogger("template-e2e"),
             ),
         ):
@@ -87,9 +88,9 @@ def test_copyable_template_runs_end_to_end_without_framework_edits(tmp_path):
         state = json.loads((state_dir / "template_store.json").read_text())
         assert state["items"]["sample-widget"]["last_price"] == 1.0
     finally:
-        scraper_package.__path__[:] = saved_path
+        plugin_package.__path__[:] = saved_path
         for name in tuple(sys.modules):
-            if name == "core.scrapers.template_store" or name.startswith(
-                "core.scrapers.template_store."
+            if name == "core.scrapers.plugins.template_store" or name.startswith(
+                "core.scrapers.plugins.template_store."
             ):
                 sys.modules.pop(name, None)

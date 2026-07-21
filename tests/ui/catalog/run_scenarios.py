@@ -11,8 +11,8 @@ stay as illustrative literals — they are arbitrary inputs, not framework wordi
 """
 
 from core import messages
+from core.application.contracts import ConfigOutcome, PriceOutcome
 from core.constants import OLD_ENTRY_HOURS
-from core.run import ConfigOutcome, PriceOutcome
 from core.settings import SettingStatus
 from ui.catalog._base import Surface, scenario
 from ui.catalog.inputs import (

@@ -9,7 +9,7 @@ from pathlib import Path
 from core.exceptions import ConfigFileError
 from core.general.notifications import NotificationConfig, resolve_notification_config
 from core.general.settings import general_config_path, resolve_general_settings
-from core.persistence import read_json_object
+from core.infrastructure.persistence import read_json_object
 from core.settings import ResolvedSettings
 
 GENERAL_PERMISSION_WARNING = (

@@ -10,19 +10,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rich.console import Console
 
+from core.application.orchestrator import ScrapingOrchestrator
+from core.application.preflight import load_targets, validate_notification_preflight
+from core.application.reporting import SilentRunReporter
 from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
+from core.exceptions import UpdateCheckError
 from core.general import ReminderService, load_general_config
 from core.general.reminder import general_state_path
-from core.logger import save_traceback, setup_global_logging
+from core.infrastructure.logging import save_traceback, setup_global_logging
+from core.infrastructure.signals import install_interrupt_handler
+from core.infrastructure.updates import check_for_updates
 from core.notifier import Notifier
-from core.orchestrator import ScrapingOrchestrator
-from core.preflight import load_targets
-from core.reporting import SilentRunReporter
-from core.scrapers.registry import ClientLoader, PluginCatalog
-from core.scrapers.settings import KEY_RETENTION
-from core.ui.config_check import preflight
-from core.ui.tui import InteractiveRunReporter
-from core.utils import install_interrupt_handler
+from core.scrapers.framework.catalog import PluginCatalog
+from core.scrapers.framework.clients import ClientLoader
+from core.scrapers.framework.settings import KEY_RETENTION
+from core.tui.config_check import render_config_panel
+from core.tui.run_reporter import InteractiveRunReporter
 
 
 def main() -> None:
@@ -70,7 +73,13 @@ def main() -> None:
         console = Console()
         console.print()
 
-        init_fatal_error = preflight(console, targets_to_run, quiet=False, general=general)
+        with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
+            try:
+                update_available: bool | None = check_for_updates()
+            except UpdateCheckError:
+                update_available = None
+        render_config_panel(console, general, update_available)
+        init_fatal_error = None
 
         # Restore default handlers immediately after the spinner vanishes
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -83,12 +92,10 @@ def main() -> None:
         retention_by_target = {
             load.target: load.settings[load.plugin.setting(KEY_RETENTION)] for load in load_results
         }
-        init_fatal_error = preflight(
-            None,
+        init_fatal_error = validate_notification_preflight(
             targets_to_run,
-            quiet=True,
-            general=general,
-            retention_by_target=retention_by_target,
+            general,
+            retention_by_target,
         )
         reporter = SilentRunReporter()
 

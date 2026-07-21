@@ -15,7 +15,7 @@ assertion keep running; render on demand with ``gallery.py --surface startup`` o
 matching ``--tag`` (e.g. ``layout``).
 """
 
-from core.run import ConfigOutcome, PriceOutcome
+from core.application.contracts import ConfigOutcome, PriceOutcome
 from ui.catalog._base import Surface, scenario
 from ui.catalog.inputs import CURRENCY, stub_logger, views_all_ok
 from ui.harness.drivers import drive_startup
