@@ -37,7 +37,7 @@ _case(
 
 _case(
     "unknown_target",
-    "An explicit --<target> in neither the registry nor the units.",
+    "An explicit --<target> in neither the catalog nor the units.",
     "--bogus",
     world=WORLD_INSTALLED,
     tags=("error",),

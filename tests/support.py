@@ -9,7 +9,7 @@ from unittest import mock
 
 from core.application.contracts import RunReporter
 from core.general import general_config_path
-from core.notifier import Notifier
+from core.notifications.contracts import NotificationService
 from core.scrapers.api import ScraperClient, ScraperPlugin, UrlField
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.compiler import compile_plugin
@@ -79,7 +79,7 @@ def catalog_sandbox(*plugins: PluginFixture | RegisteredPlugin):
 
 
 def mock_notifier(has_services: bool = False, delivery_ok: bool = True) -> mock.Mock:
-    notifier = mock.create_autospec(Notifier, instance=True)
+    notifier = mock.create_autospec(NotificationService, instance=True)
     notifier.has_services = has_services
     notifier.notify_low_price.return_value = delivery_ok
     return notifier

@@ -1,4 +1,8 @@
-"""The periodic liveness reminder: slot arithmetic, persisted state, and dispatch.
+"""Periodic liveness-reminder policy, recovery, and dispatch orchestration.
+
+Pure slot arithmetic lives in :mod:`core.general.reminder_schedule`; schema-versioned
+persistence lives in :mod:`core.general.reminder_state`. This module coordinates those
+boundaries with locking, update inspection, logging, and notification delivery.
 
 The reminder tells the user the scrapers are still running in the background. Because
 the app is one-shot (systemd timers fire per-plugin runs), delivery happens on the
@@ -36,16 +40,18 @@ State:
 """
 
 import datetime
-import json
 import logging
-import os
 from collections.abc import Callable
-from pathlib import Path
-from typing import TYPE_CHECKING
 
-from core.constants import TIMESTAMP_FORMAT
 from core.exceptions import LockAcquisitionError
 from core.general.reminder_schedule import most_recent_slot, next_due_slot
+from core.general.reminder_state import (
+    ReminderStatePreservationError,
+    ReminderStateProblem,
+    ReminderStateRepository,
+    ReminderStateSnapshot,
+    ReminderStateWriteError,
+)
 from core.general.settings import (
     GENERAL_SETTING_SPECS,
     SPEC_REMINDER,
@@ -55,13 +61,9 @@ from core.general.settings import (
 from core.general.vocab import display_reminder, time_parts, weekday_index, weeks_for
 from core.infrastructure.locking import acquire_lock
 from core.infrastructure.logging import get_target_logger, save_traceback
-from core.infrastructure.persistence import format_utc, parse_utc, write_json_atomically
 from core.infrastructure.updates import check_for_updates
+from core.notifications.contracts import NotificationService
 from core.settings import ResolvedSettings, SettingStatus
-
-if TYPE_CHECKING:
-    from core.notifier import Notifier
-
 
 # Pseudo-target for the reminder's lock and logs (logs/reminder/), mirroring how each
 # scraper target owns logs/<target>/.
@@ -71,13 +73,8 @@ REMINDER_TARGET = "reminder"
 # check, not a scrape - rather than the per-scraper "<target>_scraper_running.lock".
 REMINDER_LOCK_FILENAME = "reminder_check.lock"
 
-# Machine-owned state key holding the last delivered grid slot as RFC 3339 UTC.
-LAST_REMINDER_FIELD = "last_reminder"
-
-
-def general_state_path(config_dir: str) -> str:
-    """Return the machine-owned reminder state beside the config directory."""
-    return str(Path(config_dir).resolve().parent / "state" / "general.json")
+# Human-readable local timestamp used in reminder logs and notification bodies.
+REMINDER_DISPLAY_FORMAT = "%d-%m-%Y %H:%M:%S"
 
 
 class ReminderService:
@@ -100,8 +97,8 @@ class ReminderService:
     def __init__(
         self,
         settings: ResolvedSettings | None,
-        state_path: str,
-        notifier: "Notifier",
+        state: ReminderStateRepository,
+        notifier: NotificationService,
         settings_error: str | None = None,
         now_fn: Callable[[], datetime.datetime] = datetime.datetime.now,
         update_check_fn: Callable[[], bool] = check_for_updates,
@@ -110,8 +107,8 @@ class ReminderService:
 
         Args:
             settings (ResolvedSettings | None): The already-resolved general settings.
-            state_path (str): The machine-owned reminder state path.
-            notifier (Notifier): The service used to send the reminder.
+            state (ReminderStateRepository): Machine-owned reminder persistence.
+            notifier (NotificationService): The service used to send the reminder.
             settings_error (str | None): A redacted settings-load failure that disables
                 only the reminder.
             now_fn (Callable): Returns the current time as a naive *local* datetime (the
@@ -122,7 +119,7 @@ class ReminderService:
         """
         self.settings = settings
         self.settings_error = settings_error
-        self.state_path = state_path
+        self.state = state
         self.notifier = notifier
         self._now_fn = now_fn
         self._update_check_fn = update_check_fn
@@ -210,20 +207,21 @@ class ReminderService:
         returns ``True`` so it is resolved under the lock; a readable, in-the-past slot is
         due only once ``now`` reaches its next grid slot.
         """
-        _, last_slot, problem = self._read_state()
-        if problem is not None or last_slot is None:
+        snapshot = self.state.load()
+        if snapshot.problem is not None or snapshot.last_slot is None:
             return True
         now = self._now_fn()
-        return last_slot > now or now >= next_due_slot(last_slot, weeks)
+        return snapshot.last_slot > now or now >= next_due_slot(snapshot.last_slot, weeks)
 
     def _check_and_send(
         self, weeks: int, canonical: str, weekday: int, hour: int, minute: int
     ) -> None:
         """Performs one due-check and, when due, one send-then-persist (under the lock)."""
         now = self._now_fn()
-        data, last_slot, problem = self._read_state()
+        snapshot = self.state.load()
+        last_slot = snapshot.last_slot
 
-        if problem == "unreadable":
+        if snapshot.problem is ReminderStateProblem.UNREADABLE:
             # An OSError reading an existing file (permissions, transient I/O): we can
             # neither trust nor safely rewrite it, so skip and retry on the next run.
             self._log.warning(
@@ -242,10 +240,10 @@ class ReminderService:
             # First run (or unusable state): anchor to the current grid slot and send
             # nothing - the first reminder arrives one full interval later.
             anchor = most_recent_slot(now, weekday, hour, minute)
-            if not self._persist_slot(data, anchor):
+            if not self._save_slot(snapshot, anchor):
                 return
-            first_due = next_due_slot(anchor, weeks).strftime(TIMESTAMP_FORMAT)
-            if problem == "corrupt":
+            first_due = next_due_slot(anchor, weeks).strftime(REMINDER_DISPLAY_FORMAT)
+            if snapshot.problem is ReminderStateProblem.INVALID_TIMESTAMP:
                 self._log.warning(
                     f"🟡 Corrupted last_reminder timestamp! Re-anchored; "
                     f"next reminder due at {first_due} local time."
@@ -275,7 +273,7 @@ class ReminderService:
         # a second reminder within the same cadence window. Both are <= now, so this never
         # persists a future slot.
         new_slot = max(most_recent_slot(now, weekday, hour, minute), due_slot)
-        next_due = next_due_slot(new_slot, weeks).strftime(TIMESTAMP_FORMAT)
+        next_due = next_due_slot(new_slot, weeks).strftime(REMINDER_DISPLAY_FORMAT)
 
         try:
             delivered = bool(
@@ -307,7 +305,7 @@ class ReminderService:
         # Only a confirmed delivery may advance an established last_reminder. If this
         # write fails, keeping the old slot can cause a duplicate next run, but never a
         # false record claiming that an undelivered reminder was sent.
-        if not self._persist_slot(data, new_slot):
+        if not self._save_slot(snapshot, new_slot):
             self._log.warning(
                 "🟡 Reminder was delivered but its timestamp could not be recorded; "
                 "the next run may deliver it again."
@@ -328,64 +326,14 @@ class ReminderService:
             self._log.warning("🟡 Update check failed; reminder will report it as inconclusive.")
             return None
 
-    def _read_state(self) -> tuple[dict | None, datetime.datetime | None, str | None]:
-        """Read ``state/general.json`` once as ``(data, last_slot, problem)``.
-
-        This is the single reader for the reminder state, so the due-check and the
-        write-back share one file read under the lock.
-
-        Returns:
-            tuple: ``data`` is the parsed dict (mutated and rewritten by
-                :meth:`_persist_slot`), ``{}`` when the file is absent, or ``None`` when
-                it is unreadable/corrupt (the writer refuses to overwrite it). ``last_slot`` is
-                the parsed ``last_reminder`` grid slot, or ``None``. ``problem`` is
-                ``None``; ``"unreadable"`` (an ``OSError`` - do not rewrite); or
-                ``"corrupt"`` (an unparseable file or timestamp).
-        """
-        if not os.path.isfile(self.state_path):
-            return {}, None, None
+    def _save_slot(self, snapshot: ReminderStateSnapshot, slot: datetime.datetime) -> bool:
+        """Persist a slot while translating repository failures into run diagnostics."""
         try:
-            with open(self.state_path, "r") as file:
-                loaded = json.load(file)
-        except OSError:
-            return None, None, "unreadable"
-        except (json.JSONDecodeError, UnicodeError):
-            return None, None, "corrupt"
-
-        if (
-            not isinstance(loaded, dict)
-            or loaded.get("schema_version") != 1
-            or set(loaded) - {"schema_version", LAST_REMINDER_FIELD}
-        ):
-            return None, None, "corrupt"
-        raw = loaded.get(LAST_REMINDER_FIELD)
-        if raw is None:
-            return loaded, None, None
-        try:
-            local_naive = parse_utc(raw).astimezone().replace(tzinfo=None)
-            return loaded, local_naive, None
-        except (ValueError, TypeError):
-            return loaded, None, "corrupt"
-
-    def _persist_slot(self, data: dict | None, slot: datetime.datetime) -> bool:
-        """Writes ``slot`` into the top-level state field and rewrites the file atomically.
-
-        ``data`` is the already-parsed state document from :meth:`_read_state`, mutated
-        in place and atomically rewritten. ``None`` means the existing state is corrupt;
-        it is preserved unchanged. A write failure logs and reports False.
-
-        Returns:
-            bool: True when the state is on disk.
-        """
-        if data is None:
+            self.state.save(snapshot, slot)
+        except ReminderStatePreservationError:
             self._log.warning("🟡 state/general.json is malformed; refusing to overwrite it.")
             return False
-        data["schema_version"] = 1
-        data[LAST_REMINDER_FIELD] = format_utc(slot.astimezone())
-        try:
-            os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
-            write_json_atomically(self.state_path, data)
-        except OSError as e:
-            self._log.warning(f"🟡 Could not update state/general.json: {e}")
+        except ReminderStateWriteError as exc:
+            self._log.warning(f"🟡 Could not update state/general.json: {exc}")
             return False
         return True

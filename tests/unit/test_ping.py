@@ -4,7 +4,7 @@ from unittest import mock
 
 import core.ping
 from core.general.configuration import GeneralConfigLoad
-from core.general.notifications import NotificationConfig
+from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
 
 
@@ -28,7 +28,7 @@ def test_main_validates_only_nonblank_urls_and_renders_results():
                 ResolvedSettings(()),
             ),
         ),
-        mock.patch("core.ping.Notifier") as notifier_type,
+        mock.patch("core.ping.AppriseNotifier") as notifier_type,
         mock.patch("core.ping.Console", return_value=console),
         mock.patch("core.ping.signal.signal"),
         mock.patch("core.ping.build_ping_panel") as build_panel,
@@ -68,7 +68,7 @@ def test_main_reports_config_error_without_constructing_notifier():
                 settings_error="General config is unreadable",
             ),
         ),
-        mock.patch("core.ping.Notifier") as notifier_type,
+        mock.patch("core.ping.AppriseNotifier") as notifier_type,
         mock.patch("core.ping.Console", return_value=console),
         mock.patch("core.ping.signal.signal"),
         mock.patch("core.ping.build_ping_panel") as build_panel,

@@ -5,7 +5,7 @@ the captured snapshot reflects exactly what the application renders:
 
 * ``drive_run`` replays a script of public ``InteractiveRunReporter`` calls (with
   ``rich.live.Live`` stubbed) and captures the resulting panel — the same panel the
-  orchestrator drives at runtime.
+  application workflow drives at runtime.
 * ``drive_service`` / ``drive_not_installed`` / ``drive_orphan`` call the pure builders
   in ``core.tui.status``.
 * ``drive_ping`` calls the pure builder in ``core.tui.ping``.
@@ -29,7 +29,7 @@ from rich.text import Text
 from core.application import orchestrator as orchestrator_module
 from core.general import ReminderService
 from core.general.configuration import GeneralConfigLoad
-from core.general.notifications import NotificationConfig
+from core.general.reminder_state import ReminderStateRepository
 from core.general.settings import (
     GENERAL_SETTING_SPECS,
     KEY_REMINDER,
@@ -38,6 +38,7 @@ from core.general.settings import (
 )
 from core.infrastructure import logging as core_logger
 from core.infrastructure.logging import setup_global_logging
+from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
 from core.tui import config_check, ping, run_reporter, status
 from ui.catalog._base import BuildResult
@@ -56,7 +57,7 @@ _DEFAULT_CONFIG = config_check.config_view(5)
 
 
 class _FakeLive:
-    """A no-op stand-in for ``rich.live.Live`` so the strategy accumulates state without
+    """A no-op stand-in for ``rich.live.Live`` so the reporter accumulates state without
     starting a real live display (which would emit to the terminal and animate)."""
 
     def __init__(self, *args, **kwargs):
@@ -73,32 +74,32 @@ class _FakeLive:
 
 
 def drive_run(script: Callable[[run_reporter.InteractiveRunReporter], None]) -> BuildResult:
-    """Runs ``script`` against a real strategy and captures its final panel.
+    """Runs ``script`` against a real reporter and captures its final panel.
 
-    The script calls the strategy's public methods (``start_target``, ``log_price_result``,
-    ``start_sleep``, ``log_interrupt``, ...) in the exact order the orchestrator would, and
-    ends at the visual state to snapshot. A scenario depicting a *finished* target ends its
-    script with ``strat.complete_target()`` to settle the final border color; a mid-flight
+    The script calls the reporter's public methods (``start_target``, ``log_price_result``,
+    ``start_sleep``, ``log_interrupt``, ...) in the exact order the application workflow
+    would, and ends at the visual state to snapshot. A scenario depicting a *finished*
+    target ends its script with ``reporter.complete_target()`` to settle the final border color; a mid-flight
     scenario (spinner, sleeping) simply stops earlier.
 
     Returns:
         BuildResult: the panel from ``_generate_panel()`` and its ``border_style``.
     """
     with mock.patch.object(run_reporter, "Live", _FakeLive):
-        strat = run_reporter.InteractiveRunReporter()
+        reporter = run_reporter.InteractiveRunReporter()
         # Absorb the blank line complete_target prints; the captured panel comes from
         # _generate_panel(), not this console.
-        strat.console = Console(file=io.StringIO())
-        script(strat)
-        panel = strat._generate_panel()
+        reporter.console = Console(file=io.StringIO())
+        script(reporter)
+        panel = reporter._generate_panel()
     return BuildResult(panel, str(panel.border_style))
 
 
-# --- E2E_RUN: the same panel, driven by the real orchestrator ------------------------
+# --- E2E_RUN: the same panel, driven by the real application workflow ----------------
 
 
 def drive_orchestrated_run(
-    products: list[dict],
+    items: list[dict],
     results_by_url: dict[str, list],
     *,
     has_services: bool = False,
@@ -107,15 +108,15 @@ def drive_orchestrated_run(
     """Runs the *real* ``ScrapingOrchestrator`` over a scripted store and captures the
     finished interactive panel.
 
-    Where :func:`drive_run` replays a hand-written script of strategy calls (and so can
+    Where :func:`drive_run` replays a hand-written script of reporter calls (and so can
     depict any rendering state), this driver closes the loop the other way: the notes,
     warnings, and footnotes on the captured panel are whatever the production
-    orchestrator actually emits (via ``core.messages``) for the given scrape outcomes —
+    application workflow actually emits (via ``core.messages``) for the given scrape outcomes —
     nothing is hand-fed to the UI. Only the pacing sleep, the signal-handler install,
     and the per-target file logger are patched.
 
     Args:
-        products: The config rows written to the temp ``fakestore.json``.
+        items: The config rows written to the temp ``fakestore.json``.
         results_by_url: ``url -> [outcome, ...]`` where each outcome is a
             ``PriceResult`` or an exception instance to raise; consecutive attempts
             consume the list and the last entry repeats.
@@ -149,15 +150,13 @@ def drive_orchestrated_run(
 
     cfg_dir = tempfile.mkdtemp()
     try:
-        canonical_products = []
-        for index, product in enumerate(products, 1):
-            canonical_products.append(
-                {"id": f"item-{index}", "skip": False, **product}
-                if isinstance(product, dict)
-                else product
+        canonical_items = []
+        for index, item in enumerate(items, 1):
+            canonical_items.append(
+                {"id": f"item-{index}", "skip": False, **item} if isinstance(item, dict) else item
             )
         with open(os.path.join(cfg_dir, "fakestore.json"), "w") as f:
-            json.dump({"settings": {}, "items": canonical_products}, f)
+            json.dump({"settings": {}, "items": canonical_items}, f)
 
         plugin = fake_plugin(
             name="fakestore",
@@ -166,8 +165,8 @@ def drive_orchestrated_run(
             url_field=url_field,
         )
         with catalog_sandbox(plugin) as catalog, mock.patch.object(run_reporter, "Live", _FakeLive):
-            strat = run_reporter.InteractiveRunReporter()
-            strat.console = Console(file=io.StringIO())
+            reporter = run_reporter.InteractiveRunReporter()
+            reporter.console = Console(file=io.StringIO())
 
             loader = ClientLoader()
             loads = load_targets([catalog.get("fakestore")], cfg_dir)
@@ -176,15 +175,15 @@ def drive_orchestrated_run(
                 client_loader=loader,
                 notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
                 quiet=False,
-                reporter=strat,
+                reporter=reporter,
             )
             with (
-                mock.patch("core.application.execution.ItemExecutor.sleep_with_jitter"),
+                mock.patch("core.application.pacing.Pacer.sleep"),
                 mock.patch.object(orchestrator_module.signal, "signal"),
                 mock.patch.object(orchestrator_module, "get_target_logger", lambda *a, **k: stub),
             ):
                 orch.run()
-            panel = strat._generate_panel()
+            panel = reporter._generate_panel()
         return BuildResult(panel, str(panel.border_style))
     finally:
         shutil.rmtree(cfg_dir, ignore_errors=True)
@@ -320,12 +319,12 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
     regresses, the stray line is captured onto the shared transcript exactly where a terminal
     user would see it, between the Configuration Check and Scraping panels.
 
-    Runs offline and non-mutating: a mock notifier, a stubbed (False) update check, and a
-    fixed clock with ``last_reminder`` on the current slot so the reminder is never due
-    (no send, no network), while an invalid ``reminder`` value still exercises the warning
-    path. ``LOGS_DIR`` is already redirected to a temp dir by the autouse conftest fixture.
+    Runs offline and confines mutations to temporary state: a mock notifier, a stubbed
+    (False) update check, and a fixed clock cause the missing reminder state to be anchored
+    to the current slot without sending. An invalid ``reminder`` value still exercises the
+    warning path. ``LOGS_DIR`` is already redirected by the autouse conftest fixture.
     """
-    cfg_dir = tempfile.mkdtemp()
+    temp_root = tempfile.mkdtemp()
     now = datetime.datetime(2026, 7, 4, 14, 0, 0)  # Saturday 14:00, just after the 13:00 slot
     from core.settings import resolve_settings
 
@@ -343,14 +342,14 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
             setup_global_logging(quiet=False)  # interactive: root Rich handler -> console
             ReminderService(
                 settings,
-                os.path.join(cfg_dir, "general.json"),
+                ReminderStateRepository(os.path.join(temp_root, "state", "general.json")),
                 notifier=mock.Mock(),
                 now_fn=lambda: now,
                 update_check_fn=lambda: False,
             ).run_once()
     finally:
         logging.root.handlers[:], logging.root.level, reminder_logger.handlers[:] = saved
-        shutil.rmtree(cfg_dir, ignore_errors=True)
+        shutil.rmtree(temp_root, ignore_errors=True)
 
 
 def drive_startup(

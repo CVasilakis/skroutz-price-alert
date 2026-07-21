@@ -36,7 +36,7 @@ NOTIFICATIONS_NONE = "No notification URLs found in config/general.json"
 
 
 def stub_logger() -> logging.Logger:
-    """A no-op logger for ``start_target`` (the interactive strategy never writes to it)."""
+    """A no-op logger for ``start_target`` (the interactive reporter never writes to it)."""
     lg = logging.getLogger("ui_test.stub")
     lg.handlers = [logging.NullHandler()]
     lg.propagate = False

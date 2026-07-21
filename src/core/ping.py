@@ -12,7 +12,7 @@ from core.constants import CONFIG_DIR
 from core.general import load_general_config
 from core.infrastructure.logging import setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
-from core.notifier import Notifier
+from core.notifications.apprise import AppriseNotifier
 from core.tui.ping import build_ping_panel
 
 
@@ -38,7 +38,7 @@ def main():
     valid_urls = [url for url, is_valid in url_entries if is_valid]
     test_results = []
     if valid_urls:
-        notifier = Notifier(valid_urls)
+        notifier = AppriseNotifier(valid_urls)
         with console.status("[bold green]Sending test messages...[/bold green]", spinner="dots"):
             test_results = notifier.notify_test()
 

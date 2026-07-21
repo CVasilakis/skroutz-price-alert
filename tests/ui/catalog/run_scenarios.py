@@ -1,11 +1,11 @@
 """Interactive scraping-panel scenarios (the standard, no-flag run).
 
 Each scenario replays the exact sequence of ``InteractiveRunReporter`` calls the
-orchestrator makes for a given situation, ending at the visual state to capture. A
+application workflow makes for a given situation, ending at the visual state to capture. A
 *finished* target ends with ``complete_target()`` (settling the final border color); a
 *mid-flight* state (spinner, sleeping) stops earlier. The note strings come straight
-from the production catalog (``core.messages``), so these fixtures cannot drift from
-what the orchestrator actually emits: a reword there flows into these snapshots via
+from the production message catalog (``core.messages``), so these fixtures cannot drift
+from what the application actually emits: a reword there flows into these snapshots via
 ``UPDATE_SNAPSHOTS=1``. Only store-specific details (e.g. a parse error's message)
 stay as illustrative literals — they are arbitrary inputs, not framework wording.
 """
@@ -48,7 +48,7 @@ STALE = messages.stale_note("25-06-2026 09:00:00", OLD_ENTRY_HOURS)
 
 
 def _attempts(*error_types: str) -> list[str]:
-    """Consecutive per-attempt footnotes (attempts 1..n), as the orchestrator builds them."""
+    """Consecutive per-attempt footnotes (attempts 1..n), as item execution builds them."""
     return [messages.attempt_note(i + 1, t) for i, t in enumerate(error_types)]
 
 
@@ -218,7 +218,7 @@ def _():
 # --- Skips and non-retryable warnings -----------------------------------------------
 
 
-@scenario(Surface.RUN, "skip_true", "Product skipped via skip:true in config", tags=("skipped",))
+@scenario(Surface.RUN, "skip_true", "Item skipped via skip:true in config", tags=("skipped",))
 def _():
     def script(s):
         _start(s)
@@ -477,7 +477,7 @@ def _():
 @scenario(
     Surface.RUN,
     "failure_stale",
-    "Terminal failure on a product that is also stale",
+    "Terminal failure on an item that is also stale",
     tags=("error",),
 )
 def _():
@@ -506,7 +506,7 @@ def _():
 @scenario(
     Surface.RUN,
     "sleeping_pacing",
-    "Normal pacing delay between products (progress bar)",
+    "Normal pacing delay between items (progress bar)",
     tags=("in_progress",),
 )
 def _():
@@ -573,7 +573,7 @@ def _():
 @scenario(
     Surface.RUN,
     "interrupt_during_scraping",
-    "Ctrl+C while a product was being scraped",
+    "Ctrl+C while an item was being scraped",
     tags=("interrupt",),
 )
 def _():
@@ -630,7 +630,7 @@ def _():
 @scenario(
     Surface.RUN,
     "interrupt_between_products",
-    "Ctrl+C after a product, before the next",
+    "Ctrl+C after an item, before the next",
     tags=("interrupt",),
 )
 def _():
@@ -769,7 +769,7 @@ def _():
 @scenario(
     Surface.RUN,
     "config_faulty",
-    "Some products misconfigured (Config row leads)",
+    "Some items misconfigured (Config row leads)",
     tags=("products",),
 )
 def _():
@@ -788,8 +788,8 @@ def _():
     tags=("products", "error"),
 )
 def _():
-    # Mirrors the orchestrator's per-target skip: open the panel with a failed 'Config' row
-    # and finish immediately — no products are scraped for this target.
+    # Mirrors the application's per-target skip: open the panel with a failed 'Config' row
+    # and finish immediately — no items are scraped for this target.
     def script(s):
         _start(s, config=ConfigOutcome(0, error=STORAGE_BAD_JSON))
         s.complete_target()
@@ -803,7 +803,7 @@ def _():
 @scenario(
     Surface.RUN,
     "wrap_long_footnote",
-    "Very long footnote + a truncated product name",
+    "Very long footnote + a truncated item name",
     tags=("layout",),
 )
 def _():
@@ -859,7 +859,7 @@ def _():
     return drive_run(script)
 
 
-# --- A realistic multi-product run ---------------------------------------------------
+# --- A realistic multi-item run ------------------------------------------------------
 
 
 @scenario(

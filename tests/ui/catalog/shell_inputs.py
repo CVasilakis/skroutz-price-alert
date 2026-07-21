@@ -9,7 +9,7 @@ The cast, used consistently across every preset so transcripts stay comparable:
 * ``skroutz`` - the one healthy registered-and-installed plugin.
 * ``amazon``  - a second *registered* plugin, installed only where a scenario says so
   (the "registered but not installed" foil).
-* ``ghost``   - an *orphan*: unit files still on disk, no longer in the registry
+* ``ghost``   - an *orphan*: unit files still on disk, no longer in the catalog
   (its plugin was removed upstream).
 
 All identifiers, paths, and error strings are synthetic fixtures - nothing here is
@@ -21,7 +21,7 @@ from functools import cache
 from ui.catalog._base import Surface, scenario
 from ui.harness.shell import ShellWorld, drive_shell
 
-#: The one-line error registry_diagnose surfaces when plugin discovery fails.
+#: The one-line error catalog_diagnose surfaces when plugin discovery fails.
 DISCOVERY_ERROR = "PluginDiscoveryError: plugin package 'zzzbroken' failed to import: boom"
 
 #: skroutz installed and armed: timer enabled and active (the steady state).
@@ -46,7 +46,7 @@ WORLD_AMAZON_UNINSTALLED = ShellWorld(
     installed_services=("skroutz",),
 )
 
-#: skroutz healthy plus the 'ghost' orphan (units on disk, plugin de-registered).
+#: skroutz healthy plus the 'ghost' orphan (units on disk, plugin removed from the catalog).
 WORLD_ORPHAN = ShellWorld(
     installed_timers=("skroutz", "ghost"),
     installed_services=("skroutz", "ghost"),
@@ -55,7 +55,7 @@ WORLD_ORPHAN = ShellWorld(
 #: Only the 'ghost' orphan remains installed.
 WORLD_ALL_ORPHANS = ShellWorld(installed_timers=("ghost",), installed_services=("ghost",))
 
-#: Units installed but the venv is gone - registry_diagnose's "environment missing" branch.
+#: Units installed but the venv is gone - catalog_diagnose's "environment missing" branch.
 WORLD_NO_VENV = ShellWorld(
     venv=False,
     installed_timers=("skroutz",),
@@ -63,7 +63,7 @@ WORLD_NO_VENV = ShellWorld(
 )
 
 #: Units installed, venv fine, but plugin discovery raises - diagnose branch 2.
-WORLD_BROKEN_REG = ShellWorld(
+WORLD_BROKEN_CATALOG = ShellWorld(
     plugins=(),
     discovery_error=DISCOVERY_ERROR,
     installed_timers=("skroutz",),

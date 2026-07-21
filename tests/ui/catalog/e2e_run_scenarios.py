@@ -1,14 +1,15 @@
-"""Orchestrator-driven scraping-panel scenarios (the end-to-end bridge).
+"""Application-driven scraping-panel scenarios (the end-to-end bridge).
 
-Unlike ``run_scenarios`` — which replays hand-written strategy calls and covers every
+Unlike ``run_scenarios`` — which replays hand-written reporter calls and covers every
 rendering state exhaustively — these scenarios put the *real* ``ScrapingOrchestrator``
-in the loop: a scripted client returns each product's outcomes, and whatever notes and
-footnotes the orchestrator emits land on the captured panel. A change to the
-orchestrator's UI payloads (wording, ordering, which notes appear at all) flips these
+and its target/item/result collaborators in the loop: a scripted client returns each
+item's outcomes, and whatever notes and footnotes the application emits land on the
+captured panel. A change to the application's UI payloads (wording, ordering, which
+notes appear at all) flips these
 goldens even if the hand-scripted catalog were forgotten, closing the gap where UI
 output changes could pass every test.
 
-Kept to the main note-producing flows; rendering states the orchestrator can't finish
+Kept to the main note-producing flows; rendering states the workflow can't finish
 deterministically (spinners, sleeps, interrupts, stale timestamps) stay in
 ``run_scenarios``.
 """
@@ -27,7 +28,7 @@ _URL = "https://fake-store.example/p/{}"
 )
 def _():
     return drive_orchestrated_run(
-        products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
+        items=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
         results_by_url={_URL.format(1): [PriceResult(price=248.0, currency="€")]},
         has_services=True,
     )
@@ -41,7 +42,7 @@ def _():
 )
 def _():
     return drive_orchestrated_run(
-        products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
+        items=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
         results_by_url={_URL.format(1): [PriceResult(price=248.0, currency="€")]},
         has_services=True,
         delivery_ok=False,
@@ -56,7 +57,7 @@ def _():
 )
 def _():
     return drive_orchestrated_run(
-        products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
+        items=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
         results_by_url={_URL.format(1): [PriceResult(price=248.0, currency="€")]},
         has_services=False,
     )
@@ -67,7 +68,7 @@ def _():
 )
 def _():
     return drive_orchestrated_run(
-        products=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
+        items=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
         results_by_url={
             _URL.format(1): [
                 ServerError(messages.server_error_detail(503)),
@@ -80,7 +81,7 @@ def _():
 @scenario(Surface.E2E_RUN, "failure_all_parse", "Every attempt fails to parse", tags=("error",))
 def _():
     return drive_orchestrated_run(
-        products=[{"name": "Flaky Product", "url": _URL.format(1), "target_price": 50.0}],
+        items=[{"name": "Flaky Product", "url": _URL.format(1), "target_price": 50.0}],
         results_by_url={_URL.format(1): [ScraperParseError("No price element found")]},
     )
 
@@ -93,7 +94,7 @@ def _():
 )
 def _():
     return drive_orchestrated_run(
-        products=[
+        items=[
             {"name": "Paused Product", "url": _URL.format(1), "target_price": 10.0, "skip": True},
             {"name": "Removed Product", "url": _URL.format(2), "target_price": 10.0},
             {"name": "Untargeted Product", "url": _URL.format(3), "target_price": 0.0},
@@ -113,7 +114,7 @@ def _():
 )
 def _():
     return drive_orchestrated_run(
-        products=[
+        items=[
             None,
             {"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0},
         ],

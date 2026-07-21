@@ -6,7 +6,7 @@ from ui.catalog._base import Surface
 from ui.catalog.shell_inputs import (
     WORLD_ALL_ORPHANS,
     WORLD_AMAZON_UNINSTALLED,
-    WORLD_BROKEN_REG,
+    WORLD_BROKEN_CATALOG,
     WORLD_EMPTY,
     WORLD_HEALTHY,
     WORLD_INSTALLED,
@@ -34,17 +34,17 @@ _case(
 )
 
 _case(
-    "registry_unreadable",
+    "catalog_unavailable",
     "Units exist but the venv is gone - refuse with a repair hint.",
     world=WORLD_NO_VENV,
-    tags=("error", "registry"),
+    tags=("error", "catalog"),
 )
 
 _case(
-    "registry_unreadable_discovery_failed",
+    "catalog_unavailable_discovery_failed",
     "Units exist but plugin discovery raises.",
-    world=WORLD_BROKEN_REG,
-    tags=("error", "registry"),
+    world=WORLD_BROKEN_CATALOG,
+    tags=("error", "catalog"),
 )
 
 _case(
@@ -65,7 +65,7 @@ _case(
 
 _case(
     "unknown_target",
-    "An explicit --<target> in neither the registry nor the units.",
+    "An explicit --<target> in neither the catalog nor the units.",
     "--bogus",
     world=WORLD_INSTALLED,
     tags=("error",),

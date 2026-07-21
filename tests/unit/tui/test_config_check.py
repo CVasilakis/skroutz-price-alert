@@ -1,7 +1,7 @@
 """Unit tests for pure Configuration Check panel construction."""
 
 from core.general.configuration import GeneralConfigLoad
-from core.general.notifications import NotificationConfig
+from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
 from core.tui.config_check import build_config_panel
 

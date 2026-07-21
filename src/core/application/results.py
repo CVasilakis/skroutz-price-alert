@@ -1,0 +1,164 @@
+"""Evaluation of successful scrape results and staged state changes."""
+
+from __future__ import annotations
+
+import datetime
+import logging
+from collections.abc import Callable
+
+from core import messages
+from core.application.contracts import PriceOutcome, RunReporter
+from core.constants import MAX_RETRIES, OLD_ENTRY_HOURS
+from core.infrastructure.logging import save_traceback
+from core.infrastructure.persistence import format_utc
+from core.notifications.contracts import NotificationService
+from core.scrapers.api import ListingResult, ScrapeResult, TrackedItem
+from core.scrapers.framework.state import JsonStateRepository
+
+
+class ResultHandler:
+    """Evaluate typed results, notify, and stage one state mutation."""
+
+    def __init__(
+        self,
+        *,
+        target: str,
+        display_name: str,
+        state: JsonStateRepository,
+        notifier: NotificationService,
+        reporter: RunReporter,
+        logger: logging.Logger,
+        now_fn: Callable[[], datetime.datetime],
+        reference_url: Callable[[TrackedItem], str | None],
+    ) -> None:
+        self.target = target
+        self.display_name = display_name
+        self.state = state
+        self.notifier = notifier
+        self.reporter = reporter
+        self.logger = logger
+        self.now_fn = now_fn
+        self.reference_url = reference_url
+        self.stale_items: list[TrackedItem] = []
+
+    def stale_note(self, item: TrackedItem) -> str | None:
+        last_checked = self.state.get(item.id).last_checked
+        if last_checked is None:
+            return None
+        if self.now_fn() - last_checked > datetime.timedelta(hours=OLD_ENTRY_HOURS):
+            self.stale_items.append(item)
+            return messages.stale_note(format_utc(last_checked), OLD_ENTRY_HOURS)
+        return None
+
+    def _try_notification(self, operation: Callable[[], bool]) -> bool:
+        try:
+            return bool(operation())
+        except Exception:
+            save_traceback(self.logger, target_name=self.target, log_to_console=False)
+            return False
+
+    def _notify_matching_offers(
+        self, item: TrackedItem, result: ListingResult, notes: list[str]
+    ) -> tuple[PriceOutcome, bool]:
+        offers = tuple(result.offers)
+        below = [offer for offer in offers if offer.price < item.target_price]
+        notes.append(messages.advert_matches_note(len(offers), len(below)))
+        if not below:
+            return (
+                PriceOutcome.NO_TARGET if item.target_price == 0.0 else PriceOutcome.OK,
+                False,
+            )
+        failed = 0
+        if self.notifier.has_services:
+            for match in below:
+                delivered = self._try_notification(
+                    lambda match=match: self.notifier.notify_low_price(
+                        self.display_name,
+                        item.name,
+                        item.target_price,
+                        match.price,
+                        match.url,
+                        result.currency,
+                        advert_title=match.title,
+                    )
+                )
+                failed += not delivered
+            notes.append(
+                messages.advert_notified_ok(len(below))
+                if failed == 0
+                else messages.advert_notified_fail(failed, len(below))
+            )
+        else:
+            notes.append(messages.NOTE_NOTIFIED_NONE)
+        return PriceOutcome.DROP, failed > 0
+
+    def handle(
+        self,
+        item: TrackedItem,
+        result: ScrapeResult,
+        retries_used: int,
+        attempt_notes: list[str],
+    ) -> bool:
+        notes = (
+            [messages.succeeded_on_attempt(retries_used + 1, MAX_RETRIES)] if retries_used else []
+        )
+        checked_at = self.now_fn()
+        if isinstance(result, ListingResult) and not result.offers:
+            self.reporter.log_price_result(
+                item.name,
+                None,
+                result.currency,
+                item.target_price,
+                PriceOutcome.NO_MATCH,
+                notes=notes,
+                attempt_notes=attempt_notes,
+            )
+            self.state.record_no_price_check(item.id, checked_at)
+            return False
+
+        notification_failed = False
+        if isinstance(result, ListingResult):
+            current_price = min(offer.price for offer in result.offers)
+            outcome, notification_failed = self._notify_matching_offers(item, result, notes)
+        else:
+            current_price = result.price
+            if current_price < item.target_price:
+                outcome = PriceOutcome.DROP
+                if self.notifier.has_services:
+                    link = result.url or self.reference_url(item)
+                    delivered = self._try_notification(
+                        lambda: self.notifier.notify_low_price(
+                            self.display_name,
+                            item.name,
+                            item.target_price,
+                            current_price,
+                            link,
+                            result.currency,
+                        )
+                    )
+                    notes.append(
+                        messages.NOTE_NOTIFIED_OK if delivered else messages.NOTE_NOTIFIED_FAIL
+                    )
+                    notification_failed = not delivered
+                else:
+                    notes.append(messages.NOTE_NOTIFIED_NONE)
+            elif item.target_price == 0.0:
+                outcome = PriceOutcome.NO_TARGET
+            else:
+                outcome = PriceOutcome.OK
+
+        self.reporter.log_price_result(
+            item.name,
+            current_price,
+            result.currency,
+            item.target_price,
+            outcome,
+            notes=notes,
+            attempt_notes=attempt_notes,
+            delivery_failed=notification_failed,
+        )
+        self.state.record_priced_check(item.id, current_price, checked_at)
+        return notification_failed
+
+
+__all__ = ["ResultHandler"]

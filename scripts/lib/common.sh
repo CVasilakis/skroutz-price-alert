@@ -82,7 +82,7 @@ plugin_in_list() {
 # which load lazily only when a scrape actually runs. Returns non-zero (printing
 # nothing) if the venv is unavailable, so callers can fall back to
 # list_installed_plugins.
-registry_cli() {
+catalog_cli() {
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
     PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" -m core.scrapers.tooling.cli "$@"
 }
@@ -98,7 +98,7 @@ load_plugin_manifest() {
         1) return 0 ;;
         2) return 1 ;;
     esac
-    if PLUGIN_MANIFEST_DATA="$(registry_cli manifest --config-dir "$BASE_DIR/config" 2>/dev/null)"; then
+    if PLUGIN_MANIFEST_DATA="$(catalog_cli manifest --config-dir "$BASE_DIR/config" 2>/dev/null)"; then
         PLUGIN_MANIFEST_STATE=1
         return 0
     fi
@@ -160,25 +160,25 @@ plugin_manifest() {
 # vocabulary (SUPPORTED_INTERVALS) so user-facing help text never drifts from the
 # code. Same venv requirement as list_plugins.
 list_supported_intervals() {
-    registry_cli intervals 2>/dev/null
+    catalog_cli intervals 2>/dev/null
 }
 
-# registry_diagnose: explain on stderr WHY plugin enumeration printed nothing,
+# catalog_diagnose: explain on stderr WHY plugin enumeration printed nothing,
 # then return 1. The list_* helpers suppress stderr so their stdout stays a clean
 # machine-readable stream, which would otherwise let a single malformed plugin
 # masquerade as a broken venv. Two cases are distinguished:
 #   1) the venv python is missing/broken            -> the reinstall hint;
 #   2) the venv is fine but plugin discovery failed -> the actual one-line error
 #      (e.g. the PluginDiscoveryError naming the offending plugin package).
-# Callers use it in their "registry unreadable" error paths: registry_diagnose || exit 1
-registry_diagnose() {
+# Callers use it when catalog discovery is unavailable: catalog_diagnose || exit 1
+catalog_diagnose() {
     if [ ! -x "$BASE_DIR/venv/bin/python3" ]; then
-        printf "%b\n" "${RED}Error: Cannot read the scraper registry - the Python environment looks missing or broken.${NC}" >&2
+        printf "%b\n" "${RED}Error: Cannot read the plugin catalog - the Python environment looks missing or broken.${NC}" >&2
         printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}" >&2
         return 1
     fi
     printf "%b\n" "${RED}Error: Scraper plugin discovery failed:${NC}" >&2
-    registry_cli diagnose >&2 || :
+    catalog_cli diagnose >&2 || :
     printf "%b\n" "Fix (or remove) the offending plugin package under ${CYAN}src/core/scrapers/plugins/${NC}, then retry." >&2
     return 1
 }
@@ -269,7 +269,7 @@ known_targets_all() {
 # OR has an installed "<plugin>-scraper.<suffix>" unit. The membership test for
 # the teardown commands (disable/stop/uninstall): they only need a unit to act
 # on, so they accept this union, whereas install/enable validate against the
-# registry alone (they need code to run). A name in neither set is a real typo.
+# catalog alone (they need code to run). A name in neither set is a real typo.
 is_known_target() {
     plugin_in_list "$1" $(known_targets "$2")
 }

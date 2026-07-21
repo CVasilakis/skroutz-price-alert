@@ -1,7 +1,7 @@
 # Core framework dependencies — installed for every Scrooge Alert install,
 # regardless of which scrapers are provisioned. Transport/parsing libraries that
 # only a single scraper needs (e.g. tls-client, selenium) live in that plugin's
-# own requirements file: src/core/scrapers/<plugin>/requirements.txt.
+# own requirements file: src/core/scrapers/plugins/<plugin>/requirements.txt.
 apprise
 filelock
 rich

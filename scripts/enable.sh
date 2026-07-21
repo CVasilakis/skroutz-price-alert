@@ -33,7 +33,7 @@ print_help() {
     printf '%s\n' "  -h, --help        show this help message and exit"
     for plugin in $(list_installed_plugins timer); do
         # Skip orphans (installed but no longer a registered scraper) - they can't
-        # be enabled. If the registry is unreadable we can't tell, so list them all.
+        # be enabled. If the catalog is unavailable we can't tell, so list them all.
         if [ -n "$_registered" ] && ! plugin_in_list "$plugin" $_registered; then
             continue
         fi
@@ -46,12 +46,12 @@ print_help() {
 # TARGET RESOLUTION
 # ------------------------------------------------------------------------------
 # enable.sh re-arms the timers that install.sh provisioned, so it acts on the
-# INSTALLED timer units (glob-derived) - never the bare registry, so a selective
+# INSTALLED timer units (glob-derived) - never the bare catalog, so a selective
 # install (e.g. ./install.sh --skroutz) is preserved. It then intersects with the
-# registry to drop any *orphan*: a unit still on disk whose plugin was removed from
+# catalog to drop any *orphan*: a unit still on disk whose plugin was removed from
 # the project (so it is no longer registered). Re-arming one would only schedule a
-# job whose code is gone. Because that orphan check needs the registry, a readable
-# registry is REQUIRED: if units exist but it can't be read the Python environment
+# job whose code is gone. Because that orphan check needs the catalog, a readable
+# catalog is REQUIRED: if units exist but it can't be read the Python environment
 # is broken (and broken scrapers cannot run anyway), so enable refuses with a
 # repair hint rather than arming timers that would only fail on schedule.
 # -h/--help is honored anywhere in the argument list; a bare '--' is rejected
@@ -74,20 +74,20 @@ load_plugin_manifest || true
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"
 
-# Units exist but the registry can't be read -> refuse rather than guess: arming a
+# Units exist but the catalog can't be read -> refuse rather than guess: arming a
 # timer we cannot vet (orphan or not) just schedules a job that cannot run.
-# registry_diagnose says WHY (venv missing vs. a plugin whose discovery failed).
+# catalog_diagnose says WHY (venv missing vs. a plugin whose discovery failed).
 if [ -n "$INSTALLED_PLUGINS" ] && [ -z "$REGISTERED" ]; then
-    registry_diagnose || exit 1
+    catalog_diagnose || exit 1
 fi
 
 if [ -n "$SELECTED" ]; then
     PLUGINS=""
     for sel in $SELECTED; do
         if plugin_in_list "$sel" $INSTALLED_PLUGINS; then
-            # Installed: arm it - unless the registry omits it, i.e. it is an orphan
+            # Installed: arm it - unless the catalog omits it, i.e. it is an orphan
             # whose code is gone, in which case point at uninstall instead. (The
-            # guard above guarantees the registry is readable when units exist.)
+            # guard above guarantees the catalog is readable when units exist.)
             if ! plugin_in_list "$sel" $REGISTERED; then
                 printf "%b\n" "${RED}Error: '$sel' is installed but no longer a registered scraper (orphan).${NC}"
                 printf "%b\n" "Remove its leftover units with: ${CYAN}./scripts/uninstall.sh --$sel${NC}"
@@ -109,7 +109,7 @@ if [ -n "$SELECTED" ]; then
     done
 else
     # No flag: enable every installed timer that is STILL a registered scraper,
-    # i.e. installed ∩ registry - skipping orphans whose code was removed.
+    # i.e. installed ∩ catalog - skipping orphans whose code was removed.
     PLUGINS=""
     for plugin in $INSTALLED_PLUGINS; do
         plugin_in_list "$plugin" $REGISTERED && PLUGINS="$PLUGINS $plugin"
@@ -118,7 +118,7 @@ fi
 
 if [ -z "$PLUGINS" ]; then
     if [ -n "$INSTALLED_PLUGINS" ]; then
-        # Units exist but none survived the registry intersection: every installed
+        # Units exist but none survived the catalog intersection: every installed
         # unit is an orphan (its plugin was removed from the project).
         printf "%b\n" "\n${YELLOW}Nothing to enable: every installed unit is an orphan (no longer a registered scraper).${NC}"
         printf "%b\n" "Remove the leftovers with ${CYAN}./scripts/uninstall.sh${NC} (see ${CYAN}./scripts/uninstall.sh --help${NC})."

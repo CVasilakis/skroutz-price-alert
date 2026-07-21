@@ -48,7 +48,7 @@ def _run(catalog, config_dir, state_dir, notifier, ui):
     )
     logger = logging.getLogger("e2e")
     with (
-        mock.patch("core.application.execution.ItemExecutor.sleep_with_jitter"),
+        mock.patch("core.application.pacing.Pacer.sleep"),
         mock.patch("core.application.orchestrator.signal.signal"),
         mock.patch("core.application.orchestrator.get_target_logger", return_value=logger),
     ):

@@ -11,6 +11,5 @@
 │   ❗    Last Execution Status       Storage Failed [1]                  │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
-│   [1] Could not update config/skroutz.json with the latest scrape       │
-│ state.                                                                  │
+│   [1] Could not update state/skroutz.json with the latest scrape state. │
 ╰─────────────────────────────────────────────────────────────────────────╯

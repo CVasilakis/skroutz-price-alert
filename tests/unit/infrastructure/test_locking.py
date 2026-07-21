@@ -2,7 +2,7 @@
 
 Every other suite patches ``acquire_lock`` to a no-op, so this is the one place the
 actual mutual exclusion and lock-file placement are verified - the guarantee the reminder
-and the orchestrator both rely on to stop concurrent runs from racing. ``LOGS_DIR`` is
+and ``TargetRunner`` both rely on to stop concurrent runs from racing. ``LOGS_DIR`` is
 redirected to a temp dir by the autouse ``_isolate_logs_dir`` fixture, so the lock files
 land there and never in the repository's ``logs/``.
 """

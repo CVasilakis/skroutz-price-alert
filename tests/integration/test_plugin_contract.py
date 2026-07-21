@@ -77,7 +77,7 @@ def test_copyable_template_runs_end_to_end_without_framework_edits(tmp_path):
             reporter=mock_ui(),
         )
         with (
-            mock.patch("core.application.execution.ItemExecutor.sleep_with_jitter"),
+            mock.patch("core.application.pacing.Pacer.sleep"),
             mock.patch("core.application.orchestrator.signal.signal"),
             mock.patch(
                 "core.application.orchestrator.get_target_logger",

@@ -15,7 +15,7 @@ class ConfigView:
     The single rendering-agnostic model behind the 'Config' row shown atop each Service
     Status panel (``--status``) and Scraping panel (a run). Built by :func:`config_view`
     so the icon/value/footnote decision lives in one place, and consumed by
-    :func:`add_config_row` (StatusPanelBuilder panels) and the interactive strategy.
+    :func:`add_config_row` (StatusPanelBuilder panels) and the interactive reporter.
 
     Attributes:
         icon (str): The status icon (``✅`` / ``🟡`` / ``❗``).
@@ -56,7 +56,7 @@ def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
     """Renders a :class:`ConfigView` as the 'Config' row on a StatusPanelBuilder panel.
 
     Used atop the ``--status`` Service Status panel; the interactive Scraping panel
-    renders the same view through the strategy's own footnote mechanism.
+    renders the same view through the reporter's own footnote mechanism.
 
     Args:
         panel (StatusPanelBuilder): The panel being built.

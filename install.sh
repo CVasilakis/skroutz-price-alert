@@ -52,7 +52,7 @@ print_help() {
 #                                       only the named plugins (the set update.sh derived
 #                                       from the already-installed units), or every plugin
 #                                       when none are named. Plugins that no longer exist in
-#                                       the registry (removed/renamed in the new version) are
+#                                       the catalog (removed/renamed in the new version) are
 #                                       skipped instead of aborting the update.
 
 INSTALL_MODE="all"   # all | selected
@@ -155,7 +155,7 @@ fi
 # ------------------------------------------------------------------------------
 # PLUGIN DISCOVERY
 # ------------------------------------------------------------------------------
-# The venv now exists, so the registry can be queried (the single source of truth
+# The venv now exists, so the catalog can be queried (the single source of truth
 # for which scrapers exist). One systemd unit pair is generated per plugin.
 
 load_plugin_manifest || true
@@ -163,7 +163,7 @@ ALL_PLUGINS="$(list_plugins || true)"
 if [ -z "$ALL_PLUGINS" ]; then
     # Distinguishes a broken venv from a plugin whose discovery failed, and
     # surfaces the actual error instead of a generic "venv may be broken".
-    registry_diagnose || exit 1
+    catalog_diagnose || exit 1
 fi
 
 if [ "$INSTALL_MODE" = "selected" ]; then
@@ -179,7 +179,7 @@ $sel"
         elif [ "$IS_UPDATE" -eq 1 ]; then
             # During an update the selection is derived from the installed units;
             # a plugin removed or renamed in the incoming version is no longer in
-            # the registry. Skip it (its orphaned unit was already stopped by
+            # the catalog. Skip it (its orphaned unit was already stopped by
             # update.sh; uninstall clears it) rather than aborting the whole update.
             printf "%b\n" "${YELLOW}Note: Skipping '$sel' - no longer a registered scraper in this version.${NC}"
             printf "%b\n" "${YELLOW}      Its leftover units can be removed with: ${CYAN}./scripts/uninstall.sh --$sel${NC}"
@@ -318,7 +318,7 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
     for plugin in $MISSING_CONFIGS; do
         example="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"
         printf "%b\n" "- Copy $example to config/$plugin.json"
-        printf "%b\n" "  and fill it with your desired products."
+        printf "%b\n" "  and fill it with your desired items."
     done
 
     if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then

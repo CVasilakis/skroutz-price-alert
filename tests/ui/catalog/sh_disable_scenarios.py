@@ -2,7 +2,7 @@
 
 Teardown semantics differ from enable/schedule: a registered-but-not-installed
 target is a yellow *notice* (exit 0), not an error, and orphans are first-class
-disable targets (glob-derived, no registry needed).
+disable targets (glob-derived, no catalog needed).
 """
 
 from dataclasses import replace
@@ -62,7 +62,7 @@ _case(
 
 _case(
     "unknown_target",
-    "An explicit --<target> in neither the registry nor the units.",
+    "An explicit --<target> in neither the catalog nor the units.",
     "--bogus",
     world=WORLD_INSTALLED,
     tags=("error",),

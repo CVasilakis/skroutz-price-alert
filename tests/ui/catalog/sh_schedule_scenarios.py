@@ -2,7 +2,7 @@
 
 schedule.sh re-applies configured cadences to the installed timers, so the worlds
 vary the interval-resolution status, the resolved-vs-installed [Timer] blocks, and
-the registry health.
+the catalog health.
 """
 
 from dataclasses import replace
@@ -11,7 +11,7 @@ from ui.catalog._base import Surface
 from ui.catalog.shell_inputs import (
     WORLD_ALL_ORPHANS,
     WORLD_AMAZON_UNINSTALLED,
-    WORLD_BROKEN_REG,
+    WORLD_BROKEN_CATALOG,
     WORLD_EMPTY,
     WORLD_INSTALLED,
     WORLD_NO_VENV,
@@ -21,7 +21,7 @@ from ui.catalog.shell_inputs import (
 
 _case = shell_case(Surface.SH_SCHEDULE, "scripts/schedule.sh")
 
-#: The registry resolves a 2h cadence while the installed timer still runs hourly.
+#: The catalog resolves a 2h cadence while the installed timer still runs hourly.
 _CHANGED = replace(WORLD_INSTALLED, schedules={"skroutz": "*-*-* 00/2:00:00"})
 
 _case(
@@ -37,7 +37,7 @@ _case(
     "Help still renders without a venv - intervals shown as unavailable.",
     "--help",
     world=WORLD_NO_VENV,
-    tags=("help", "registry"),
+    tags=("help", "catalog"),
 )
 
 _case(
@@ -49,17 +49,17 @@ _case(
 )
 
 _case(
-    "registry_unreadable_venv_missing",
+    "catalog_unavailable_venv_missing",
     "Units exist but the venv is gone - repair hint.",
     world=WORLD_NO_VENV,
-    tags=("error", "registry"),
+    tags=("error", "catalog"),
 )
 
 _case(
-    "registry_unreadable_discovery_failed",
+    "catalog_unavailable_discovery_failed",
     "Units exist but plugin discovery raises.",
-    world=WORLD_BROKEN_REG,
-    tags=("error", "registry"),
+    world=WORLD_BROKEN_CATALOG,
+    tags=("error", "catalog"),
 )
 
 _case(
@@ -80,7 +80,7 @@ _case(
 
 _case(
     "unknown_target",
-    "An explicit --<target> in neither the registry nor the units.",
+    "An explicit --<target> in neither the catalog nor the units.",
     "--bogus",
     world=WORLD_INSTALLED,
     tags=("error",),
@@ -124,7 +124,7 @@ _case(
 
 _case(
     "missing_schedule",
-    "A scheduled target has no registry-resolved schedule - skipped.",
+    "A scheduled target has no catalog-resolved schedule - skipped.",
     world=replace(WORLD_INSTALLED, schedules={}),
     tags=("error",),
 )

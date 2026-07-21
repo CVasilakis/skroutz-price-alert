@@ -1,4 +1,4 @@
-"""Project-wide notification endpoint validation and immutable load results."""
+"""Notification endpoint validation and immutable configuration results."""
 
 from __future__ import annotations
 
@@ -16,8 +16,6 @@ def is_valid_apprise_url(url: str) -> bool:
     if not candidate or any(placeholder in candidate for placeholder in APPRISE_PLACEHOLDERS):
         return False
 
-    # Keep the configuration boundary import-light for commands that never validate
-    # notification endpoints.
     import apprise
 
     try:
@@ -34,16 +32,13 @@ def classify_notification_urls(
     invalid: list[str] = []
     for raw_url in notification_urls:
         url = raw_url.strip()
-        if is_valid_apprise_url(url):
-            valid.append(url)
-        else:
-            invalid.append(url)
+        (valid if is_valid_apprise_url(url) else invalid).append(url)
     return tuple(valid), tuple(invalid)
 
 
 @dataclass(frozen=True)
 class NotificationConfig:
-    """The redacted, immutable outcome of resolving the ``notifications`` section."""
+    """The redacted, immutable outcome of resolving the notifications section."""
 
     configured_urls: tuple[str, ...] = field(default=(), repr=False)
     valid_urls: tuple[str, ...] = field(default=(), repr=False)

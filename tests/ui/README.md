@@ -24,7 +24,7 @@ panels. Getting it right means caring about things that only show up *when rende
 - Does a long footnote **wrap** cleanly inside the 75-character panel, or spill/overflow?
 - Is the panel **border color** right (green = good, yellow = warning, red = error,
   blue = in-progress)?
-- Do product names **truncate** correctly? Are the **icons** (✅ 🟡 ❗ 🛑 🎉 ⏳) the ones
+- Do item names **truncate** correctly? Are the **icons** (✅ 🟡 ❗ 🛑 🎉 ⏳) the ones
   you expect? Are footnote reference numbers (`[1] [2] …`) aligned to the right notes?
 
 Historically the only way to check these was to **run the app and induce each state by
@@ -94,7 +94,7 @@ tests/ui/
     inputs.py              #    shared input builders (SettingViews, ResolvedSettings,
                            #      ConfigView, systemd property dicts) — reused by scenarios
     run_scenarios.py       #    interactive scraping panel (a normal run)
-    e2e_run_scenarios.py   #    the same panel, driven by the real orchestrator
+    e2e_run_scenarios.py   #    the same panel, driven by the real application workflow
     config_scenarios.py    #    Configuration Check panel
     startup_scenarios.py   #    the full pre-scrape console transcript (surface startup)
     status_scenarios.py    #    --status: service / not-installed / orphan panels
@@ -114,6 +114,7 @@ tests/ui/
     shell.py               #    drive_shell: sandboxed shell-script execution + shims
     rendering.py           #    the deterministic recording console + capture helpers
   snapshots/               # ── the approved output: golden files <surface>__<name>.txt
+  test_ui_catalog.py       #    catalog metadata, visibility, and ordering guards
   test_ui_snapshots.py     #    the gate: compare each scenario to its golden file
   test_ui_colors.py        #    border-color assertions
   gallery.py               #    render everything in color for human review
@@ -121,7 +122,7 @@ tests/ui/
 ```
 
 A useful way to hold it in your head: **`catalog/` says *what*, `harness/` says *how*,
-`snapshots/` is the *approved result*, and the two `test_*.py` files plus `gallery.py` are
+`snapshots/` is the *approved result*, and the three `test_*.py` files plus `gallery.py` are
 the *consumers*.**
 
 ---
@@ -142,7 +143,7 @@ the complete development toolchain once with `./scripts/dev-setup.sh`.
 The `pythonpath` setting lets the scenarios import the production modules
 (`core.tui.run_reporter`, `core.tui.status`,
 `core.tui.ping`, …) and the `ui.*` test packages the same way the app does — no `PYTHONPATH=` prefix
-needed. This runs the existing project tests **and** the UI snapshot + color tests together
+needed. This runs the existing project tests **and** the UI catalog, snapshot, and color tests together
 (`pytest tests/ui` runs just this suite).
 
 ### Read a failure
@@ -186,7 +187,7 @@ right?" check that snapshots (plain text) can't give you.
 
 ```sh
 ./venv/bin/python3 tests/ui/gallery.py                 # every scenario, grouped by surface
-./venv/bin/python3 tests/ui/gallery.py --surface run   # only one surface: run|status|ping|config
+./venv/bin/python3 tests/ui/gallery.py --surface run   # only the selected surface
 ./venv/bin/python3 tests/ui/gallery.py --tag interrupt # only scenarios carrying a tag
 ./venv/bin/python3 tests/ui/gallery.py --html /tmp/ui.html   # write a shareable HTML page
 ./venv/bin/python3 tests/ui/gallery.py --list          # list scenario keys + descriptions (renders nothing)
@@ -233,9 +234,9 @@ class Scenario:
 
 Tags come from one curated vocabulary — `TAG_VOCABULARY` in `catalog/_base.py`, a
 `tag -> one-line meaning` mapping (currently: `ok`, `error`, `skipped`, `help`,
-`retry`, `interrupt`, `in_progress`, `price_drop`, `settings`, `products`,
-`reminder`, `timer`, `last_run`, `orphan`, `registry`, `system`, `combined`,
-`layout`). `test_ui_catalog.py` rejects a tag outside the vocabulary and a
+`retry`, `interrupt`, `in_progress`, `price_drop`, `listing`, `settings`, `products`,
+`reminder`, `timer`, `last_run`, `orphan`, `catalog`, `system`, `combined`,
+`layout`, `synthetic`). `test_ui_catalog.py` rejects a tag outside the vocabulary and a
 vocabulary entry no scenario uses, so the filter chips in the HTML report stay
 small and meaningful. To introduce a tag, add it there with its meaning.
 
@@ -262,7 +263,7 @@ real production builder:
 | Surface  | Gallery label | Driver(s)                                                   | Drives (production code)                              |
 |----------|---------------|-------------------------------------------------------------|------------------------------------------------------|
 | `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `run_reporter.InteractiveRunReporter` panel    |
-| `E2E_RUN`| Scraping panel (end-to-end) | `drive_orchestrated_run(products, results_by_url)`          | the real `ScrapingOrchestrator` driving that same panel |
+| `E2E_RUN`| Scraping panel (end-to-end) | `drive_orchestrated_run(items, results_by_url)`             | the real application workflow driving that same panel |
 | `STATUS` | Health check (--status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
 | `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, config_error_msg)`   | `ping.build_ping_panel`                              |
 | `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check.build_config_panel`                    |
@@ -274,10 +275,10 @@ concern: it leads each `STATUS` Service Status panel (`drive_service`'s `config`
 `RUN` Scraping panel (the `config` passed to `_start`/`start_target`), built by the shared
 `config_check.config_view` / `add_config_row`.
 
-**RUN is special.** The scraping panel is *live* — it evolves as products are checked. So a
-RUN scenario is a **script**: a sequence of the exact method calls the orchestrator makes
-on the strategy, in order, ending at the moment you want to capture. The driver runs the
-script against a real strategy (with the live-refresh loop stubbed out so nothing animates)
+**RUN is special.** The scraping panel is *live* — it evolves as items are checked. So a
+RUN scenario is a **script**: a sequence of the exact method calls the application workflow
+makes on the reporter, in order, ending at the moment you want to capture. The driver runs
+the script against a real reporter (with the live-refresh loop stubbed out so nothing animates)
 and captures the resulting panel:
 
 ```python
@@ -305,21 +306,21 @@ The **capture point is wherever the script ends**:
   `s.start_scraping(...)` to snapshot the spinner, or after `s.start_sleep(...)` +
   `s.update_sleep(...)` to snapshot the progress bar (these render blue, "in progress").
 
-Because a RUN script mirrors the orchestrator's real call sequence, it doubles as
-executable documentation of the orchestrator→strategy contract. If the orchestrator ever
+Because a RUN script mirrors the application workflow's real call sequence, it doubles as
+executable documentation of the application→reporter contract. If the workflow ever
 changes *which* calls it emits for a situation, update the matching scenario and
-regenerate. The note strings a script feeds the strategy are imported from the
-production catalog (`core.messages`), so their wording can never drift from what the
-orchestrator emits.
+regenerate. The note strings a script feeds the reporter are imported from the
+production message catalog (`core.messages`), so their wording can never drift from what
+the application emits.
 
 **E2E_RUN closes the loop from the other end.** Where a RUN script hand-feeds the
-strategy, an `E2E_RUN` scenario (`e2e_run_scenarios.py`) gives `drive_orchestrated_run`
-only the config rows and each product's scrape outcomes (price/listing results or exceptions);
-the *real* `ScrapingOrchestrator` then runs against a scripted client and a real JSON
-storage on a temp dir, and whatever notes it actually emits land on the captured panel.
-A change to the orchestrator's UI payloads (wording, ordering, which notes appear at
+reporter, an `E2E_RUN` scenario (`e2e_run_scenarios.py`) gives `drive_orchestrated_run`
+only the config rows and each item's scrape outcomes (price/listing results or exceptions);
+the real application workflow then runs against a scripted client and a JSON state
+repository in a temp dir, and whatever notes it actually emits land on the captured panel.
+A change to the application's UI payloads (wording, ordering, which notes appear at
 all) flips these goldens even if the hand-scripted catalog were forgotten. Keep this
-surface to the main note-producing flows; states the orchestrator can't finish
+surface to the main note-producing flows; states the workflow can't finish
 deterministically (spinners, sleeps, interrupts, stale timestamps) belong in RUN.
 
 The other three panel surfaces are *static*, so their scenarios just hand the driver the
@@ -338,7 +339,7 @@ def _():
 A shell scenario snapshots the transcript one management script prints for one world
 state. `drive_shell` (`harness/shell.py`) copies the **real scripts** into a throwaway
 install tree, shims every external command they touch (`systemctl`, `loginctl`, `git`,
-`python3`, and the venv python that answers the registry queries in
+`python3`, and the venv python that answers the catalog queries in
 `scripts/lib/common.sh`), runs the script with `/bin/sh`, and captures stdout+stderr
 interleaved — exactly what a terminal user sees. Nothing touches your real system: no
 systemd, no git, no network, no real venv.
@@ -376,7 +377,7 @@ formatting and warning text), `inputs.py` offers small factories:
 - `stub_logger()`, `CURRENCY` — misc helpers.
 
 `run_scenarios.py` also defines a `_start(s, …)` helper and note constants (`NOTIFIED_OK`,
-`ERRORS_LOG`, `STALE`, …) that mirror the exact strings the orchestrator emits.
+`ERRORS_LOG`, `STALE`, …) that mirror the exact strings the application emits.
 
 ---
 
@@ -465,7 +466,7 @@ becomes part of the repository history. So:
   string that merely *looks* like a token can trip GitHub's push protection — a Slack
   `xoxb-…` shape, a real-looking Telegram bot token (`digits:35-char-string`), a
   `discord.com/api/webhooks/...` URL, an AWS key, etc. Keep placeholders clearly synthetic.
-- **Don't paste your real tracked products.** Use invented names (`Sony WH-1000XM5`,
+- **Don't paste your real tracked items.** Use invented names (`Sony WH-1000XM5`,
   `Widget`), not the items from your own `config/skroutz.json`.
 - **Don't bake in personal paths, usernames, or emails** (`/home/you/...`,
   `you@example.com`). None are needed — scenarios take literal inputs you control.
@@ -494,7 +495,7 @@ enforces that:
   terminal size.
 - **Pinned clock.** The scraping `Spinner` picks its frame from the clock; the capture
   console's clock is pinned so it always renders the same frame.
-- **No live animation.** For RUN, Rich's live-refresh loop is stubbed out, so the strategy
+- **No live animation.** For RUN, Rich's live-refresh loop is stubbed out, so the reporter
   just accumulates state and we capture the final `Panel` — no timing races, no partial
   frames.
 - **Plain text, trimmed.** Output is captured with styles off and per-line trailing spaces
@@ -511,8 +512,10 @@ enforces that:
 
 ---
 
-## The two test files (what actually asserts)
+## The three test files (what actually asserts)
 
+- **`test_ui_catalog.py`** — guards tag vocabulary, surface metadata, hidden-scenario
+  visibility, and section ordering.
 - **`test_ui_snapshots.py`** — for every scenario: render it, compare to its golden file
   (or write it under `UPDATE_SNAPSHOTS=1`). Also checks that scenario keys are unique and
   that no orphan golden files exist.

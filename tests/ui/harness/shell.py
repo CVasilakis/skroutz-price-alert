@@ -64,14 +64,14 @@ _REAL_TOOLS = ("dirname", "cut", "cat", "chmod", "mkdir", "rm", "cp", "mv", "id"
 class ShellWorld:
     """Everything variable about the sandbox, defaulting to one healthy 'skroutz' install.
 
-    Registry answers (served by the venv responder):
-        plugins: Registered plugin names, in registry order.
+    Catalog answers (served by the venv responder):
+        plugins: Registered plugin names, in catalog order.
         requirements: plugin -> absolute requirements path (plugins with none omitted).
         schedules: plugin -> resolved OnCalendar value; default hourly.
         interval_status: plugin -> ok|default|invalid|nocfg; default ok.
         supported_intervals: The one-line cadence vocabulary shown in help text.
-        discovery_error: When set, the registry is unreadable: list_plugins prints
-            nothing and registry_diagnose reports this one-line error.
+        discovery_error: When set, the catalog is unavailable: list_plugins prints
+            nothing and catalog_diagnose reports this one-line error.
 
     Venv state and failure injection:
         venv: Pre-create venv/bin/python3 (the responder) in the sandbox.
@@ -273,7 +273,7 @@ VENV_RESPONDER_MARKERS: tuple[str, ...] = (
 # The venv responder implements the small machine-readable scraper CLI used by
 # common.sh, plus pip failure injection and run.sh's final dispatch marker.
 _VENV_PYTHON_SHIM = """#!/bin/sh
-# venv python responder: canned registry answers, pip failure injection, and a
+# venv python responder: canned catalog answers, pip failure injection, and a
 # dispatch marker for run.sh's final exec.
 case "${1:-}" in
     -m)

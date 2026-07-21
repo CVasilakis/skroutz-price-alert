@@ -129,7 +129,7 @@ def _():
 @scenario(
     Surface.STATUS,
     "config_faulty",
-    "Some products are misconfigured (Config row)",
+    "Some items are misconfigured (Config row)",
     tags=("products",),
 )
 def _():
@@ -264,7 +264,7 @@ def _():
 @scenario(
     Surface.STATUS,
     "exec_storage_error",
-    "Last run could not persist scrape state (exit 19)",
+    "Last run could not load or persist scrape state (exit 19)",
     tags=("last_run",),
 )
 def _():

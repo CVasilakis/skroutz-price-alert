@@ -134,9 +134,9 @@ main() {
     fi
 
     # Surface any scraper this version provides that the user has not installed
-    # (registry minus installed timers), so a newly-added store is discoverable
+    # (catalog minus installed timers), so a newly-added store is discoverable
     # instead of silently waiting to be opted into. The venv is fresh after the
-    # reprovision above, so the registry is readable here.
+    # reprovision above, so the catalog is readable here.
     NEW_SCRAPERS=""
     INSTALLED_NOW="$(list_installed_plugins timer)"
     load_plugin_manifest || true

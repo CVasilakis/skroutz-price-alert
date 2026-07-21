@@ -2,7 +2,7 @@
 
 For a new scraper plugin, confirm that:
 
-- [ ] The diff adds only `src/core/scrapers/<target>/` and `tests/plugins/<target>/`.
+- [ ] The diff adds only `src/core/scrapers/plugins/<target>/` and `tests/plugins/<target>/`.
 - [ ] `plugin.py` and `__init__.py` are import-light and use no third-party imports.
 - [ ] `Client` uses bounded requests, modeled exceptions, and clean shutdown.
 - [ ] Tests use mocked/fixture responses and cover success, malformed data,

@@ -2,7 +2,7 @@
 
 Scrapers are checked-in price adapters. A contribution is strictly additive: it
 creates `src/core/scrapers/plugins/<target>/` and `tests/plugins/<target>/` and does not edit
-the framework, registry, shell tools, UI, root documentation, workflows, or snapshots.
+the framework, catalog, shell tools, UI, root documentation, workflows, or snapshots.
 The package name becomes the CLI flag and the stem for config, state, logs, and
 systemd units.
 
@@ -53,8 +53,9 @@ The contributor verifier additionally requires:
 
 Add `requirements.txt` only when the client needs private dependencies. Those
 dependencies must never be imported by `plugin.py` or `__init__.py`.
-Production code must not import a sibling plugin; reusable behavior belongs in the
-framework only when it is genuinely store-independent.
+Production code must not import a sibling plugin. Genuinely store-independent, opt-in
+client helpers belong in `core.scrapers.support`; framework runtime internals remain in
+`core.scrapers.framework`.
 
 ## Descriptor contract
 
@@ -148,7 +149,7 @@ reference URL. If neither exists, the notification is sent without a link.
 Raise modeled exceptions from `core.scrapers.api`: `ProductNotFoundError`,
 `ProductUnavailableError`, `InvalidURLError`, `RateLimitError`, `ServerError`,
 `ScraperParseError`, or the base `ScraperError`. Their retry preparation,
-abort, traceback, notification, and exit-status policies are framework-owned.
+abort, traceback, notification, and exit-status policies are application-owned.
 
 ## Custom item fields
 
@@ -216,7 +217,7 @@ blocks are fatal configuration errors. The framework adds `execution_interval`, 
 A basic client implements only `scrape()`. Override `prepare_retry()` to rotate
 or reset transport state before selected retries, `diagnostic_context()` to return
 a non-secret string mapping for traceback logs, and `close()` to release resources.
-The orchestrator creates one client per target and closes it in that target's
+`TargetRunner` creates one client per target and closes it in that target's
 `finally` block.
 
 HTTP clients may subclass the documented `core.scrapers.support.http.HttpScraperClient`

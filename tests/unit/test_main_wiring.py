@@ -4,7 +4,7 @@
 Everything main() touches is patched with ``autospec=True``, so this asserts the wiring
 (that the reminder is constructed and run, in the right order) *and* that every
 constructor/function call still matches the real signatures — a parameter added to
-``ScrapingOrchestrator``, ``ReminderService``, ``Notifier``, ``load_targets`` or
+``ScrapingOrchestrator``, ``ReminderService``, ``AppriseNotifier``, ``load_targets`` or
 ``validate_notification_preflight`` fails here instead of passing silently. It does not test any scraping
 behavior.
 """
@@ -30,7 +30,8 @@ class TestMainWiring(unittest.TestCase):
             mock.patch(
                 "core.main.validate_notification_preflight", autospec=True, return_value=None
             ),
-            mock.patch("core.main.Notifier", autospec=True) as Notifier,
+            mock.patch("core.main.AppriseNotifier", autospec=True) as notifier_type,
+            mock.patch("core.main.ReminderStateRepository", autospec=True) as StateRepository,
             mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
             mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator,
         ):
@@ -50,8 +51,9 @@ class TestMainWiring(unittest.TestCase):
         reminder.run_once.assert_called_once()
         self.assertEqual(order, ["reminder", "orchestrator"])
         load_general.assert_called_once_with(core.main.CONFIG_DIR)
-        self.assertEqual(ReminderService.call_args.args[2], Notifier.return_value)
-        Notifier.assert_called_once_with(("json://localhost",))
+        self.assertEqual(ReminderService.call_args.args[2], notifier_type.return_value)
+        self.assertEqual(ReminderService.call_args.args[1], StateRepository.return_value)
+        notifier_type.assert_called_once_with(("json://localhost",))
 
     def test_reminder_not_run_when_preflight_aborts(self):
         # A fatal preflight (e.g. missing notifications in service mode) exits before the
@@ -64,7 +66,8 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.load_targets", autospec=True, return_value=[]),
             mock.patch("core.main.load_general_config", autospec=True),
             mock.patch("core.main.validate_notification_preflight", autospec=True, return_value=3),
-            mock.patch("core.main.Notifier", autospec=True),
+            mock.patch("core.main.AppriseNotifier", autospec=True),
+            mock.patch("core.main.ReminderStateRepository", autospec=True),
             mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
             mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator,
         ):
@@ -89,8 +92,9 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.render_config_panel") as render_config,
             mock.patch("core.main.Console") as Console,
             mock.patch("core.main.signal.signal"),
-            mock.patch("core.main.InteractiveRunReporter") as strategy_type,
-            mock.patch("core.main.Notifier"),
+            mock.patch("core.main.InteractiveRunReporter") as reporter_type,
+            mock.patch("core.main.AppriseNotifier"),
+            mock.patch("core.main.ReminderStateRepository"),
             mock.patch("core.main.ReminderService"),
             mock.patch("core.main.ScrapingOrchestrator") as Orchestrator,
         ):
@@ -110,7 +114,7 @@ class TestMainWiring(unittest.TestCase):
         )
         install_handler.assert_called_once()
         Orchestrator.assert_called_once_with(
-            [], ClientLoader.return_value, mock.ANY, False, strategy_type.return_value
+            [], ClientLoader.return_value, mock.ANY, False, reporter_type.return_value
         )
 
 

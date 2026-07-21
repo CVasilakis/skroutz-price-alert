@@ -26,9 +26,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # Plugin transport deps (e.g. tls-client) so the http_client and client
+          # Plugin transport deps (e.g. tls-client) so the shared HTTP and plugin client
           # tests run instead of skipping — CI exercises the full stack.
-          for f in src/core/scrapers/*/requirements.txt; do
+          for f in src/core/scrapers/plugins/*/requirements.txt; do
             [ -f "$f" ] && pip install -r "$f"
           done
           pip install -r requirements-dev.txt
@@ -64,7 +64,7 @@ jobs:
         run: |
           python -m venv venv
           venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
-          for f in src/core/scrapers/*/requirements.txt; do
+          for f in src/core/scrapers/plugins/*/requirements.txt; do
             [ -f "$f" ] && venv/bin/python -m pip install -r "$f"
           done
       - name: Run basedpyright
@@ -97,4 +97,4 @@ jobs:
             "$plugin_python" -m pip check
             SCROOGE_PLUGIN_CHECK_PYTHON="$plugin_python" \
               ./scripts/plugin-check.sh "--$target"
-          done < <(PYTHONPATH=src python -m core.scrapers.cli requirements)
+          done < <(PYTHONPATH=src python -m core.scrapers.tooling.cli requirements)

@@ -90,8 +90,8 @@ class Client(HttpScraperClient):
 
         response = self.get(listing_url, headers=self.current_headers)
 
-        # Maps the HTTP status to the modeled exception the orchestrator's retry/abort
-        # policy is keyed on (404/410, 401/403/429, 5xx, ...). See HttpScraperClient.
+        # Maps the HTTP status to the modeled exception the application retry/abort
+        # policy consumes (404/410, 401/403/429, 5xx, ...). See HttpScraperClient.
         self.raise_for_status(response.status_code)
 
         matches = self._parse_adverts(response.text or "", listing_url, include, exclude)

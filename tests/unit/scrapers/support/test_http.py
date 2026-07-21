@@ -1,13 +1,14 @@
 """Unit tests for the shared HTTP scraper client.
 
 Covers the bounded request hook, the pure HTTP-status -> modeled-exception mapping
-(``raise_for_status``, the table the orchestrator's ErrorPolicy is keyed on), and
+(``raise_for_status``, whose exceptions feed the application retry policy), and
 identity rotation (``prepare_retry``). ``tls_client`` is patched, so no real
 session or network is involved. The module imports ``tls_client`` at top (a
 per-plugin transport dep), so the whole suite skips cleanly on a core-only install.
 
-Note: the retry/back-off loop is NOT here — it lives in the orchestrator and is
-covered by test_orchestrator.py.
+Note: the retry/back-off loop is NOT here — ``ItemExecutor`` coordinates it,
+``core.application.retry`` supplies the error policies, and ``Pacer`` performs the
+waits. Focused coverage lives in the application item, pacing, and retry tests.
 """
 
 import unittest

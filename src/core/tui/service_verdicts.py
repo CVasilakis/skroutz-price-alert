@@ -63,7 +63,7 @@ _VERDICTS: dict[int, ServiceVerdict] = {
         "❗",
         "Storage Failed",
         "red",
-        "Could not update `config/{detail}` with the latest scrape state.",
+        "Could not update `state/{target}.json` with the latest scrape state.",
     ),
     EXIT_CODE_NOTIFICATION_ERROR: ServiceVerdict(
         "🟡",

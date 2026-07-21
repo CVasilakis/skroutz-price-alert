@@ -1,19 +1,18 @@
 from unittest import mock
 
-from core.notifier import TITLE_PRICE_DROP, TITLE_STATUS_UPDATE, Notifier
+from core.notifications.apprise import AppriseNotifier
+from core.notifications.templates import TITLE_PRICE_DROP, TITLE_STATUS_UPDATE
 from core.scrapers.api import TrackedItem, UrlField
 
 URL = UrlField("url", domains=("x",), accepts_url=lambda _url: True)
 
 
-def _notifier(urls=("x://y",), *, valid=True, added=True):
-    with (
-        mock.patch("core.notifier.apprise.Apprise") as cls,
-        mock.patch("core.notifier.is_valid_apprise_url", return_value=valid),
-    ):
+def _notifier(urls=("x://y",), *, added=True):
+    with mock.patch("core.notifications.apprise.apprise.Apprise") as cls:
         app = cls.return_value
         app.add.return_value = added
-        notifier = Notifier(urls)
+        notifier = AppriseNotifier(urls)
+        cls.instantiate.assert_not_called()
     return notifier, app
 
 
@@ -26,10 +25,11 @@ def _item(index=1):
     )
 
 
-def test_service_gate_and_dispatch_exception():
-    notifier, app = _notifier(valid=False)
+def test_service_gate_registration_and_dispatch_exception():
+    notifier, app = _notifier(added=False)
     assert not notifier.has_services
-    app.add.assert_not_called()
+    app.add.assert_called_once_with("x://y")
+
     notifier, app = _notifier()
     assert notifier.has_services
     app.notify.return_value = 1
@@ -64,7 +64,7 @@ def test_reminder_variants_and_error_summary_truncation():
     assert not notifier.notify_errors("Store", [])
 
 
-def test_old_entries_and_crash_and_ping_delegation():
+def test_old_entries_crash_and_ping_delegation():
     notifier, app = _notifier()
     app.notify.return_value = True
     assert notifier.notify_old_entries("Store", [_item()], 48)

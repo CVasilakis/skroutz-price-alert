@@ -30,17 +30,17 @@ _case(
 
 _case(
     "unknown_flag",
-    "An unregistered --<target> flag (registry readable).",
+    "An unregistered --<target> flag (catalog available).",
     "--ghost",
     tags=("error",),
 )
 
 _case(
-    "registry_unreadable",
-    "An unknown flag while the registry is unreadable - diagnose only.",
+    "catalog_unavailable",
+    "An unknown flag while the catalog is unavailable - diagnose only.",
     "--ghost",
     world=WORLD_NO_VENV,
-    tags=("error", "registry"),
+    tags=("error", "catalog"),
 )
 
 _case(

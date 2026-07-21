@@ -16,7 +16,7 @@ from core.application.target import TargetRunner
 from core.infrastructure.locking import acquire_lock
 from core.infrastructure.logging import get_target_logger, save_traceback
 from core.infrastructure.signals import describe_signal
-from core.notifier import Notifier
+from core.notifications.contracts import NotificationService
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.settings import KEY_RETENTION
 
@@ -26,13 +26,13 @@ def _utc_now() -> datetime.datetime:
 
 
 class ScrapingOrchestrator:
-    """Coordinate locks, clients, state commits, summaries, and final status."""
+    """Coordinate target startup/delegation, summaries, interruption, and final status."""
 
     def __init__(
         self,
         target_loads: list[TargetLoad],
         client_loader: ClientLoader,
-        notifier: Notifier,
+        notifier: NotificationService,
         quiet: bool = False,
         reporter: RunReporter | None = None,
         now_fn: Callable[[], datetime.datetime] = _utc_now,

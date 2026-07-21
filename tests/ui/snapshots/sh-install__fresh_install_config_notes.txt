@@ -10,7 +10,7 @@ Systemd timer(s) configured successfully.
 
 Note: Configuration required!
 - Copy <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to config/skroutz.json
-  and fill it with your desired products.
+  and fill it with your desired items.
 - Copy src/core/general/config.example.json to config/general.json
   and configure your Apprise notification URLs and preferences.
 - Read the README.md file for more information.

@@ -7,7 +7,7 @@ delivery results, exercising row icons, URL obfuscation, and panel coloring.
 from ui.catalog._base import Surface, scenario
 from ui.harness.drivers import drive_ping
 
-# Pre-obfuscated identifiers as Notifier.notify_test would return them. These are
+# Pre-obfuscated identifiers as AppriseNotifier.notify_test would return them. These are
 # deliberately fake placeholders (no real token shapes) so the committed snapshots never
 # resemble a secret; SLACK_LONG is only long enough to exercise value-cell wrapping.
 TGRAM = "tgram://1...n/..."

@@ -61,7 +61,7 @@ EXPECTED_COLORS = {
     "sh-install__reinstall_all_configured": "green",
     "sh-update__dirty_declined": "red",
     "sh-update__new_scrapers_available": "green",
-    "sh-schedule__registry_unreadable_venv_missing": "red",
+    "sh-schedule__catalog_unavailable_venv_missing": "red",
     "sh-schedule__invalid_interval": "green",  # a warning notice, but the script exits 0
     "sh-enable__enable_fails": "red",
     "sh-disable__disable_success": "green",

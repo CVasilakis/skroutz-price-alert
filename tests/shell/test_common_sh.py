@@ -23,7 +23,7 @@ COMMON_SH = REPO_ROOT / "scripts" / "lib" / "common.sh"
 
 def test_install_does_not_invoke_configuration_migration():
     install = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
-    assert "registry_cli migration" not in install
+    assert "catalog_cli migration" not in install
 
 
 def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None):
@@ -112,7 +112,7 @@ class TestManifestSnapshot(unittest.TestCase):
         self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
         counter = temp_dir / "calls"
         script = (
-            f'registry_cli() {{ printf x >> "{counter}"; '
+            f'catalog_cli() {{ printf x >> "{counter}"; '
             "printf 'alpha\\tAlpha Store\\t/example.json\\t/req.txt\\thourly\\tok\\n'; }\n"
             "load_plugin_manifest\n"
             "list_plugins >/dev/null\n"
@@ -230,8 +230,8 @@ class TestKnownTargets(unittest.TestCase):
         self.assertEqual(result.stdout.split(), ["timeronly", "serviceonly"])
 
 
-class TestRegistryDiagnose(unittest.TestCase):
-    """registry_diagnose distinguishes a missing venv from failed plugin discovery."""
+class TestCatalogDiagnose(unittest.TestCase):
+    """catalog_diagnose distinguishes a missing venv from failed plugin discovery."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
@@ -239,7 +239,7 @@ class TestRegistryDiagnose(unittest.TestCase):
 
     def test_missing_venv_reports_reinstall_hint(self):
         # A BASE_DIR with no venv at all -> the reinstall hint, not a discovery error.
-        result = run_sh("registry_diagnose", base_dir=self.tmp)
+        result = run_sh("catalog_diagnose", base_dir=self.tmp)
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing or broken", result.stderr)
         self.assertIn("./install.sh", result.stderr)
@@ -261,7 +261,7 @@ class TestRegistryDiagnose(unittest.TestCase):
         broken.mkdir()
         (broken / "__init__.py").write_text('raise RuntimeError("boom")\n')
 
-        result = run_sh("registry_diagnose", base_dir=self.tmp)
+        result = run_sh("catalog_diagnose", base_dir=self.tmp)
         self.assertEqual(result.returncode, 1)
         self.assertIn("discovery failed", result.stderr)
         self.assertIn("PluginDiscoveryError", result.stderr)

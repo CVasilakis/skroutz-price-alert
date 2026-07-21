@@ -123,8 +123,8 @@ class Client(HttpScraperClient):
 
         response = self.get(api_link.strip(), headers=headers)
 
-        # Maps the HTTP status to the modeled exception the orchestrator's retry/abort
-        # policy is keyed on (404/410, 401/403/429, 5xx, ...). See HttpScraperClient.
+        # Maps the HTTP status to the modeled exception the application retry/abort
+        # policy consumes (404/410, 401/403/429, 5xx, ...). See HttpScraperClient.
         self.raise_for_status(response.status_code)
 
         try:
@@ -136,8 +136,8 @@ class Client(HttpScraperClient):
             raise ProductUnavailableError("Not available")
 
         # parse_price is the single shared price normalizer (handles currency symbols
-        # and European/US grouping); None means the value was unparseable, which the
-        # orchestrator treats as a modeled parse failure per the exception contract.
+        # and European/US grouping); None means the value was unparseable and is raised
+        # below as the modeled parse failure required by the exception contract.
         price = parse_price(response_data["price_min"])
         if price is None:
             raise ScraperParseError(

@@ -1,0 +1,41 @@
+{
+  "settings": {
+    "execution_interval": "1h",
+    "log_retention_days": 7,
+    "notify_scraping_errors": true
+  },
+  "items": [
+    {
+      "id": "samsung-ssd-2tb",
+      "name": "Samsung SSD 2TB",
+      "url": "https://www.skroutz.gr/s/39358691/Samsung-990-PRO-SSD-2TB-M-2-NVMe-PCI-Express-4-0-MZ-V9P2T0BW.html",
+      "target_price": 500,
+      "skip": false
+    },
+    {
+      "id": "dremel-4250",
+      "name": "Dremel 4250",
+      "url": "https://www.skroutz.cy/s/32650272/Dremel-4250-Peristrofiko-Polyergaleio-175W-me-Rythmisi-Tachytitas.html",
+      "target_price": 50,
+      "skip": true
+    },
+    {
+      "id": "nintendo-switch-2",
+      "name": "Nintendo Switch 2 256GB",
+      "url": "https://www.skroutz.bg/s/58318540/Nintendo-Switch-2-256GB.html",
+      "target_price": 100
+    },
+    {
+      "id": "tommy-hilfiger-watch",
+      "name": "Tommy Hilfiger watch",
+      "url": "https://www.skroutz.de/s/17582724/Tommy-Hilfiger-Daniel-Herrenuhr-44mm-Chronograph-Batterie-mit-Schwarz-Metallarmband-1710383.html",
+      "target_price": 10
+    },
+    {
+      "id": "ddr4-ram",
+      "name": "DDR4 RAM",
+      "url": "https://www.skroutz.ro/s/7730092/G-Skill-Ripjaws-V-16GB-DDR4-RAM-cu-2-module-2x8GB-si-Viteza-3200-pentru-Desktop-F4-3200C16D-16GVKB.html",
+      "target_price": 700
+    }
+  ]
+}

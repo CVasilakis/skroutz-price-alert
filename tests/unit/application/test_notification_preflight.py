@@ -3,7 +3,7 @@ from unittest import mock
 from core.application.preflight import validate_notification_preflight
 from core.constants import EXIT_CODE_NOTIFICATION_CONFIG_ERROR
 from core.general.configuration import GeneralConfigLoad
-from core.general.notifications import NotificationConfig
+from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
 
 

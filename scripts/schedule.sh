@@ -43,7 +43,7 @@ print_help() {
     printf '%s\n' "  -h, --help        show this help message and exit"
     for plugin in $(list_installed_plugins timer); do
         # Skip orphans (installed but no longer a registered scraper) - they have
-        # no config to apply. If the registry is unreadable we can't tell, so list all.
+        # no config to apply. If the catalog is unavailable we can't tell, so list all.
         if [ -n "$_registered" ] && ! plugin_in_list "$plugin" $_registered; then
             continue
         fi
@@ -56,11 +56,11 @@ print_help() {
 # TARGET RESOLUTION
 # ------------------------------------------------------------------------------
 # schedule.sh re-applies the cadence of the timers install.sh provisioned, so it
-# acts on the INSTALLED timer units intersected with the registry: it needs Python
+# acts on the INSTALLED timer units intersected with the catalog: it needs Python
 # both to enumerate scrapers and to resolve each one's configured interval. An
 # installed unit whose plugin was removed (an orphan) has no config to apply, so it
-# is reported and skipped. Because resolving intervals requires the registry, a
-# readable registry is REQUIRED when units exist.
+# is reported and skipped. Because resolving intervals requires the catalog, a
+# readable catalog is REQUIRED when units exist.
 # -h/--help is honored anywhere in the argument list; a bare '--' is rejected
 # (it would otherwise parse as an empty target name and silently select nothing).
 
@@ -81,18 +81,18 @@ load_plugin_manifest || true
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"
 
-# Units exist but the registry can't be read -> without it we can neither enumerate
+# Units exist but the catalog can't be read -> without it we can neither enumerate
 # scrapers nor resolve their intervals, so refuse rather than guess.
-# registry_diagnose says WHY (venv missing vs. a plugin whose discovery failed).
+# catalog_diagnose says WHY (venv missing vs. a plugin whose discovery failed).
 if [ -n "$INSTALLED_PLUGINS" ] && [ -z "$REGISTERED" ]; then
-    registry_diagnose || exit 1
+    catalog_diagnose || exit 1
 fi
 
 if [ -n "$SELECTED" ]; then
     PLUGINS=""
     for sel in $SELECTED; do
         if plugin_in_list "$sel" $INSTALLED_PLUGINS; then
-            # Installed: configure it - unless the registry omits it, i.e. it is an
+            # Installed: configure it - unless the catalog omits it, i.e. it is an
             # orphan whose code is gone, in which case point at uninstall instead.
             if ! plugin_in_list "$sel" $REGISTERED; then
                 printf "%b\n" "${RED}Error: '$sel' is installed but no longer a registered scraper (orphan).${NC}"

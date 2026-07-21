@@ -40,7 +40,7 @@ print_help() {
     done
 
     # Leftover scrapers: a still-installed timer/service whose plugin is no longer
-    # in the registry (removed or renamed upstream). They are not in the list
+    # in the catalog (removed or renamed upstream). They are not in the list
     # above but can still be purged by name, so surface them in their own section.
     _orphans=""
     for plugin in $(list_installed_plugins timer) $(list_installed_plugins service); do

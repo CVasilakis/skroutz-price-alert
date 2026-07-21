@@ -22,7 +22,7 @@ class InteractiveRunReporter(RunReporter):
     """Rich live reporter for an interactive scraping run."""
 
     def __init__(self):
-        """Initializes the interactive strategy state."""
+        """Initializes the interactive reporter state."""
         self.console = Console()
         self.live = None
         self.rows = []
@@ -107,7 +107,7 @@ class InteractiveRunReporter(RunReporter):
         return table
 
     def start_scraping(self, name: str, attempt: int = 1, max_retries: int = 1) -> None:
-        """Starts scraping the specified product and updates the live display.
+        """Starts scraping the specified item and updates the live display.
 
         The spinner row stays visible across retries; from the second attempt on it
         shows an ``(attempt/max)`` counter so a single evolving row conveys progress.
@@ -316,7 +316,7 @@ class InteractiveRunReporter(RunReporter):
             self.live.update(self._generate_panel())
 
     def log_attempt(self, name: str, attempt: int, max_retries: int, detail: str) -> None:
-        """Ignored: failed attempts are collapsed into the product's single row."""
+        """Ignored: failed attempts are collapsed into the item's single row."""
         pass
 
     def log_failure(

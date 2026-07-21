@@ -11,13 +11,13 @@ from typing import Any
 
 from core import messages
 from core.application.contracts import RunReporter
-from core.application.execution import ItemExecutor
+from core.application.items import ItemExecutor
 from core.application.preflight import TargetLoad
 from core.constants import OLD_ENTRY_HOURS
 from core.exceptions import LockAcquisitionError, PluginDependencyError, StorageFileError
 from core.infrastructure.locking import acquire_lock
 from core.infrastructure.logging import save_traceback
-from core.notifier import Notifier
+from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.settings import KEY_NOTIFY
@@ -42,7 +42,7 @@ class TargetRunner:
         self,
         *,
         client_loader: ClientLoader,
-        notifier: Notifier,
+        notifier: NotificationService,
         reporter: RunReporter,
         now_fn: Callable[[], datetime.datetime],
         executor_type: type[ItemExecutor] | None = None,

@@ -65,11 +65,11 @@ class SurfaceInfo:
 SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     Surface.RUN: SurfaceInfo(
         "Scraping panel (interactive)",
-        "The live panel a manual ./scripts/run.sh draws while checking products.",
+        "The live panel a manual ./scripts/run.sh draws while checking items.",
     ),
     Surface.E2E_RUN: SurfaceInfo(
         "Scraping panel (end-to-end)",
-        "The same panel painted by the real orchestrator against a fake store.",
+        "The same panel painted by the real application workflow against a fake store.",
     ),
     Surface.CONFIG: SurfaceInfo(
         "Configuration Check panel",
@@ -114,7 +114,7 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
 TAG_VOCABULARY: dict[str, str] = {
     "ok": "Healthy/expected outcome",
     "error": "An error or rejection state",
-    "skipped": "A product or target skipped (skip flag, 404, invalid URL)",
+    "skipped": "An item or target skipped (skip flag, 404, invalid URL)",
     "help": "--help usage transcript",
     "retry": "Retry/back-off flow",
     "interrupt": "Ctrl-C / termination mid-run",
@@ -127,7 +127,7 @@ TAG_VOCABULARY: dict[str, str] = {
     "timer": "Systemd timer state / schedule drift",
     "last_run": "Last-execution verdict rows",
     "orphan": "Units left behind by a removed plugin",
-    "registry": "Plugin discovery/registry problems",
+    "catalog": "Plugin catalog/discovery problems",
     "system": "Locks, missing dependencies, missing prerequisites",
     "combined": "Several conditions in one panel",
     "layout": "Wrapping/truncation edge cases",

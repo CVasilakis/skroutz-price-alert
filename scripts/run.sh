@@ -90,9 +90,9 @@ while [ "$#" -gt 0 ]; do
                 shift
             else
                 # An empty plugin list means the flag was rejected because the
-                # registry itself is unreadable, not because of a typo - say so.
+                # catalog itself is unavailable, not because of a typo - say so.
                 if [ -z "$PLUGINS" ]; then
-                    registry_diagnose || exit 1
+                    catalog_diagnose || exit 1
                 fi
                 printf "%bError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
                 print_help
@@ -133,8 +133,8 @@ if [ "$FLAG_STATUS" -gt 0 ]; then
 fi
 
 # A missing venv would otherwise surface as the shell's raw "not found" from exec;
-# fail with the same repair hint registry_diagnose gives. (The plugin-flag path
-# already routes through registry_diagnose above.)
+# fail with the same repair hint catalog_diagnose gives. (The plugin-flag path
+# already routes through catalog_diagnose above.)
 if [ ! -x "$BASE_DIR/venv/bin/python3" ]; then
     printf "%b\n" "${RED}Error: Cannot run - the Python environment looks missing or broken.${NC}" >&2
     printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}" >&2

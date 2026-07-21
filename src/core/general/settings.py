@@ -35,7 +35,7 @@ from core.settings import (
 GENERAL_CONFIG_FILENAME = "general.json"
 
 # The JSON keys of the general settings in general.json's ``settings`` block. Exported so
-# framework code references them by name instead of a string literal.
+# general-feature consumers reference them by name instead of repeating string literals.
 KEY_REMINDER = "reminder"
 KEY_REMINDER_DAY = "reminder_day"
 KEY_REMINDER_TIME = "reminder_time"

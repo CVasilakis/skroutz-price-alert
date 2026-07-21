@@ -16,11 +16,11 @@ from core.application.reporting import SilentRunReporter
 from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
 from core.exceptions import UpdateCheckError
 from core.general import ReminderService, load_general_config
-from core.general.reminder import general_state_path
+from core.general.reminder_state import ReminderStateRepository, general_state_path
 from core.infrastructure.logging import save_traceback, setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
 from core.infrastructure.updates import check_for_updates
-from core.notifier import Notifier
+from core.notifications.apprise import AppriseNotifier
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.settings import KEY_RETENTION
@@ -32,8 +32,8 @@ def main() -> None:
     """Main entry point for the Scrooge Alert application.
 
     This function initializes the environment, parses arguments, sets up logging,
-    checks for updates, loads products, and starts the scraping orchestrator.
-    It delegates file locking and scraping execution to the ScrapingOrchestrator.
+    checks for updates, loads targets, and starts the scraping application workflow.
+    The workflow delegates each lock/client/state lifecycle to ``TargetRunner``.
     """
     parser = argparse.ArgumentParser(description="Scrooge Alert scraper")
     parser.add_argument("--quiet", action="store_true", help="Run script with no console output")
@@ -102,7 +102,7 @@ def main() -> None:
     if init_fatal_error:
         sys.exit(init_fatal_error)
 
-    notifier = Notifier(general.notifications.valid_urls)
+    notifier = AppriseNotifier(general.notifications.valid_urls)
 
     # Periodic liveness reminder: checked once per invocation (not per scraper), right
     # after the preflight/update-check phase. run_once never raises, and it runs before
@@ -111,7 +111,7 @@ def main() -> None:
     # of an interactive run.
     ReminderService(
         general.settings,
-        general_state_path(CONFIG_DIR),
+        ReminderStateRepository(general_state_path(CONFIG_DIR)),
         notifier,
         settings_error=general.settings_error,
     ).run_once()

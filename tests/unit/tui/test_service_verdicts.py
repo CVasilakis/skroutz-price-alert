@@ -69,8 +69,8 @@ class TestClassifyServiceState(unittest.TestCase):
         scrape = self._classify(exec_status=str(EXIT_CODE_SCRAPE_ERROR), target="insomnia")
         self.assertIn("logs/insomnia/output.log", scrape.note)
 
-        storage = self._classify(exec_status=str(EXIT_CODE_STORAGE_ERROR), config="custom.json")
-        self.assertIn("config/custom.json", storage.note)
+        storage = self._classify(exec_status=str(EXIT_CODE_STORAGE_ERROR), target="insomnia")
+        self.assertIn("state/insomnia.json", storage.note)
 
         dependency = self._classify(
             exec_status=str(EXIT_CODE_PLUGIN_DEPENDENCY_ERROR),

@@ -211,7 +211,7 @@ state/
 *.lock
 *.tmp
 *.json
-!src/core/scrapers/*/config.example.json
+!src/core/scrapers/plugins/*/config.example.json
 !src/core/general/config.example.json
 *.pyc
 *.txt
@@ -222,6 +222,8 @@ state/
 GEMINI.md
 CLAUDE.md
 WARP.md
+.codex/
+.agents/
 
 # Keep the POSIX shell helper library (the generic 'lib/' rule above would ignore it)
 !scripts/lib/

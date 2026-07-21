@@ -1,6 +1,6 @@
 """SH_INSTALL scenarios: every user-facing transcript install.sh can produce.
 
-install.sh acts on the *registry* (it provisions code), so most worlds vary the venv
+install.sh acts on the *catalog* (it provisions code), so most worlds vary the venv
 state, the failure injections, and the config artifacts rather than installed units.
 """
 
@@ -82,7 +82,7 @@ _case(
     "discovery_failed",
     "The venv is fine but plugin discovery raises - the diagnose branch.",
     world=ShellWorld(plugins=(), discovery_error=DISCOVERY_ERROR),
-    tags=("error", "registry"),
+    tags=("error", "catalog"),
 )
 
 _case(
@@ -111,7 +111,7 @@ _case(
 
 _case(
     "update_skips_removed_target",
-    "--update skips a selection no longer in the registry.",
+    "--update skips a selection no longer in the catalog.",
     "--update",
     "--ghost",
     "--skroutz",
@@ -139,7 +139,7 @@ _case(
 
 _case(
     "missing_schedule",
-    "A target has no registry-resolved schedule.",
+    "A target has no catalog-resolved schedule.",
     world=ShellWorld(schedules={}),
     tags=("error",),
 )

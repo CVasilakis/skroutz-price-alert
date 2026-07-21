@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,3 +28,24 @@ def test_coverage_reporting_has_no_failure_threshold() -> None:
             assert option not in active_configuration, (
                 f"remove coverage threshold {option!r} from {path}"
             )
+
+
+def test_plugin_artifacts_and_ci_use_the_current_package_layout() -> None:
+    """Contributor files remain visible to Git and CI resolves the tooling package."""
+    plugin_root = "src/core/scrapers/plugins"
+    for relative_path in (
+        f"{plugin_root}/new_store/config.example.json",
+        f"{plugin_root}/new_store/requirements.txt",
+    ):
+        result = subprocess.run(
+            ["git", "check-ignore", "--quiet", "--no-index", relative_path],
+            cwd=ROOT,
+            check=False,
+        )
+        assert result.returncode == 1, f"plugin contributor file is ignored: {relative_path}"
+
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    assert f"{plugin_root}/*/requirements.txt" in workflow
+    assert "core.scrapers.tooling.cli requirements" in workflow
+    assert "src/core/scrapers/" + "*/requirements.txt" not in workflow
+    assert "core.scrapers." + "cli requirements" not in workflow

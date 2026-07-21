@@ -22,7 +22,7 @@
 5. [Configuration](#%EF%B8%8F-configuration)
    - [Scraper Configuration (config/<target>.json)](#file-1-scraper-configuration-configtargetjson)
      - [Scraper Settings](#scraper-settings)
-     - [Monitored Products](#monitored-products)
+     - [Monitored Items](#monitored-items)
    - [General Configuration (config/general.json)](#file-2-general-configuration-configgeneraljson)
      - [Notification Settings](#notification-settings)
      - [General Settings](#general-settings)
@@ -45,9 +45,9 @@
 
 ## ✨ Features
 
-* **Automated Monitoring:** Set it and forget it. Tracks products silently in the background.
+* **Automated Monitoring:** Set it and forget it. Tracks configured items silently in the background.
 * **Instant Notifications:** Get instant push notifications (Telegram, Discord, Slack, Email, etc.) for price drops.
-* **Custom Target Prices:** Define specific price drop thresholds for every individual product.
+* **Custom Target Prices:** Define a price-drop threshold for each monitored item.
 
 ## 🌍 Supported Stores
 
@@ -107,7 +107,7 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     ./install.sh
     ```
 
-    The `install.sh` script will automatically create a Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper (hourly by default). No `sudo` or elevated privileges are required for the installation.
+    The `install.sh` script will automatically create a Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. No `sudo` or elevated privileges are required for the installation.
 
 4. **Configure your settings:**
 
@@ -154,7 +154,7 @@ A complete file is structured like this:
 
 #### Scraper Settings
 
-The optional top-level `settings` holds per-scraper preferences, separate from your product list:
+The optional top-level `settings` holds per-scraper preferences, separate from your item list:
 
 | Setting | Type | Description |
 | :--- | :--- | :--- |
@@ -165,7 +165,7 @@ The optional top-level `settings` holds per-scraper preferences, separate from y
 > [!NOTE]
 > Changing `execution_interval` does not take effect on its own. After editing it, apply it to the live timer with the [Set Execution Interval](#set-execution-interval) script: `./scripts/schedule.sh`.
 
-#### Monitored Products
+#### Monitored Items
 
 The `items` array lists the entries you want to monitor. Every row needs a unique,
 stable `id`; separate IDs may intentionally use the same source input.
@@ -175,7 +175,7 @@ stable `id`; separate IDs may intentionally use the same source input.
 | `id` | String | **User-defined** | Unique stable state key for this row. |
 | `name` | String | **User-defined** | A friendly naming label used inside the notifications. |
 | `target_price` | Number | **User-defined** | The maximum price threshold. If the price drops below this, you get alerted; use `0` to monitor without an alert threshold. |
-| `skip` | Boolean | **User-defined** | Optional. Set to `true` to skip monitoring this product. Defaults to `false`. |
+| `skip` | Boolean | **User-defined** | Optional. Set to `true` to skip monitoring this item. Defaults to `false`. |
 Runtime `last_price` and `last_checked` values are written to `state/<target>.json`, not
 to user configuration. Timestamps are RFC 3339 UTC strings ending in `Z`.
 
@@ -251,7 +251,7 @@ There are two ways to execute the script: automatically via the scheduled system
 
 ### Automated Systemd Execution
 
-Once `install.sh` has run successfully, each scraper executes automatically via its own systemd timer — every hour by default, or on the cadence set by its [execution_interval](#scraper-settings) setting. The systemd timer applies a randomized up-to-3m startup delay before launching the execution wrapper (`scripts/run.sh`) to simulate human timing and avoid exact scheduling footprints.
+Once `install.sh` has run successfully, each scraper executes automatically via its own systemd timer — on its plugin-defined default cadence, or on the valid cadence set by its [execution_interval](#scraper-settings) setting. The systemd timer applies a randomized up-to-3m startup delay before launching the execution wrapper (`scripts/run.sh`) to simulate human timing and avoid exact scheduling footprints.
 
 ### Manual Execution
 
@@ -281,7 +281,7 @@ These flags allow you to isolate execution to specific platforms. If no target f
 | `--<target>` | Activates only the specified target's scraper (e.g., `--skroutz`). You can pass one or more target flags simultaneously. |
 
 > [!NOTE]
-> Only one instance of a specific scraper is allowed to run at a time to avoid triggering anti-bot protections. If a background execution for a domain (e.g., Skroutz) is currently in progress, your manual run for that domain will be blocked and skipped. If you need to forcefully stop all active background executions to run the scraper manually, you can safely use the [stop script](#stop-active-runs): `./scripts/stop.sh`. This stops all the current background runs but will not break any future scheduled executions.
+> Only one instance of a specific scraper target is allowed to run at a time to avoid triggering anti-bot protections. If a background execution for a target (e.g., Skroutz) is currently in progress, your manual run for that target will be blocked and skipped. If you need to forcefully stop all active background executions to run the scraper manually, you can safely use the [stop script](#stop-active-runs): `./scripts/stop.sh`. This stops all the current background runs but will not break any future scheduled executions.
 
 #### Status Check:
 
@@ -306,7 +306,7 @@ Background runs expose precise exit statuses through **Last Execution Status**:
 | `16` | Notification configuration in `config/general.json` is unusable. |
 | `17` | The store blocked or rate-limited the scraper. |
 | `18` | A parser or unexpected scraper fault exhausted all retries. |
-| `19` | Scraped state could not be saved atomically. |
+| `19` | Scraper state could not be loaded or persisted atomically. |
 | `20` | At least one configured notification failed; shown as a yellow warning. |
 | `21` | The selected scraper's private dependencies are missing. |
 | `42` | Every selected scraper was already running. |
@@ -415,9 +415,9 @@ You might receive the following push notification alerts throughout the lifecycl
 
 | Notification&nbsp;Title&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Trigger Condition |
 | :--- | :--- |
-| **Scrooge Alert - Price Drop!** | Sent when a product's price falls below your price limit. Listing-result plugins send one alert per matching offer, each linking directly to that offer. |
-| **Scrooge Alert - Tracking Stale** | Sent if a specific product continuously fails the scrape. |
-| **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_error](#scraper-settings) setting. |
+| **Scrooge Alert - Price Drop!** | Sent when an item's observed price falls below your price limit. Listing-result plugins send one alert per matching offer, each linking directly to that offer. |
+| **Scrooge Alert - Tracking Stale** | Sent if a specific item continuously fails the scrape. |
+| **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_errors](#scraper-settings) setting. |
 | **Scrooge Alert - Script Crash** | Sent if the script completely failed to run. |
 | **Scrooge Alert - Status Update** | Periodic liveness reminder confirming the scrapers still run in the background, as well as notifying you of any available updates. Can be turned off via the project-wide [reminder](#general-settings) setting. |
 | **Scrooge Alert - Test Notification** | Sent when manually invoking the script with the `--ping` flag. |
@@ -444,10 +444,10 @@ The uninstallation process safely performs the following actions:
 
 ## 🔧 Troubleshooting & Debugging
 
-**1. Failing to Fetch Products:**
+**1. Failing to Fetch Items:**
 
-If the script cannot retrieve data for certain items, begin by checking for broken links in your `config/<target>.json` file. Invalid URLs are often redirected to similar products.
-If the URLs are correct but failures persist across multiple products, your connection has likely been temporarily restricted by the website's anti-bot protection. To mitigate this, reduce your network traffic by tracking fewer products, or decrease the script's run frequency by setting a longer [`execution_interval`](#scraper-settings) in the scraper's config and applying it with `./scripts/schedule.sh`.
+If the script cannot retrieve data for certain items, review the target's package-local guide and verify the source inputs in `config/<target>.json`. For URL-based targets, check for broken links; invalid URLs are often redirected to similar pages.
+If the inputs are correct but failures persist across multiple items, your connection has likely been temporarily restricted by the website's anti-bot protection. To mitigate this, reduce your network traffic by tracking fewer active items, or decrease the script's run frequency by setting a longer [`execution_interval`](#scraper-settings) in the scraper's config and applying it with `./scripts/schedule.sh`.
 
 > [!TIP]  
 > For the best results, this script should **not** be run behind a VPN and should ideally be executed from a standard Greek residential IP address. High traffic coming from known VPS providers, data centers, or VPNs is very likely to trigger strict anti-bot mechanisms, causing the script to fail.
@@ -475,11 +475,11 @@ The application maintains comprehensive logs to help you monitor background exec
 The default configuration applies rate limiting to reduce traffic and increase the success rate of the web scraper:
 
 *   A randomized startup delay (up to 3 minutes) is applied by the systemd timer before each background execution to avoid exact scheduling footprints.
-*   Products are checked sequentially, not concurrently.
+*   Items are checked sequentially, not concurrently.
 *   A base 20s delay, plus randomized jitter (1-5s), is enforced between requests.
 
 > [!TIP]
-> Periodically remove items from your `config/<target>.json` file once you purchase them or abandon interest. Also avoid decreasing the scraping delays. Over-frequent scraping will trigger strict anti-bot mechanisms and the script will fail to fetch the product data.
+> Periodically remove items from your `config/<target>.json` file once you purchase them or abandon interest. Also avoid decreasing the scraping delays. Over-frequent scraping will trigger strict anti-bot mechanisms and the script will fail to fetch source data.
 
 ## ❓ Frequently Asked Questions
 
@@ -521,7 +521,7 @@ When run manually, the script automatically checks the online repository for upd
 </details>
 
 <details>
-<summary><b>4. Is it safe to edit my product list while the script is running?</b></summary>
+<summary><b>4. Is it safe to edit my item list while the script is running?</b></summary>
 <br>
 
 Absolutely. Configuration is read-only at runtime, so you can add, edit, or remove
@@ -529,17 +529,17 @@ items between runs. Use unique stable IDs if you want existing state to follow a
 </details>
 
 <details>
-<summary><b>5. How many products can I track at once using the default settings?</b></summary>
+<summary><b>5. How many items can I track at once?</b></summary>
 <br>
 
-Because the script intentionally pauses for about 25 seconds per product to avoid being blocked by the website, monitoring too many items might cause the execution to exceed the 60-minute window before the next cycle starts. While the script has safety locks to prevent overlapping runs, a practical soft limit is around **100 products** per instance when using the default hourly schedule.
+Because the script intentionally pauses for about 25 seconds per active item to avoid being blocked by the website, monitoring too many items might cause an execution to overlap its next scheduled cycle. Safety locks prevent overlapping runs for the same target; as a rough example, an hourly schedule has a practical soft limit of around **100 active items** per target.
 </details>
 
 <details>
 <summary><b>6. How long does a full scrape take to complete?</b></summary>
 <br>
 
-To mimic human behavior, the script spaces out its requests. It applies a base delay of 20 seconds per product, plus an unpredictable jitter of 1–5 seconds. If you are tracking 10 products, a full manual run will take approximately 4 minutes. *(Note: Background runs via systemd also have a randomized startup delay of up to 3 minutes, which is not applied to manual executions).*
+To mimic human behavior, the script spaces out its requests. It applies a base delay of 20 seconds per active item, plus an unpredictable jitter of 1–5 seconds. If you are tracking 10 active items, a full manual run will take approximately 4 minutes. *(Note: Background runs via systemd also have a randomized startup delay of up to 3 minutes, which is not applied to manual executions).*
 </details>
 
 <details>
@@ -598,7 +598,9 @@ CLI, UI, and management-script edits are unnecessary. See
 exception, dependency, and testing contracts.
 
 Contributions are always welcome! If you have an idea to make this project better, feel free to fork the repository and submit a pull request.
-To add a marketplace, follow [CONTRIBUTING.md](CONTRIBUTING.md): a scraper is one self-contained package, and adding it requires no registry, orchestrator, shell, or UI edits.
+To add a marketplace, follow [CONTRIBUTING.md](CONTRIBUTING.md): a scraper is one
+self-contained package discovered by the immutable catalog, with no application,
+shell, or UI edits required.
 If you encounter a bug or run into any issues, please [open an issue](https://github.com/CVasilakis/scrooge-alert/issues). To help me resolve it quickly, include as much detail as possible.
 
 ## 💝 Support & Donations
