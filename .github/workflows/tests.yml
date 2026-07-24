@@ -24,6 +24,7 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             scripts/dev/requirements-dev.txt
+            scripts/dev/requirements-shell.txt
             src/core/scrapers/plugins/*/requirements.txt
 
       - name: Install dependencies
@@ -50,13 +51,21 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
+          cache: pip
+          cache-dependency-path: scripts/dev/requirements-shell.txt
+
+      - name: Install shell analysis toolchain
+        run: python -m pip install -r scripts/dev/requirements-shell.txt
 
       # Intentional word splitting is suppressed only at the exact expansion.
       # -x follows sourced libraries via the "shellcheck source=" directives.
       # The list comes from git so tracked and new nonignored scripts anywhere
       # in the repo are covered before they are committed.
       - name: Run shellcheck
-        run: SCROOGE_CHECK_PYTHON=python ./scripts/dev/check.sh shell
+        run: |
+          SCROOGE_CHECK_PYTHON=python \
+            SCROOGE_SHELLCHECK="$(command -v shellcheck)" \
+            ./scripts/dev/check.sh shell
 
   typecheck:
     runs-on: ubuntu-latest
@@ -69,6 +78,7 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             scripts/dev/requirements-dev.txt
+            scripts/dev/requirements-shell.txt
             src/core/scrapers/plugins/*/requirements.txt
       - name: Install typing toolchain
         run: |
@@ -92,6 +102,7 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             scripts/dev/requirements-dev.txt
+            scripts/dev/requirements-shell.txt
             src/core/scrapers/plugins/*/requirements.txt
 
       - name: Verify every plugin with only its declared dependencies

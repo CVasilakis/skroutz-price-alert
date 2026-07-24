@@ -31,7 +31,7 @@ main() {
         IFS="$_dut_old_ifs"
     }
 
-    # shellcheck disable=SC2329  # invoked by HUP/INT/TERM trap strings
+    # shellcheck disable=SC2317,SC2329  # invoked indirectly by HUP/INT/TERM traps
     update_interrupted() {
         _ui_signal="$1"
         _ui_status="$2"

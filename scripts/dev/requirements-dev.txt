@@ -7,9 +7,8 @@
 pytest>=7.0
 # Coverage visibility (report-only; CI prints the summary, no threshold gate).
 pytest-cov
-# Shell linting: provides a `shellcheck` binary in the venv so
-# scripts/dev/check.sh can run the canonical shell gate locally.
-shellcheck-py
+# Shell linting is pinned separately so local and CI checks use the same binary.
+-r requirements-shell.txt
 # Static contract checking (reads [tool.pyright] from pyproject.toml).
 basedpyright
 # Fast Python linting and formatting (configured for the Python 3.10 floor).

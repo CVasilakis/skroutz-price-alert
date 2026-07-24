@@ -76,7 +76,14 @@ def test_shellcheck_ci_job_provisions_and_selects_supported_python():
     shellcheck_job = workflow.split("  shellcheck:\n", 1)[1].split("  typecheck:\n", 1)[0]
     assert "actions/setup-python@v6" in shellcheck_job
     assert "python-version: '3.10'" in shellcheck_job
-    assert "SCROOGE_CHECK_PYTHON=python ./scripts/dev/check.sh shell" in shellcheck_job
+    assert "pip install -r scripts/dev/requirements-shell.txt" in shellcheck_job
+    assert "SCROOGE_CHECK_PYTHON=python" in shellcheck_job
+    assert 'SCROOGE_SHELLCHECK="$(command -v shellcheck)"' in shellcheck_job
+
+
+def test_indirect_signal_handler_has_cross_version_shellcheck_suppression():
+    update = (ROOT / "update.sh").read_text(encoding="utf-8")
+    assert "# shellcheck disable=SC2317,SC2329" in update
 
 
 def test_shell_gate_checks_tracked_and_new_nonignored_scripts(tmp_path):
@@ -253,7 +260,45 @@ def test_versioned_pre_push_hook_runs_the_canonical_gate():
 
 def test_plugin_check_binds_static_analysis_to_selected_venv():
     contents = (ROOT / "scripts/dev/plugin-check.sh").read_text(encoding="utf-8")
-    assert '-m basedpyright --pythonpath "$plugin_check_python"' in contents
+    assert 'plugin_check_venv_parent="$(dirname -- "$plugin_check_venv_dir")"' in contents
+    assert '-m basedpyright --venvpath "$plugin_check_venv_parent"' in contents
+    check = (ROOT / "scripts/dev/check.sh").read_text(encoding="utf-8")
+    assert "-m basedpyright src" in check
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'venvPath = "."' in pyproject
+    assert 'venv = "venv"' in pyproject
+
+
+def test_plugin_check_runs_from_external_venv_without_root_venv(tmp_path):
+    project = tmp_path / "clean project"
+    for relative in (
+        "scripts/dev/plugin-check.sh",
+        "scripts/lib/common.sh",
+        "scripts/lib/preflight.sh",
+        "pyproject.toml",
+    ):
+        destination = project / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / relative, destination)
+    shutil.copytree(ROOT / "src", project / "src")
+    shutil.copytree(ROOT / "tests/plugins/insomnia", project / "tests/plugins/insomnia")
+
+    external_venv = tmp_path / "isolation/venv"
+    external_venv.parent.mkdir(parents=True)
+    external_venv.symlink_to(sys.prefix, target_is_directory=True)
+    external_python = external_venv / Path(sys.executable).relative_to(sys.prefix)
+    env = os.environ.copy()
+    env["SCROOGE_PLUGIN_CHECK_PYTHON"] = str(external_python)
+    result = subprocess.run(
+        ["sh", str(project / "scripts/dev/plugin-check.sh"), "--insomnia"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (project / "venv").exists()
 
 
 def test_dev_setup_rejects_invalid_argument_before_installing():
@@ -446,20 +491,20 @@ esac
 
 
 def test_developer_requirements_are_visible_without_unignoring_arbitrary_text():
-    developer_requirements = subprocess.run(
-        [
-            "git",
-            "check-ignore",
-            "--quiet",
-            "--no-index",
+    requirement_results = [
+        subprocess.run(
+            ["git", "check-ignore", "--quiet", "--no-index", relative],
+            cwd=ROOT,
+        )
+        for relative in (
             "scripts/dev/requirements-dev.txt",
-        ],
-        cwd=ROOT,
-    )
+            "scripts/dev/requirements-shell.txt",
+        )
+    ]
     arbitrary_text = subprocess.run(
         ["git", "check-ignore", "--quiet", "--no-index", "scripts/dev/notes.txt"],
         cwd=ROOT,
     )
 
-    assert developer_requirements.returncode == 1
+    assert all(result.returncode == 1 for result in requirement_results)
     assert arbitrary_text.returncode == 0

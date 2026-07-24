@@ -21,11 +21,18 @@ require_python_310 "$plugin_check_python" "./scripts/dev/setup.sh" || exit 127
 plugin_check_python="$(
     CDPATH='' cd -- "$(dirname -- "$plugin_check_python")" && pwd
 )/$(basename -- "$plugin_check_python")"
+plugin_check_venv_dir="$(dirname -- "$(dirname -- "$plugin_check_python")")"
+[ "$(basename -- "$plugin_check_venv_dir")" = "venv" ] || {
+    printf '%s\n' \
+        "Error: The plugin-check Python must belong to a virtual environment named venv." >&2
+    exit 2
+}
+plugin_check_venv_parent="$(dirname -- "$plugin_check_venv_dir")"
 
 env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
     -m core.scrapers.tooling.cli plugin-check "$target"
 "$plugin_check_python" -m pytest --no-cov "$BASE_DIR/tests/plugins/$target"
-"$plugin_check_python" -m basedpyright --pythonpath "$plugin_check_python" \
+"$plugin_check_python" -m basedpyright --venvpath "$plugin_check_venv_parent" \
     "$BASE_DIR/src/core/scrapers/plugins/$target"
 "$plugin_check_python" -m ruff check \
     "$BASE_DIR/src/core/scrapers/plugins/$target" "$BASE_DIR/tests/plugins/$target"

@@ -217,6 +217,7 @@ state/
 *.txt
 !/requirements.txt
 !/scripts/dev/requirements-dev.txt
+!/scripts/dev/requirements-shell.txt
 !/src/core/scrapers/plugins/*/requirements.txt
 !/tests/ui/snapshots/*.txt
 *.bak
