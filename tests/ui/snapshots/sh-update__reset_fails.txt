@@ -2,5 +2,7 @@
 # exit: 1
 
 Updating Scrooge Alert...
-
-Error: Failed to reset to origin/main. Update aborted.
+Fetching origin/main before stopping any scraper...
+Quiescing 'skroutz'...
+Error: Failed to update project files; restoring timer states.
+The prior timer states were restored.

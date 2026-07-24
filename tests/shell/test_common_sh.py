@@ -91,12 +91,16 @@ class TestNamingHelpers(unittest.TestCase):
         result = run_sh("unit_name skroutz timer")
         self.assertEqual(result.stdout, "skroutz-scraper.timer")
 
-    def test_plugin_in_list_hit_and_miss(self):
-        self.assertEqual(run_sh("plugin_in_list b a b c").returncode, 0)
-        self.assertEqual(run_sh("plugin_in_list z a b c").returncode, 1)
+    def test_stream_contains_hit_and_miss(self):
+        self.assertEqual(run_sh('stream_contains b "a\nb\nc"').returncode, 0)
+        self.assertEqual(run_sh('stream_contains z "a\nb\nc"').returncode, 1)
 
-    def test_plugin_in_list_with_empty_list(self):
-        self.assertEqual(run_sh("plugin_in_list z").returncode, 1)
+    def test_stream_contains_with_empty_list(self):
+        self.assertEqual(run_sh('stream_contains z ""').returncode, 1)
+
+    def test_stream_add_unique_preserves_order_and_deduplicates(self):
+        result = run_sh('items="alpha\nbeta"\nstream_add_unique "$items" beta')
+        self.assertEqual(result.stdout.splitlines(), ["alpha", "beta"])
 
     def test_plugin_stream_value_preserves_spaces(self):
         result = run_sh(
@@ -228,6 +232,16 @@ class TestKnownTargets(unittest.TestCase):
         (unit_dir / "serviceonly-scraper.service").touch()
         result = run_sh("list_installed_targets", xdg_config_home=tmp)
         self.assertEqual(result.stdout.split(), ["timeronly", "serviceonly"])
+
+    def test_malformed_installed_unit_name_is_diagnosed_and_ignored(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        unit_dir = tmp / "systemd" / "user"
+        unit_dir.mkdir(parents=True)
+        (unit_dir / "bad target-scraper.timer").touch()
+        result = run_sh("list_installed_plugins timer", xdg_config_home=tmp)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("malformed installed unit name", result.stderr)
 
 
 class TestCatalogDiagnose(unittest.TestCase):

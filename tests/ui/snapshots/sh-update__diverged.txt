@@ -3,4 +3,5 @@
 
 Updating Scrooge Alert...
 Fetching origin/main before stopping any scraper...
-Error: Failed to fetch origin/main. Nothing was stopped or changed.
+Error: Local main and origin/main have diverged.
+Reconcile the histories manually before updating.

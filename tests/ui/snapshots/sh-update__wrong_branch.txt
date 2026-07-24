@@ -1,0 +1,5 @@
+# border: red
+# exit: 1
+
+Error: update.sh requires branch 'main' (current branch: 'beta').
+Switch branches yourself after saving any work, then retry.

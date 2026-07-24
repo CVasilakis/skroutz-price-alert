@@ -61,15 +61,65 @@ unit_name() {
     printf '%s-scraper.%s' "$1" "$2"
 }
 
-# plugin_in_list <needle> <item>...  ->  returns 0 if <needle> is one of the items.
-# Call unquoted to split a space/newline list, e.g. plugin_in_list "$x" $PLUGINS
-plugin_in_list() {
-    _needle="$1"
-    shift
-    for _item in "$@"; do
-        [ "$_item" = "$_needle" ] && return 0
+# is_valid_target <value>: accept the same ASCII snake_case shape as the Python
+# catalog compiler. Unit filenames and command flags are rejected before they can
+# take part in pathname expansion or systemd operations.
+is_valid_target() {
+    case "$1" in
+        ''|[!a-z]*|*[!a-z0-9_]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+require_valid_target() {
+    if ! is_valid_target "$1"; then
+        printf '%s\n' "Error: Invalid target '$1' (expected a nonblank snake_case name)." >&2
+        return 1
+    fi
+}
+
+# stream_contains <needle> <newline-delimited-stream>
+#
+# Target collections are always represented as newline-delimited streams and
+# passed as one quoted argument. The one intentional split below is constrained
+# by IFS to newline only.
+stream_contains() {
+    _sc_needle="$1"
+    _sc_stream="$2"
+    _sc_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # intentional newline-only stream iteration
+    for _sc_item in $_sc_stream; do
+        if [ "$_sc_item" = "$_sc_needle" ]; then
+            IFS="$_sc_old_ifs"
+            return 0
+        fi
     done
+    IFS="$_sc_old_ifs"
     return 1
+}
+
+# stream_add_unique <stream> <item>: print the stream with item appended once.
+stream_add_unique() {
+    _sau_stream="$1"
+    _sau_item="$2"
+    if [ -n "$_sau_stream" ]; then
+        printf '%s\n' "$_sau_stream"
+    fi
+    stream_contains "$_sau_item" "$_sau_stream" || printf '%s\n' "$_sau_item"
+}
+
+stream_for_display() {
+    _sfd_stream="$1"
+    _sfd_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # intentional newline-only stream iteration
+    for _sfd_item in $_sfd_stream; do
+        printf '%s ' "$_sfd_item"
+    done
+    IFS="$_sfd_old_ifs"
 }
 
 # ------------------------------------------------------------------------------
@@ -190,10 +240,16 @@ catalog_diagnose() {
 # was deleted from the source tree - essential for robust teardown.
 list_installed_plugins() {
     _suffix="$1"
+    case "$_suffix" in service|timer) ;; *) return 2 ;; esac
     for _f in "$SYSTEMD_USER_DIR"/*-scraper."$_suffix"; do
         [ -e "$_f" ] || continue   # POSIX sh has no nullglob: skip the literal pattern
         _base="${_f##*/}"                       # strip directory
-        printf '%s\n' "${_base%-scraper."$_suffix"}"  # strip "-scraper.<suffix>"
+        _lip_target="${_base%-scraper."$_suffix"}"
+        if ! is_valid_target "$_lip_target"; then
+            printf '%s\n' "Error: Ignoring malformed installed unit name '$_base'." >&2
+            continue
+        fi
+        printf '%s\n' "$_lip_target"
     done
 }
 
@@ -201,16 +257,22 @@ list_installed_plugins() {
 # service units. Teardown commands use this so a partially-installed pair (for
 # example, a service whose timer file is gone) remains manageable.
 list_installed_targets() {
-    _lit_seen=" "
-    for _lit_target in $(list_installed_plugins timer) $(list_installed_plugins service); do
-        case "$_lit_seen" in
-            *" $_lit_target "*) ;;
-            *)
-                _lit_seen="$_lit_seen$_lit_target "
-                printf '%s\n' "$_lit_target"
-                ;;
-        esac
+    _lit_all="$(list_installed_plugins timer)"
+    _lit_services="$(list_installed_plugins service)"
+    [ -z "$_lit_services" ] || _lit_all="${_lit_all}${_lit_all:+
+}${_lit_services}"
+    _lit_seen=''
+    _lit_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # intentional newline-only stream iteration
+    for _lit_target in $_lit_all; do
+        if ! stream_contains "$_lit_target" "$_lit_seen"; then
+            _lit_seen="$(stream_add_unique "$_lit_seen" "$_lit_target")"
+            printf '%s\n' "$_lit_target"
+        fi
     done
+    IFS="$_lit_old_ifs"
 }
 
 # plugin_stream_value <plugin> <tab-separated-stream>: print the value paired
@@ -242,28 +304,43 @@ plugin_stream_value() {
 # act on the installed units alone (list_installed_plugins), since a registered
 # plugin that was never installed has nothing to stop/disable/remove.
 known_targets() {
-    _seen=" "
-    for _t in $(list_plugins) $(list_installed_plugins "$1"); do
-        case "$_seen" in
-            *" $_t "*) ;;                          # already emitted
-            *) _seen="$_seen$_t "; printf '%s\n' "$_t" ;;
-        esac
+    _kt_all="$(list_plugins 2>/dev/null || true)"
+    _kt_installed="$(list_installed_plugins "$1")"
+    [ -z "$_kt_installed" ] || _kt_all="${_kt_all}${_kt_all:+
+}${_kt_installed}"
+    _kt_seen=''
+    _kt_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # intentional newline-only stream iteration
+    for _kt_target in $_kt_all; do
+        if ! stream_contains "$_kt_target" "$_kt_seen"; then
+            _kt_seen="$(stream_add_unique "$_kt_seen" "$_kt_target")"
+            printf '%s\n' "$_kt_target"
+        fi
     done
+    IFS="$_kt_old_ifs"
 }
 
 # known_targets_all: registered plugins plus every installed unit half. Commands
 # that operate on both timer and service units use this broader validation/help set.
 known_targets_all() {
-    _kta_seen=" "
-    for _kta_target in $(list_plugins) $(list_installed_targets); do
-        case "$_kta_seen" in
-            *" $_kta_target "*) ;;
-            *)
-                _kta_seen="$_kta_seen$_kta_target "
-                printf '%s\n' "$_kta_target"
-                ;;
-        esac
+    _kta_all="$(list_plugins 2>/dev/null || true)"
+    _kta_installed="$(list_installed_targets)"
+    [ -z "$_kta_installed" ] || _kta_all="${_kta_all}${_kta_all:+
+}${_kta_installed}"
+    _kta_seen=''
+    _kta_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # intentional newline-only stream iteration
+    for _kta_target in $_kta_all; do
+        if ! stream_contains "$_kta_target" "$_kta_seen"; then
+            _kta_seen="$(stream_add_unique "$_kta_seen" "$_kta_target")"
+            printf '%s\n' "$_kta_target"
+        fi
     done
+    IFS="$_kta_old_ifs"
 }
 
 # is_known_target <plugin> <suffix>: succeed if <plugin> is a registered plugin
@@ -272,11 +349,13 @@ known_targets_all() {
 # on, so they accept this union, whereas install/enable validate against the
 # catalog alone (they need code to run). A name in neither set is a real typo.
 is_known_target() {
-    plugin_in_list "$1" $(known_targets "$2")
+    _ikt_known="$(known_targets "$2")"
+    stream_contains "$1" "$_ikt_known"
 }
 
 is_known_target_any() {
-    plugin_in_list "$1" $(known_targets_all)
+    _ikta_known="$(known_targets_all)"
+    stream_contains "$1" "$_ikta_known"
 }
 
 # ------------------------------------------------------------------------------

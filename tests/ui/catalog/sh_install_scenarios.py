@@ -37,6 +37,25 @@ _case(
 )
 
 _case(
+    "python39_rejected",
+    "Python older than the supported 3.10 minimum is rejected before setup.",
+    world=ShellWorld(python_version="3.9.18", python_supported=False),
+    tags=("error",),
+)
+
+_case(
+    "existing_venv_python39_rejected",
+    "A supported system Python cannot hide an existing Python 3.9 venv.",
+    world=ShellWorld(
+        python_version="3.12.0",
+        python_supported=True,
+        venv_python_version="3.9.18",
+        venv_python_supported=False,
+    ),
+    tags=("error",),
+)
+
+_case(
     "venv_module_missing",
     "Prerequisite check: python3 exists but the venv module is unavailable.",
     world=ShellWorld(ensurepip_missing=True),
@@ -115,8 +134,25 @@ _case(
     "--update",
     "--ghost",
     "--skroutz",
-    world=_CONFIGURED,
+    world=replace(_CONFIGURED, internal_update=True),
     tags=("orphan",),
+)
+
+_case(
+    "unauthorized_update_mode",
+    "The deferred internal update mode cannot be invoked directly.",
+    "--update",
+    "--skroutz",
+    world=_CONFIGURED,
+    tags=("error",),
+)
+
+_case(
+    "update_mode_requires_target",
+    "Internal update mode always requires an explicit target selection.",
+    "--update",
+    world=replace(_CONFIGURED, internal_update=True),
+    tags=("error",),
 )
 
 _case(

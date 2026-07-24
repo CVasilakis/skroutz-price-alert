@@ -1,0 +1,5 @@
+# border: red
+# exit: 1
+
+Error: Detected Python 3.9.18; Python 3.10 or newer is required.
+Run ./install.sh after installing a supported Python.

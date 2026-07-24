@@ -1,5 +1,5 @@
-# border: green
-# exit: 0
+# border: red
+# exit: 143
 
 Updating Scrooge Alert...
 Fetching origin/main before stopping any scraper...
@@ -10,8 +10,8 @@ Python virtual environment successfully updated.
 
 Setting up Systemd timer(s)...
 Systemd timer(s) configured successfully.
-
-Scrapers available but not installed: amazon
-Install any of them with: ./install.sh --<target>
-
-Update complete! You are now running origin/main.
+Update interrupted by TERM.
+Affected timers were left disabled for safety.
+Recovery data was retained at:
+<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
+Rerun ./update.sh or inspect ./scripts/run.sh --status.

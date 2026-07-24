@@ -33,7 +33,9 @@ print_help() {
     printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    for plugin in $(known_targets service); do
+    _known="$(known_targets service)"
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
+    for plugin in $_known; do
         printf '  --%-15s Stop only the %s scraper\n' "$plugin" "$plugin"
     done
     printf '\n'
@@ -53,7 +55,11 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help) print_help; exit 0 ;;
         --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-        --*) SELECTED="$SELECTED ${1#--}" ;;
+        --*)
+            target="${1#--}"
+            require_valid_target "$target" || exit 1
+            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
+            ;;
         *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
     esac
     shift
@@ -69,15 +75,17 @@ if [ -n "$SELECTED" ]; then
     # acting as if there were a unit. A name in neither set is a typo: reject it.
     INSTALLED="$(list_installed_plugins service)"
     PLUGINS=""
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for sel in $SELECTED; do
-        if plugin_in_list "$sel" $INSTALLED; then
-            PLUGINS="$PLUGINS $sel"
+        if stream_contains "$sel" "$INSTALLED"; then
+            PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
         elif is_known_target "$sel" service; then
             printf "%b\n" "\n${YELLOW}[$sel] is registered but not installed - nothing to stop.${NC}"
             printf "%b\n" "Install it first with: ${CYAN}./install.sh --$sel${NC}"
         else
             printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
-            printf "%b\n" "Available targets: ${CYAN}$(printf '%s ' $(known_targets service))${NC}"
+            _available="$(known_targets service)"
+            printf "%b\n" "Available targets: ${CYAN}$(stream_for_display "$_available")${NC}"
             exit 1
         fi
     done
@@ -98,6 +106,7 @@ fi
 # For Type=oneshot services, the state is 'activating' while the script is running.
 
 FAILED=0
+# shellcheck disable=SC2086  # intentional newline-delimited target stream
 for plugin in $PLUGINS; do
     if ! state="$(service_state "$plugin")"; then
         printf "%b\n" "\n${RED}[$plugin] Error: Could not determine whether the service is running.${NC}"

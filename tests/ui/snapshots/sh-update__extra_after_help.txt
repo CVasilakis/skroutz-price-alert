@@ -1,0 +1,4 @@
+# border: red
+# exit: 1
+
+Error: update.sh accepts no arguments other than one -h or --help.

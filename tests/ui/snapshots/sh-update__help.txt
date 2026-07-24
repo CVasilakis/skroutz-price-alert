@@ -1,5 +1,7 @@
 # border: green
 # exit: 0
 
-Update Scrooge Alert to the latest version.
-Reinstalls the scraper(s) you previously installed.
+Usage: update.sh [-h|--help]
+
+Safely update Scrooge Alert from origin/main and transactionally
+reprovision exactly the scraper targets that are already installed.

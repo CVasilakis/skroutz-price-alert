@@ -1,0 +1,202 @@
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+import ui.catalog  # noqa: F401  # initialize catalog before importing its shell harness
+from ui.harness.shell import ShellWorld, _build_sandbox, _cleanup, _fake_env
+
+
+def git(*args, cwd: Path, env=None):
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+
+@pytest.fixture
+def real_git_update_world(tmp_path):
+    world = ShellWorld(
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+        enabled_timers=("skroutz",),
+        active_timers=("skroutz",),
+        config_files=("skroutz.json", "general.json"),
+    )
+    checkout = _build_sandbox(world)
+    host_git = shutil.which("git")
+    assert host_git is not None
+    (checkout / "bin" / "git").unlink()
+    (checkout / "bin" / "git").symlink_to(host_git)
+
+    (checkout / ".gitignore").write_text(
+        "\n".join(("bin/", "config/", "home/", "systemd-state/", "venv/", "xdg/")) + "\n",
+        encoding="utf-8",
+    )
+    git("init", "-q", "-b", "main", cwd=checkout)
+    git("config", "user.name", "Scrooge Test", cwd=checkout)
+    git("config", "user.email", "scrooge@example.invalid", cwd=checkout)
+    git("add", ".", cwd=checkout)
+    git("commit", "-q", "-m", "base", cwd=checkout)
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-q", "--initial-branch=main", str(origin)],
+        check=True,
+    )
+    git("remote", "add", "origin", str(origin), cwd=checkout)
+    git("push", "-q", "-u", "origin", "main", cwd=checkout)
+
+    env = _fake_env(checkout, world)
+    env.update(
+        {
+            "GIT_AUTHOR_NAME": "Scrooge Test",
+            "GIT_AUTHOR_EMAIL": "scrooge@example.invalid",
+            "GIT_COMMITTER_NAME": "Scrooge Test",
+            "GIT_COMMITTER_EMAIL": "scrooge@example.invalid",
+        }
+    )
+    yield checkout, origin, env
+    _cleanup(checkout)
+
+
+def push_remote_change(tmp_path: Path, origin: Path):
+    remote_work = tmp_path / "remote-work"
+    subprocess.run(["git", "clone", "-q", str(origin), str(remote_work)], check=True)
+    git("config", "user.name", "Scrooge Test", cwd=remote_work)
+    git("config", "user.email", "scrooge@example.invalid", cwd=remote_work)
+    (remote_work / "release.txt").write_text("remote release\n", encoding="utf-8")
+    git("add", "release.txt", cwd=remote_work)
+    git("commit", "-q", "-m", "remote release", cwd=remote_work)
+    git("push", "-q", "origin", "main", cwd=remote_work)
+
+
+def run_update(checkout: Path, env):
+    return subprocess.run(
+        ["/bin/sh", str(checkout / "update.sh")],
+        cwd=checkout,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+
+def test_real_git_fast_forward_updates_checkout(real_git_update_world, tmp_path):
+    checkout, origin, env = real_git_update_world
+    push_remote_change(tmp_path, origin)
+    result = run_update(checkout, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (checkout / "release.txt").read_text(encoding="utf-8") == "remote release\n"
+    assert git("status", "--porcelain", cwd=checkout).stdout == ""
+
+
+def test_real_git_fetch_repairs_pruned_origin_main(real_git_update_world):
+    checkout, _, env = real_git_update_world
+    git("update-ref", "-d", "refs/remotes/origin/main", cwd=checkout)
+    result = run_update(checkout, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    git("rev-parse", "--verify", "refs/remotes/origin/main", cwd=checkout)
+
+
+def test_real_git_dirty_tree_is_refused_without_prompt(real_git_update_world):
+    checkout, _, env = real_git_update_world
+    (checkout / "update.sh").write_text(
+        (checkout / "update.sh").read_text(encoding="utf-8") + "\n# dirty\n",
+        encoding="utf-8",
+    )
+    result = run_update(checkout, env)
+    assert result.returncode != 0
+    assert "working tree contains" in result.stderr
+    assert "proceed" not in (result.stdout + result.stderr).lower()
+
+
+def test_real_git_ahead_main_is_refused(real_git_update_world):
+    checkout, _, env = real_git_update_world
+    (checkout / "local.txt").write_text("local\n", encoding="utf-8")
+    git("add", "local.txt", cwd=checkout)
+    git("commit", "-q", "-m", "local", cwd=checkout)
+    result = run_update(checkout, env)
+    assert result.returncode != 0
+    assert "commits that are not contained" in result.stderr
+
+
+def test_real_git_diverged_history_is_refused(real_git_update_world, tmp_path):
+    checkout, origin, env = real_git_update_world
+    (checkout / "local.txt").write_text("local\n", encoding="utf-8")
+    git("add", "local.txt", cwd=checkout)
+    git("commit", "-q", "-m", "local", cwd=checkout)
+    push_remote_change(tmp_path, origin)
+    result = run_update(checkout, env)
+    assert result.returncode != 0
+    assert "have diverged" in result.stderr
+
+
+def test_real_git_wrong_branch_is_refused_without_switching(real_git_update_world):
+    checkout, _, env = real_git_update_world
+    git("switch", "-q", "-c", "feature", cwd=checkout)
+    result = run_update(checkout, env)
+    assert result.returncode != 0
+    assert "requires branch 'main'" in result.stderr
+    assert git("branch", "--show-current", cwd=checkout).stdout.strip() == "feature"
+
+
+def test_activation_failure_disables_every_selected_target():
+    world = ShellWorld(
+        plugins=("alpha", "beta"),
+        installed_timers=("alpha", "beta"),
+        installed_services=("alpha", "beta"),
+        enabled_timers=("alpha", "beta"),
+        active_timers=("alpha", "beta"),
+        systemctl_fail=("start",),
+        systemctl_fail_target="beta",
+        config_files=("alpha.json", "beta.json", "general.json"),
+    )
+    checkout = _build_sandbox(world)
+    try:
+        result = run_update(checkout, _fake_env(checkout, world))
+        assert result.returncode != 0
+        assert "All selected targets were left disabled for safety." in result.stdout
+        state = checkout / "systemd-state"
+        for target in ("alpha", "beta"):
+            assert not (state / f"enabled.{target}").exists()
+            assert not (state / f"timer_active.{target}").exists()
+    finally:
+        _cleanup(checkout)
+
+
+def test_signal_during_update_success_cleanup_cannot_disable_restored_target():
+    world = ShellWorld(
+        installed_timers=("alpha",),
+        installed_services=("alpha",),
+        enabled_timers=("alpha",),
+        active_timers=("alpha",),
+        config_files=("alpha.json", "general.json"),
+        plugins=("alpha",),
+    )
+    checkout = _build_sandbox(world)
+    fake_rm = checkout / "bin/rm"
+    fake_rm.unlink()
+    fake_rm.write_text(
+        """#!/bin/sh
+case "$*" in
+    *.scrooge-update.*) kill -TERM "$PPID" ;;
+esac
+exec /bin/rm "$@"
+""",
+        encoding="utf-8",
+    )
+    fake_rm.chmod(0o755)
+    try:
+        result = run_update(checkout, _fake_env(checkout, world))
+        assert result.returncode == 0, result.stdout + result.stderr
+        state = checkout / "systemd-state"
+        assert (state / "enabled.alpha").exists()
+        assert (state / "timer_active.alpha").exists()
+        assert list((checkout / "xdg/systemd/user").glob(".scrooge-update.*")) == []
+    finally:
+        _cleanup(checkout)

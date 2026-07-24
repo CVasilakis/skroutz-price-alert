@@ -31,10 +31,12 @@ print_help() {
     printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    for plugin in $(list_installed_plugins timer); do
+    _installed="$(list_installed_plugins timer)"
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
+    for plugin in $_installed; do
         # Skip orphans (installed but no longer a registered scraper) - they can't
         # be enabled. If the catalog is unavailable we can't tell, so list them all.
-        if [ -n "$_registered" ] && ! plugin_in_list "$plugin" $_registered; then
+        if [ -n "$_registered" ] && ! stream_contains "$plugin" "$_registered"; then
             continue
         fi
         printf '  --%-15s Enable only the %s scraper\n' "$plugin" "$plugin"
@@ -62,7 +64,11 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help) print_help; exit 0 ;;
         --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-        --*) SELECTED="$SELECTED ${1#--}" ;;
+        --*)
+            target="${1#--}"
+            require_valid_target "$target" || exit 1
+            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
+            ;;
         *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
     esac
     shift
@@ -83,18 +89,19 @@ fi
 
 if [ -n "$SELECTED" ]; then
     PLUGINS=""
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for sel in $SELECTED; do
-        if plugin_in_list "$sel" $INSTALLED_PLUGINS; then
+        if stream_contains "$sel" "$INSTALLED_PLUGINS"; then
             # Installed: arm it - unless the catalog omits it, i.e. it is an orphan
             # whose code is gone, in which case point at uninstall instead. (The
             # guard above guarantees the catalog is readable when units exist.)
-            if ! plugin_in_list "$sel" $REGISTERED; then
+            if ! stream_contains "$sel" "$REGISTERED"; then
                 printf "%b\n" "${RED}Error: '$sel' is installed but no longer a registered scraper (orphan).${NC}"
                 printf "%b\n" "Remove its leftover units with: ${CYAN}./scripts/uninstall.sh --$sel${NC}"
                 exit 1
             fi
-            PLUGINS="$PLUGINS $sel"
-        elif plugin_in_list "$sel" $REGISTERED; then
+            PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
+        elif stream_contains "$sel" "$REGISTERED"; then
             # A real scraper, but install.sh never provisioned its timer - enable
             # cannot arm a unit that does not exist.
             printf "%b\n" "${RED}Error: '$sel' is registered but not installed.${NC}"
@@ -111,8 +118,11 @@ else
     # No flag: enable every installed timer that is STILL a registered scraper,
     # i.e. installed ∩ catalog - skipping orphans whose code was removed.
     PLUGINS=""
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for plugin in $INSTALLED_PLUGINS; do
-        plugin_in_list "$plugin" $REGISTERED && PLUGINS="$PLUGINS $plugin"
+        if stream_contains "$plugin" "$REGISTERED"; then
+            PLUGINS="$(stream_add_unique "$PLUGINS" "$plugin")"
+        fi
     done
 fi
 
@@ -134,6 +144,7 @@ fi
 # ------------------------------------------------------------------------------
 
 FAILED=0
+# shellcheck disable=SC2086  # intentional newline-delimited target stream
 for plugin in $PLUGINS; do
     if ! timer_enabled="$(timer_is_enabled "$plugin")" || \
        ! timer_active="$(timer_is_active "$plugin")"; then

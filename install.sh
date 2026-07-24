@@ -12,6 +12,10 @@ BASE_DIR="$SCRIPT_DIR"
 # Shared helpers (colors, plugin enumeration, systemd helpers)
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/scripts/lib/common.sh"
+# shellcheck source=scripts/lib/preflight.sh
+. "$SCRIPT_DIR/scripts/lib/preflight.sh"
+# shellcheck source=scripts/lib/provisioning.sh
+. "$SCRIPT_DIR/scripts/lib/provisioning.sh"
 
 # Environment and File Configurations
 VENV_DIR="venv"
@@ -57,6 +61,7 @@ print_help() {
 
 INSTALL_MODE="all"   # all | selected
 IS_UPDATE=0
+UPDATE_FLAG_COUNT=0
 SELECTED=""
 
 while [ "$#" -gt 0 ]; do
@@ -67,6 +72,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --update)
             IS_UPDATE=1
+            UPDATE_FLAG_COUNT=$((UPDATE_FLAG_COUNT + 1))
             ;;
         --)
             # A bare '--' would otherwise parse as an empty target name and
@@ -76,8 +82,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --*)
             INSTALL_MODE="selected"
-            # De-duplicate: repeating a --<target> is harmless, provision it once.
-            plugin_in_list "${1#--}" $SELECTED || SELECTED="$SELECTED ${1#--}"
+            target="${1#--}"
+            require_valid_target "$target" || exit 1
+            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
             ;;
         *)
             printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"
@@ -87,15 +94,28 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
+if [ "$IS_UPDATE" -eq 1 ]; then
+    if [ "$UPDATE_FLAG_COUNT" -ne 1 ] ||
+       [ "${SCROOGE_INTERNAL_UPDATE:-}" != "1" ]; then
+        printf "%b\n" "${RED}Error: --update is reserved for the internal update workflow.${NC}"
+        exit 1
+    fi
+    if [ "$INSTALL_MODE" != "selected" ] || [ -z "$SELECTED" ]; then
+        printf "%b\n" "${RED}Error: Internal update mode requires at least one explicit target.${NC}"
+        exit 1
+    fi
+fi
+
 # ==============================================================================
 # PREREQUISITES
 # ==============================================================================
 
 cd "$SCRIPT_DIR"
 
-if ! command -v python3 > /dev/null 2>&1; then
-    printf "%b\n" "${RED}Error: python3 is not installed. Please install it first.${NC}"
-    exit 1
+require_python_310 python3 "./install.sh" || exit 1
+
+if [ -d "$VENV_DIR" ]; then
+    require_python_310 "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh" || exit 1
 fi
 
 if ! python3 -c "import ensurepip" > /dev/null 2>&1; then
@@ -105,11 +125,15 @@ fi
 
 require_systemctl
 
-# Make the management scripts executable (lib/common.sh is sourced, not executed,
-# so the scripts/*.sh glob deliberately skips the scripts/lib/ subdirectory).
-for s in "$BASE_DIR"/install.sh "$BASE_DIR"/update.sh "$BASE_DIR"/scripts/*.sh; do
+# Repair executable modes for every command entry point and the versioned hook.
+for s in "$BASE_DIR"/install.sh "$BASE_DIR"/update.sh "$BASE_DIR"/scripts/*.sh \
+    "$BASE_DIR"/scripts/dev/*.sh "$BASE_DIR"/.githooks/pre-push; do
     [ -e "$s" ] || continue
     chmod +x "$s"
+done
+for s in "$BASE_DIR"/scripts/lib/*.sh; do
+    [ -e "$s" ] || continue
+    chmod a-x "$s"
 done
 
 
@@ -129,6 +153,8 @@ if [ ! -d "$VENV_DIR" ]; then
 else
     printf "%b\n" "\n${CYAN}Updating python packages in existing virtual environment...${NC}"
 fi
+
+require_python_310 "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh" || exit 1
 
 # Safely upgrade pip and install matching requirements
 if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade pip; then
@@ -172,10 +198,13 @@ if [ "$INSTALL_MODE" = "selected" ]; then
     # IFS=newline, where a space-joined list would arrive as one bogus
     # " name" item and silently skip every selected plugin's requirements.
     PLUGINS=""
+    OLD_IFS="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for sel in $SELECTED; do
-        if plugin_in_list "$sel" $ALL_PLUGINS; then
-            PLUGINS="$PLUGINS
-$sel"
+        if stream_contains "$sel" "$ALL_PLUGINS"; then
+            PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
         elif [ "$IS_UPDATE" -eq 1 ]; then
             # During an update the selection is derived from the installed units;
             # a plugin removed or renamed in the incoming version is no longer in
@@ -185,10 +214,12 @@ $sel"
             printf "%b\n" "${YELLOW}      Its leftover units can be removed with: ${CYAN}./scripts/uninstall.sh --$sel${NC}"
         else
             printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
-            printf "%b\n" "Available targets: ${CYAN}$(printf '%s ' $ALL_PLUGINS)${NC}"
+            printf "%b\n" "Available targets: ${CYAN}$(stream_for_display "$ALL_PLUGINS")${NC}"
+            IFS="$OLD_IFS"
             exit 1
         fi
     done
+    IFS="$OLD_IFS"
 else
     PLUGINS="$ALL_PLUGINS"
 fi
@@ -210,10 +241,11 @@ OLD_IFS="$IFS"
 IFS='
 '
 PAIR_TAB="$(printf '\t')"
+# shellcheck disable=SC2086  # intentional newline-only stream iteration
 for pair in $PLUGIN_REQS; do
     req_name="${pair%%"$PAIR_TAB"*}"
     req_path="${pair#*"$PAIR_TAB"}"
-    plugin_in_list "$req_name" $PLUGINS || continue
+    stream_contains "$req_name" "$PLUGINS" || continue
 
     printf "%b\n" "${CYAN}Installing dependencies for the '$req_name' scraper...${NC}"
     if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade -r "$req_path"; then
@@ -244,35 +276,22 @@ if ! ALL_SCHEDULES="$(list_plugin_schedules)"; then
     exit 1
 fi
 
-for plugin in $PLUGINS; do
-    on_calendar="$(plugin_stream_value "$plugin" "$ALL_SCHEDULES")"
-
-    if [ -z "$on_calendar" ]; then
-        printf "%b\n" "${RED}Error: Target '$plugin' has no resolved schedule.${NC}\n"
+if [ -n "$PLUGINS" ]; then
+    if [ "$IS_UPDATE" -eq 1 ]; then
+        PROVISION_MODE="deferred"
+    else
+        PROVISION_MODE="normal"
+    fi
+    if ! provision_units_transaction "$PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
+        if [ "$IS_UPDATE" -eq 1 ]; then
+            printf "%b\n" "${RED}Error: Transactional systemd provisioning failed during update.${NC}\n"
+        else
+            printf "%b\n" "${RED}Error: Transactional systemd provisioning failed.${NC}\n"
+        fi
+        [ -z "${PROVISION_RECOVERY_DIR:-}" ] || \
+            printf "%b\n" "${YELLOW}Recovery files: $PROVISION_RECOVERY_DIR${NC}"
         exit 1
     fi
-
-    if ! write_plugin_units "$plugin" "$on_calendar"; then
-        printf "%b\n" "${RED}Error: Failed to create systemd configuration files for '$plugin'.${NC}\n"
-        exit 1
-    fi
-done
-
-if ! systemctl --user daemon-reload; then
-    printf "%b\n" "${RED}Error: Failed to reload the systemd user manager.${NC}\n"
-    exit 1
-fi
-
-ENABLE_FAILED=0
-for plugin in $PLUGINS; do
-    if ! enable_one "$plugin"; then
-        printf "%b\n" "${RED}Error: Failed to enable the timer for '$plugin'.${NC}\n"
-        ENABLE_FAILED=1
-    fi
-done
-if [ "$ENABLE_FAILED" -ne 0 ]; then
-    printf "%b\n" "${RED}Error: One or more plugin timers could not be enabled.${NC}\n"
-    exit 1
 fi
 
 if command -v loginctl >/dev/null 2>&1; then
@@ -304,6 +323,7 @@ fi
 OLD_IFS="$IFS"
 IFS='
 '
+# shellcheck disable=SC2086  # intentional newline-only stream iteration
 for plugin in $PLUGINS; do
     [ -f "config/$plugin.json" ] || MISSING_CONFIGS="$MISSING_CONFIGS $plugin"
 done

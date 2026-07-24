@@ -47,14 +47,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
 
-      # SC2086/SC2046 are excluded: unquoted expansion of plugin lists is the
-      # library's documented word-splitting idiom (see scripts/lib/common.sh).
-      # -x follows the sourced common.sh via the "shellcheck source=" directives.
+      # Intentional word splitting is suppressed only at the exact expansion.
+      # -x follows sourced libraries via the "shellcheck source=" directives.
       # The list comes from git so tracked and new nonignored scripts anywhere
       # in the repo are covered before they are committed.
       - name: Run shellcheck
-        run: ./scripts/dev/check.sh shell
+        run: SCROOGE_CHECK_PYTHON=python ./scripts/dev/check.sh shell
 
   typecheck:
     runs-on: ubuntu-latest

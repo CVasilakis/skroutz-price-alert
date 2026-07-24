@@ -6,3 +6,4 @@ Python virtual environment successfully updated.
 
 Setting up Systemd timer(s)...
 Error: Target 'skroutz' has no resolved schedule.
+Error: Transactional systemd provisioning failed.

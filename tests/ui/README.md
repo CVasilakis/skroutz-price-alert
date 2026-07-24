@@ -359,9 +359,9 @@ _case("enable_fails", "systemctl enable --now fails.",
 
 The cast is fixed across all shell scenarios: `skroutz` (healthy, installed), `amazon`
 (registered but not installed), `ghost` (an orphan — units on disk, plugin removed).
-Interactive prompts (update.sh's dirty-tree confirmation) are fed via `stdin=`; the
-sandbox path is normalized to `<BASE_DIR>` and sh's own diagnostics to `<line>`, so the
-goldens are machine-independent.
+Scenarios that need standard input supply it through `stdin=`. The sandbox path is
+normalized to `<BASE_DIR>` and sh's own diagnostics to `<line>`, so the goldens are
+machine-independent.
 
 ### Shared input builders (`catalog/inputs.py`)
 

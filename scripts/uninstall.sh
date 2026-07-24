@@ -35,6 +35,7 @@ print_help() {
     printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for plugin in $_registered; do
         printf '  --%-15s Remove only the %s scraper\n' "$plugin" "$plugin"
     done
@@ -43,10 +44,12 @@ print_help() {
     # in the catalog (removed or renamed upstream). They are not in the list
     # above but can still be purged by name, so surface them in their own section.
     _orphans=""
-    for plugin in $(list_installed_plugins timer) $(list_installed_plugins service); do
-        plugin_in_list "$plugin" $_registered && continue
-        plugin_in_list "$plugin" $_orphans && continue
-        _orphans="$_orphans $plugin"
+    _installed="$(list_installed_targets)"
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
+    for plugin in $_installed; do
+        stream_contains "$plugin" "$_registered" && continue
+        stream_contains "$plugin" "$_orphans" && continue
+        _orphans="$(stream_add_unique "$_orphans" "$plugin")"
     done
 
     if [ -n "$_orphans" ]; then
@@ -73,7 +76,11 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help) print_help; exit 0 ;;
         --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-        --*) SELECTED="$SELECTED ${1#--}" ;;
+        --*)
+            target="${1#--}"
+            require_valid_target "$target" || exit 1
+            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
+            ;;
         *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
     esac
     shift
@@ -93,15 +100,18 @@ if [ -n "$SELECTED" ]; then
     # still be purged). A name in none of those sets is a typo: reject it instead
     # of silently "succeeding" (rm -f on absent unit files would otherwise report
     # a misleading success).
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for sel in $SELECTED; do
         if ! is_known_target "$sel" timer && ! is_known_target "$sel" service; then
             printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
-            printf "%b\n" "Available targets: ${CYAN}$(printf '%s ' $(known_targets timer))${NC}"
+            _available="$(known_targets_all)"
+            printf "%b\n" "Available targets: ${CYAN}$(stream_for_display "$_available")${NC}"
             exit 1
         fi
     done
 
     TEARDOWN_FAILED=0
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for sel in $SELECTED; do
         printf "%b\n" "\n${CYAN}Stopping and disabling '$sel'...${NC}"
         if ! disable_one "$sel"; then
@@ -114,6 +124,7 @@ if [ -n "$SELECTED" ]; then
         exit 1
     fi
 
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for sel in $SELECTED; do
         printf "%b\n" "\n${CYAN}Removing systemd units for '$sel'...${NC}"
         if ! rm -f "$SYSTEMD_USER_DIR/$(unit_name "$sel" timer)" \
@@ -143,6 +154,7 @@ printf "%b\n" "\n${CYAN}Disabling and removing Systemd Timer(s) and Service(s)..
 
 INSTALLED_TARGETS="$(list_installed_targets)"
 TEARDOWN_FAILED=0
+# shellcheck disable=SC2086  # intentional newline-delimited target stream
 for plugin in $INSTALLED_TARGETS; do
     if ! disable_one "$plugin"; then
         printf "%b\n" "${RED}Error: '$plugin' could not be made safe for removal.${NC}"
@@ -154,6 +166,7 @@ if [ "$TEARDOWN_FAILED" -ne 0 ]; then
     exit 1
 fi
 
+# shellcheck disable=SC2086  # intentional newline-delimited target stream
 for plugin in $INSTALLED_TARGETS; do
     if ! rm -f "$SYSTEMD_USER_DIR/$(unit_name "$plugin" timer)" \
                 "$SYSTEMD_USER_DIR/$(unit_name "$plugin" service)"; then

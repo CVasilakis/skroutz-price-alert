@@ -51,8 +51,9 @@
 
 ## 🌍 Supported Stores
 
-Supported targets are discovered from the checked-in plugin packages. Run
-`./scripts/run.sh --help` to see the exact target flags available in your checkout.
+Supported targets are discovered from the checked-in plugin packages. After
+installation, run `./scripts/run.sh --help` to see the exact target flags available
+in your checkout; before installation, the command prints setup guidance instead.
 Each target's accepted URLs, custom fields, settings, dependencies, and examples are
 documented in `src/core/scrapers/plugins/<target>/README.md` beside its implementation.
 
@@ -411,11 +412,20 @@ Performs a full or partial teardown of the background services:
 | `--<target>` | Removes only the specified scrapers' units, leaving the virtual environment and other targets intact. You can pass one or more target flags simultaneously. With no flag, removes every installed systemd timer/service and deletes the Python virtual environment. |
 
 #### Update to Latest Version
-Updates Scrooge Alert to the latest version by pulling from the repository and reinstalling the scraper(s) you previously installed:
+Updates Scrooge Alert to the latest version from `origin/main`, updates dependencies
+for exactly the scraper targets that already have timer or service units, and
+transactionally replaces their systemd unit files:
 
 ```
 ./update.sh
 ```
+
+The checkout must already be on `main`, with no tracked changes, nonignored
+untracked files, unpublished commits, or diverged history. The updater never
+discards work or switches branches. It stops and disables selected targets before
+replacing source or unit files, then restores each timer's prior enabled/active
+state. If an update is interrupted after source replacement, affected timers stay
+disabled and the command prints the retained recovery path and status command.
 
 ## 🔔 Notifications & Messages
 
@@ -519,13 +529,17 @@ notification library, which supports almost every major platform. Add the servic
 <summary><b>3. How do I update the script to the latest version?</b></summary>
 <br>
 
-Navigate to the project directory and run the update script. This will pull the latest changes using Git and automatically run the installation script again to ensure any new dependencies are installed and your environment is properly updated:
+Navigate to a clean checkout on the `main` branch and run the update script. It
+fetches `origin/main`, refuses unpublished or diverged work, quiesces the installed
+scrapers, updates their dependencies, and transactionally replaces their systemd
+unit files:
 
 ```sh
 ./update.sh
 ```
 
-When run manually, the script automatically checks the online repository for updates. If a newer version is found, a message is displayed in the terminal.
+The updater preserves selective installations and prior timer activation states.
+It never prompts to discard changes or switches branches automatically.
 </details>
 
 <details>

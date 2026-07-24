@@ -1,0 +1,4 @@
+# border: red
+# exit: 1
+
+Error: <BASE_DIR> is not a Git worktree.

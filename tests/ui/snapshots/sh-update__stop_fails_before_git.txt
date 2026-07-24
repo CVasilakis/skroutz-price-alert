@@ -1,7 +1,0 @@
-# border: red
-# exit: 1
-
-Updating Scrooge Alert...
-Error: Failed to stop skroutz-scraper.service.
-Error: Could not safely stop the 'skroutz' scraper before updating.
-Update aborted before changing project files.

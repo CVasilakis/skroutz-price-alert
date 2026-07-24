@@ -22,6 +22,14 @@ _case(
 )
 
 _case(
+    "help_no_venv",
+    "Missing-venv help retains fixed options and explains how to obtain target rows.",
+    "--help",
+    world=WORLD_NO_VENV,
+    tags=("help",),
+)
+
+_case(
     "invalid_positional",
     "A positional argument is rejected (with the help text).",
     "foo",
@@ -70,6 +78,13 @@ _case(
     "no_venv_dispatch",
     "No flags with the venv missing: the repair hint, not a raw exec failure.",
     world=WORLD_NO_VENV,
+    tags=("error",),
+)
+
+_case(
+    "python39_rejected",
+    "An installed venv older than Python 3.10 is rejected before dispatch.",
+    world=ShellWorld(python_version="3.9.18", python_supported=False),
     tags=("error",),
 )
 

@@ -41,10 +41,12 @@ print_help() {
     printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    for plugin in $(list_installed_plugins timer); do
+    _installed="$(list_installed_plugins timer)"
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
+    for plugin in $_installed; do
         # Skip orphans (installed but no longer a registered scraper) - they have
         # no config to apply. If the catalog is unavailable we can't tell, so list all.
-        if [ -n "$_registered" ] && ! plugin_in_list "$plugin" $_registered; then
+        if [ -n "$_registered" ] && ! stream_contains "$plugin" "$_registered"; then
             continue
         fi
         printf '  --%-15s Apply only the %s scraper interval\n' "$plugin" "$plugin"
@@ -69,7 +71,11 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help) print_help; exit 0 ;;
         --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-        --*) SELECTED="$SELECTED ${1#--}" ;;
+        --*)
+            target="${1#--}"
+            require_valid_target "$target" || exit 1
+            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
+            ;;
         *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
     esac
     shift
@@ -90,17 +96,18 @@ fi
 
 if [ -n "$SELECTED" ]; then
     PLUGINS=""
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for sel in $SELECTED; do
-        if plugin_in_list "$sel" $INSTALLED_PLUGINS; then
+        if stream_contains "$sel" "$INSTALLED_PLUGINS"; then
             # Installed: configure it - unless the catalog omits it, i.e. it is an
             # orphan whose code is gone, in which case point at uninstall instead.
-            if ! plugin_in_list "$sel" $REGISTERED; then
+            if ! stream_contains "$sel" "$REGISTERED"; then
                 printf "%b\n" "${RED}Error: '$sel' is installed but no longer a registered scraper (orphan).${NC}"
                 printf "%b\n" "Remove its leftover units with: ${CYAN}./scripts/uninstall.sh --$sel${NC}"
                 exit 1
             fi
-            PLUGINS="$PLUGINS $sel"
-        elif plugin_in_list "$sel" $REGISTERED; then
+            PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
+        elif stream_contains "$sel" "$REGISTERED"; then
             # A real scraper, but install.sh never provisioned its timer - there is
             # no unit to reschedule.
             printf "%b\n" "${RED}Error: '$sel' is registered but not installed.${NC}"
@@ -118,9 +125,10 @@ else
     # (installed but de-registered) are reported here, then skipped - they have no
     # config and no code to schedule.
     PLUGINS=""
+    # shellcheck disable=SC2086  # intentional newline-delimited target stream
     for plugin in $INSTALLED_PLUGINS; do
-        if plugin_in_list "$plugin" $REGISTERED; then
-            PLUGINS="$PLUGINS $plugin"
+        if stream_contains "$plugin" "$REGISTERED"; then
+            PLUGINS="$(stream_add_unique "$PLUGINS" "$plugin")"
         else
             printf "%b\n" "\n${YELLOW}[$plugin] Installed but no longer a registered scraper (orphan); skipping.${NC}"
             printf "%b\n" "Remove its leftover units with: ${CYAN}./scripts/uninstall.sh --$plugin${NC}"
@@ -160,6 +168,7 @@ CHANGED=""
 ACTIVE_CHANGED=""
 INACTIVE_CHANGED=""
 FAILED=0
+# shellcheck disable=SC2086  # intentional newline-delimited target stream
 for plugin in $PLUGINS; do
     if ! status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")"; then
         printf "%b\n" "\n${RED}[$plugin] Could not resolve execution_interval status; skipping.${NC}"
@@ -200,9 +209,9 @@ for plugin in $PLUGINS; do
         continue
     fi
     if [ "$prior_active" = "active" ]; then
-        ACTIVE_CHANGED="$ACTIVE_CHANGED $plugin"
+        ACTIVE_CHANGED="$(stream_add_unique "$ACTIVE_CHANGED" "$plugin")"
     elif state_is_stopped "$prior_active"; then
-        INACTIVE_CHANGED="$INACTIVE_CHANGED $plugin"
+        INACTIVE_CHANGED="$(stream_add_unique "$INACTIVE_CHANGED" "$plugin")"
     else
         printf "%b\n" "\n${RED}[$plugin] Timer is in unexpected state '$prior_active'; skipping.${NC}"
         FAILED=1
@@ -211,7 +220,7 @@ for plugin in $PLUGINS; do
 
     printf "%b\n" "\n${CYAN}[$plugin] Updating the timer schedule to match the configured interval...${NC}"
     if write_plugin_timer_unit "$plugin" "$new_calendar"; then
-        CHANGED="$CHANGED $plugin"
+        CHANGED="$(stream_add_unique "$CHANGED" "$plugin")"
         printf "%b\n" "${GREEN}[$plugin] Timer unit updated.${NC}"
     else
         printf "%b\n" "${RED}[$plugin] Error: Failed to write the systemd timer unit.${NC}"
@@ -228,8 +237,9 @@ done
 
 if [ -n "$CHANGED" ]; then
     if systemctl --user daemon-reload; then
+        # shellcheck disable=SC2086  # intentional newline-delimited target stream
         for plugin in $ACTIVE_CHANGED; do
-            if ! plugin_in_list "$plugin" $CHANGED; then
+            if ! stream_contains "$plugin" "$CHANGED"; then
                 continue
             fi
             if ! restart_timer_one "$plugin"; then
@@ -237,8 +247,9 @@ if [ -n "$CHANGED" ]; then
                 FAILED=1
             fi
         done
+        # shellcheck disable=SC2086  # intentional newline-delimited target stream
         for plugin in $INACTIVE_CHANGED; do
-            if ! plugin_in_list "$plugin" $CHANGED; then
+            if ! stream_contains "$plugin" "$CHANGED"; then
                 continue
             fi
             if ! inactive_state="$(timer_is_active "$plugin")"; then
@@ -257,13 +268,13 @@ fi
 
 if [ "$FAILED" -ne 0 ]; then
     [ -z "$CHANGED" ] || \
-        printf "%b\n" "\n${YELLOW}Timer files written but not fully activated:${NC}${CYAN}$(printf ' %s' $CHANGED)${NC}"
+        printf "%b\n" "\n${YELLOW}Timer files written but not fully activated:${NC} ${CYAN}$(stream_for_display "$CHANGED")${NC}"
     printf "%b\n" "${RED}One or more timer schedules could not be applied.${NC}\n"
     exit 1
 fi
 
 if [ -n "$CHANGED" ]; then
-    printf "%b\n" "\n${GREEN}Done. Updated:${NC}${CYAN}$(printf ' %s' $CHANGED)${NC}\n"
+    printf "%b\n" "\n${GREEN}Done. Updated:${NC} ${CYAN}$(stream_for_display "$CHANGED")${NC}\n"
 else
     printf "%b\n" "\n${GREEN}All timers already match their configured intervals. Nothing changed.${NC}\n"
 fi

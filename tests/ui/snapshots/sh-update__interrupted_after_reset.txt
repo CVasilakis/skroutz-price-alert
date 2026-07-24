@@ -1,0 +1,11 @@
+# border: red
+# exit: 143
+
+Updating Scrooge Alert...
+Fetching origin/main before stopping any scraper...
+Quiescing 'skroutz'...
+Update interrupted by TERM.
+Affected timers were left disabled for safety.
+Recovery data was retained at:
+<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
+Rerun ./update.sh or inspect ./scripts/run.sh --status.

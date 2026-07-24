@@ -1,0 +1,7 @@
+# border: red
+# exit: 1
+
+Updating Scrooge Alert...
+Fetching origin/main before stopping any scraper...
+Error: Local main has commits that are not contained in origin/main.
+Publish or reconcile those commits before updating.

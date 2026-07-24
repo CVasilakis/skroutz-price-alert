@@ -1,0 +1,4 @@
+# border: red
+# exit: 1
+
+Error: Git is not installed or not available.

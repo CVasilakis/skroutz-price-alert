@@ -1,5 +1,5 @@
 # border: red
 # exit: 1
 
-Error: Cannot run - the Python environment looks missing or broken.
-Reinstall it with: ./scripts/uninstall.sh then ./install.sh
+Error: Python interpreter not found: <BASE_DIR>/venv/bin/python3.
+Python 3.10 or newer is required. Run ./install.sh.

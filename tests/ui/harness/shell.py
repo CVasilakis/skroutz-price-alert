@@ -51,6 +51,8 @@ _SCRIPT_FILES = (
     "scripts/stop.sh",
     "scripts/uninstall.sh",
     "scripts/lib/common.sh",
+    "scripts/lib/preflight.sh",
+    "scripts/lib/provisioning.sh",
 )
 
 # The coreutils allowlist symlinked into the sandbox bin/ in EVERY mode. PATH is
@@ -126,13 +128,26 @@ class ShellWorld:
     active_services: tuple[str, ...] = ()
     activating_services: tuple[str, ...] = ()
     systemctl_fail: tuple[str, ...] = ()
+    systemctl_fail_target: str | None = None
     systemctl_noop: tuple[str, ...] = ()
+    systemctl_signal: str | None = None
     linger: str = "yes"
     linger_enable_fails: bool = False
 
     git_branch: str = "main"
     git_dirty: bool = False
     git_fail: tuple[str, ...] = ()
+    git_relation: str = "fast_forward"
+    git_worktree: bool = True
+    git_origin: bool = True
+    git_origin_ref: bool = True
+    fetched_paths_valid: bool = True
+    python_version: str = "3.12.0"
+    python_supported: bool = True
+    venv_python_version: str | None = None
+    venv_python_supported: bool | None = None
+    internal_update: bool = False
+    git_signal: str | None = None
 
     config_files: tuple[str, ...] = ()
 
@@ -160,9 +175,21 @@ marker() {
     printf '%s/%s.%s' "$FAKE_SYSTEMD_STATE_DIR" "$1" "$(stem "$2")"
 }
 
+failure_target=""
+for failure_arg in "$@"; do
+    case "$failure_arg" in
+        *.timer|*.service) failure_target="$(stem "$failure_arg")" ;;
+    esac
+done
 case " ${FAKE_SYSTEMCTL_FAIL:-} " in
-    *" $verb "*) exit 1 ;;
+    *" $verb "*)
+        if [ -z "${FAKE_SYSTEMCTL_FAIL_TARGET:-}" ] ||
+           [ "$failure_target" = "$FAKE_SYSTEMCTL_FAIL_TARGET" ]; then
+            exit 1
+        fi
+        ;;
 esac
+[ "${FAKE_SYSTEMCTL_SIGNAL:-}" = "$verb" ] && kill -TERM "$PPID"
 
 case "$verb" in
     show)
@@ -201,9 +228,15 @@ case "$verb" in
                 esac ;;
         esac ;;
     enable)
-        for unit in "$@"; do :; done
+        with_now=0
+        [ "${1:-}" = "--now" ] && { with_now=1; shift; }
+        unit="$1"
         case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
         : > "$(marker enabled "$unit")"
+        [ "$with_now" -eq 0 ] || : > "$(marker timer_active "$unit")" ;;
+    start)
+        unit="$1"
+        case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
         : > "$(marker timer_active "$unit")" ;;
     stop)
         unit="$1"
@@ -235,12 +268,34 @@ exit 0
 """
 
 _GIT_SHIM = """#!/bin/sh
+[ "${1:-}" = "-C" ] && shift 2
 case " ${FAKE_GIT_FAIL:-} " in
     *" ${1:-} "*) exit 1 ;;
 esac
 case "${1:-}" in
-    rev-parse) printf '%s\\n' "${FAKE_GIT_BRANCH:-main}" ;;
+    rev-parse)
+        case " $* " in
+            *" --is-inside-work-tree "*) [ "${FAKE_GIT_WORKTREE:-1}" = "1" ] && echo true || echo false ;;
+            *" --is-bare-repository "*) echo false ;;
+            *" --verify "*)
+                [ "${FAKE_GIT_ORIGIN_REF:-1}" = "1" ] ||
+                    [ -f "$FAKE_GIT_STATE_DIR/fetched" ] ;;
+            *) printf '%s\\n' "${FAKE_GIT_BRANCH:-main}" ;;
+        esac ;;
+    symbolic-ref) printf '%s\\n' "${FAKE_GIT_BRANCH:-main}" ;;
+    remote) [ "${FAKE_GIT_ORIGIN:-1}" = "1" ] ;;
+    merge-base)
+        relation="${FAKE_GIT_RELATION:-fast_forward}"
+        case "$relation:$3:$4" in
+            fast_forward:HEAD:origin/main) exit 0 ;;
+            ahead:origin/main:HEAD) exit 0 ;;
+            *) exit 1 ;;
+        esac ;;
+    fetch) : > "$FAKE_GIT_STATE_DIR/fetched" ;;
+    cat-file) [ "${FAKE_FETCHED_PATHS_VALID:-1}" = "1" ] ;;
     status) [ "${FAKE_GIT_DIRTY:-0}" = "1" ] && printf ' M src/core/main.py\\n' ;;
+    reset)
+        [ "${FAKE_GIT_SIGNAL:-}" = "reset" ] && kill -TERM "$PPID" ;;
 esac
 exit 0
 """
@@ -250,7 +305,14 @@ _PYTHON3_SHIM = """#!/bin/sh
 # the venv responder (or fails on demand).
 case "${1:-}" in
     -c)
-        [ "${FAKE_NO_ENSUREPIP:-0}" = "1" ] && exit 1 ;;
+        case "${2:-}" in
+            *sys.version_info*)
+                case "${2:-}" in
+                    *print*) printf '%s\\n' "${FAKE_PYTHON_VERSION:-3.12.0}"; exit 0 ;;
+                    *) [ "${FAKE_PYTHON_SUPPORTED:-1}" = "1" ]; exit $? ;;
+                esac ;;
+            *) [ "${FAKE_NO_ENSUREPIP:-0}" = "1" ] && exit 1; exit 0 ;;
+        esac ;;
     -m)
         if [ "${2:-}" = "venv" ]; then
             [ "${FAKE_VENV_CREATE_FAILS:-0}" = "1" ] && exit 1
@@ -276,6 +338,11 @@ _VENV_PYTHON_SHIM = """#!/bin/sh
 # venv python responder: canned catalog answers, pip failure injection, and a
 # dispatch marker for run.sh's final exec.
 case "${1:-}" in
+    -c)
+        case "${2:-}" in
+            *print*) printf '%s\\n' "${FAKE_VENV_PYTHON_VERSION:-3.12.0}"; exit 0 ;;
+            *) [ "${FAKE_VENV_PYTHON_SUPPORTED:-1}" = "1" ]; exit $? ;;
+        esac ;;
     -m)
         shift
         case "$*" in
@@ -351,6 +418,8 @@ def _write_shims(bin_dir: Path, world: ShellWorld) -> None:
         del shims["systemctl"]
     elif world.tools == "no-python3":
         del shims["python3"]
+    elif world.tools == "no-git":
+        del shims["git"]
 
     for name, body in shims.items():
         shim = bin_dir / name
@@ -476,13 +545,35 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_ACTIVE_SERVICES": " ".join(world.active_services),
         "FAKE_ACTIVATING_SERVICES": " ".join(world.activating_services),
         "FAKE_SYSTEMCTL_FAIL": " ".join(world.systemctl_fail),
+        "FAKE_SYSTEMCTL_FAIL_TARGET": world.systemctl_fail_target or "",
         "FAKE_SYSTEMCTL_NOOP": " ".join(world.systemctl_noop),
+        "FAKE_SYSTEMCTL_SIGNAL": world.systemctl_signal or "",
         "FAKE_SYSTEMD_STATE_DIR": str(sandbox / "systemd-state"),
         "FAKE_LINGER": world.linger,
         "FAKE_LINGER_ENABLE_FAILS": "1" if world.linger_enable_fails else "0",
         "FAKE_GIT_BRANCH": world.git_branch,
         "FAKE_GIT_DIRTY": "1" if world.git_dirty else "0",
         "FAKE_GIT_FAIL": " ".join(world.git_fail),
+        "FAKE_GIT_RELATION": world.git_relation,
+        "FAKE_GIT_WORKTREE": "1" if world.git_worktree else "0",
+        "FAKE_GIT_ORIGIN": "1" if world.git_origin else "0",
+        "FAKE_GIT_ORIGIN_REF": "1" if world.git_origin_ref else "0",
+        "FAKE_GIT_STATE_DIR": str(sandbox / "systemd-state"),
+        "FAKE_FETCHED_PATHS_VALID": "1" if world.fetched_paths_valid else "0",
+        "FAKE_PYTHON_VERSION": world.python_version,
+        "FAKE_PYTHON_SUPPORTED": "1" if world.python_supported else "0",
+        "FAKE_VENV_PYTHON_VERSION": world.venv_python_version or world.python_version,
+        "FAKE_VENV_PYTHON_SUPPORTED": (
+            "1"
+            if (
+                world.python_supported
+                if world.venv_python_supported is None
+                else world.venv_python_supported
+            )
+            else "0"
+        ),
+        "SCROOGE_INTERNAL_UPDATE": "1" if world.internal_update else "",
+        "FAKE_GIT_SIGNAL": world.git_signal or "",
     }
 
 
@@ -529,6 +620,7 @@ def drive_shell(
 
     transcript = proc.stdout.replace(str(sandbox), "<BASE_DIR>").replace("\r", "")
     transcript = re.sub(r"\.(tmp|backup)\.\d+", r".\1.<PID>", transcript)
+    transcript = re.sub(r"\.scrooge-(provision|update)\.\d+", r".scrooge-\1.<PID>", transcript)
     # sh's own diagnostics (e.g. a failed redirect in the readonly-unit-dir scenarios)
     # carry a script line number that drifts with every script edit - pin it.
     transcript = re.sub(r"\.sh: (?:line )?\d+:", ".sh: <line>:", transcript)

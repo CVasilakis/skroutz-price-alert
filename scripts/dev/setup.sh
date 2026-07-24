@@ -2,6 +2,11 @@
 set -eu
 
 PROJECT_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+BASE_DIR="$PROJECT_ROOT"
+# shellcheck source=scripts/lib/common.sh
+. "$PROJECT_ROOT/scripts/lib/common.sh"
+# shellcheck source=scripts/lib/preflight.sh
+. "$PROJECT_ROOT/scripts/lib/preflight.sh"
 VENV_PYTHON="$PROJECT_ROOT/venv/bin/python3"
 SELECTED=""
 
@@ -21,16 +26,17 @@ while [ "$#" -gt 0 ]; do
                 exit 1
             }
             SELECTED="${1#--}"
+            require_valid_target "$SELECTED" || exit 1
             ;;
         *) printf '%s\n' "Error: Invalid argument: $1" >&2; exit 1 ;;
     esac
     shift
 done
 
-command -v python3 >/dev/null 2>&1 || {
-    printf '%s\n' "Error: python3 is not installed." >&2
-    exit 1
-}
+require_python_310 python3 "./scripts/dev/setup.sh" || exit 1
+if [ -d "$PROJECT_ROOT/venv" ]; then
+    require_python_310 "$VENV_PYTHON" "./scripts/dev/setup.sh" || exit 1
+fi
 PLUGIN_REQUIREMENTS="$(
     PYTHONPATH="$PROJECT_ROOT/src" python3 -m core.scrapers.tooling.cli requirements
 )"
@@ -52,6 +58,7 @@ if [ -n "$SELECTED" ] && [ "$FOUND" -eq 0 ]; then
 fi
 
 [ -d "$PROJECT_ROOT/venv" ] || python3 -m venv "$PROJECT_ROOT/venv"
+require_python_310 "$VENV_PYTHON" "./scripts/dev/setup.sh" || exit 1
 "$VENV_PYTHON" -m pip install --upgrade pip
 "$VENV_PYTHON" -m pip install --upgrade -r "$PROJECT_ROOT/requirements.txt" \
     -r "$PROJECT_ROOT/scripts/dev/requirements-dev.txt"

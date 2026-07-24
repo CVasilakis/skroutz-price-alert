@@ -12,17 +12,18 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 # Shared helpers (colors, plugin enumeration)
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=scripts/lib/preflight.sh
+. "$SCRIPT_DIR/lib/preflight.sh"
 
-# Registered plugins (one --<plugin> flag is accepted per registered scraper).
-load_plugin_manifest || true
-PLUGINS="$(list_plugins || true)"
+VENV_PYTHON="$BASE_DIR/venv/bin/python3"
+PLUGINS=""
 
 # ==============================================================================
 # HELPER FUNCTIONS
 # ==============================================================================
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
-print_help() {
+print_fixed_help() {
     printf '\n'
     printf '%s\n' "Usage: run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]"
     printf '\n'
@@ -31,12 +32,42 @@ print_help() {
     printf '%s\n' "  --quiet           Run script with no console output"
     printf '%s\n' "  --status          Perform a health check of the background service"
     printf '%s\n' "  --ping            Send a test notification via Apprise"
+}
+
+print_help() {
+    print_fixed_help
     for plugin in $PLUGINS; do
         display_name="$(plugin_display_name "$plugin")"
         printf '  --%-15s Run exclusively the %s scraper\n' "$plugin" "${display_name:-$plugin}"
     done
     printf '\n'
 }
+
+print_missing_venv_help() {
+    print_fixed_help
+    printf '\n'
+    printf '%s\n' "Target-specific options are unavailable because the project"
+    printf '%s\n' "virtual environment is not installed."
+    printf '%s\n' "Run ./install.sh, then rerun this help command to list registered targets."
+    printf '\n'
+}
+
+# Help remains useful before installation, but a healthy installation supplies
+# the dynamic target rows from the catalog.
+case "${1:-}" in
+    -h|--help)
+        if [ ! -x "$VENV_PYTHON" ]; then
+            print_missing_venv_help
+            exit 0
+        fi
+        ;;
+esac
+
+require_python_310 "$VENV_PYTHON" "./install.sh" || exit 1
+
+# Registered plugins (one --<plugin> flag is accepted per registered scraper).
+load_plugin_manifest || true
+PLUGINS="$(list_plugins || true)"
 
 # ==============================================================================
 # EXECUTION
@@ -71,7 +102,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --quiet)
             FLAG_QUIET=$((FLAG_QUIET + 1))
-            ARGS="$ARGS --quiet"
+            ARGS="$(stream_add_unique "$ARGS" "--quiet")"
             shift
             ;;
         --)
@@ -84,9 +115,10 @@ while [ "$#" -gt 0 ]; do
             # Any registered plugin (e.g. --skroutz) selects that scraper and is
             # forwarded to main.py, which builds a matching flag per plugin.
             name="${1#--}"
-            if plugin_in_list "$name" $PLUGINS; then
+            require_valid_target "$name" || exit 1
+            if stream_contains "$name" "$PLUGINS"; then
                 FLAG_PLUGIN=$((FLAG_PLUGIN + 1))
-                ARGS="$ARGS $1"
+                ARGS="$(stream_add_unique "$ARGS" "$1")"
                 shift
             else
                 # An empty plugin list means the flag was rejected because the
@@ -135,12 +167,13 @@ fi
 # A missing venv would otherwise surface as the shell's raw "not found" from exec;
 # fail with the same repair hint catalog_diagnose gives. (The plugin-flag path
 # already routes through catalog_diagnose above.)
-if [ ! -x "$BASE_DIR/venv/bin/python3" ]; then
-    printf "%b\n" "${RED}Error: Cannot run - the Python environment looks missing or broken.${NC}" >&2
-    printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}" >&2
-    exit 1
-fi
-
-# Intentionally unquoted ARGS to allow multiple arguments to expand properly
-# shellcheck disable=SC2086
-exec "$BASE_DIR/venv/bin/python3" "$BASE_DIR/src/core/$TARGET" $ARGS
+set --
+OLD_IFS="$IFS"
+IFS='
+'
+# shellcheck disable=SC2086  # intentional newline-only stream iteration
+for arg in $ARGS; do
+    set -- "$@" "$arg"
+done
+IFS="$OLD_IFS"
+exec "$VENV_PYTHON" "$BASE_DIR/src/core/$TARGET" "$@"

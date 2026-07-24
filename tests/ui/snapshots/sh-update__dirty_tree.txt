@@ -1,0 +1,5 @@
+# border: red
+# exit: 1
+
+Error: The working tree contains tracked changes or nonignored untracked files.
+Commit or stash your work before running update.sh; nothing was changed.

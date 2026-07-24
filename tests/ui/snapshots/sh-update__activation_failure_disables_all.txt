@@ -1,0 +1,19 @@
+# border: red
+# exit: 1
+
+Updating Scrooge Alert...
+Fetching origin/main before stopping any scraper...
+Quiescing 'alpha'...
+Quiescing 'beta'...
+
+Updating python packages in existing virtual environment...
+Python virtual environment successfully updated.
+
+Setting up Systemd timer(s)...
+Systemd timer(s) configured successfully.
+Error: Could not restore the timer state for 'beta'.
+The update installed successfully, but timer activation was incomplete.
+All selected targets were left disabled for safety.
+Recorded timer states were retained at:
+<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
+Inspect with ./scripts/run.sh --status before enabling timers.

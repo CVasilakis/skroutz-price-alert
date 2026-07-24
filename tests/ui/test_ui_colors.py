@@ -59,7 +59,7 @@ EXPECTED_COLORS = {
     # SHELL (border derives from the exit code: 0 -> green, else red)
     "sh-install__systemctl_missing": "red",
     "sh-install__reinstall_all_configured": "green",
-    "sh-update__dirty_declined": "red",
+    "sh-update__dirty_tree": "red",
     "sh-update__new_scrapers_available": "green",
     "sh-schedule__catalog_unavailable_venv_missing": "red",
     "sh-schedule__invalid_interval": "green",  # a warning notice, but the script exits 0

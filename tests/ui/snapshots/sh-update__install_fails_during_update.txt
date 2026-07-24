@@ -2,9 +2,14 @@
 # exit: 1
 
 Updating Scrooge Alert...
+Fetching origin/main before stopping any scraper...
+Quiescing 'skroutz'...
 
 Updating python packages in existing virtual environment...
 Error: Failed to upgrade pip in the virtual environment.
 
-
-Error: Installation failed during update. Please run ./install.sh manually.
+Error: Provisioning failed after the source update.
+Affected timers remain disabled for safety.
+Rerun ./update.sh, or inspect with ./scripts/run.sh --status.
+Original timer states were recorded at:
+<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
