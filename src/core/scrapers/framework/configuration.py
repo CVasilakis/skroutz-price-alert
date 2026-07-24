@@ -12,6 +12,7 @@ from core.exceptions import ConfigFileError
 from core.infrastructure.persistence import read_json_object, storage_diagnostic
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.model import RegisteredPlugin
+from core.scrapers.framework.naming import FRAMEWORK_ITEM_KEYS
 from core.settings import (
     MISSING,
     ResolvedSettings,
@@ -21,14 +22,6 @@ from core.settings import (
 )
 
 TOP_LEVEL_KEYS = frozenset({"settings", "items"})
-COMMON_ITEM_KEYS = frozenset(
-    {
-        "id",
-        "name",
-        "target_price",
-        "skip",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -154,7 +147,7 @@ class TargetConfigLoader:
         if not isinstance(row, dict):
             raise ValueError("item must be an object")
         custom_by_key = {field.key: field for field in self.plugin.item_fields}
-        unknown = set(row) - COMMON_ITEM_KEYS - set(custom_by_key)
+        unknown = set(row) - FRAMEWORK_ITEM_KEYS - set(custom_by_key)
         if unknown:
             raise ValueError(f"unknown item keys: {', '.join(sorted(unknown))}")
         item_id = _nonblank(row.get("id"), "id")

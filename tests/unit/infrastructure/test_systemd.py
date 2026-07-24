@@ -19,7 +19,13 @@ from core.infrastructure.systemd import (
     get_systemd_properties,
     get_systemd_user_dir,
     read_timer_oncalendar,
+    scraper_unit_name,
 )
+
+
+def test_scraper_unit_name_uses_conventional_timer_and_service_names():
+    assert scraper_unit_name("skroutz", "timer") == "skroutz-scraper.timer"
+    assert scraper_unit_name("skroutz", "service") == "skroutz-scraper.service"
 
 
 class _UnitDirCase(unittest.TestCase):

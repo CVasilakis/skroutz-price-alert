@@ -22,6 +22,7 @@ from core.infrastructure.systemd import (
     get_installed_plugin_units,
     get_systemd_properties,
     read_timer_oncalendar,
+    scraper_unit_name,
 )
 from core.infrastructure.updates import check_for_updates
 from core.scrapers.framework.catalog import PluginCatalog
@@ -66,10 +67,10 @@ def main() -> None:
             diagnostic_saved = record_target_load_diagnostic(load)
 
         timer_props = get_systemd_properties(
-            f"{target}-scraper.timer", "ActiveState,NextElapseUSecRealtime"
+            scraper_unit_name(target, "timer"), "ActiveState,NextElapseUSecRealtime"
         )
         service_props = get_systemd_properties(
-            f"{target}-scraper.service",
+            scraper_unit_name(target, "service"),
             "ActiveState,Result,ExecMainStartTimestamp,ExecMainStatus",
         )
 

@@ -5,6 +5,12 @@ import os
 import subprocess
 
 SYSTEMCTL_QUERY_TIMEOUT_SECONDS = 10
+_SCRAPER_UNIT_INFIX = "-scraper."
+
+
+def scraper_unit_name(target: str, suffix: str) -> str:
+    """Return the conventional systemd unit name for one scraper target."""
+    return f"{target}{_SCRAPER_UNIT_INFIX}{suffix}"
 
 
 def get_systemd_user_dir() -> str:
@@ -18,7 +24,7 @@ def get_installed_plugin_units() -> dict[str, set[str]]:
     unit_dir = get_systemd_user_dir()
     found: dict[str, set[str]] = {}
     for suffix in ("timer", "service"):
-        marker = f"-scraper.{suffix}"
+        marker = f"{_SCRAPER_UNIT_INFIX}{suffix}"
         for path in glob.glob(os.path.join(unit_dir, f"*{marker}")):
             name = os.path.basename(path)[: -len(marker)]
             found.setdefault(name, set()).add(suffix)
@@ -27,7 +33,7 @@ def get_installed_plugin_units() -> dict[str, set[str]]:
 
 def read_timer_oncalendar(target: str) -> str:
     """Return the first installed ``OnCalendar`` value, or an empty string."""
-    timer_path = os.path.join(get_systemd_user_dir(), f"{target}-scraper.timer")
+    timer_path = os.path.join(get_systemd_user_dir(), scraper_unit_name(target, "timer"))
     try:
         with open(timer_path) as timer_file:
             for line in timer_file:
@@ -67,4 +73,5 @@ __all__ = [
     "get_systemd_properties",
     "get_systemd_user_dir",
     "read_timer_oncalendar",
+    "scraper_unit_name",
 ]

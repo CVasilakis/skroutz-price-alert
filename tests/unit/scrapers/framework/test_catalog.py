@@ -99,11 +99,16 @@ def test_repeated_price_alert_suppression_is_a_framework_setting_defaulting_fals
     assert invalid.status(spec) is SettingStatus.INVALID
 
 
+@pytest.mark.parametrize("key", ["id", "name", "target_price", "skip"])
+def test_framework_item_field_keys_cannot_be_redeclared(key):
+    with pytest.raises(PluginValidationError, match="invalid or reserved"):
+        _compile(_plugin(item_fields=[ItemField(key, str, default="x")]))
+
+
 @pytest.mark.parametrize(
     "field",
     [
         object(),
-        ItemField("id", str, default="x"),
         ItemField("", str, default="x"),
         ItemField("sku", None, default="x"),
         ItemField(

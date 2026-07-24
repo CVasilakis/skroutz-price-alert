@@ -518,13 +518,14 @@ render_plugin_timer() {
     _rpt_plugin="$1"
     _rpt_calendar="$2"
     _rpt_path="$3"
+    _rpt_service="$(unit_name "$_rpt_plugin" service)"
     if ! cat > "$_rpt_path" << EOF
 [Unit]
 Description=Run $_rpt_plugin scraper
 
 [Timer]
 OnCalendar=$_rpt_calendar
-Unit=$_rpt_plugin-scraper.service
+Unit=$_rpt_service
 RandomizedDelaySec=180s
 Persistent=true
 

@@ -14,7 +14,7 @@ from core.exceptions import PluginValidationError
 from core.scrapers.api import ItemField, ScraperPlugin, UrlField
 from core.scrapers.framework.model import RegisteredPlugin
 from core.scrapers.framework.naming import (
-    RESERVED_ITEM_KEYS,
+    FRAMEWORK_ITEM_KEYS,
     RESERVED_PLUGIN_NAMES,
     SNAKE_CASE_KEY,
 )
@@ -101,7 +101,7 @@ def compile_plugin(
         if (
             not isinstance(key, str)
             or SNAKE_CASE_KEY.fullmatch(key) is None
-            or key in RESERVED_ITEM_KEYS
+            or key in FRAMEWORK_ITEM_KEYS
         ):
             raise PluginValidationError(
                 f"Plugin '{target}' item field key {key!r} is invalid or reserved."
