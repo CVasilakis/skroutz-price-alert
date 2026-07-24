@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from enum import Enum
 from typing import Any, cast
 
 from core.settings.model import (
@@ -13,6 +14,33 @@ from core.settings.model import (
     SettingStatus,
     SettingView,
 )
+
+
+class SettingsValidationProblem(str, Enum):
+    """Stable categories for strict settings-block validation failures."""
+
+    NOT_OBJECT = "not_object"
+    UNKNOWN = "unknown"
+    REQUIRED = "required"
+
+
+class SettingsValidationError(ValueError):
+    """A typed settings failure whose text remains backward compatible."""
+
+    def __init__(
+        self,
+        problem: SettingsValidationProblem,
+        keys: Sequence[str] = (),
+    ) -> None:
+        self.problem = problem
+        self.keys = tuple(keys)
+        if problem is SettingsValidationProblem.NOT_OBJECT:
+            message = "settings must be an object"
+        elif problem is SettingsValidationProblem.UNKNOWN:
+            message = f"unknown settings: {', '.join(self.keys)}"
+        else:
+            message = f"required settings missing or invalid: {', '.join(self.keys)}"
+        super().__init__(message)
 
 
 def resolve_spec(
@@ -46,19 +74,19 @@ def resolve_settings(
 def validate_settings_block(specs: Sequence[SettingSpec[Any]], block: object) -> ResolvedSettings:
     """Validate one strict settings object and resolve all declarations."""
     if not isinstance(block, Mapping):
-        raise ValueError("settings must be an object")
+        raise SettingsValidationError(SettingsValidationProblem.NOT_OBJECT)
     known = {spec.key for spec in specs}
-    unknown = set(block) - known
+    unknown = sorted(set(block) - known)
     if unknown:
-        raise ValueError(f"unknown settings: {', '.join(sorted(unknown))}")
+        raise SettingsValidationError(SettingsValidationProblem.UNKNOWN, unknown)
     resolved = resolve_settings(specs, block)
-    unresolved = [
+    unresolved = sorted(
         spec.key
         for spec in specs
         if spec.required and resolved.status(spec) in (SettingStatus.MISSING, SettingStatus.INVALID)
-    ]
+    )
     if unresolved:
-        raise ValueError("required settings missing or invalid: " + ", ".join(sorted(unresolved)))
+        raise SettingsValidationError(SettingsValidationProblem.REQUIRED, unresolved)
     return resolved
 
 

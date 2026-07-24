@@ -28,6 +28,11 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.load_targets", autospec=True, return_value=[]),
             mock.patch("core.main.load_general_config", autospec=True) as load_general,
             mock.patch(
+                "core.main.record_general_diagnostic",
+                autospec=True,
+                side_effect=lambda general: general,
+            ),
+            mock.patch(
                 "core.main.validate_notification_preflight", autospec=True, return_value=None
             ),
             mock.patch("core.main.AppriseNotifier", autospec=True) as notifier_type,
@@ -73,6 +78,11 @@ class TestMainWiring(unittest.TestCase):
             ),
             mock.patch("core.main.load_general_config", autospec=True),
             mock.patch(
+                "core.main.record_general_diagnostic",
+                autospec=True,
+                side_effect=lambda general: general,
+            ),
+            mock.patch(
                 "core.main.record_target_load_diagnostic",
                 autospec=True,
             ) as record_diagnostic,
@@ -99,6 +109,10 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.ClientLoader") as ClientLoader,
             mock.patch("core.main.load_targets", return_value=[]) as load_targets,
             mock.patch("core.main.load_general_config") as load_general,
+            mock.patch(
+                "core.main.record_general_diagnostic",
+                side_effect=lambda general: general,
+            ),
             mock.patch("core.main.install_interrupt_handler") as install_handler,
             mock.patch("core.main.check_for_updates", return_value=False),
             mock.patch("core.main.render_config_panel") as render_config,

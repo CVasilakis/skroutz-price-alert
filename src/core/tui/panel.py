@@ -9,7 +9,6 @@ from rich.text import Text
 
 from core.tui.footnotes import FootnoteRegistry
 
-
 PANEL_WIDTH = 75
 
 

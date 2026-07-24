@@ -37,7 +37,7 @@ jobs:
       - name: Run tests
         # Coverage is report-only: never add a percentage failure threshold here
         # or in pyproject.toml. Test outcomes, not coverage totals, gate CI.
-        run: pytest --cov=src/core --cov-report=term-missing:skip-covered
+        run: SCROOGE_CHECK_PYTHON=python ./scripts/check.sh tests
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
       # The list comes from git so a new script anywhere in the repo is covered
       # the moment it is tracked (tests/shell/test_shellcheck.py mirrors this).
       - name: Run shellcheck
-        run: git ls-files -z -- '*.sh' | xargs -0 shellcheck -x --exclude=SC2086,SC2046
+        run: ./scripts/check.sh shell
 
   typecheck:
     runs-on: ubuntu-latest
@@ -67,13 +67,8 @@ jobs:
           for f in src/core/scrapers/plugins/*/requirements.txt; do
             [ -f "$f" ] && venv/bin/python -m pip install -r "$f"
           done
-      - name: Run basedpyright
-        run: venv/bin/basedpyright src
-
-      - name: Run Ruff
-        run: |
-          venv/bin/ruff check src tests
-          venv/bin/ruff format --check src tests
+      - name: Run static checks
+        run: ./scripts/check.sh static
 
   plugin-isolation:
     runs-on: ubuntu-latest

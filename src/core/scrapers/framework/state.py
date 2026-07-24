@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from core import messages
 from core.exceptions import StateFileError
 from core.infrastructure.persistence import (
     format_utc,
@@ -105,7 +106,7 @@ class JsonStateRepository:
             self._items = self._validate_document(document)
         except (TypeError, ValueError) as exc:
             raise StateFileError(
-                f"Fix invalid state in `{self.display_path}`; details are logged.",
+                messages.invalid_state(self.display_path),
                 storage_diagnostic(path, exc, operation="validate scraper state"),
             ) from exc
 

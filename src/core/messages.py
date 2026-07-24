@@ -175,6 +175,98 @@ def state_save_failed(target: str) -> str:
     return "Latest scrape state was not saved."
 
 
+# --- Configuration and persistence failures ------------------------------------------
+
+
+def missing_config(path: str) -> str:
+    return f"Create missing `{path}` from the plugin example."
+
+
+def malformed_json(path: str, line: int, column: int) -> str:
+    return f"Fix JSON in `{path}` at line {line}, column {column}."
+
+
+def invalid_utf8(path: str) -> str:
+    return f"`{path}` is not valid UTF-8."
+
+
+def storage_read_permission(path: str) -> str:
+    return f"Cannot read `{path}`; check its permissions."
+
+
+def storage_read_failed(path: str) -> str:
+    return f"Cannot read `{path}`; check the error log."
+
+
+def json_object_required(path: str) -> str:
+    return f"`{path}` must contain a JSON object."
+
+
+def storage_save_permission(path: str) -> str:
+    return f"Cannot save `{path}`; check its permissions."
+
+
+def storage_save_failed(path: str) -> str:
+    return f"Cannot save `{path}`; check the error log."
+
+
+def invalid_state(path: str) -> str:
+    return f"Fix invalid state in `{path}`; details are logged."
+
+
+def unsupported_config_keys(path: str) -> str:
+    return f"Remove unsupported keys from `{path}`."
+
+
+def items_array_required(path: str) -> str:
+    return f"`items` in `{path}` must be a JSON array."
+
+
+def settings_object_required(path: str) -> str:
+    return f"`settings` in `{path}` must be a JSON object."
+
+
+def unsupported_settings(path: str) -> str:
+    return f"Remove unsupported settings from `{path}`."
+
+
+def required_settings_invalid(path: str) -> str:
+    return f"Fix required settings in `{path}`."
+
+
+def settings_invalid(path: str) -> str:
+    return f"Fix settings in `{path}`."
+
+
+def notifications_object_required(path: str) -> str:
+    return f"`notifications` in `{path}` must be a JSON object."
+
+
+def unsupported_notification_settings(path: str) -> str:
+    return f"Remove unsupported notification settings from `{path}`."
+
+
+def notification_urls_array_required(path: str) -> str:
+    return f"`notifications.urls` in `{path}` must be a JSON array."
+
+
+def notification_url_string_required(path: str) -> str:
+    return f"A notification URL in `{path}` must be a string."
+
+
+def notifications_invalid(path: str) -> str:
+    return f"Fix notifications in `{path}`."
+
+
+def misconfigured_items(path: str | None = None) -> str:
+    if path:
+        return f"Fix items in `{path}`; details are logged."
+    return "Fix misconfigured items; details are logged."
+
+
+DIAGNOSTIC_WRITE_FAILED = "Technical details could not be written to the error log."
+
+
 # --- HTTP status details (shared HTTP helper) -----------------------------------------
 
 EMPTY_RESPONSE_DETAIL = "Empty response or no status code received from server"

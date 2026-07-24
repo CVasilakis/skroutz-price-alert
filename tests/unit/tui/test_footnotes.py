@@ -185,9 +185,7 @@ def test_application_owned_notes_fit_one_row_at_default_panel_width():
 
     rendered = _render(notes)
     content_rows = [
-        line[1:-1].strip()
-        for line in rendered.splitlines()[1:-1]
-        if line[1:-1].strip()
+        line[1:-1].strip() for line in rendered.splitlines()[1:-1] if line[1:-1].strip()
     ]
     assert len(notes.notes) >= 10
     assert len(content_rows) == len(notes.notes)
@@ -211,9 +209,7 @@ def test_dynamic_file_error_notes_use_at_most_two_rows(note):
 
     rendered = _render(notes)
     content_rows = [
-        line[1:-1].strip()
-        for line in rendered.splitlines()[1:-1]
-        if line[1:-1].strip()
+        line[1:-1].strip() for line in rendered.splitlines()[1:-1] if line[1:-1].strip()
     ]
     assert 1 <= len(content_rows) <= 2
     assert note.replace("`", "") in rendered.replace("\n", "")

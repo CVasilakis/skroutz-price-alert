@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -29,11 +30,54 @@ def test_dev_setup_help_has_no_install_side_effect():
     assert "without systemd" in result.stdout
 
 
+def test_check_help_needs_no_venv_and_describes_full_gate():
+    result = _run("scripts/check.sh", "--help")
+    assert result.returncode == 0, result.stderr
+    assert "complete local pre-push gate" in result.stdout
+
+
+def test_check_rejects_unknown_mode_before_running_tools():
+    result = _run("scripts/check.sh", "unknown")
+    assert result.returncode == 2
+    assert "Invalid argument" in result.stderr
+
+
 def test_dev_setup_contains_no_service_or_user_data_operations():
     contents = (ROOT / "scripts/dev-setup.sh").read_text(encoding="utf-8")
     assert "systemctl" not in contents
     assert "config/" not in contents
     assert "state/" not in contents
+    assert '"$SCRIPT_DIR/scripts/install-hooks.sh"' in contents
+
+
+def test_hook_installer_sets_only_repository_local_hooks_path(tmp_path):
+    project = tmp_path / "project"
+    scripts = project / "scripts"
+    scripts.mkdir(parents=True)
+    shutil.copy(ROOT / "scripts" / "install-hooks.sh", scripts / "install-hooks.sh")
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+
+    result = subprocess.run(
+        ["sh", str(scripts / "install-hooks.sh")],
+        cwd=project,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    configured = subprocess.run(
+        ["git", "-C", str(project), "config", "--local", "--get", "core.hooksPath"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    assert configured.stdout.strip() == ".githooks"
+
+
+def test_versioned_pre_push_hook_runs_the_canonical_gate():
+    hook = ROOT / ".githooks" / "pre-push"
+    assert os.access(hook, os.X_OK)
+    assert 'exec "$PROJECT_ROOT/scripts/check.sh"' in hook.read_text(encoding="utf-8")
 
 
 def test_plugin_check_binds_static_analysis_to_selected_venv():

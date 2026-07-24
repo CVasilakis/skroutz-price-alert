@@ -51,6 +51,14 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar,
         mock.patch("core.status.load_targets", return_value=(load,)),
         mock.patch("core.status.load_general_config") as load_general,
+        mock.patch(
+            "core.status.record_general_diagnostic",
+            side_effect=lambda general: general,
+        ),
+        mock.patch(
+            "core.status.record_target_load_diagnostic",
+            return_value=True,
+        ),
         mock.patch("core.status._check_for_updates", return_value=False),
         mock.patch("core.status.render_config_panel") as render_config,
         mock.patch("core.status.signal.signal"),

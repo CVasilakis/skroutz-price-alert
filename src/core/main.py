@@ -10,18 +10,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rich.console import Console
 
-from core.application.orchestrator import ScrapingOrchestrator
-from core.application.preflight import (
-    load_targets,
+from core.application.diagnostics import (
+    record_general_diagnostic,
     record_target_load_diagnostic,
-    validate_notification_preflight,
 )
+from core.application.orchestrator import ScrapingOrchestrator
+from core.application.preflight import load_targets, validate_notification_preflight
 from core.application.reporting import SilentRunReporter
 from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
 from core.exceptions import UpdateCheckError
 from core.general import ReminderService, load_general_config
 from core.general.reminder_state import ReminderStateRepository, general_state_path
-from core.infrastructure.logging import save_diagnostic, save_traceback, setup_global_logging
+from core.infrastructure.logging import save_traceback, setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
 from core.infrastructure.updates import check_for_updates
 from core.notifications.apprise import AppriseNotifier
@@ -69,12 +69,7 @@ def main() -> None:
     # outcomes drive each scraper's 'Config' row and its per-target broken-config skip.
     selected_plugins = [catalog.get(target) for target in targets_to_run]
     load_results = load_targets(selected_plugins, CONFIG_DIR)
-    general = load_general_config(CONFIG_DIR)
-    if isinstance(general.diagnostic, str) and general.diagnostic.strip():
-        try:
-            save_diagnostic(general.diagnostic)
-        except OSError:
-            pass
+    general = record_general_diagnostic(load_general_config(CONFIG_DIR))
 
     if not args.quiet:
         install_interrupt_handler()

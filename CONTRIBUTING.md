@@ -30,12 +30,13 @@ That command checks the descriptor and example, runs only the target-owned tests
 and statically checks the plugin package. Run the full suite before submitting:
 
 ```sh
-./venv/bin/python3 -m pytest
-./venv/bin/basedpyright src
-./venv/bin/ruff check src tests
-./venv/bin/ruff format --check src tests
-git ls-files -z -- '*.sh' | xargs -0 ./venv/bin/shellcheck -x --exclude=SC2086,SC2046
+./scripts/check.sh
 ```
+
+`./scripts/dev-setup.sh` enables the repository's versioned pre-push hook, which
+runs this same non-mutating gate. To apply safe Python formatting before checking,
+run `./venv/bin/ruff check --fix src tests` followed by
+`./venv/bin/ruff format src tests`.
 
 ## Package layout
 
@@ -273,11 +274,7 @@ Run the focused verifier and full acceptance suite:
 
 ```sh
 ./scripts/plugin-check.sh --<target>
-./venv/bin/python3 -m pytest
-./venv/bin/basedpyright src
-./venv/bin/ruff check src tests
-./venv/bin/ruff format --check src tests
-git ls-files -z -- '*.sh' | xargs -0 ./venv/bin/shellcheck -x --exclude=SC2086,SC2046
+./scripts/check.sh
 ```
 
 Coverage is collected to show untested production lines, but its percentage is

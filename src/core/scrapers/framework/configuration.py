@@ -7,11 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from core import messages
 from core.exceptions import ConfigFileError
 from core.infrastructure.persistence import read_json_object, storage_diagnostic
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.model import RegisteredPlugin
-from core.settings import MISSING, ResolvedSettings, validate_settings_block
+from core.settings import (
+    MISSING,
+    ResolvedSettings,
+    SettingsValidationError,
+    SettingsValidationProblem,
+    validate_settings_block,
+)
 
 TOP_LEVEL_KEYS = frozenset({"settings", "items"})
 COMMON_ITEM_KEYS = frozenset(
@@ -78,12 +85,12 @@ class TargetConfigLoader:
         unknown = set(document) - TOP_LEVEL_KEYS
         if unknown:
             raise self._validation_error(
-                f"Remove unsupported keys from `{self.display_path}`.",
+                messages.unsupported_config_keys(self.display_path),
                 f"unknown top-level keys: {', '.join(sorted(unknown))}",
             )
         if not isinstance(document.get("items"), list):
             raise self._validation_error(
-                f"`items` in `{self.display_path}` must be a JSON array.",
+                messages.items_array_required(self.display_path),
                 f"items is {type(document.get('items')).__name__}, expected list",
             )
         return document
@@ -91,15 +98,15 @@ class TargetConfigLoader:
     def _settings(self, document: dict[str, Any]) -> ResolvedSettings:
         try:
             return validate_settings_block(self.plugin.setting_specs, document.get("settings", {}))
-        except ValueError as exc:
-            if str(exc) == "settings must be an object":
-                message = f"`settings` in `{self.display_path}` must be a JSON object."
-            elif str(exc).startswith("unknown settings:"):
-                message = f"Remove unsupported settings from `{self.display_path}`."
-            elif str(exc).startswith("required settings missing or invalid:"):
-                message = f"Fix required settings in `{self.display_path}`."
+        except SettingsValidationError as exc:
+            if exc.problem is SettingsValidationProblem.NOT_OBJECT:
+                message = messages.settings_object_required(self.display_path)
+            elif exc.problem is SettingsValidationProblem.UNKNOWN:
+                message = messages.unsupported_settings(self.display_path)
+            elif exc.problem is SettingsValidationProblem.REQUIRED:
+                message = messages.required_settings_invalid(self.display_path)
             else:
-                message = f"Fix settings in `{self.display_path}`."
+                message = messages.settings_invalid(self.display_path)
             raise ConfigFileError(
                 message,
                 storage_diagnostic(

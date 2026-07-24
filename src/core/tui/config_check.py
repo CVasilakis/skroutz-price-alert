@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markup import escape
 
+from core import messages
 from core.general.configuration import GeneralConfigLoad
 from core.tui.panel import StatusPanelBuilder
 
@@ -35,6 +36,7 @@ def config_view(
     faulty_indices: Sequence[int] = (),
     error: str | None = None,
     source_path: str | None = None,
+    diagnostic_saved: bool | None = None,
 ) -> ConfigView:
     """Builds the :class:`ConfigView` for a target from its load outcome.
 
@@ -43,18 +45,19 @@ def config_view(
         faulty_indices (Sequence[int]): 1-based indices of items failing validation.
         error (str | None): The storage failure message, if the load failed.
         source_path (str | None): Explicit project-relative config path for remediation.
+        diagnostic_saved (bool | None): Whether available technical details were logged.
 
     Returns:
         ConfigView: The icon/value/footnote for the 'Config' row.
     """
     if error is not None:
+        if diagnostic_saved is False:
+            error = f"{error} {messages.DIAGNOSTIC_WRITE_FAILED}"
         return ConfigView("❗", "[red]Failed[/red]", error, has_warning=True)
     if faulty_indices:
-        note = (
-            f"Fix items in `{source_path}`; details are logged."
-            if source_path
-            else "Fix misconfigured items; details are logged."
-        )
+        note = messages.misconfigured_items(source_path)
+        if diagnostic_saved is False:
+            note = f"{note} {messages.DIAGNOSTIC_WRITE_FAILED}"
         value = f"{count} loaded, [yellow]{len(faulty_indices)} misconfigured[/yellow]"
         return ConfigView("🟡", value, note, has_warning=True)
     return ConfigView("✅", f"{count} loaded", None, has_warning=False)
@@ -118,7 +121,10 @@ def _append_general_rows(panel: StatusPanelBuilder, general: GeneralConfigLoad) 
     strict general-config boundary. Iterates whatever ``GENERAL_SETTING_SPECS`` declares.
     """
     if general.settings is None:
-        ref = panel.add_note_ref(general.settings_error or "General settings are unavailable.")
+        detail = general.settings_error or "General settings are unavailable."
+        if general.diagnostic_saved is False:
+            detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
+        ref = panel.add_note_ref(detail)
         panel.add_row("❗", "General Config", f"[red]Failed{ref}[/red]")
         return
     for view in general.settings.views():
@@ -161,6 +167,8 @@ def _append_notifications_row(panel: StatusPanelBuilder, general: GeneralConfigL
         )
     else:
         detail = notifications.error or "No notification URLs found in `config/general.json`."
+        if general.diagnostic_saved is False:
+            detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
         ref = panel.add_note_ref(detail)
         panel.add_row("❗", "Notifications", f"[red]Not configured{ref}{permission_ref}[/red]")
 

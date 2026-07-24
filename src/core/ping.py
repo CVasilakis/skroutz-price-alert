@@ -8,9 +8,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rich.console import Console
 
+from core import messages
+from core.application.diagnostics import record_general_diagnostic
 from core.constants import CONFIG_DIR
 from core.general import load_general_config
-from core.infrastructure.logging import save_diagnostic, setup_global_logging
+from core.infrastructure.logging import setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
 from core.notifications.apprise import AppriseNotifier
 from core.tui.ping import build_ping_panel
@@ -28,14 +30,11 @@ def main():
     console = Console()
     console.print()
 
-    general = load_general_config(CONFIG_DIR)
-    if isinstance(general.diagnostic, str) and general.diagnostic.strip():
-        try:
-            save_diagnostic(general.diagnostic)
-        except OSError:
-            pass
+    general = record_general_diagnostic(load_general_config(CONFIG_DIR))
     notifications = general.notifications
     config_error_msg = notifications.error or ""
+    if config_error_msg and general.diagnostic_saved is False:
+        config_error_msg = f"{config_error_msg} {messages.DIAGNOSTIC_WRITE_FAILED}"
     valid_lookup = set(notifications.valid_urls)
     url_entries = [(url, url in valid_lookup) for url in notifications.configured_urls]
 

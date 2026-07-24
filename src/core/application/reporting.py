@@ -29,13 +29,14 @@ class SilentRunReporter(RunReporter):
     ) -> None:
         self.target_logger = target_logger
         if config.error:
-            target_logger.warning(f"❗ Monitored Items: Failed ({config.error})")
+            detail = config.error
+            if config.diagnostic_saved is False:
+                detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
+            target_logger.warning(f"❗ Monitored Items: Failed ({detail})")
         elif config.faulty_indices:
-            detail = (
-                f"Fix items in `{config.source_path}`; details are logged."
-                if config.source_path
-                else "Fix misconfigured items; details are logged."
-            )
+            detail = messages.misconfigured_items(config.source_path)
+            if config.diagnostic_saved is False:
+                detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
             target_logger.warning(
                 f"❗ Monitored Items: {config.loaded_count} loaded, "
                 f"{len(config.faulty_indices)} misconfigured "

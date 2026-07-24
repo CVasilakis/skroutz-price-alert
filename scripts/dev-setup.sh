@@ -68,4 +68,5 @@ for row in $PLUGIN_REQUIREMENTS; do
 done
 IFS="$OLD_IFS"
 "$VENV_PYTHON" -m pip check
+"$SCRIPT_DIR/scripts/install-hooks.sh"
 printf '%s\n' "Development environment is ready."

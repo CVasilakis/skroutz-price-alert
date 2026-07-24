@@ -9,7 +9,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from core import messages
 from core.exceptions import ConfigFileError
+
+
+def _safe_absolute_path(path: str | os.PathLike[str]) -> str:
+    """Return an absolute diagnostic path without masking an active failure."""
+    try:
+        return str(Path(path).resolve())
+    except (OSError, RuntimeError):
+        return os.path.abspath(os.fspath(path))
 
 
 def storage_diagnostic(
@@ -21,12 +30,16 @@ def storage_diagnostic(
     """Build a complete, log-only diagnostic for one storage operation."""
     lines = [
         f"Storage operation: {operation}",
-        f"Path: {Path(path).resolve()}",
+        f"Path: {_safe_absolute_path(path)}",
         f"Exception: {type(error).__name__}",
     ]
     error_number = getattr(error, "errno", None)
-    if error_number is not None:
-        lines.append(f"Errno: {error_number} ({os.strerror(error_number)})")
+    if isinstance(error_number, int):
+        try:
+            error_name = os.strerror(error_number)
+        except (OverflowError, ValueError):
+            error_name = "unknown error"
+        lines.append(f"Errno: {error_number} ({error_name})")
     if isinstance(error, json.JSONDecodeError):
         lines.append(
             f"JSON location: line {error.lineno}, column {error.colno}, character {error.pos}"
@@ -44,25 +57,18 @@ def storage_diagnostic(
     return "\n".join(lines)
 
 
-def _display(path: str) -> str:
-    return f"`{path}`"
-
-
 def read_failure_message(display_path: str, error: BaseException) -> str:
     """Classify a low-level read failure into concise presentation wording."""
     if isinstance(error, json.JSONDecodeError):
-        return (
-            f"Fix JSON in {_display(display_path)} at "
-            f"line {error.lineno}, column {error.colno}."
-        )
+        return messages.malformed_json(display_path, error.lineno, error.colno)
     if isinstance(error, UnicodeError):
-        return f"{_display(display_path)} is not valid UTF-8."
+        return messages.invalid_utf8(display_path)
     if isinstance(error, OSError) and (
         isinstance(error, PermissionError)
         or error.errno in {errno.EACCES, errno.EPERM, errno.EROFS}
     ):
-        return f"Cannot read {_display(display_path)}; check its permissions."
-    return f"Cannot read {_display(display_path)}; check the error log."
+        return messages.storage_read_permission(display_path)
+    return messages.storage_read_failed(display_path)
 
 
 def save_failure_message(display_path: str, error: BaseException) -> str:
@@ -71,8 +77,8 @@ def save_failure_message(display_path: str, error: BaseException) -> str:
         isinstance(error, PermissionError)
         or error.errno in {errno.EACCES, errno.EPERM, errno.EROFS}
     ):
-        return f"Cannot save {_display(display_path)}; check its permissions."
-    return f"Cannot save {_display(display_path)}; check the error log."
+        return messages.storage_save_permission(display_path)
+    return messages.storage_save_failed(display_path)
 
 
 def read_json_object(
@@ -91,7 +97,7 @@ def read_json_object(
         if not required:
             return None
         raise ConfigFileError(
-            f"Create missing `{shown_path}` from the plugin example.",
+            messages.missing_config(shown_path),
             storage_diagnostic(source, exc, operation="read configuration"),
         ) from exc
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -100,11 +106,9 @@ def read_json_object(
             storage_diagnostic(source, exc, operation="read configuration"),
         ) from exc
     if not isinstance(document, dict):
-        error = TypeError(
-            f"top-level JSON value is {type(document).__name__}, expected object"
-        )
+        error = TypeError(f"top-level JSON value is {type(document).__name__}, expected object")
         raise ConfigFileError(
-            f"`{shown_path}` must contain a JSON object.",
+            messages.json_object_required(shown_path),
             storage_diagnostic(source, error, operation="validate configuration"),
         )
     return document

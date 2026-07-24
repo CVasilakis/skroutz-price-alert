@@ -19,6 +19,8 @@ from core.settings.normalizers import (
     normalize_retention_days,
 )
 from core.settings.resolve import (
+    SettingsValidationError,
+    SettingsValidationProblem,
     resolve_settings,
     resolve_spec,
     setting_view,
@@ -32,6 +34,8 @@ __all__ = [
     "ResolvedSettings",
     "SettingStatus",
     "SettingView",
+    "SettingsValidationError",
+    "SettingsValidationProblem",
     "fold_token",
     "alias_form",
     "normalize_retention_days",

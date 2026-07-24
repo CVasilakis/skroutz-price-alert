@@ -32,6 +32,19 @@ def save_diagnostic(
         log_file.write(f"\n\n{'-' * 100}")
 
 
+def try_save_diagnostic(
+    diagnostic_detail: str,
+    *,
+    target_name: str | None = None,
+) -> bool:
+    """Best-effort diagnostic persistence for non-fatal reporting paths."""
+    try:
+        save_diagnostic(diagnostic_detail, target_name=target_name)
+    except OSError:
+        return False
+    return True
+
+
 class RichConsoleHandler(logging.Handler):
     """Custom handler that uses Rich for console output and supports padding."""
 

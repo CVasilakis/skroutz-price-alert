@@ -8,10 +8,11 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from core import messages
 from core.constants import EXIT_CODE_NOTIFICATION_CONFIG_ERROR
 from core.exceptions import ConfigFileError, StateFileError
 from core.general.configuration import GeneralConfigLoad
-from core.infrastructure.logging import get_target_logger, save_diagnostic
+from core.infrastructure.logging import get_target_logger
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.configuration import RowIssue, TargetConfigLoader
 from core.scrapers.framework.model import RegisteredPlugin
@@ -137,24 +138,6 @@ def load_targets(
     return results
 
 
-def record_target_load_diagnostic(load: TargetLoad) -> None:
-    """Append target config/state diagnostics without producing terminal output."""
-    diagnostics = [
-        detail
-        for detail in (
-            load.failure.diagnostic if load.failure is not None else None,
-            load.row_diagnostic,
-        )
-        if detail
-    ]
-    if not diagnostics:
-        return
-    try:
-        save_diagnostic("\n\n".join(diagnostics), target_name=load.target)
-    except OSError:
-        pass
-
-
 def validate_notification_preflight(
     targets_to_run: Sequence[str],
     general: GeneralConfigLoad,
@@ -163,10 +146,9 @@ def validate_notification_preflight(
     """Validate notification configuration for a quiet/background run."""
     notifications = general.notifications
     if not notifications.usable:
-        detail = (
-            notifications.error
-            or "No valid notification URLs found in `config/general.json`"
-        )
+        detail = notifications.error or "No valid notification URLs found in `config/general.json`"
+        if general.diagnostic_saved is False:
+            detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
         for target in targets_to_run:
             retention = (retention_by_target or {}).get(target, DEFAULT_LOG_RETENTION_DAYS)
             get_target_logger(target, True, retention).error(
@@ -191,6 +173,5 @@ __all__ = [
     "LoadFailureKind",
     "TargetLoad",
     "load_targets",
-    "record_target_load_diagnostic",
     "validate_notification_preflight",
 ]

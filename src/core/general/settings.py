@@ -27,6 +27,8 @@ from core.general.vocab import (
 from core.settings import (
     ResolvedSettings,
     SettingSpec,
+    SettingsValidationError,
+    SettingsValidationProblem,
     resolve_settings,
     unsupported_value_message,
     validate_settings_block,
@@ -41,6 +43,18 @@ KEY_REMINDER_DAY = "reminder_day"
 KEY_REMINDER_TIME = "reminder_time"
 
 
+class GeneralSettingsConfigError(ConfigFileError):
+    """A typed general-settings failure retaining ConfigFileError compatibility."""
+
+    def __init__(
+        self,
+        problem: SettingsValidationProblem,
+        detail: str,
+    ) -> None:
+        self.problem = problem
+        super().__init__(detail)
+
+
 def general_config_path(config_dir: str) -> str:
     """Returns the absolute path of the project-wide config file inside ``config_dir``."""
     return os.path.join(config_dir, GENERAL_CONFIG_FILENAME)
@@ -52,13 +66,13 @@ def resolve_general_settings(block: object | None) -> ResolvedSettings:
         return resolve_settings(GENERAL_SETTING_SPECS, None)
     try:
         return validate_settings_block(GENERAL_SETTING_SPECS, block)
-    except ValueError as exc:
+    except SettingsValidationError as exc:
         message = str(exc)
-        if message == "settings must be an object":
+        if exc.problem is SettingsValidationProblem.NOT_OBJECT:
             message = "General settings must be an object"
-        elif message.startswith("unknown settings:"):
+        elif exc.problem is SettingsValidationProblem.UNKNOWN:
             message = "Unknown general settings:" + message.removeprefix("unknown settings:")
-        raise ConfigFileError(message) from exc
+        raise GeneralSettingsConfigError(exc.problem, message) from exc
 
 
 def _decode(normalizer, raw):

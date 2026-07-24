@@ -4,10 +4,44 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import Enum
 
 from core.constants import APPRISE_PLACEHOLDERS
 
 KEY_URLS = "urls"
+
+
+class NotificationValidationProblem(str, Enum):
+    """Stable categories for notification configuration structure failures."""
+
+    NOT_OBJECT = "not_object"
+    UNKNOWN = "unknown"
+    URLS_NOT_ARRAY = "urls_not_array"
+    URL_NOT_STRING = "url_not_string"
+
+
+class NotificationValidationError(ValueError):
+    """A typed notification failure whose text remains backward compatible."""
+
+    def __init__(
+        self,
+        problem: NotificationValidationProblem,
+        *,
+        keys: Sequence[str] = (),
+        index: int | None = None,
+    ) -> None:
+        self.problem = problem
+        self.keys = tuple(keys)
+        self.index = index
+        if problem is NotificationValidationProblem.NOT_OBJECT:
+            message = "Notifications must be an object"
+        elif problem is NotificationValidationProblem.UNKNOWN:
+            message = f"Unknown notification settings: {', '.join(self.keys)}"
+        elif problem is NotificationValidationProblem.URLS_NOT_ARRAY:
+            message = 'Notification setting "urls" must be an array'
+        else:
+            message = f"Notification URL at JSON index {index} must be a string"
+        super().__init__(message)
 
 
 def is_valid_apprise_url(url: str) -> bool:
@@ -55,20 +89,26 @@ def resolve_notification_config(block: object | None) -> NotificationConfig:
     if block is None:
         return NotificationConfig()
     if not isinstance(block, Mapping):
-        raise ValueError("Notifications must be an object")
+        raise NotificationValidationError(NotificationValidationProblem.NOT_OBJECT)
 
-    unknown = set(block) - {KEY_URLS}
+    unknown = sorted(set(block) - {KEY_URLS})
     if unknown:
-        raise ValueError(f"Unknown notification settings: {', '.join(sorted(unknown))}")
+        raise NotificationValidationError(
+            NotificationValidationProblem.UNKNOWN,
+            keys=unknown,
+        )
 
     raw_urls = block.get(KEY_URLS, [])
     if not isinstance(raw_urls, list):
-        raise ValueError('Notification setting "urls" must be an array')
+        raise NotificationValidationError(NotificationValidationProblem.URLS_NOT_ARRAY)
 
     configured: list[str] = []
     for index, raw_url in enumerate(raw_urls, 1):
         if not isinstance(raw_url, str):
-            raise ValueError(f"Notification URL at JSON index {index} must be a string")
+            raise NotificationValidationError(
+                NotificationValidationProblem.URL_NOT_STRING,
+                index=index,
+            )
         configured.append(raw_url.strip())
 
     configured_urls = tuple(configured)
@@ -79,6 +119,8 @@ def resolve_notification_config(block: object | None) -> NotificationConfig:
 __all__ = [
     "KEY_URLS",
     "NotificationConfig",
+    "NotificationValidationError",
+    "NotificationValidationProblem",
     "classify_notification_urls",
     "is_valid_apprise_url",
     "resolve_notification_config",

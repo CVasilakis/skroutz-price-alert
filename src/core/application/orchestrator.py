@@ -10,11 +10,8 @@ from types import FrameType
 
 from core import messages
 from core.application.contracts import ConfigOutcome, RunOutcome, RunReporter
-from core.application.preflight import (
-    LoadFailureKind,
-    TargetLoad,
-    record_target_load_diagnostic,
-)
+from core.application.diagnostics import record_target_load_diagnostic
+from core.application.preflight import LoadFailureKind, TargetLoad
 from core.application.reporting import SilentRunReporter
 from core.application.target import TargetRunner
 from core.infrastructure.locking import acquire_lock
@@ -56,14 +53,14 @@ class ScrapingOrchestrator:
         self._interrupt_message = f"Received signal {describe_signal(signum)}"
         self.interrupted = True
 
-    def _start_target(self, load: TargetLoad) -> logging.Logger:
+    def _start_target(self, load: TargetLoad) -> tuple[logging.Logger, bool | None]:
         plugin = load.plugin
         logger = get_target_logger(
             plugin.target,
             self.quiet,
             load.settings[plugin.setting(KEY_RETENTION)],
         )
-        record_target_load_diagnostic(load)
+        diagnostic_saved = record_target_load_diagnostic(load)
         config_error = (
             load.failure.detail
             if load.failure is not None and load.failure.kind is LoadFailureKind.CONFIG
@@ -78,9 +75,10 @@ class ScrapingOrchestrator:
                 tuple(load.faulty_indices),
                 config_error,
                 f"config/{plugin.config_filename}",
+                diagnostic_saved,
             ),
         )
-        return logger
+        return logger, diagnostic_saved
 
     def run(self) -> int:
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -92,14 +90,17 @@ class ScrapingOrchestrator:
                 break
             plugin = load.plugin
             self._current_target = plugin.target
-            self._current_logger = self._start_target(load)
+            self._current_logger, diagnostic_saved = self._start_target(load)
 
             if load.failure is not None:
                 if load.failure.kind is LoadFailureKind.STATE:
+                    notes: str | list[str] = load.failure.detail
+                    if diagnostic_saved is False:
+                        notes = [load.failure.detail, messages.DIAGNOSTIC_WRITE_FAILED]
                     self.reporter.log_error(
                         "Storage",
                         messages.state_load_failed(plugin.target),
-                        load.failure.detail,
+                        notes,
                     )
                     outcome.storage_error = True
                 else:

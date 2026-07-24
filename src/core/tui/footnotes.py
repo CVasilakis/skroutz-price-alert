@@ -9,7 +9,6 @@ from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
 
-
 _PROSE_WHITESPACE = re.compile(r"\s+")
 _CONTROL_WHITESPACE = re.compile(r"[\t\r\n\f\v]+")
 

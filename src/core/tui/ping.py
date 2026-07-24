@@ -59,10 +59,7 @@ def build_ping_panel(
                 panel.add_row("🛑", "Delivery Failed", f"{prefix}{escape(identifier)}{ref}")
 
     if not url_entries:
-        detail = (
-            config_error_msg
-            or "Add notification URLs to `config/general.json`, then retry."
-        )
+        detail = config_error_msg or "Add notification URLs to `config/general.json`, then retry."
         ref = panel.add_note_ref(detail)
         panel.add_row(
             "🛑",

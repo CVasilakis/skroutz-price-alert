@@ -38,6 +38,7 @@ class ConfigOutcome:
     faulty_indices: tuple[int, ...] = ()
     error: str | None = None
     source_path: str | None = None
+    diagnostic_saved: bool | None = None
 
 
 @dataclass(frozen=True)

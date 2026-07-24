@@ -1,5 +1,5 @@
-import json
 import errno
+import json
 from datetime import datetime, timezone
 from unittest import mock
 
@@ -12,6 +12,7 @@ from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec, UrlField
 from core.scrapers.framework.compiler import compile_plugin
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.state import JsonStateRepository, StateEntry
+from core.settings import SettingsValidationError, SettingsValidationProblem
 
 
 @pytest.fixture
@@ -135,9 +136,7 @@ def test_malformed_existing_state_is_not_overwritten(tmp_path):
     repo = JsonStateRepository(path, display_path="state/x.json")
     with pytest.raises(StateFileError) as caught:
         repo.load()
-    assert str(caught.value) == (
-        "Fix invalid state in `state/x.json`; details are logged."
-    )
+    assert str(caught.value) == ("Fix invalid state in `state/x.json`; details are logged.")
     assert "schema_version must be 2" in (caught.value.diagnostic_detail or "")
     assert str(path.resolve()) in (caught.value.diagnostic_detail or "")
     assert path.read_bytes() == original
@@ -153,9 +152,7 @@ def test_state_read_and_save_permission_failures_are_concise(tmp_path):
     ):
         with pytest.raises(StateFileError) as read_failure:
             repo.load()
-    assert str(read_failure.value) == (
-        "Cannot read `state/x.json`; check its permissions."
-    )
+    assert str(read_failure.value) == ("Cannot read `state/x.json`; check its permissions.")
     assert "Errno: 13" in (read_failure.value.diagnostic_detail or "")
 
     repo.load()
@@ -166,9 +163,7 @@ def test_state_read_and_save_permission_failures_are_concise(tmp_path):
     ):
         with pytest.raises(StateFileError) as save_failure:
             repo.save()
-    assert str(save_failure.value) == (
-        "Cannot save `state/x.json`; check its permissions."
-    )
+    assert str(save_failure.value) == ("Cannot save `state/x.json`; check its permissions.")
     assert "Errno: 13" in (save_failure.value.diagnostic_detail or "")
 
 
@@ -195,9 +190,7 @@ def test_state_read_and_save_permission_failures_are_concise(tmp_path):
         ),
     ],
 )
-def test_strict_document_shapes(
-    tmp_path, document, display_message, diagnostic_message, plugin
-):
+def test_strict_document_shapes(tmp_path, document, display_message, diagnostic_message, plugin):
     _write(tmp_path / "config" / "fakestore.json", document)
     with pytest.raises(ConfigFileError) as caught:
         TargetConfigLoader(plugin, str(tmp_path / "config")).load()
@@ -328,10 +321,10 @@ def test_url_free_required_fields_and_required_settings(tmp_path):
     )
     with pytest.raises(ConfigFileError) as caught:
         TargetConfigLoader(plugin, str(path.parent)).load()
-    assert str(caught.value) == (
-        "Fix required settings in `config/identifier_store.json`."
-    )
+    assert str(caught.value) == ("Fix required settings in `config/identifier_store.json`.")
     assert "api_token" in (caught.value.diagnostic_detail or "")
+    assert isinstance(caught.value.__cause__, SettingsValidationError)
+    assert caught.value.__cause__.problem is SettingsValidationProblem.REQUIRED
 
     _write(
         path,

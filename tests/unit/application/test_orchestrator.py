@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 
+import core.infrastructure.logging
 from core.application.contracts import ItemRunOutcome, RunReporter
 from core.application.orchestrator import ScrapingOrchestrator
 from core.application.preflight import LoadFailure, LoadFailureKind, TargetLoad
@@ -18,7 +19,6 @@ from core.constants import (
     EXIT_CODE_STORAGE_ERROR,
 )
 from core.exceptions import LockAcquisitionError, PluginDependencyError, StateFileError
-import core.infrastructure.logging
 from core.scrapers.api import ScraperPlugin, TrackedItem, UrlField
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.compiler import compile_plugin
@@ -79,9 +79,7 @@ def _runtime_seams(monkeypatch):
 
 
 def test_config_and_state_failures_keep_distinct_exit_status_and_reporting():
-    config_run, _, _, config_reporter = _orchestrator(
-        _load(error="bad config")
-    )
+    config_run, _, _, config_reporter = _orchestrator(_load(error="bad config"))
     assert config_run.run() == EXIT_CODE_PRODUCTS_ERROR
     assert config_reporter.start_target.call_args.args[3].error == "bad config"
 
@@ -110,9 +108,7 @@ def test_load_diagnostic_is_logged_before_the_target_is_reported():
 
     assert run.run() == EXIT_CODE_PRODUCTS_ERROR
 
-    content = (
-        Path(core.infrastructure.logging.LOGS_DIR) / "store" / "errors.txt"
-    ).read_text()
+    content = (Path(core.infrastructure.logging.LOGS_DIR) / "store" / "errors.txt").read_text()
     assert "Path: /absolute/config/store.json" in content
     assert "Errno: 13" in content
     assert reporter.start_target.called
@@ -172,6 +168,28 @@ def test_one_state_commit_failure_is_storage_error(monkeypatch):
     ).read_text()
     assert "Path: /project/state/store.json" in diagnostic_log
     assert "Detail: disk full" in diagnostic_log
+
+
+def test_secondary_diagnostic_write_failure_is_reported(monkeypatch):
+    load = _load(error="bad config")
+    load = TargetLoad(
+        plugin=load.plugin,
+        settings=load.settings,
+        failure=LoadFailure(
+            LoadFailureKind.CONFIG,
+            "Fix `config/store.json`.",
+            "Path: /absolute/config/store.json\nException: PermissionError",
+        ),
+    )
+    monkeypatch.setattr(
+        "core.application.diagnostics.try_save_diagnostic",
+        mock.Mock(return_value=False),
+    )
+    run, _, _, reporter = _orchestrator(load)
+
+    assert run.run() == EXIT_CODE_PRODUCTS_ERROR
+    config = reporter.start_target.call_args.args[3]
+    assert config.diagnostic_saved is False
 
 
 def test_success_commits_once_and_aggregates_notification_failures(monkeypatch):

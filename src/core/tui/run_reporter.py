@@ -73,6 +73,7 @@ class InteractiveRunReporter(RunReporter):
             list(config.faulty_indices),
             config.error,
             config.source_path,
+            config.diagnostic_saved,
         )
         self.settings_rows = self._build_settings_rows(settings_view, view)
 
@@ -263,9 +264,7 @@ class InteractiveRunReporter(RunReporter):
         self, icon: str, name: str, value: str, notes: Notes = None, attempt_notes: Notes = None
     ) -> None:
         """Logs a standard result directly into the rich table."""
-        refs = self._build_note_refs(
-            self._note_list(attempt_notes) + self._note_list(notes)
-        )
+        refs = self._build_note_refs(self._note_list(attempt_notes) + self._note_list(notes))
         self.rows.append((icon, escape(name), f"{value}{refs}"))
         if self.live:
             self.live.update(self._generate_panel())
@@ -304,9 +303,7 @@ class InteractiveRunReporter(RunReporter):
         self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None
     ) -> None:
         """Logs a warning entry to the live display."""
-        refs = self._build_note_refs(
-            self._note_list(attempt_notes) + self._note_list(notes)
-        )
+        refs = self._build_note_refs(self._note_list(attempt_notes) + self._note_list(notes))
         value = inline_text(warning_str, style="yellow")
         value.append_text(Text.from_markup(refs))
         self.rows.append(
@@ -323,9 +320,7 @@ class InteractiveRunReporter(RunReporter):
         self, name: str, error_str: str, notes: Notes = None, attempt_notes: Notes = None
     ) -> None:
         """Logs an error entry to the live display."""
-        refs = self._build_note_refs(
-            self._note_list(attempt_notes) + self._note_list(notes)
-        )
+        refs = self._build_note_refs(self._note_list(attempt_notes) + self._note_list(notes))
         value = inline_text(error_str)
         value.append_text(Text.from_markup(refs))
         self.rows.append(("❗", escape(name), value))

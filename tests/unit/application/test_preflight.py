@@ -5,13 +5,18 @@ import pytest
 from support import catalog_sandbox, fake_plugin
 
 import core.infrastructure.logging
+from core.application.diagnostics import (
+    record_general_diagnostic,
+    record_target_load_diagnostic,
+)
 from core.application.preflight import (
     LoadFailure,
     LoadFailureKind,
     TargetLoad,
     load_targets,
-    record_target_load_diagnostic,
 )
+from core.general.configuration import GeneralConfigLoad
+from core.notifications.configuration import NotificationConfig
 from core.settings import resolve_settings
 
 
@@ -108,3 +113,20 @@ def test_target_load_rejects_inconsistent_failure_combinations(plugin):
         )
     with pytest.raises(ValueError, match="detail"):
         LoadFailure(LoadFailureKind.CONFIG, " ")
+
+
+def test_general_diagnostic_write_status_is_propagated(monkeypatch):
+    load = GeneralConfigLoad(
+        NotificationConfig(error="broken"),
+        None,
+        diagnostic="Path: /absolute/config/general.json",
+    )
+    monkeypatch.setattr(
+        "core.application.diagnostics.try_save_diagnostic",
+        lambda _detail: False,
+    )
+
+    recorded = record_general_diagnostic(load)
+
+    assert recorded is not load
+    assert recorded.diagnostic_saved is False

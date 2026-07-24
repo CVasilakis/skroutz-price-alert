@@ -5,7 +5,6 @@ from unittest import mock
 import pytest
 
 import core.general.configuration
-from core.exceptions import ConfigFileError
 from core.general.configuration import GENERAL_PERMISSION_WARNING, load_general_config
 from core.general.reminder import ReminderService
 from core.general.reminder_schedule import most_recent_slot, next_due_slot
@@ -19,10 +18,11 @@ from core.general.settings import (
     SPEC_REMINDER,
     SPEC_REMINDER_DAY,
     SPEC_REMINDER_TIME,
+    GeneralSettingsConfigError,
     resolve_general_settings,
 )
 from core.notifications.configuration import NotificationConfig
-from core.settings import SettingStatus
+from core.settings import SettingStatus, SettingsValidationProblem
 
 
 def _config(root, settings, notifications=None):
@@ -62,8 +62,10 @@ def test_general_config_is_strict_and_typed(tmp_path):
     assert resolved[SPEC_REMINDER_DAY] == "Monday"
     assert resolved[SPEC_REMINDER_TIME] == "08:30"
     assert resolved.status(SPEC_REMINDER) is SettingStatus.OK
-    with pytest.raises(ConfigFileError):
+    with pytest.raises(GeneralSettingsConfigError) as caught:
         resolve_general_settings({"unknown": 1})
+    assert caught.value.problem is SettingsValidationProblem.UNKNOWN
+    assert str(caught.value) == "Unknown general settings: unknown"
 
 
 @pytest.mark.parametrize(
@@ -196,9 +198,7 @@ def test_settings_failure_is_isolated_from_notifications(tmp_path):
     loaded = load_general_config(str(tmp_path / "config"))
     assert loaded.notifications.valid_urls == ("json://localhost",)
     assert loaded.settings is None
-    assert loaded.settings_error == (
-        "Remove unsupported settings from `config/general.json`."
-    )
+    assert loaded.settings_error == ("Remove unsupported settings from `config/general.json`.")
     assert loaded.diagnostic is not None
     assert "Unknown general settings: unknown" in loaded.diagnostic
 

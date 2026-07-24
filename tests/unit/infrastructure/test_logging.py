@@ -11,6 +11,7 @@ import logging
 import unittest
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+from unittest import mock
 
 import core.infrastructure.logging
 from core.infrastructure.logging import (
@@ -18,6 +19,7 @@ from core.infrastructure.logging import (
     get_target_logger,
     save_diagnostic,
     save_traceback,
+    try_save_diagnostic,
 )
 
 _ids = itertools.count()
@@ -142,9 +144,17 @@ def test_save_diagnostic_uses_target_or_root_log_without_console_output():
 
     root = Path(core.infrastructure.logging.LOGS_DIR)
     assert "Path: /absolute/config.json" in (root / "errors.txt").read_text()
-    assert "Path: /absolute/state.json" in (
-        root / "insomnia" / "errors.txt"
-    ).read_text()
+    assert "Path: /absolute/state.json" in (root / "insomnia" / "errors.txt").read_text()
+
+
+def test_try_save_diagnostic_reports_secondary_write_failure(monkeypatch):
+    monkeypatch.setattr(
+        core.infrastructure.logging,
+        "save_diagnostic",
+        mock.Mock(side_effect=PermissionError("denied")),
+    )
+
+    assert not try_save_diagnostic("Path: /absolute/config.json")
 
 
 if __name__ == "__main__":
