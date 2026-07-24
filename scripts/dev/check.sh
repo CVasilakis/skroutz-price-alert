@@ -1,11 +1,11 @@
 #!/bin/sh
 set -eu
 
-PROJECT_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+PROJECT_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
 CHECK_MODE="${1:-full}"
 
 print_help() {
-    printf '%s\n' "Usage: ./scripts/check.sh [full|static|shell|tests]"
+    printf '%s\n' "Usage: ./scripts/dev/check.sh [full|static|shell|tests]"
     printf '%s\n' "Run the project's non-mutating local/CI acceptance checks."
     printf '%s\n' "With no flag, run the complete local pre-push gate."
 }
@@ -28,7 +28,7 @@ require_python() {
         *) command -v "$CHECK_PYTHON" >/dev/null 2>&1 ;;
     esac || {
         printf '%s\n' "Python interpreter not found: $CHECK_PYTHON" >&2
-        printf '%s\n' "Run ./scripts/dev-setup.sh first." >&2
+        printf '%s\n' "Run ./scripts/dev/setup.sh first." >&2
         exit 127
     }
 }
@@ -49,13 +49,17 @@ run_shell() {
         shellcheck_binary="$(command -v shellcheck || true)"
     fi
     [ -n "$shellcheck_binary" ] || {
-        printf '%s\n' "Shellcheck is not available. Run ./scripts/dev-setup.sh first." >&2
+        printf '%s\n' "Shellcheck is not available. Run ./scripts/dev/setup.sh first." >&2
         exit 127
     }
     (
         cd "$PROJECT_ROOT"
-        git ls-files -z -- '*.sh' |
-            xargs -0 "$shellcheck_binary" -x --exclude=SC2086,SC2046
+        # The child sh, not this parent script, must expand $1 and $2.
+        # shellcheck disable=SC2016
+        git ls-files --cached --others --exclude-standard -z -- '*.sh' |
+            xargs -0 -n 1 sh -c '
+                [ ! -f "$2" ] || "$1" -x --exclude=SC2086,SC2046 "$2"
+            ' sh "$shellcheck_binary"
     )
 }
 

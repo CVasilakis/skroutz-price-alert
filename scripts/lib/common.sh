@@ -6,6 +6,7 @@
 #
 #     . "$SCRIPT_DIR/lib/common.sh"          # from scripts/*.sh
 #     . "$SCRIPT_DIR/scripts/lib/common.sh"  # from root install.sh / update.sh
+#     . "$PROJECT_ROOT/scripts/lib/common.sh" # from scripts/dev/*.sh
 #
 # Caller contract: define BASE_DIR (the repository root) BEFORE sourcing.
 # This file intentionally does NOT set `set -eu` (the sourcing script owns its

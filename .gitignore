@@ -215,8 +215,10 @@ state/
 !src/core/general/config.example.json
 *.pyc
 *.txt
-!requirements*.txt
-!tests/ui/snapshots/*.txt
+!/requirements.txt
+!/scripts/dev/requirements-dev.txt
+!/src/core/scrapers/plugins/*/requirements.txt
+!/tests/ui/snapshots/*.txt
 *.bak
 *.log.*
 GEMINI.md

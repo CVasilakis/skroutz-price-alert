@@ -21,6 +21,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            scripts/dev/requirements-dev.txt
+            src/core/scrapers/plugins/*/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -31,13 +35,13 @@ jobs:
           for f in src/core/scrapers/plugins/*/requirements.txt; do
             [ -f "$f" ] && pip install -r "$f"
           done
-          pip install -r requirements-dev.txt
+          pip install -r scripts/dev/requirements-dev.txt
           pip check
 
       - name: Run tests
         # Coverage is report-only: never add a percentage failure threshold here
         # or in pyproject.toml. Test outcomes, not coverage totals, gate CI.
-        run: SCROOGE_CHECK_PYTHON=python ./scripts/check.sh tests
+        run: SCROOGE_CHECK_PYTHON=python ./scripts/dev/check.sh tests
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -47,10 +51,10 @@ jobs:
       # SC2086/SC2046 are excluded: unquoted expansion of plugin lists is the
       # library's documented word-splitting idiom (see scripts/lib/common.sh).
       # -x follows the sourced common.sh via the "shellcheck source=" directives.
-      # The list comes from git so a new script anywhere in the repo is covered
-      # the moment it is tracked (tests/shell/test_shellcheck.py mirrors this).
+      # The list comes from git so tracked and new nonignored scripts anywhere
+      # in the repo are covered before they are committed.
       - name: Run shellcheck
-        run: ./scripts/check.sh shell
+        run: ./scripts/dev/check.sh shell
 
   typecheck:
     runs-on: ubuntu-latest
@@ -60,15 +64,20 @@ jobs:
         with:
           python-version: '3.10'
           cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            scripts/dev/requirements-dev.txt
+            src/core/scrapers/plugins/*/requirements.txt
       - name: Install typing toolchain
         run: |
           python -m venv venv
-          venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
+          venv/bin/python -m pip install -r requirements.txt \
+            -r scripts/dev/requirements-dev.txt
           for f in src/core/scrapers/plugins/*/requirements.txt; do
             [ -f "$f" ] && venv/bin/python -m pip install -r "$f"
           done
       - name: Run static checks
-        run: ./scripts/check.sh static
+        run: ./scripts/dev/check.sh static
 
   plugin-isolation:
     runs-on: ubuntu-latest
@@ -78,6 +87,10 @@ jobs:
         with:
           python-version: '3.10'
           cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            scripts/dev/requirements-dev.txt
+            src/core/scrapers/plugins/*/requirements.txt
 
       - name: Verify every plugin with only its declared dependencies
         run: |
@@ -87,9 +100,10 @@ jobs:
             python -m venv "$env_dir/venv"
             plugin_python="$env_dir/venv/bin/python3"
             "$plugin_python" -m pip install --upgrade pip
-            "$plugin_python" -m pip install -r requirements.txt -r requirements-dev.txt
+            "$plugin_python" -m pip install -r requirements.txt \
+              -r scripts/dev/requirements-dev.txt
             [ -z "$requirement" ] || "$plugin_python" -m pip install -r "$requirement"
             "$plugin_python" -m pip check
             SCROOGE_PLUGIN_CHECK_PYTHON="$plugin_python" \
-              ./scripts/plugin-check.sh "--$target"
+              ./scripts/dev/plugin-check.sh "--$target"
           done < <(PYTHONPATH=src python -m core.scrapers.tooling.cli requirements)

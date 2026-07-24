@@ -336,7 +336,7 @@ This will send a test message to each configured Apprise URL(s). It will output 
 
 ### Helper Scripts
 
-The project includes several helper scripts to manage your background scraper services and update the application. Most are located in the `scripts/` directory, while the install and update scripts are in the root directory. They support a `--help` flag and can be applied to specific targets.
+The project includes several helper scripts to manage your background scraper services and update the application. User-facing management commands are located directly in the `scripts/` directory, while the install and update scripts are in the root directory. Developer-only setup, validation, and plugin-contributor commands are grouped under `scripts/dev/` and documented in `CONTRIBUTING.md`. The management scripts support a `--help` flag and can be applied to specific targets.
 
 #### Install & Add Scrapers
 Sets up the Python virtual environment and installs the systemd timer(s) and service(s). Run it as many times as you like to add more scrapers later:
@@ -597,9 +597,9 @@ To see all the undergoing feature requests or to request a new feature, please c
 ## 🤝 Contributing & Issues
 
 New stores use the in-repository plugin contract: run
-`./scripts/plugin-create.sh`, keep `plugin.py` import-light, export `Client` from
+`./scripts/dev/plugin-create.sh`, keep `plugin.py` import-light, export `Client` from
 `client.py`, add mocked target-owned tests, and run
-`./scripts/plugin-check.sh --<target>`. The immutable plugin
+`./scripts/dev/plugin-check.sh --<target>`. The immutable plugin
 catalog and shell manifest discover the new adapter automatically, so framework,
 CLI, UI, and management-script edits are unnecessary. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the complete input, URL, field, setting, result,

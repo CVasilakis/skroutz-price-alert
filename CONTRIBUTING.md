@@ -4,18 +4,19 @@ Scrapers are checked-in price adapters. A contribution is strictly additive: it
 creates `src/core/scrapers/plugins/<target>/` and `tests/plugins/<target>/` and does not edit
 the framework, catalog, shell tools, UI, root documentation, workflows, or snapshots.
 The package name becomes the CLI flag and the stem for config, state, logs, and
-systemd units.
+systemd units. Contributor commands and their development requirements are grouped
+under `scripts/dev/`.
 
 ## Quick start
 
 Generate both plugin-owned directories without installing or touching systemd:
 
 ```sh
-./scripts/plugin-create.sh acme_store \
+./scripts/dev/plugin-create.sh acme_store \
   --display-name "Acme Store" \
   --domain store.example \
   --url-prefix /products/
-./scripts/dev-setup.sh --acme_store
+./scripts/dev/setup.sh --acme_store
 ```
 
 The scaffold refuses existing destinations and leaves a failing behavior-test
@@ -23,20 +24,23 @@ placeholder. Implement the client with mocked response fixtures, replace that te
 complete the package-local guide, and run the one-target acceptance command:
 
 ```sh
-./scripts/plugin-check.sh --acme_store
+./scripts/dev/plugin-check.sh --acme_store
 ```
 
 That command checks the descriptor and example, runs only the target-owned tests,
 and statically checks the plugin package. Run the full suite before submitting:
 
 ```sh
-./scripts/check.sh
+./scripts/dev/check.sh
 ```
 
-`./scripts/dev-setup.sh` enables the repository's versioned pre-push hook, which
-runs this same non-mutating gate. To apply safe Python formatting before checking,
-run `./venv/bin/ruff check --fix src tests` followed by
-`./venv/bin/ruff format src tests`.
+`./scripts/dev/setup.sh` enables the repository's versioned pre-push hook, which
+runs this same non-mutating gate. Rerunning setup upgrades the core, development,
+and selected plugin dependencies in the shared root venv to their latest compatible
+versions. To apply safe Python formatting before checking, run
+`./venv/bin/ruff check --fix src tests` followed by
+`./venv/bin/ruff format src tests`. Markdown documentation is intentionally
+hand-formatted and excluded from Ruff.
 
 ## Package layout
 
@@ -273,8 +277,8 @@ combined constraints with `pip check`.
 Run the focused verifier and full acceptance suite:
 
 ```sh
-./scripts/plugin-check.sh --<target>
-./scripts/check.sh
+./scripts/dev/plugin-check.sh --<target>
+./scripts/dev/check.sh
 ```
 
 Coverage is collected to show untested production lines, but its percentage is

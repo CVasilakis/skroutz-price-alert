@@ -193,7 +193,7 @@ def create_plugin(repo_root: Path, request: ScaffoldRequest) -> tuple[Path, Path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="./scripts/plugin-create.sh",
+        prog="./scripts/dev/plugin-create.sh",
         description="Create an additive in-repository scraper plugin scaffold.",
     )
     parser.add_argument("target")
@@ -214,8 +214,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"Created {source}")
     print(f"Created {tests}")
-    print(f"Next: ./scripts/dev-setup.sh --{args.target}")
-    print(f"Then: ./scripts/plugin-check.sh --{args.target}")
+    print(f"Next: ./scripts/dev/setup.sh --{args.target}")
+    print(f"Then: ./scripts/dev/plugin-check.sh --{args.target}")
     return 0
 
 

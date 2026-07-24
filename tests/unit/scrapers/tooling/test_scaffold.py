@@ -118,6 +118,6 @@ def test_scaffold_cli_reports_success_and_collision(tmp_path, capsys):
         str(tmp_path),
     ]
     assert main(args) == 0
-    assert "plugin-check.sh --acme_store" in capsys.readouterr().out
+    assert "./scripts/dev/plugin-check.sh --acme_store" in capsys.readouterr().out
     assert main(args) == 1
     assert "refusing to overwrite" in capsys.readouterr().err

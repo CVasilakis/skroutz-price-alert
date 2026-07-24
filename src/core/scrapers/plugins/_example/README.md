@@ -1,9 +1,9 @@
 # Example scraper plugin
 
-Use `./scripts/plugin-create.sh` to generate a source package and its matching test
+Use `./scripts/dev/plugin-create.sh` to generate a source package and its matching test
 package from this minimal shape. Update the descriptor, client, example config,
 package-local guide, and generated behavior tests, then run
-`./scripts/plugin-check.sh --<target>`.
+`./scripts/dev/plugin-check.sh --<target>`.
 
 Runtime discovery requires `__init__.py`, `plugin.py`, and `client.py`; the contributor
 verifier also requires this README, `config.example.json`, and a corresponding

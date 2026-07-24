@@ -3,7 +3,8 @@
 This suite automatically verifies **everything Scrooge Alert draws in the terminal** — the
 live scraping panel of a normal run, the `--status`, `--ping`, and Configuration Check
 panels, and the colored transcripts printed by the management shell scripts
-(`install.sh`, `update.sh`, `scripts/*.sh`). It exists so that changes to the UI (a new
+(`install.sh`, `update.sh`, and the user-facing `scripts/*.sh`). It exists so that
+changes to the UI (a new
 footnote, a reworded message, a border-color rule, a layout tweak) are caught the moment
 they alter what a user would see, without anyone having to run the app and manually
 reproduce failure states.
@@ -132,7 +133,7 @@ the *consumers*.**
 Everything runs through the project's venv. Tests are written with the stdlib `unittest`
 `TestCase` API but run under **pytest**, which is configured in the repo-root
 `pyproject.toml` (`pythonpath = ["src", "tests"]`, `testpaths = ["tests"]`). Install
-the complete development toolchain once with `./scripts/dev-setup.sh`.
+the complete development toolchain once with `./scripts/dev/setup.sh`.
 
 ### Run the whole suite
 

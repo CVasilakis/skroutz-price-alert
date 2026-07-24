@@ -2,4 +2,4 @@
 set -eu
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
-exec "$PROJECT_ROOT/scripts/check.sh"
+exec "$PROJECT_ROOT/scripts/dev/check.sh"

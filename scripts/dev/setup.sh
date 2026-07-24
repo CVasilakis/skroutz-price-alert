@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
-VENV_PYTHON="$SCRIPT_DIR/venv/bin/python3"
+PROJECT_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+VENV_PYTHON="$PROJECT_ROOT/venv/bin/python3"
 SELECTED=""
 
 print_help() {
-    printf '%s\n' "Usage: ./scripts/dev-setup.sh [--<target>]"
+    printf '%s\n' "Usage: ./scripts/dev/setup.sh [--<target>]"
     printf '%s\n' "Create/update the development venv without systemd or user-data changes."
     printf '%s\n' "With no target, install every plugin's private dependencies."
 }
@@ -32,7 +32,7 @@ command -v python3 >/dev/null 2>&1 || {
     exit 1
 }
 PLUGIN_REQUIREMENTS="$(
-    PYTHONPATH="$SCRIPT_DIR/src" python3 -m core.scrapers.tooling.cli requirements
+    PYTHONPATH="$PROJECT_ROOT/src" python3 -m core.scrapers.tooling.cli requirements
 )"
 FOUND=0
 OLD_IFS="$IFS"
@@ -51,10 +51,10 @@ if [ -n "$SELECTED" ] && [ "$FOUND" -eq 0 ]; then
     exit 1
 fi
 
-[ -d "$SCRIPT_DIR/venv" ] || python3 -m venv "$SCRIPT_DIR/venv"
+[ -d "$PROJECT_ROOT/venv" ] || python3 -m venv "$PROJECT_ROOT/venv"
 "$VENV_PYTHON" -m pip install --upgrade pip
-"$VENV_PYTHON" -m pip install -r "$SCRIPT_DIR/requirements.txt" \
-    -r "$SCRIPT_DIR/requirements-dev.txt"
+"$VENV_PYTHON" -m pip install --upgrade -r "$PROJECT_ROOT/requirements.txt" \
+    -r "$PROJECT_ROOT/scripts/dev/requirements-dev.txt"
 
 IFS='
 '
@@ -63,10 +63,10 @@ for row in $PLUGIN_REQUIREMENTS; do
     requirement="${row#*	}"
     [ -z "$SELECTED" ] || [ "$target" = "$SELECTED" ] || continue
     if [ -n "$requirement" ]; then
-        "$VENV_PYTHON" -m pip install -r "$requirement"
+        "$VENV_PYTHON" -m pip install --upgrade -r "$requirement"
     fi
 done
 IFS="$OLD_IFS"
 "$VENV_PYTHON" -m pip check
-"$SCRIPT_DIR/scripts/install-hooks.sh"
+"$PROJECT_ROOT/scripts/dev/install-hooks.sh"
 printf '%s\n' "Development environment is ready."
