@@ -13,5 +13,5 @@
 │   ✅    Last Execution Status             OK                            │
 │   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
 │                                                                         │
-│   [1] Problematic items found at JSON index: 2, 5.                      │
+│   [1] Fix items in config/skroutz.json; details are logged.             │
 ╰─────────────────────────────────────────────────────────────────────────╯

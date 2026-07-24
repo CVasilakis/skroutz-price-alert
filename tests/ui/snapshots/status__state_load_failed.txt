@@ -1,7 +1,8 @@
-# border: yellow
+# border: red
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
 │   ✅    Monitored Items                   5 loaded                      │
+│   ❗    State                             Failed [1]                    │
 │   ✅    Execution Interval                1h                            │
 │   ✅    Log Retention                     7 days                        │
 │   ✅    Notify On Errors                  true                          │
@@ -9,8 +10,8 @@
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Systemd Timer Active              Yes                           │
 │   ✅    Last Execution Time               Sun 2026-06-28 13:00:00 UTC   │
-│   🟡    Last Execution Status             Notification Warning [1]      │
+│   ✅    Last Execution Status             OK                            │
 │   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
 │                                                                         │
-│   [1] A configured notification failed. Run ./scripts/run.sh --ping.    │
+│   [1] Fix JSON in state/skroutz.json at line 8, column 2.               │
 ╰─────────────────────────────────────────────────────────────────────────╯

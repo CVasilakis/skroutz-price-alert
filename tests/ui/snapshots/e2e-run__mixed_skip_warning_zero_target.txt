@@ -12,6 +12,6 @@
 │                                           (ProductNotFoundError) [2]    │
 │   🟡    Untargeted Product                55.0 € (Target: 0.0 €)        │
 │                                                                         │
-│   [1] The skip field was set to true in the configuration file.         │
+│   [1] Skipped by the config's skip setting.                             │
 │   [2] Product not found or removed (HTTP 404).                          │
 ╰─────────────────────────────────────────────────────────────────────────╯

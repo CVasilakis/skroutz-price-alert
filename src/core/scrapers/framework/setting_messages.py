@@ -24,4 +24,4 @@ def notify_errors_warning_message() -> str:
 
 
 def suppress_repeated_price_alerts_warning_message() -> str:
-    return "Invalid suppress_repeated_price_alerts setting. Defaulting to false."
+    return "Invalid repeated-alert setting. Using default false."

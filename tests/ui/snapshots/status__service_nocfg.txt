@@ -1,7 +1,7 @@
-# border: green
+# border: red
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   ✅    Monitored Items                   5 loaded                      │
+│   ❗    Monitored Items                   Failed [1]                    │
 │   ✅    Execution Interval                1h (default)                  │
 │   ✅    Log Retention                     7 days (default)              │
 │   ✅    Notify On Errors                  true (default)                │
@@ -11,4 +11,6 @@
 │   ✅    Last Execution Time               Sun 2026-06-28 13:00:00 UTC   │
 │   ✅    Last Execution Status             OK                            │
 │   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
+│                                                                         │
+│   [1] Create missing config/skroutz.json from the plugin example.       │
 ╰─────────────────────────────────────────────────────────────────────────╯

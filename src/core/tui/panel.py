@@ -1,4 +1,3 @@
-import re
 from collections.abc import Iterable, Sequence
 
 from rich.console import Console, Group
@@ -8,9 +7,26 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
+from core.tui.footnotes import FootnoteRegistry
+
+
+PANEL_WIDTH = 75
+
+
+def panel_content_width(panel_width: int) -> int:
+    """Return usable cells after the panel border and default horizontal padding."""
+    return max(1, panel_width - 4)
+
+
+def primary_column_max(panel_width: int) -> int:
+    """Return the responsive maximum for a panel's primary label/name column."""
+    return min(48, max(12, round(panel_content_width(panel_width) * 3 / 7)))
+
 
 def uniform_column_widths(
-    rows: Iterable[Sequence], columns: tuple[int, ...] = (0, 1)
+    rows: Iterable[Sequence],
+    columns: tuple[int, ...] = (0, 1),
+    maximums: dict[int, int] | None = None,
 ) -> dict[int, int]:
     """Max rendered cell width per column index across all rows (non-str cells ignored).
 
@@ -23,15 +39,20 @@ def uniform_column_widths(
     Args:
         rows (Iterable[Sequence]): The row tuples to measure (``(icon, label, value)``).
         columns (tuple[int, ...]): The column indices to size. Defaults to icon and label.
+        maximums (dict[int, int] | None): Optional terminal-cell caps by column.
 
     Returns:
         dict[int, int]: Column index -> fixed width, for columns that had a string cell.
     """
     widths: dict[int, int] = {}
+    maximums = maximums or {}
     for row in rows:
         for c in columns:
             if c < len(row) and isinstance(row[c], str):
-                widths[c] = max(widths.get(c, 0), Text.from_markup(row[c]).cell_len)
+                measured = Text.from_markup(row[c]).cell_len
+                if c in maximums:
+                    measured = min(measured, maximums[c])
+                widths[c] = max(widths.get(c, 0), measured)
     return widths
 
 
@@ -58,18 +79,23 @@ class StatusPanelBuilder:
     # Internal row entries are tagged tuples: ("row", icon, label, value) or ("sep",).
     _SEP: tuple[str] = ("sep",)
 
-    def __init__(self, title: str, width: int = 75):
+    def __init__(self, title: str, width: int = PANEL_WIDTH):
         """Initializes the panel builder.
 
         Args:
             title (str): The panel title displayed in the border.
-            width (int): The panel width in characters. Defaults to 75.
+            width (int): The panel width in terminal cells. Defaults to ``PANEL_WIDTH``.
         """
         self.title = title
         self.width = width
         self._rows: list[tuple] = []
-        self.notes: list[str] = []
+        self._footnotes = FootnoteRegistry()
         self.icons: list[str] = []
+
+    @property
+    def notes(self) -> tuple[str, ...]:
+        """Return the panel's normalized footnotes."""
+        return self._footnotes.notes
 
     @staticmethod
     def _new_table(col_widths: dict[int, int] | None = None) -> Table:
@@ -83,7 +109,13 @@ class StatusPanelBuilder:
         col_widths = col_widths or {}
         table = Table(show_header=False, box=None, padding=(0, 2))
         table.add_column("Icon", justify="center", width=col_widths.get(0))
-        table.add_column("Label", style="bold", width=col_widths.get(1))
+        table.add_column(
+            "Label",
+            style="bold",
+            width=col_widths.get(1),
+            no_wrap=True,
+            overflow="ellipsis",
+        )
         table.add_column("Value")
         return table
 
@@ -118,11 +150,7 @@ class StatusPanelBuilder:
         Returns:
             str: The Rich markup string for the footnote reference.
         """
-        note_stripped = note.strip()
-        if note_stripped and not note_stripped.endswith("."):
-            note_stripped += "."
-        self.notes.append(note_stripped)
-        return f" [dim default][{len(self.notes)}][/dim default]"
+        return self._footnotes.add(note)
 
     def get_panel_color(self) -> str:
         """Determines the panel border color based on the tracked icons.
@@ -147,7 +175,10 @@ class StatusPanelBuilder:
         """
         # Size the icon/label columns once across every section's rows so the value column
         # starts at the same position above and below each divider.
-        widths = uniform_column_widths((e[1], e[2], e[3]) for e in self._rows if e[0] == "row")
+        widths = uniform_column_widths(
+            ((e[1], e[2], e[3]) for e in self._rows if e[0] == "row"),
+            maximums={1: primary_column_max(self.width)},
+        )
 
         sections: list = []
         current = self._new_table(widths)
@@ -189,12 +220,7 @@ class StatusPanelBuilder:
         blocks: list = self._build_sections()
 
         if self.notes:
-            notes_lines = [""]
-            for i, note in enumerate(self.notes, 1):
-                escaped_note = escape(note)
-                escaped_note = re.sub(r"`([^`]+)`", r"[cyan]\1[/cyan]", escaped_note)
-                notes_lines.append(f"  [{i}] {escaped_note}")
-            blocks.append(Text.from_markup("\n".join(notes_lines), style="dim"))
+            blocks.append(self._footnotes.render())
 
         renderable = blocks[0] if len(blocks) == 1 else Group(*blocks)
 
@@ -206,3 +232,12 @@ class StatusPanelBuilder:
                 width=self.width,
             )
         )
+
+
+__all__ = [
+    "PANEL_WIDTH",
+    "StatusPanelBuilder",
+    "panel_content_width",
+    "primary_column_max",
+    "uniform_column_widths",
+]

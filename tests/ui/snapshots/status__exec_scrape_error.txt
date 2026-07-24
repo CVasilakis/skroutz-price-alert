@@ -12,6 +12,5 @@
 │   ❗    Last Execution Status             Scraping Failed [1]           │
 │   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
 │                                                                         │
-│   [1] A parser or unexpected scraper failure exhausted all retries.     │
-│ Check logs/skroutz/output.log.                                          │
+│   [1] Retries exhausted; check logs/skroutz/output.log.                 │
 ╰─────────────────────────────────────────────────────────────────────────╯

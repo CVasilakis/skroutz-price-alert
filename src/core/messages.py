@@ -16,7 +16,7 @@ production place and is pinned by the snapshots.
 # --- Success-row notes (application execution) ---------------------------------------
 
 NOTE_NOTIFIED_OK = "Notification delivered to all valid apprise URL(s)."
-NOTE_NOTIFIED_FAIL = "Notification delivery failed for some apprise URL(s)."
+NOTE_NOTIFIED_FAIL = "Notification failed; test with `./scripts/run.sh --ping`."
 NOTE_NOTIFIED_NONE = "No notification sent (notifications not configured)."
 NOTE_REPEATED_PRICE_ALERT_SUPPRESSED = "Repeated price alert suppressed."
 
@@ -99,7 +99,7 @@ def advert_alerts_suppressed(count: int) -> str:
 
 # --- Skips, warnings, and failures (application execution) ----------------------------
 
-NOTE_SKIP_FIELD = "The skip field was set to true in the configuration file."
+NOTE_SKIP_FIELD = "Skipped by the config's `skip` setting."
 WARN_STALE_NOTIFICATION_FAILED = "Failed to deliver the stale-products notification."
 WARN_ERROR_NOTIFICATION_FAILED = "Failed to deliver the scraping-errors notification."
 NOTE_RATE_LIMIT_ABORTED = "Rate limit reached; scraping aborted."
@@ -145,7 +145,7 @@ def errors_log_pointer(target: str) -> str:
     Returns:
         str: The footnote wording.
     """
-    return f"See logs/{target}/errors.txt for details."
+    return f"See `logs/{target}/errors.txt` for details."
 
 
 def plugin_dependency_detail(name: str, missing: str | None = None) -> str:
@@ -160,19 +160,19 @@ def plugin_dependency_detail(name: str, missing: str | None = None) -> str:
     """
     missing_note = f" (missing module: {missing})" if missing else ""
     return (
-        f"Scraper '{name}' requires dependencies that are not installed{missing_note}. "
-        f"Install them with: ./install.sh --{name}"
+        f"Scraper '{name}' requires missing dependencies{missing_note}. "
+        f"Install with `./install.sh --{name}`."
     )
 
 
 def state_load_failed(target: str) -> str:
     """Describe a machine-state read failure without implying config mutation."""
-    return f"Failed to load state/{target}.json file!"
+    return "Scrape state could not be loaded."
 
 
 def state_save_failed(target: str) -> str:
     """Describe a machine-state commit failure."""
-    return f"Failed to update state/{target}.json file!"
+    return "Latest scrape state was not saved."
 
 
 # --- HTTP status details (shared HTTP helper) -----------------------------------------

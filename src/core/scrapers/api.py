@@ -3,6 +3,12 @@
 Plugin descriptor modules may import this module without loading any transport,
 parser, persistence, or UI dependency.  The framework deliberately owns item
 decoding and JSON persistence; plugins declare data and implement only a client.
+
+Plugin-authored setting warnings and modeled skip-exception messages are plain
+text. Plugins cannot create Rich footnotes or references. Optional paired
+backticks may mark commands, paths, or other code-like fragments; Rich tags are
+displayed literally. Do not add wrapping or indentation: the TUI safely wraps
+text of any length.
 """
 
 from __future__ import annotations

@@ -12,5 +12,5 @@
 │   ✅    Last Execution Status             OK                            │
 │   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
 │                                                                         │
-│   [1] The config/skroutz.json file contains invalid JSON format.        │
+│   [1] Fix JSON in config/skroutz.json at line 12, column 4.             │
 ╰─────────────────────────────────────────────────────────────────────────╯

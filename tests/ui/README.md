@@ -21,7 +21,7 @@ write a scenario.
 The UI is rendered with the [Rich](https://rich.readthedocs.io/) library into bordered
 panels. Getting it right means caring about things that only show up *when rendered*:
 
-- Does a long footnote **wrap** cleanly inside the 75-character panel, or spill/overflow?
+- Does a long footnote **wrap** cleanly inside the configured panel width, or spill/overflow?
 - Is the panel **border color** right (green = good, yellow = warning, red = error,
   blue = in-progress)?
 - Do item names **truncate** correctly? Are the **icons** (✅ 🟡 ❗ 🛑 🎉 ⏳) the ones
@@ -490,7 +490,7 @@ synthetic). Keep it that way: don't introduce a scenario that reads live data.
 A snapshot is only useful if the same input always renders the same bytes. The harness
 enforces that:
 
-- **Fixed width.** The recording console is a fixed width (≥ the 75-char panel), so the
+- **Fixed width.** The recording console is wider than the configured/default panel, so the
   panel and its footnote wrapping are reproduced identically regardless of your real
   terminal size.
 - **Pinned clock.** The scraping `Spinner` picks its frame from the clock; the capture

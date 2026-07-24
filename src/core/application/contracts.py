@@ -37,6 +37,7 @@ class ConfigOutcome:
     loaded_count: int
     faulty_indices: tuple[int, ...] = ()
     error: str | None = None
+    source_path: str | None = None
 
 
 @dataclass(frozen=True)

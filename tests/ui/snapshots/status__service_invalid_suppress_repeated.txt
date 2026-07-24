@@ -12,6 +12,5 @@
 │   ✅    Last Execution Status             OK                            │
 │   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
 │                                                                         │
-│   [1] Invalid suppress_repeated_price_alerts setting. Defaulting to     │
-│ false.                                                                  │
+│   [1] Invalid repeated-alert setting. Using default false.              │
 ╰─────────────────────────────────────────────────────────────────────────╯

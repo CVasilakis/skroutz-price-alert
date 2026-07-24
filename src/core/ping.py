@@ -10,7 +10,7 @@ from rich.console import Console
 
 from core.constants import CONFIG_DIR
 from core.general import load_general_config
-from core.infrastructure.logging import setup_global_logging
+from core.infrastructure.logging import save_diagnostic, setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
 from core.notifications.apprise import AppriseNotifier
 from core.tui.ping import build_ping_panel
@@ -29,6 +29,11 @@ def main():
     console.print()
 
     general = load_general_config(CONFIG_DIR)
+    if isinstance(general.diagnostic, str) and general.diagnostic.strip():
+        try:
+            save_diagnostic(general.diagnostic)
+        except OSError:
+            pass
     notifications = general.notifications
     config_error_msg = notifications.error or ""
     valid_lookup = set(notifications.valid_urls)

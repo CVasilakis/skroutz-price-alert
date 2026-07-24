@@ -58,13 +58,24 @@ class TestMainWiring(unittest.TestCase):
     def test_reminder_not_run_when_preflight_aborts(self):
         # A fatal preflight (e.g. missing notifications in service mode) exits before the
         # reminder/orchestrator phase, so no heartbeat is attempted on an unusable config.
+        failed_load = mock.MagicMock()
+        failed_load.target = "skroutz"
+        failed_load.settings.__getitem__.return_value = 7
         with (
             mock.patch.object(sys, "argv", ["main", "--quiet"]),
             mock.patch("core.main.setup_global_logging", autospec=True),
             mock.patch("core.main.PluginCatalog", autospec=True) as Catalog,
             mock.patch("core.main.ClientLoader", autospec=True),
-            mock.patch("core.main.load_targets", autospec=True, return_value=[]),
+            mock.patch(
+                "core.main.load_targets",
+                autospec=True,
+                return_value=[failed_load],
+            ),
             mock.patch("core.main.load_general_config", autospec=True),
+            mock.patch(
+                "core.main.record_target_load_diagnostic",
+                autospec=True,
+            ) as record_diagnostic,
             mock.patch("core.main.validate_notification_preflight", autospec=True, return_value=3),
             mock.patch("core.main.AppriseNotifier", autospec=True),
             mock.patch("core.main.ReminderStateRepository", autospec=True),
@@ -76,6 +87,7 @@ class TestMainWiring(unittest.TestCase):
                 core.main.main()
 
         self.assertEqual(caught.exception.code, 3)
+        record_diagnostic.assert_called_once_with(failed_load)
         ReminderService.return_value.run_once.assert_not_called()
         Orchestrator.assert_not_called()
 

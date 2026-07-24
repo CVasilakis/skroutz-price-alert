@@ -5,13 +5,13 @@ from rich.console import Console
 from core.application.contracts import PriceOutcome
 from core.settings import SettingStatus, SettingView
 from core.tui.config_check import add_setting_row, config_view
-from core.tui.panel import StatusPanelBuilder
+from core.tui.panel import PANEL_WIDTH, StatusPanelBuilder
 from core.tui.run_reporter import InteractiveRunReporter
 
 
 def _render(renderable) -> str:
     stream = io.StringIO()
-    Console(file=stream, color_system=None, width=100).print(renderable)
+    Console(file=stream, color_system=None, width=PANEL_WIDTH + 25).print(renderable)
     return stream.getvalue()
 
 
@@ -66,6 +66,20 @@ def test_exception_config_and_url_details_render_literally_inside_error_panel():
     assert str(panel.border_style) == "red"
 
 
+def test_interactive_error_row_backticks_are_dim_cyan_without_parsing_markup():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    reporter.log_error("Storage", "Could not save `[red]state/store.json[/red]`")
+    panel = reporter._generate_panel()
+    console = Console(width=PANEL_WIDTH + 25, color_system="truecolor")
+    segments = list(console.render(panel, console.options))
+
+    path = next(segment for segment in segments if "state/store.json" in segment.text)
+    assert str(path.style) == "dim cyan"
+    assert "[red]state/store.json[/red]" in "".join(segment.text for segment in segments)
+    assert "`" not in "".join(segment.text for segment in segments)
+
+
 def test_status_setting_callbacks_and_title_are_plain_text():
     panel = StatusPanelBuilder("[red]Store[/red]")
     add_setting_row(
@@ -73,7 +87,7 @@ def test_status_setting_callbacks_and_title_are_plain_text():
         SettingView("[red]Mode[/red]", "[blue]fast[/blue]", SettingStatus.OK),
     )
     output_stream = io.StringIO()
-    panel.render(Console(file=output_stream, color_system=None, width=100))
+    panel.render(Console(file=output_stream, color_system=None, width=PANEL_WIDTH + 25))
     output = output_stream.getvalue()
 
     assert "[red]Store[/red]" in output

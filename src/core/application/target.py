@@ -16,7 +16,7 @@ from core.application.preflight import TargetLoad
 from core.constants import OLD_ENTRY_HOURS
 from core.exceptions import LockAcquisitionError, PluginDependencyError, StorageFileError
 from core.infrastructure.locking import acquire_lock
-from core.infrastructure.logging import save_traceback
+from core.infrastructure.logging import save_diagnostic, save_traceback
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.clients import ClientLoader
@@ -121,6 +121,14 @@ class TargetRunner:
                         try:
                             load.state.save()
                         except StorageFileError as exc:
+                            if exc.diagnostic_detail:
+                                try:
+                                    save_diagnostic(
+                                        exc.diagnostic_detail,
+                                        target_name=plugin.target,
+                                    )
+                                except OSError:
+                                    pass
                             self.reporter.log_error(
                                 "Storage",
                                 messages.state_save_failed(plugin.target),

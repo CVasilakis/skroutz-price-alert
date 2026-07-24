@@ -5,8 +5,8 @@ wrapping, icons — no ANSI) plus a ``# border: <color>`` header is the golden a
 gallery uses the same :func:`paint` to render with full color to a live console.
 
 Determinism notes:
-* The console width is fixed and >= the 75-char panel width, so footnote wrapping inside
-  the panel is reproduced exactly while the surrounding width never shifts.
+* The console width is fixed relative to the configured panel width, so footnote wrapping
+  inside the panel is reproduced exactly while the surrounding width never shifts.
 * Color is explicitly enabled even when the developer exports ``NO_COLOR``; Rich's
   progress bar otherwise changes its *text glyphs*, not merely its ANSI styling.
 * ``get_time`` is pinned so the scraping-row ``Spinner`` renders a stable first frame.
@@ -18,11 +18,11 @@ import io
 
 from rich.console import Console
 
-from core.tui.panel import StatusPanelBuilder
+from core.tui.panel import PANEL_WIDTH, StatusPanelBuilder
 from ui.catalog._base import BuildResult
 
-# >= the 75-char panel width so panels render at full width with stable surrounding space.
-CONSOLE_WIDTH = 100
+# Keep a stable margin around the configured panel width.
+CONSOLE_WIDTH = PANEL_WIDTH + 25
 
 
 def make_recording_console() -> Console:

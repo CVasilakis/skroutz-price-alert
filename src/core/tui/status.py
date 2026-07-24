@@ -10,7 +10,7 @@ from core.tui.config_check import (
     add_config_row,
     add_setting_row,
 )
-from core.tui.panel import StatusPanelBuilder
+from core.tui.panel import PANEL_WIDTH, StatusPanelBuilder
 from core.tui.service_verdicts import classify_service_state
 
 
@@ -35,7 +35,7 @@ def build_not_installed_panel(target: str, display_name: str | None = None) -> P
         service_table,
         title=f"[bold]{escape(label)} Service Status[/bold]",
         border_style="red",
-        width=75,
+        width=PANEL_WIDTH,
     )
 
 
@@ -50,9 +50,7 @@ def build_orphan_panel(name: str) -> StatusPanelBuilder:
     """
     orphan_panel = StatusPanelBuilder(f"{name.capitalize()} Service Status (Orphaned)")
     ref = orphan_panel.add_note_ref(f"Run `./scripts/uninstall.sh --{name}` to remove it")
-    orphan_panel.add_row(
-        "❗", f"[red]This scraper was removed but is still scheduled.[/red]{ref}", ""
-    )
+    orphan_panel.add_row("❗", "Removed Scraper", f"[red]Still scheduled{ref}[/red]")
     return orphan_panel
 
 

@@ -13,7 +13,12 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 import core.infrastructure.logging
-from core.infrastructure.logging import NonEmptyFilter, get_target_logger, save_traceback
+from core.infrastructure.logging import (
+    NonEmptyFilter,
+    get_target_logger,
+    save_diagnostic,
+    save_traceback,
+)
 
 _ids = itertools.count()
 
@@ -126,6 +131,20 @@ class TestSaveTraceback(_LoggerCase):
         self._trigger(target_name=target)
         content = (Path(core.infrastructure.logging.LOGS_DIR) / target / "errors.txt").read_text()
         self.assertEqual(content.count("RuntimeError: boom"), 2)
+
+
+def test_save_diagnostic_uses_target_or_root_log_without_console_output():
+    save_diagnostic("Path: /absolute/config.json\nErrno: 13")
+    save_diagnostic(
+        "Path: /absolute/state.json\nException: PermissionError",
+        target_name="insomnia",
+    )
+
+    root = Path(core.infrastructure.logging.LOGS_DIR)
+    assert "Path: /absolute/config.json" in (root / "errors.txt").read_text()
+    assert "Path: /absolute/state.json" in (
+        root / "insomnia" / "errors.txt"
+    ).read_text()
 
 
 if __name__ == "__main__":

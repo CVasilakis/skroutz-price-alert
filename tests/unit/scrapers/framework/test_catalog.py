@@ -217,6 +217,7 @@ def test_runtime_compilation_does_not_require_contributor_docs(tmp_path):
         {"settings": [SettingSpec("bad\nkey", str, default="x")]},
         {"settings": [SettingSpec("safe", str, default="x", label="Bad\x7fLabel")]},
         {"settings": [SettingSpec("safe", str, default="x", display=lambda _value: "Bad\tValue")]},
+        {"settings": [SettingSpec("safe", str, default="x", warning="Bad\nWarning")]},
     ],
 )
 def test_catalog_strings_and_keys_are_shell_and_terminal_safe(changes):

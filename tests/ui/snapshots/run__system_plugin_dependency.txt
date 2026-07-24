@@ -8,9 +8,8 @@
 │   ✅    Suppress Repeated Price Alerts    false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ❗    System                            Scraper 'skroutz' requires    │
-│                                           dependencies that are not     │
-│                                           installed (missing module:    │
-│                                           tls_client). Install them     │
-│                                           with: ./install.sh            │
-│                                           --skroutz                     │
+│                                           missing dependencies          │
+│                                           (missing module:              │
+│                                           tls_client). Install with     │
+│                                           ./install.sh --skroutz.       │
 ╰─────────────────────────────────────────────────────────────────────────╯

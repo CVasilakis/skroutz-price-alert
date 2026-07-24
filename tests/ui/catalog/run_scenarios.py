@@ -750,7 +750,7 @@ def _():
         s.log_error(
             "Storage",
             messages.state_save_failed("skroutz"),
-            "Permission denied: 'state/skroutz.json'",
+            "Cannot save `state/skroutz.json`; check its permissions.",
         )
         s.complete_target()
 
@@ -836,7 +836,14 @@ def _():
 )
 def _():
     def script(s):
-        _start(s, config=ConfigOutcome(3, (2, 4)))
+        _start(
+            s,
+            config=ConfigOutcome(
+                3,
+                (2, 4),
+                source_path="config/skroutz.json",
+            ),
+        )
         s.log_price_result("Sony WH-1000XM5", 320.0, CURRENCY, 300.0, PriceOutcome.OK)
         s.complete_target()
 
@@ -894,7 +901,7 @@ def _():
 @scenario(
     Surface.RUN,
     "wrap_many_footnotes",
-    "Synthetic renderer stress: one row with six footnotes",
+    "Synthetic renderer stress: one row with ten footnotes",
     tags=("layout", "synthetic"),
 )
 def _():
@@ -913,6 +920,10 @@ def _():
                 "Synthetic renderer note two",
                 "Synthetic renderer note three",
                 "Synthetic renderer note four",
+                "Synthetic renderer note five",
+                "Synthetic renderer note six",
+                "Synthetic renderer note seven",
+                "Synthetic renderer note eight",
             ],
             attempt_notes=_attempts("ScraperParseError", "ServerError"),
         )

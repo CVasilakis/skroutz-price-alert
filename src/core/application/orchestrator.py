@@ -10,7 +10,11 @@ from types import FrameType
 
 from core import messages
 from core.application.contracts import ConfigOutcome, RunOutcome, RunReporter
-from core.application.preflight import LoadFailureKind, TargetLoad
+from core.application.preflight import (
+    LoadFailureKind,
+    TargetLoad,
+    record_target_load_diagnostic,
+)
 from core.application.reporting import SilentRunReporter
 from core.application.target import TargetRunner
 from core.infrastructure.locking import acquire_lock
@@ -59,6 +63,7 @@ class ScrapingOrchestrator:
             self.quiet,
             load.settings[plugin.setting(KEY_RETENTION)],
         )
+        record_target_load_diagnostic(load)
         config_error = (
             load.failure.detail
             if load.failure is not None and load.failure.kind is LoadFailureKind.CONFIG
@@ -68,7 +73,12 @@ class ScrapingOrchestrator:
             plugin.display_name,
             logger,
             load.settings.views(),
-            ConfigOutcome(load.count, tuple(load.faulty_indices), config_error),
+            ConfigOutcome(
+                load.count,
+                tuple(load.faulty_indices),
+                config_error,
+                f"config/{plugin.config_filename}",
+            ),
         )
         return logger
 

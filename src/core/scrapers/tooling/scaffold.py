@@ -124,6 +124,15 @@ Replace the scaffolded `Client.scrape` method with bounded network access and
 fixture-driven parsing. Add a package-local `requirements.txt` only if the client
 needs dependencies outside the core environment.
 
+## Panel text
+
+`SettingSpec.warning` values and modeled skip-exception messages are plain text;
+plugins cannot create Rich footnotes or references. Optional paired backticks
+mark commands, paths, or other code-like fragments. Rich tags such as `[red]`
+are displayed literally. Do not add wrapping or indentation. Long text is valid
+and will be wrapped by the TUI; setting warnings must not contain control
+characters.
+
 ## Tests
 
 Replace the generated failing test with mocked success, malformed response,

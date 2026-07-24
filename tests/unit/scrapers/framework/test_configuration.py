@@ -1,4 +1,5 @@
 import json
+import errno
 from datetime import datetime, timezone
 from unittest import mock
 
@@ -131,27 +132,81 @@ def test_malformed_existing_state_is_not_overwritten(tmp_path):
     path = tmp_path / "state" / "x.json"
     _write(path, {"schema_version": 1, "items": []})
     original = path.read_bytes()
-    repo = JsonStateRepository(path)
-    with pytest.raises(StateFileError):
+    repo = JsonStateRepository(path, display_path="state/x.json")
+    with pytest.raises(StateFileError) as caught:
         repo.load()
+    assert str(caught.value) == (
+        "Fix invalid state in `state/x.json`; details are logged."
+    )
+    assert "schema_version must be 2" in (caught.value.diagnostic_detail or "")
+    assert str(path.resolve()) in (caught.value.diagnostic_detail or "")
     assert path.read_bytes() == original
 
 
+def test_state_read_and_save_permission_failures_are_concise(tmp_path):
+    path = tmp_path / "state" / "x.json"
+    repo = JsonStateRepository(path, display_path="state/x.json")
+    with mock.patch.object(
+        path.__class__,
+        "open",
+        side_effect=PermissionError(errno.EACCES, "denied"),
+    ):
+        with pytest.raises(StateFileError) as read_failure:
+            repo.load()
+    assert str(read_failure.value) == (
+        "Cannot read `state/x.json`; check its permissions."
+    )
+    assert "Errno: 13" in (read_failure.value.diagnostic_detail or "")
+
+    repo.load()
+    repo.record_priced_check("x", 1, datetime.now(timezone.utc))
+    with mock.patch(
+        "core.scrapers.framework.state.write_json_atomically",
+        side_effect=PermissionError(errno.EACCES, "denied"),
+    ):
+        with pytest.raises(StateFileError) as save_failure:
+            repo.save()
+    assert str(save_failure.value) == (
+        "Cannot save `state/x.json`; check its permissions."
+    )
+    assert "Errno: 13" in (save_failure.value.diagnostic_detail or "")
+
+
 @pytest.mark.parametrize(
-    "document, message",
+    "document, display_message, diagnostic_message",
     [
-        ([], "contain an object"),
-        ({"schema_version": 1, "settings": {}, "items": []}, "unknown top-level"),
-        ({"settings": [], "items": []}, "settings"),
-        ({"settings": {}, "items": {}}, "items"),
-        ({"settings": {}, "items": [], "metadata": {}}, "metadata"),
-        ({"settings": {"typo": 1}, "items": []}, "unknown settings"),
+        ([], "must contain a JSON object", "expected object"),
+        (
+            {"schema_version": 1, "settings": {}, "items": []},
+            "Remove unsupported keys",
+            "unknown top-level keys: schema_version",
+        ),
+        ({"settings": [], "items": []}, "`settings`", "settings must be an object"),
+        ({"settings": {}, "items": {}}, "`items`", "items is dict"),
+        (
+            {"settings": {}, "items": [], "metadata": {}},
+            "Remove unsupported keys",
+            "unknown top-level keys: metadata",
+        ),
+        (
+            {"settings": {"typo": 1}, "items": []},
+            "Remove unsupported settings",
+            "unknown settings: typo",
+        ),
     ],
 )
-def test_strict_document_shapes(tmp_path, document, message, plugin):
+def test_strict_document_shapes(
+    tmp_path, document, display_message, diagnostic_message, plugin
+):
     _write(tmp_path / "config" / "fakestore.json", document)
-    with pytest.raises(ConfigFileError, match=message):
+    with pytest.raises(ConfigFileError) as caught:
         TargetConfigLoader(plugin, str(tmp_path / "config")).load()
+    assert display_message in str(caught.value)
+    assert str(caught.value).count("config/fakestore.json") == 1
+    assert diagnostic_message in (caught.value.diagnostic_detail or "")
+    assert str((tmp_path / "config" / "fakestore.json").resolve()) in (
+        caught.value.diagnostic_detail or ""
+    )
 
 
 @pytest.mark.parametrize(
@@ -209,15 +264,21 @@ def test_state_rejects_every_malformed_shape(tmp_path, document):
 
 
 def test_state_noop_and_save_failure_are_explicit(tmp_path):
-    repo = JsonStateRepository(tmp_path / "state" / "x.json")
+    repo = JsonStateRepository(
+        tmp_path / "state" / "x.json",
+        display_path="state/x.json",
+    )
     repo.load()
     assert not repo.has_pending
     repo.record_priced_check("x", 1, datetime.now(timezone.utc))
     with mock.patch(
         "core.scrapers.framework.state.write_json_atomically", side_effect=OSError("disk full")
     ):
-        with pytest.raises(StateFileError, match="disk full"):
+        with pytest.raises(StateFileError) as caught:
             repo.save()
+    assert str(caught.value) == "Cannot save `state/x.json`; check the error log."
+    assert "OSError" in (caught.value.diagnostic_detail or "")
+    assert "disk full" in (caught.value.diagnostic_detail or "")
 
 
 def test_schema_v2_round_trips_alert_delivery_history(tmp_path):
@@ -265,8 +326,12 @@ def test_url_free_required_fields_and_required_settings(tmp_path):
             "items": [{"id": "one", "name": "One", "target_price": 1, "sku": "A"}],
         },
     )
-    with pytest.raises(ConfigFileError, match="api_token"):
+    with pytest.raises(ConfigFileError) as caught:
         TargetConfigLoader(plugin, str(path.parent)).load()
+    assert str(caught.value) == (
+        "Fix required settings in `config/identifier_store.json`."
+    )
+    assert "api_token" in (caught.value.diagnostic_detail or "")
 
     _write(
         path,

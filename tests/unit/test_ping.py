@@ -1,8 +1,10 @@
 """Entry-point wiring tests for ``core.ping``."""
 
+from pathlib import Path
 from unittest import mock
 
 import core.ping
+import core.infrastructure.logging
 from core.general.configuration import GeneralConfigLoad
 from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
@@ -66,6 +68,10 @@ def test_main_reports_config_error_without_constructing_notifier():
                 NotificationConfig(error="General config is unreadable"),
                 None,
                 settings_error="General config is unreadable",
+                diagnostic=(
+                    "Path: /absolute/config/general.json\n"
+                    "Exception: PermissionError\nErrno: 13"
+                ),
             ),
         ),
         mock.patch("core.ping.AppriseNotifier") as notifier_type,
@@ -79,3 +85,8 @@ def test_main_reports_config_error_without_constructing_notifier():
 
     notifier_type.assert_not_called()
     build_panel.assert_called_once_with([], [], "General config is unreadable")
+    content = (
+        Path(core.infrastructure.logging.LOGS_DIR) / "errors.txt"
+    ).read_text()
+    assert "Path: /absolute/config/general.json" in content
+    assert "Errno: 13" in content

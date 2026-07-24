@@ -11,7 +11,14 @@ from datetime import datetime
 from pathlib import Path
 
 from core.exceptions import StateFileError
-from core.infrastructure.persistence import format_utc, parse_utc, write_json_atomically
+from core.infrastructure.persistence import (
+    format_utc,
+    parse_utc,
+    read_failure_message,
+    save_failure_message,
+    storage_diagnostic,
+    write_json_atomically,
+)
 from core.scrapers.framework.url import canonicalize_url
 
 SCHEMA_VERSION = 2
@@ -70,22 +77,37 @@ class StateEntry:
 class JsonStateRepository:
     """Loaded state plus pending ID-based mutations; missing state is empty."""
 
-    def __init__(self, path: str | os.PathLike[str]) -> None:
+    def __init__(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        display_path: str | None = None,
+    ) -> None:
         self.path = str(path)
+        self.display_path = display_path or self.path
         self._items: dict[str, StateEntry] = {}
         self._pending: dict[str, StateEntry] = {}
 
     def load(self) -> None:
         path = Path(self.path)
-        if not path.exists():
-            self._items = {}
-            return
         try:
             with path.open(encoding="utf-8") as file:
                 document = json.load(file)
+        except FileNotFoundError:
+            self._items = {}
+            return
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise StateFileError(
+                read_failure_message(self.display_path, exc),
+                storage_diagnostic(path, exc, operation="read scraper state"),
+            ) from exc
+        try:
             self._items = self._validate_document(document)
-        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
-            raise StateFileError(f"State file '{path}' is invalid or unreadable: {exc}") from exc
+        except (TypeError, ValueError) as exc:
+            raise StateFileError(
+                f"Fix invalid state in `{self.display_path}`; details are logged.",
+                storage_diagnostic(path, exc, operation="validate scraper state"),
+            ) from exc
 
     @staticmethod
     def _validate_document(document: object) -> dict[str, StateEntry]:
@@ -179,7 +201,10 @@ class JsonStateRepository:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             write_json_atomically(self.path, document)
         except (OSError, TypeError, ValueError) as exc:
-            raise StateFileError(f"Could not save state file '{self.path}': {exc}") from exc
+            raise StateFileError(
+                save_failure_message(self.display_path, exc),
+                storage_diagnostic(self.path, exc, operation="save scraper state"),
+            ) from exc
         self._items = merged
         self._pending.clear()
 

@@ -15,19 +15,21 @@ from core import messages
 from core.application.contracts import ConfigOutcome, Notes, PriceOutcome, RunReporter
 from core.settings import SettingView
 from core.tui.config_check import ConfigView, config_view
-from core.tui.panel import uniform_column_widths
+from core.tui.footnotes import FootnoteRegistry, inline_text
+from core.tui.panel import PANEL_WIDTH, primary_column_max, uniform_column_widths
 
 
 class InteractiveRunReporter(RunReporter):
     """Rich live reporter for an interactive scraping run."""
 
-    def __init__(self):
+    def __init__(self, width: int = PANEL_WIDTH):
         """Initializes the interactive reporter state."""
+        self.width = width
         self.console = Console()
         self.live = None
         self.rows = []
         self.settings_rows = []
-        self.notes = []
+        self._footnotes = FootnoteRegistry()
         self.target_name = ""
         self.sleep_total = 0.0
         self.sleep_remaining = 0.0
@@ -37,6 +39,11 @@ class InteractiveRunReporter(RunReporter):
         self.scraping_attempt = 1
         self.scraping_max = 1
         self.is_complete = False
+
+    @property
+    def notes(self) -> tuple[str, ...]:
+        """Return an immutable snapshot of the current target's footnotes."""
+        return self._footnotes.notes
 
     def start_target(
         self,
@@ -51,7 +58,7 @@ class InteractiveRunReporter(RunReporter):
 
         self.target_name = target_name
         self.rows = []
-        self.notes = []
+        self._footnotes.clear()
         self.is_sleeping = False
         self.scraping_name = ""
         self.scraping_attempt = 1
@@ -61,7 +68,12 @@ class InteractiveRunReporter(RunReporter):
 
         # Build the static settings section after resetting notes, so its invalid-value
         # footnotes take the first reference numbers, ahead of the scraping rows.
-        view = config_view(config.loaded_count, list(config.faulty_indices), config.error)
+        view = config_view(
+            config.loaded_count,
+            list(config.faulty_indices),
+            config.error,
+            config.source_path,
+        )
         self.settings_rows = self._build_settings_rows(settings_view, view)
 
         self.live = Live(self._generate_panel(), refresh_per_second=10)
@@ -102,7 +114,13 @@ class InteractiveRunReporter(RunReporter):
         col_widths = col_widths or {}
         table = Table(show_header=False, box=None, padding=(0, 2))
         table.add_column("Icon", justify="center", width=col_widths.get(0))
-        table.add_column("Name", style="bold", width=col_widths.get(1))
+        table.add_column(
+            "Name",
+            style="bold",
+            width=col_widths.get(1),
+            no_wrap=True,
+            overflow="ellipsis",
+        )
         table.add_column("Value")
         return table
 
@@ -112,7 +130,7 @@ class InteractiveRunReporter(RunReporter):
         The spinner row stays visible across retries; from the second attempt on it
         shows an ``(attempt/max)`` counter so a single evolving row conveys progress.
         """
-        self.scraping_name = self._truncate_name(name)
+        self.scraping_name = name
         self.scraping_attempt = attempt
         self.scraping_max = max_retries
         if self.live:
@@ -127,12 +145,6 @@ class InteractiveRunReporter(RunReporter):
         """
         self.scraping_name = ""
 
-    def _truncate_name(self, name: str, max_len: int = 30) -> str:
-        """Truncates a name string to fit within the live display panel."""
-        if len(name) > max_len:
-            return name[: max_len - 3] + "..."
-        return name
-
     def _build_note_refs(self, notes: Notes) -> str:
         """Registers one or more footnotes and returns their combined reference markup.
 
@@ -146,14 +158,16 @@ class InteractiveRunReporter(RunReporter):
         Returns:
             str: The concatenated Rich markup references, or an empty string.
         """
-        normalized = self._normalize_notes(notes)
-        if not normalized:
+        if notes is None:
             return ""
-        refs = []
-        for note in normalized:
-            self.notes.append(note)
-            refs.append(f"[dim default][{len(self.notes)}][/dim default]")
-        return " " + " ".join(refs)
+        return self._footnotes.add_many([notes] if isinstance(notes, str) else notes)
+
+    @staticmethod
+    def _note_list(notes: Notes) -> list[str]:
+        """Coerce the presentation-neutral note union without changing its text."""
+        if notes is None:
+            return []
+        return [notes] if isinstance(notes, str) else list(notes)
 
     def _generate_panel(self) -> Panel:
         """Generates the rich panel to be rendered on the live display."""
@@ -166,7 +180,6 @@ class InteractiveRunReporter(RunReporter):
                 ProgressBar(
                     total=self.sleep_total,
                     completed=self.sleep_remaining,
-                    width=30,
                     style="grey37",
                     complete_style="cyan",
                     finished_style="cyan",
@@ -188,7 +201,10 @@ class InteractiveRunReporter(RunReporter):
         # Size the icon/label columns once across both sections so the value column starts at
         # the same position above and below the divider. The transient sleep/scraping row is
         # included so the columns don't jump as it appears and disappears.
-        widths = uniform_column_widths(self.settings_rows + display_rows)
+        widths = uniform_column_widths(
+            self.settings_rows + display_rows,
+            maximums={1: primary_column_max(self.width)},
+        )
 
         display_table = self._new_display_table(widths)
         for row in display_rows:
@@ -204,11 +220,8 @@ class InteractiveRunReporter(RunReporter):
         else:
             body = display_table
 
-        if self.notes:
-            notes_group = [""]
-            for i, note in enumerate(self.notes, 1):
-                notes_group.append(f"  [{i}] {escape(note)}")
-            renderable = Group(body, Text.from_markup("\n".join(notes_group), style="dim"))
+        if self._footnotes.notes:
+            renderable = Group(body, self._footnotes.render())
         else:
             renderable = body
 
@@ -243,7 +256,7 @@ class InteractiveRunReporter(RunReporter):
             renderable,
             title=f"[bold]{escape(self.target_name)} Scraping[/bold]",
             border_style=panel_color,
-            width=75,
+            width=self.width,
         )
 
     def log_result(
@@ -251,9 +264,9 @@ class InteractiveRunReporter(RunReporter):
     ) -> None:
         """Logs a standard result directly into the rich table."""
         refs = self._build_note_refs(
-            self._normalize_notes(attempt_notes) + self._normalize_notes(notes)
+            self._note_list(attempt_notes) + self._note_list(notes)
         )
-        self.rows.append((icon, escape(self._truncate_name(name)), f"{value}{refs}"))
+        self.rows.append((icon, escape(name), f"{value}{refs}"))
         if self.live:
             self.live.update(self._generate_panel())
 
@@ -292,13 +305,15 @@ class InteractiveRunReporter(RunReporter):
     ) -> None:
         """Logs a warning entry to the live display."""
         refs = self._build_note_refs(
-            self._normalize_notes(attempt_notes) + self._normalize_notes(notes)
+            self._note_list(attempt_notes) + self._note_list(notes)
         )
+        value = inline_text(warning_str, style="yellow")
+        value.append_text(Text.from_markup(refs))
         self.rows.append(
             (
                 "🟡",
-                escape(self._truncate_name(name)),
-                f"[yellow]{escape(warning_str)}{refs}[/yellow]",
+                escape(name),
+                value,
             )
         )
         if self.live:
@@ -309,9 +324,11 @@ class InteractiveRunReporter(RunReporter):
     ) -> None:
         """Logs an error entry to the live display."""
         refs = self._build_note_refs(
-            self._normalize_notes(attempt_notes) + self._normalize_notes(notes)
+            self._note_list(attempt_notes) + self._note_list(notes)
         )
-        self.rows.append(("❗", escape(self._truncate_name(name)), f"{escape(error_str)}{refs}"))
+        value = inline_text(error_str)
+        value.append_text(Text.from_markup(refs))
+        self.rows.append(("❗", escape(name), value))
         if self.live:
             self.live.update(self._generate_panel())
 
@@ -323,7 +340,7 @@ class InteractiveRunReporter(RunReporter):
         self, name: str, error_type: str, attempt_notes: Notes = None, extra_notes: Notes = None
     ) -> None:
         """Logs the terminal failure as a single red row with one footnote per attempt."""
-        notes = self._normalize_notes(attempt_notes) + self._normalize_notes(extra_notes)
+        notes = self._note_list(attempt_notes) + self._note_list(extra_notes)
         self.log_error(name, error_type, notes)
 
     def start_sleep(self, total_delay: float, retry_attempt: int = 0, max_retries: int = 0) -> None:

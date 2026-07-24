@@ -1,9 +1,17 @@
 import json
+from pathlib import Path
 
 import pytest
 from support import catalog_sandbox, fake_plugin
 
-from core.application.preflight import LoadFailure, LoadFailureKind, TargetLoad, load_targets
+import core.infrastructure.logging
+from core.application.preflight import (
+    LoadFailure,
+    LoadFailureKind,
+    TargetLoad,
+    load_targets,
+    record_target_load_diagnostic,
+)
 from core.settings import resolve_settings
 
 
@@ -41,6 +49,13 @@ def test_preflight_distinguishes_config_and_state_failures(tmp_path, plugin):
     config_failure = load_targets([plugin], str(tmp_path / "config"), str(tmp_path / "state"))[0]
     assert config_failure.failure is not None
     assert config_failure.failure.kind is LoadFailureKind.CONFIG
+    assert config_failure.failure.detail == (
+        "Create missing `config/fakestore.json` from the plugin example."
+    )
+    assert config_failure.failure.diagnostic is not None
+    assert str((tmp_path / "config" / "fakestore.json").resolve()) in (
+        config_failure.failure.diagnostic
+    )
     _write(
         tmp_path / "config" / "fakestore.json",
         {
@@ -60,8 +75,24 @@ def test_preflight_distinguishes_config_and_state_failures(tmp_path, plugin):
     state_failure = load_targets([plugin], str(tmp_path / "config"), str(tmp_path / "state"))[0]
     assert state_failure.failure is not None
     assert state_failure.failure.kind is LoadFailureKind.STATE
+    assert state_failure.failure.detail == (
+        "Fix invalid state in `state/fakestore.json`; details are logged."
+    )
+    assert state_failure.failure.diagnostic is not None
+    assert str((tmp_path / "state" / "fakestore.json").resolve()) in (
+        state_failure.failure.diagnostic
+    )
     assert state_failure.count == 1
     assert state_failure.faulty_indices == [2]
+    assert state_failure.row_diagnostic is not None
+    assert "JSON item 2:" in state_failure.row_diagnostic
+    record_target_load_diagnostic(state_failure)
+    diagnostic_log = (
+        Path(core.infrastructure.logging.LOGS_DIR) / "fakestore" / "errors.txt"
+    ).read_text()
+    assert "schema_version must be 2" in diagnostic_log
+    assert "JSON item 2:" in diagnostic_log
+    assert "name must be a nonblank string" in diagnostic_log
 
 
 def test_target_load_rejects_inconsistent_failure_combinations(plugin):

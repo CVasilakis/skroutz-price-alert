@@ -217,6 +217,13 @@ blocks are fatal configuration errors. The framework adds `execution_interval`,
 `log_retention_days`, `notify_scraping_errors`, and
 `suppress_repeated_price_alerts`; plugins cannot declare systemd directives.
 
+Plugin-authored `SettingSpec.warning` values and modeled skip-exception messages
+are plain text. Plugins cannot create Rich footnotes or references directly.
+Optional paired backticks mark commands, paths, or other code-like fragments;
+Rich tags such as `[red]` are displayed literally. Do not add wrapping or
+indentation. Long text is valid and the TUI wraps it, so there is no maximum
+warning length (control characters in setting warnings remain invalid).
+
 ## Optional client helpers
 
 A basic client implements only `scrape()`. Override `prepare_retry()` to rotate

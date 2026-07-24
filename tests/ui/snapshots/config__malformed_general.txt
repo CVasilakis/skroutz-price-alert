@@ -2,8 +2,8 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version    Up to date                                  │
-│   ✅    Notifications       2 valid URL(s)                              │
+│   ❗    Notifications       Not configured [1]                          │
 │   ❗    General Config      Failed [1]                                  │
 │                                                                         │
-│   [1] Remove unsupported settings from config/general.json.             │
+│   [1] Fix JSON in config/general.json at line 7, column 3.              │
 ╰─────────────────────────────────────────────────────────────────────────╯

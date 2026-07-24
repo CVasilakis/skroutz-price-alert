@@ -8,11 +8,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rich.console import Console
 
-from core.application.preflight import LoadFailureKind, load_targets
+from core.application.preflight import (
+    LoadFailureKind,
+    load_targets,
+    record_target_load_diagnostic,
+)
 from core.constants import CONFIG_DIR
 from core.exceptions import UpdateCheckError
 from core.general import load_general_config
-from core.infrastructure.logging import setup_global_logging
+from core.infrastructure.logging import save_diagnostic, setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
 from core.infrastructure.systemd import (
     get_installed_plugin_units,
@@ -47,6 +51,11 @@ def main() -> None:
     load_results = load_targets(list(catalog.plugins), CONFIG_DIR)
     loads_by_target = {load.target: load for load in load_results}
     general = load_general_config(CONFIG_DIR)
+    if isinstance(general.diagnostic, str) and general.diagnostic.strip():
+        try:
+            save_diagnostic(general.diagnostic)
+        except OSError:
+            pass
     with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
         update_available = _check_for_updates()
     render_config_panel(console, general, update_available)
@@ -56,6 +65,10 @@ def main() -> None:
 
     for target in registered_scrapers:
         plugin = catalog.get(target)
+        load = loads_by_target.get(target)
+        if load is not None:
+            record_target_load_diagnostic(load)
+
         timer_props = get_systemd_properties(
             f"{target}-scraper.timer", "ActiveState,NextElapseUSecRealtime"
         )
@@ -69,7 +82,7 @@ def main() -> None:
             console.print(build_not_installed_panel(target, plugin.display_name))
             continue
 
-        load = loads_by_target[target]
+        assert load is not None
         resolved = load.settings
         interval_spec = plugin.setting(KEY_INTERVAL)
         interval = resolved.resolved(interval_spec)
@@ -93,6 +106,7 @@ def main() -> None:
                 load.failure.detail
                 if load.failure is not None and load.failure.kind is LoadFailureKind.CONFIG
                 else None,
+                f"config/{plugin.config_filename}",
             ),
             plugin.display_name,
             interval_spec,

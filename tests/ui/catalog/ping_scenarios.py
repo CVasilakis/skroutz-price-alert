@@ -103,7 +103,7 @@ def _():
     return drive_ping(
         url_entries=[],
         test_results=[],
-        config_error_msg="Config file 'config/general.json' is invalid or unreadable",
+        config_error_msg="Fix JSON in `config/general.json` at line 7, column 3.",
     )
 
 

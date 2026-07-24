@@ -11,7 +11,7 @@ from pathlib import Path
 from core.constants import EXIT_CODE_NOTIFICATION_CONFIG_ERROR
 from core.exceptions import ConfigFileError, StateFileError
 from core.general.configuration import GeneralConfigLoad
-from core.infrastructure.logging import get_target_logger
+from core.infrastructure.logging import get_target_logger, save_diagnostic
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.configuration import RowIssue, TargetConfigLoader
 from core.scrapers.framework.model import RegisteredPlugin
@@ -28,12 +28,17 @@ class LoadFailureKind(str, Enum):
 class LoadFailure:
     kind: LoadFailureKind
     detail: str
+    diagnostic: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.kind, LoadFailureKind):
             raise TypeError("load failure kind must be CONFIG or STATE")
         if not isinstance(self.detail, str) or not self.detail.strip():
             raise ValueError("load failure detail must be nonblank")
+        if self.diagnostic is not None and (
+            not isinstance(self.diagnostic, str) or not self.diagnostic.strip()
+        ):
+            raise ValueError("load failure diagnostic must be nonblank when provided")
 
 
 @dataclass(frozen=True)
@@ -42,6 +47,7 @@ class TargetLoad:
     settings: ResolvedSettings
     items: tuple[TrackedItem, ...] = ()
     row_issues: tuple[RowIssue, ...] = ()
+    row_diagnostic: str | None = None
     state: JsonStateRepository | None = None
     failure: LoadFailure | None = None
 
@@ -87,12 +93,19 @@ def load_targets(
                 TargetLoad(
                     plugin,
                     settings,
-                    failure=LoadFailure(LoadFailureKind.CONFIG, str(exc)),
+                    failure=LoadFailure(
+                        LoadFailureKind.CONFIG,
+                        str(exc),
+                        exc.diagnostic_detail,
+                    ),
                 )
             )
             continue
 
-        state = JsonStateRepository(resolved_state_dir / f"{plugin.target}.json")
+        state = JsonStateRepository(
+            resolved_state_dir / f"{plugin.target}.json",
+            display_path=f"state/{plugin.target}.json",
+        )
         try:
             state.load()
         except StateFileError as exc:
@@ -102,7 +115,12 @@ def load_targets(
                     settings=loaded.settings,
                     items=loaded.items,
                     row_issues=loaded.row_issues,
-                    failure=LoadFailure(LoadFailureKind.STATE, str(exc)),
+                    row_diagnostic=loaded.row_diagnostic,
+                    failure=LoadFailure(
+                        LoadFailureKind.STATE,
+                        str(exc),
+                        exc.diagnostic_detail,
+                    ),
                 )
             )
             continue
@@ -112,10 +130,29 @@ def load_targets(
                 settings=loaded.settings,
                 items=loaded.items,
                 row_issues=loaded.row_issues,
+                row_diagnostic=loaded.row_diagnostic,
                 state=state,
             )
         )
     return results
+
+
+def record_target_load_diagnostic(load: TargetLoad) -> None:
+    """Append target config/state diagnostics without producing terminal output."""
+    diagnostics = [
+        detail
+        for detail in (
+            load.failure.diagnostic if load.failure is not None else None,
+            load.row_diagnostic,
+        )
+        if detail
+    ]
+    if not diagnostics:
+        return
+    try:
+        save_diagnostic("\n\n".join(diagnostics), target_name=load.target)
+    except OSError:
+        pass
 
 
 def validate_notification_preflight(
@@ -126,7 +163,10 @@ def validate_notification_preflight(
     """Validate notification configuration for a quiet/background run."""
     notifications = general.notifications
     if not notifications.usable:
-        detail = notifications.error or "No valid notification URLs found in config/general.json"
+        detail = (
+            notifications.error
+            or "No valid notification URLs found in `config/general.json`"
+        )
         for target in targets_to_run:
             retention = (retention_by_target or {}).get(target, DEFAULT_LOG_RETENTION_DAYS)
             get_target_logger(target, True, retention).error(
@@ -140,7 +180,7 @@ def validate_notification_preflight(
             retention = (retention_by_target or {}).get(target, DEFAULT_LOG_RETENTION_DAYS)
             get_target_logger(target, True, retention).warning(
                 f"❗ {len(notifications.invalid_urls)} invalid notification URL(s) "
-                "detected in config/general.json."
+                "detected in `config/general.json`."
             )
 
     return None
@@ -151,5 +191,6 @@ __all__ = [
     "LoadFailureKind",
     "TargetLoad",
     "load_targets",
+    "record_target_load_diagnostic",
     "validate_notification_preflight",
 ]

@@ -57,19 +57,19 @@ _VERDICTS: dict[int, ServiceVerdict] = {
         "❗",
         "Scraping Failed",
         "red",
-        "A parser or unexpected scraper failure exhausted all retries. Check `logs/{target}/output.log`.",
+        "Retries exhausted; check `logs/{target}/output.log`.",
     ),
     EXIT_CODE_STORAGE_ERROR: ServiceVerdict(
         "❗",
         "Storage Failed",
         "red",
-        "Could not update `state/{target}.json` with the latest scrape state.",
+        "Latest scrape state was not saved to `state/{target}.json`.",
     ),
     EXIT_CODE_NOTIFICATION_ERROR: ServiceVerdict(
         "🟡",
         "Notification Warning",
         "yellow",
-        "At least one configured notification could not be delivered. Run `./scripts/run.sh --ping`.",
+        "A configured notification failed. Run `./scripts/run.sh --ping`.",
     ),
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR: ServiceVerdict(
         "❗",

@@ -1,5 +1,6 @@
 import contextlib
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -17,6 +18,7 @@ from core.constants import (
     EXIT_CODE_STORAGE_ERROR,
 )
 from core.exceptions import LockAcquisitionError, PluginDependencyError, StateFileError
+import core.infrastructure.logging
 from core.scrapers.api import ScraperPlugin, TrackedItem, UrlField
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.compiler import compile_plugin
@@ -77,7 +79,9 @@ def _runtime_seams(monkeypatch):
 
 
 def test_config_and_state_failures_keep_distinct_exit_status_and_reporting():
-    config_run, _, _, config_reporter = _orchestrator(_load(error="bad config"))
+    config_run, _, _, config_reporter = _orchestrator(
+        _load(error="bad config")
+    )
     assert config_run.run() == EXIT_CODE_PRODUCTS_ERROR
     assert config_reporter.start_target.call_args.args[3].error == "bad config"
 
@@ -89,6 +93,29 @@ def test_config_and_state_failures_keep_distinct_exit_status_and_reporting():
     assert state_reporter.start_target.call_args.args[3].loaded_count == 1
     assert state_reporter.start_target.call_args.args[3].error is None
     state_reporter.log_error.assert_called_once()
+
+
+def test_load_diagnostic_is_logged_before_the_target_is_reported():
+    load = _load(error="bad config")
+    load = TargetLoad(
+        plugin=load.plugin,
+        settings=load.settings,
+        failure=LoadFailure(
+            LoadFailureKind.CONFIG,
+            "Fix `config/store.json`.",
+            "Path: /absolute/config/store.json\nException: PermissionError\nErrno: 13",
+        ),
+    )
+    run, _, _, reporter = _orchestrator(load)
+
+    assert run.run() == EXIT_CODE_PRODUCTS_ERROR
+
+    content = (
+        Path(core.infrastructure.logging.LOGS_DIR) / "store" / "errors.txt"
+    ).read_text()
+    assert "Path: /absolute/config/store.json" in content
+    assert "Errno: 13" in content
+    assert reporter.start_target.called
 
 
 def test_lock_and_dependency_failures_are_isolated(monkeypatch):
@@ -114,7 +141,10 @@ def test_one_state_commit_failure_is_storage_error(monkeypatch):
     item = TrackedItem("one", "One", 1, _custom={URL: "https://store.example/one"})
     state = mock.create_autospec(JsonStateRepository, instance=True)
     state.has_pending = True
-    state.save.side_effect = StateFileError("disk full")
+    state.save.side_effect = StateFileError(
+        "Cannot save `state/store.json`; check the error log.",
+        "Path: /project/state/store.json\nException: OSError\nDetail: disk full",
+    )
     run, _, _, reporter = _orchestrator(
         _load(
             items=[item],
@@ -133,7 +163,15 @@ def test_one_state_commit_failure_is_storage_error(monkeypatch):
     assert run.run() == EXIT_CODE_STORAGE_ERROR
     state.save.assert_called_once()
     assert executor_type.call_args.kwargs["suppress_repeated_price_alerts"] is True
-    assert "state/store.json" in reporter.log_error.call_args.args[1]
+    assert reporter.log_error.call_args.args[1] == "Latest scrape state was not saved."
+    assert reporter.log_error.call_args.args[2] == (
+        "Cannot save `state/store.json`; check the error log."
+    )
+    diagnostic_log = (
+        Path(core.infrastructure.logging.LOGS_DIR) / "store" / "errors.txt"
+    ).read_text()
+    assert "Path: /project/state/store.json" in diagnostic_log
+    assert "Detail: disk full" in diagnostic_log
 
 
 def test_success_commits_once_and_aggregates_notification_failures(monkeypatch):

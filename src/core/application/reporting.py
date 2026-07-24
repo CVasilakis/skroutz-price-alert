@@ -31,11 +31,15 @@ class SilentRunReporter(RunReporter):
         if config.error:
             target_logger.warning(f"❗ Monitored Items: Failed ({config.error})")
         elif config.faulty_indices:
-            indices = ", ".join(map(str, config.faulty_indices))
+            detail = (
+                f"Fix items in `{config.source_path}`; details are logged."
+                if config.source_path
+                else "Fix misconfigured items; details are logged."
+            )
             target_logger.warning(
                 f"❗ Monitored Items: {config.loaded_count} loaded, "
                 f"{len(config.faulty_indices)} misconfigured "
-                f"(Problematic items found at JSON index: {indices}.)"
+                f"({detail})"
             )
         else:
             target_logger.info(f"🗄️  Monitored Items: {config.loaded_count} loaded")

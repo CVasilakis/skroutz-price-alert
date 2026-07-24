@@ -203,6 +203,7 @@ def drive_service(
     expected_oncalendar: str = "",
     active_oncalendar: str = "",
     config: config_check.ConfigView = _DEFAULT_CONFIG,
+    state_failure_detail: str | None = None,
 ) -> BuildResult:
     """Builds a per-plugin Service Status panel via ``status.build_service_panel``.
 
@@ -221,6 +222,7 @@ def drive_service(
         config,
         display_name=target.capitalize(),
         interval_spec=__import__("ui.catalog.inputs", fromlist=["SPEC_INTERVAL"]).SPEC_INTERVAL,
+        state_failure_detail=state_failure_detail,
     )
     return BuildResult(panel, panel.get_panel_color())
 

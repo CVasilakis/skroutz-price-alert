@@ -29,10 +29,11 @@ STATUS_INVALID = SettingStatus.INVALID
 CURRENCY = "€"
 
 # Faithful persistence/configuration error messages shared across UI scenarios.
-STORAGE_MISSING = "The config/skroutz.json file is missing or not a file"
-STORAGE_PERMS = "The config/skroutz.json file has wrong permissions"
-STORAGE_BAD_JSON = "The config/skroutz.json file contains invalid JSON format"
-NOTIFICATIONS_NONE = "No notification URLs found in config/general.json"
+STORAGE_MISSING = "Create missing `config/skroutz.json` from the plugin example."
+STORAGE_PERMS = "Cannot read `config/skroutz.json`; check its permissions."
+STORAGE_BAD_JSON = "Fix JSON in `config/skroutz.json` at line 12, column 4."
+STATE_BAD_JSON = "Fix JSON in `state/skroutz.json` at line 8, column 2."
+NOTIFICATIONS_NONE = "No notification URLs found in `config/general.json`."
 
 
 def stub_logger() -> logging.Logger:
@@ -167,7 +168,11 @@ def config_ok(count: int = 5) -> ConfigView:
 
 def config_faulty(count: int = 8, faulty_indices: Sequence[int] = (2, 5)) -> ConfigView:
     """A products-config summary with some misconfigured items (``🟡``)."""
-    return config_view(count, list(faulty_indices))
+    return config_view(
+        count,
+        list(faulty_indices),
+        source_path="config/skroutz.json",
+    )
 
 
 def config_failed(error: str) -> ConfigView:

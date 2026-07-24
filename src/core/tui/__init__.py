@@ -8,6 +8,8 @@ from loose top-level modules.
 Layout:
     * :mod:`~core.tui.panel` - the shared ``StatusPanelBuilder`` primitive and column
       helpers every panel is assembled from.
+    * :mod:`~core.tui.footnotes` - safe shared note registration, inline-code styling,
+      and responsive hanging-indent rendering.
     * :mod:`~core.tui.config_check` - the Configuration Check panel and the shared settings/
       config row helpers reused by the ``--status`` and Scraping panels.
     * :mod:`~core.tui.run_reporter` - the live interactive Scraping reporter.

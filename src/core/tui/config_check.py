@@ -31,7 +31,10 @@ class ConfigView:
 
 
 def config_view(
-    count: int, faulty_indices: Sequence[int] = (), error: str | None = None
+    count: int,
+    faulty_indices: Sequence[int] = (),
+    error: str | None = None,
+    source_path: str | None = None,
 ) -> ConfigView:
     """Builds the :class:`ConfigView` for a target from its load outcome.
 
@@ -39,6 +42,7 @@ def config_view(
         count (int): The number of loaded items (ignored when ``error`` is set).
         faulty_indices (Sequence[int]): 1-based indices of items failing validation.
         error (str | None): The storage failure message, if the load failed.
+        source_path (str | None): Explicit project-relative config path for remediation.
 
     Returns:
         ConfigView: The icon/value/footnote for the 'Config' row.
@@ -46,7 +50,11 @@ def config_view(
     if error is not None:
         return ConfigView("❗", "[red]Failed[/red]", error, has_warning=True)
     if faulty_indices:
-        note = f"Problematic items found at JSON index: {', '.join(map(str, faulty_indices))}."
+        note = (
+            f"Fix items in `{source_path}`; details are logged."
+            if source_path
+            else "Fix misconfigured items; details are logged."
+        )
         value = f"{count} loaded, [yellow]{len(faulty_indices)} misconfigured[/yellow]"
         return ConfigView("🟡", value, note, has_warning=True)
     return ConfigView("✅", f"{count} loaded", None, has_warning=False)
@@ -152,7 +160,7 @@ def _append_notifications_row(panel: StatusPanelBuilder, general: GeneralConfigL
             f"{detail_ref}{permission_ref}[/red]",
         )
     else:
-        detail = notifications.error or "No notification URLs found in config/general.json."
+        detail = notifications.error or "No notification URLs found in `config/general.json`."
         ref = panel.add_note_ref(detail)
         panel.add_row("❗", "Notifications", f"[red]Not configured{ref}{permission_ref}[/red]")
 

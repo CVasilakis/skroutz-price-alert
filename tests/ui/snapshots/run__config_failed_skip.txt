@@ -8,5 +8,5 @@
 │   ✅    Suppress Repeated Price Alerts    false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
 │                                                                         │
-│   [1] The config/skroutz.json file contains invalid JSON format.        │
+│   [1] Fix JSON in config/skroutz.json at line 12, column 4.             │
 ╰─────────────────────────────────────────────────────────────────────────╯

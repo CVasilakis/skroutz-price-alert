@@ -26,6 +26,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         count=2,
         faulty_indices=(1,),
         failure=None,
+        row_diagnostic=None,
         settings=mock.MagicMock(),
     )
     interval = SimpleNamespace(status=SettingStatus.OK, value="1h")

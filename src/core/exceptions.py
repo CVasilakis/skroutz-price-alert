@@ -47,9 +47,22 @@ class InvalidURLError(ScraperError):
 
 
 class StorageFileError(Exception):
-    """Raised when there is an issue with a storage data file."""
+    """A concise storage failure paired with optional technical diagnostics.
 
-    pass
+    ``str(error)`` is deliberately presentation-safe. Callers may write
+    :attr:`diagnostic_detail` to an error log, but must not place it in a panel.
+    """
+
+    def __init__(self, display_message: str, diagnostic_detail: str | None = None) -> None:
+        if not isinstance(display_message, str) or not display_message.strip():
+            raise ValueError("storage display message must be nonblank")
+        if diagnostic_detail is not None and (
+            not isinstance(diagnostic_detail, str) or not diagnostic_detail.strip()
+        ):
+            raise ValueError("storage diagnostic detail must be nonblank when provided")
+        self.display_message = display_message.strip()
+        self.diagnostic_detail = diagnostic_detail.strip() if diagnostic_detail else None
+        super().__init__(self.display_message)
 
 
 class ConfigFileError(StorageFileError):

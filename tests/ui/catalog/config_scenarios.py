@@ -105,10 +105,7 @@ def _():
     return drive_config(
         "uptodate",
         valid_count=2,
-        permission_warning=(
-            "Notification URLs may contain credentials and config/general.json is accessible "
-            "to group or other users. Run `chmod 600 config/general.json`."
-        ),
+        permission_warning="Protect notification URLs: `chmod 600 config/general.json`.",
     )
 
 
@@ -122,7 +119,22 @@ def _():
     return drive_config(
         "uptodate",
         valid_count=2,
-        settings_error="Unknown general settings: typo",
+        settings_error="Remove unsupported settings from `config/general.json`.",
+    )
+
+
+@scenario(
+    Surface.CONFIG,
+    "malformed_general",
+    "Malformed general config fails both sections without duplicate notes",
+    tags=("combined", "error"),
+)
+def _():
+    error = "Fix JSON in `config/general.json` at line 7, column 3."
+    return drive_config(
+        "uptodate",
+        config_error=error,
+        settings_error=error,
     )
 
 

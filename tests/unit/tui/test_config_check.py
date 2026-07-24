@@ -15,4 +15,4 @@ def test_build_config_panel_uses_collected_update_and_general_config_results():
     panel = build_config_panel(general, update_available=None)
 
     assert panel.icons == ["🟡", "✅"]
-    assert panel.notes == ["Check your internet connection and retry shortly."]
+    assert panel.notes == ("Check your internet connection and retry shortly.",)

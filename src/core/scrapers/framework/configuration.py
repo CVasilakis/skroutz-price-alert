@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from core.exceptions import ConfigFileError
-from core.infrastructure.persistence import read_json_object
+from core.infrastructure.persistence import read_json_object, storage_diagnostic
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.model import RegisteredPlugin
 from core.settings import MISSING, ResolvedSettings, validate_settings_block
@@ -35,6 +35,7 @@ class LoadedTargetConfig:
     settings: ResolvedSettings
     items: tuple[TrackedItem, ...]
     row_issues: tuple[RowIssue, ...]
+    row_diagnostic: str | None = None
 
 
 def _nonblank(raw: object, field: str) -> str:
@@ -58,25 +59,55 @@ class TargetConfigLoader:
     def __init__(self, plugin: RegisteredPlugin, config_dir: str) -> None:
         self.plugin = plugin
         self.config_path = Path(config_dir) / plugin.config_filename
+        self.display_path = f"config/{plugin.config_filename}"
+
+    def _validation_error(self, message: str, detail: str) -> ConfigFileError:
+        error = ValueError(detail)
+        return ConfigFileError(
+            message,
+            storage_diagnostic(
+                self.config_path,
+                error,
+                operation="validate target configuration",
+            ),
+        )
 
     def read_document(self) -> dict[str, Any]:
-        document = read_json_object(self.config_path)
+        document = read_json_object(self.config_path, display_path=self.display_path)
         assert document is not None
         unknown = set(document) - TOP_LEVEL_KEYS
         if unknown:
-            raise ConfigFileError(
-                f"Config file '{self.config_path}' has unknown top-level keys: "
-                f"{', '.join(sorted(unknown))}"
+            raise self._validation_error(
+                f"Remove unsupported keys from `{self.display_path}`.",
+                f"unknown top-level keys: {', '.join(sorted(unknown))}",
             )
         if not isinstance(document.get("items"), list):
-            raise ConfigFileError("items must be an array")
+            raise self._validation_error(
+                f"`items` in `{self.display_path}` must be a JSON array.",
+                f"items is {type(document.get('items')).__name__}, expected list",
+            )
         return document
 
     def _settings(self, document: dict[str, Any]) -> ResolvedSettings:
         try:
             return validate_settings_block(self.plugin.setting_specs, document.get("settings", {}))
         except ValueError as exc:
-            raise ConfigFileError(str(exc)) from exc
+            if str(exc) == "settings must be an object":
+                message = f"`settings` in `{self.display_path}` must be a JSON object."
+            elif str(exc).startswith("unknown settings:"):
+                message = f"Remove unsupported settings from `{self.display_path}`."
+            elif str(exc).startswith("required settings missing or invalid:"):
+                message = f"Fix required settings in `{self.display_path}`."
+            else:
+                message = f"Fix settings in `{self.display_path}`."
+            raise ConfigFileError(
+                message,
+                storage_diagnostic(
+                    self.config_path,
+                    exc,
+                    operation="validate target settings",
+                ),
+            ) from exc
 
     def load(self) -> LoadedTargetConfig:
         document = self.read_document()
@@ -97,7 +128,15 @@ class TargetConfigLoader:
                 items.append(item)
             except (TypeError, ValueError) as exc:
                 issues.append(RowIssue(index, str(exc)))
-        return LoadedTargetConfig(settings, tuple(items), tuple(issues))
+        row_diagnostic = None
+        if issues:
+            lines = [
+                "Target configuration contains invalid item rows.",
+                f"Path: {self.config_path.resolve()}",
+            ]
+            lines.extend(f"JSON item {issue.index}: {issue.message}" for issue in issues)
+            row_diagnostic = "\n".join(lines)
+        return LoadedTargetConfig(settings, tuple(items), tuple(issues), row_diagnostic)
 
     def load_settings(self) -> ResolvedSettings:
         """Resolve a strict config document without loading state or a client."""

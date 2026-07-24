@@ -9,7 +9,9 @@ schedule-drift footnote.
 from core.settings import SettingStatus
 from ui.catalog._base import Surface, scenario
 from ui.catalog.inputs import (
+    STATE_BAD_JSON,
     STORAGE_BAD_JSON,
+    STORAGE_MISSING,
     config_failed,
     config_faulty,
     resolved_settings,
@@ -80,7 +82,14 @@ def _():
         suppress_repeated=(False, STATUS_NOCFG, None),
     )
     return drive_service(
-        TARGET, timer_props(True, NEXT_AT), _svc(), resolved, CFG, "hourly", "hourly"
+        TARGET,
+        timer_props(True, NEXT_AT),
+        _svc(),
+        resolved,
+        CFG,
+        "hourly",
+        "hourly",
+        config=config_failed(STORAGE_MISSING),
     )
 
 
@@ -176,6 +185,25 @@ def _():
         "hourly",
         "hourly",
         config=config_failed(STORAGE_BAD_JSON),
+    )
+
+
+@scenario(
+    Surface.STATUS,
+    "state_load_failed",
+    "Machine state failed to load",
+    tags=("system", "error"),
+)
+def _():
+    return drive_service(
+        TARGET,
+        timer_props(True, NEXT_AT),
+        _svc(),
+        resolved_settings(),
+        CFG,
+        "hourly",
+        "hourly",
+        state_failure_detail=STATE_BAD_JSON,
     )
 
 

@@ -16,6 +16,22 @@ from core.settings import DEFAULT_LOG_RETENTION_DAYS
 console = Console()
 
 
+def save_diagnostic(
+    diagnostic_detail: str,
+    *,
+    target_name: str | None = None,
+) -> None:
+    """Append a preformatted technical diagnostic without terminal output."""
+    target_logs_dir = os.path.join(LOGS_DIR, target_name) if target_name else LOGS_DIR
+    os.makedirs(target_logs_dir, exist_ok=True)
+    log_path = os.path.join(target_logs_dir, "errors.txt")
+    time_now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d (%H:%M:%S)")
+    with open(log_path, "a", encoding="utf-8", newline="") as log_file:
+        log_file.write(f"\n\nA diagnostic was recorded at {time_now} UTC:\n")
+        log_file.write(diagnostic_detail.rstrip())
+        log_file.write(f"\n\n{'-' * 100}")
+
+
 class RichConsoleHandler(logging.Handler):
     """Custom handler that uses Rich for console output and supports padding."""
 
@@ -185,7 +201,7 @@ def save_traceback(
         )
 
     time_now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d (%H:%M:%S)")
-    with open(log_path, "a", newline="") as log_file:
+    with open(log_path, "a", encoding="utf-8", newline="") as log_file:
         log_file.write(f"\n\nAn error occurred at {time_now} UTC:\n")
         if url:
             log_file.write(f"URL: {url}\n")

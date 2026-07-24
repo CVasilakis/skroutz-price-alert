@@ -67,27 +67,38 @@ def test_general_config_is_strict_and_typed(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "document, message",
+    "document, display_message, diagnostic_message",
     [
-        ([], "must contain an object"),
-        ({"schema_version": 1, "settings": {}}, "Unknown general config keys"),
+        ([], "must contain a JSON object", "expected object"),
+        (
+            {"schema_version": 1, "settings": {}},
+            "Remove unsupported keys",
+            "schema_version",
+        ),
         (
             {
                 "settings": [],
             },
+            "`settings`",
             "General settings must be an object",
         ),
-        ({"settings": {}, "metadata": {}}, "Unknown general config keys"),
+        ({"settings": {}, "metadata": {}}, "Remove unsupported keys", "metadata"),
     ],
 )
-def test_general_config_rejects_malformed_and_unknown_fields(tmp_path, document, message):
+def test_general_config_rejects_malformed_and_unknown_fields(
+    tmp_path, document, display_message, diagnostic_message
+):
     path = tmp_path / "config" / "general.json"
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps(document))
     loaded = load_general_config(str(path.parent))
     assert loaded.settings is None
     assert loaded.settings_error is not None
-    assert message in loaded.settings_error
+    assert display_message in loaded.settings_error
+    assert loaded.settings_error.count("config/general.json") == 1
+    assert loaded.diagnostic is not None
+    assert diagnostic_message in loaded.diagnostic
+    assert str(path.resolve()) in loaded.diagnostic
 
 
 def test_missing_general_config_uses_defaults(tmp_path):
@@ -136,26 +147,46 @@ def test_general_loader_reads_document_once_for_both_sections(tmp_path):
     ) as read:
         loaded = load_general_config(str(path.parent))
 
-    read.assert_called_once_with(str(path), required=False)
+    read.assert_called_once_with(
+        str(path),
+        required=False,
+        display_path="config/general.json",
+    )
     assert loaded.settings is not None
     assert loaded.settings[SPEC_REMINDER] == "1w"
     assert loaded.notifications.valid_urls == ("json://localhost",)
 
 
 @pytest.mark.parametrize(
-    "notifications, message",
+    "notifications, display_message, diagnostic_message",
     [
-        ([], "Notifications must be an object"),
-        ({"unknown": []}, "Unknown notification settings"),
-        ({"urls": "json://localhost"}, 'setting "urls" must be an array'),
-        ({"urls": ["json://localhost", 1]}, "JSON index 2 must be a string"),
+        ([], "`notifications`", "Notifications must be an object"),
+        (
+            {"unknown": []},
+            "Remove unsupported notification settings",
+            "Unknown notification settings: unknown",
+        ),
+        (
+            {"urls": "json://localhost"},
+            "`notifications.urls`",
+            'setting "urls" must be an array',
+        ),
+        (
+            {"urls": ["json://localhost", 1]},
+            "must be a string",
+            "JSON index 2 must be a string",
+        ),
     ],
 )
-def test_notification_structure_failure_is_isolated_from_settings(tmp_path, notifications, message):
+def test_notification_structure_failure_is_isolated_from_settings(
+    tmp_path, notifications, display_message, diagnostic_message
+):
     _config(tmp_path, {"reminder": "1 week"}, notifications)
     loaded = load_general_config(str(tmp_path / "config"))
     assert loaded.notifications.error is not None
-    assert message in loaded.notifications.error
+    assert display_message in loaded.notifications.error
+    assert loaded.diagnostic is not None
+    assert diagnostic_message in loaded.diagnostic
     assert loaded.settings is not None
     assert loaded.settings[SPEC_REMINDER] == "1w"
 
@@ -165,7 +196,11 @@ def test_settings_failure_is_isolated_from_notifications(tmp_path):
     loaded = load_general_config(str(tmp_path / "config"))
     assert loaded.notifications.valid_urls == ("json://localhost",)
     assert loaded.settings is None
-    assert loaded.settings_error == "Unknown general settings: unknown"
+    assert loaded.settings_error == (
+        "Remove unsupported settings from `config/general.json`."
+    )
+    assert loaded.diagnostic is not None
+    assert "Unknown general settings: unknown" in loaded.diagnostic
 
 
 @pytest.mark.parametrize(

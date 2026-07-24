@@ -7,7 +7,5 @@
 │   ✅    Reminder Day        Saturday (default)                          │
 │   ✅    Reminder Time       13:00 (default)                             │
 │                                                                         │
-│   [1] Notification URLs may contain credentials and config/general.json │
-│ is accessible to group or other users. Run chmod 600                    │
-│ config/general.json.                                                    │
+│   [1] Protect notification URLs: chmod 600 config/general.json.         │
 ╰─────────────────────────────────────────────────────────────────────────╯
