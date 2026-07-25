@@ -63,7 +63,7 @@ def framework_setting_specs(default_interval: str) -> tuple[SettingSpec[Any], ..
         ),
         SettingSpec(
             key=KEY_SUPPRESS_REPEATED_PRICE_ALERTS,
-            label="Suppress Repeated Price Alerts",
+            label="Repeat Alerts",
             decode=lambda raw: _decoded(normalize_bool, raw),
             display=lambda value: "true" if value else "false",
             warning=suppress_repeated_price_alerts_warning_message(),

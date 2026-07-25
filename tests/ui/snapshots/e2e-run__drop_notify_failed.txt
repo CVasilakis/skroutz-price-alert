@@ -1,14 +1,13 @@
 # border: yellow
 
 ╭────────────────────────── Fake Store Scraping ──────────────────────────╮
-│   ✅    Monitored Items                   1 loaded                      │
-│   ✅    Execution Interval                1h (default)                  │
-│   ✅    Log Retention                     7 days (default)              │
-│   ✅    Notify On Errors                  true (default)                │
-│   ✅    Suppress Repeated Price Alerts    false (default)               │
+│   ✅    Monitored Items       1 loaded                                  │
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│   ✅    Repeat Alerts         false (default)                           │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🟡    Sony WH-1000XM5                   248.0 € (Target: 300.0 €)     │
-│                                           [1]                           │
+│   🟡    Sony WH-1000XM5       248.0 € (Target: 300.0 €) [1]             │
 │                                                                         │
 │   [1] Notification failed; test with ./scripts/run.sh --ping.           │
 ╰─────────────────────────────────────────────────────────────────────────╯

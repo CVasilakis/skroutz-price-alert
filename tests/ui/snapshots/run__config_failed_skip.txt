@@ -1,11 +1,11 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ❗    Monitored Items                   Failed [1]                    │
-│   ✅    Execution Interval                1h (default)                  │
-│   ✅    Log Retention                     7 days (default)              │
-│   ✅    Notify On Errors                  true (default)                │
-│   ✅    Suppress Repeated Price Alerts    false (default)               │
+│   ❗    Monitored Items       Failed [1]                                │
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│   ✅    Repeat Alerts         false (default)                           │
 │ ─────────────────────────────────────────────────────────────────────── │
 │                                                                         │
 │   [1] Fix JSON in config/skroutz.json at line 12, column 4.             │

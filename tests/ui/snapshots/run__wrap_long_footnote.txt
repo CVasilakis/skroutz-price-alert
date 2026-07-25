@@ -5,7 +5,7 @@
 │   ✅    Execution Interval                1h (default)                  │
 │   ✅    Log Retention                     7 days (default)              │
 │   ✅    Notify On Errors                  true (default)                │
-│   ✅    Suppress Repeated Price Alerts    false (default)               │
+│   ✅    Repeat Alerts                     false (default)               │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ❗    Samsung Odyssey G9 49-inch Cu…    ScraperParseError [1] [2]     │
 │                                                                         │

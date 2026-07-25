@@ -1,11 +1,11 @@
 # border: blue
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items                   5 loaded                      │
-│   ✅    Execution Interval                1h (default)                  │
-│   ✅    Log Retention                     7 days (default)              │
-│   ✅    Notify On Errors                  true (default)                │
-│   ✅    Suppress Repeated Price Alerts    false (default)               │
+│   ✅    Monitored Items       5 loaded                                  │
+│   ✅    Execution Interval    1h (default)                              │
+│   ✅    Log Retention         7 days (default)                          │
+│   ✅    Notify On Errors      true (default)                            │
+│   ✅    Repeat Alerts         false (default)                           │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ⏳    Retrying (2/3)                    ━━━━━━━━━━━━━━╸━━━━━━ 18.4s   │
+│   ⏳    Retrying (2/3)        ━━━━━━━━━━━━━━━━━━━━━━━╺━━━━━━━━━ 18.4s   │
 ╰─────────────────────────────────────────────────────────────────────────╯

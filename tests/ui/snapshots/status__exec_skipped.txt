@@ -1,16 +1,16 @@
 # border: yellow
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   ✅    Monitored Items                   5 loaded                      │
-│   ✅    Execution Interval                1h                            │
-│   ✅    Log Retention                     7 days                        │
-│   ✅    Notify On Errors                  true                          │
-│   ✅    Suppress Repeated Price Alerts    false                         │
+│   ✅    Monitored Items             5 loaded                            │
+│   ✅    Execution Interval          1h                                  │
+│   ✅    Log Retention               7 days                              │
+│   ✅    Notify On Errors            true                                │
+│   ✅    Repeat Alerts               false                               │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Systemd Timer Active              Yes                           │
-│   ✅    Last Execution Time               Sun 2026-06-28 13:00:00 UTC   │
-│   🟡    Last Execution Status             Skipped [1]                   │
-│   ✅    Next Scheduled Execution          Mon 2026-06-29 13:00:00 UTC   │
+│   ✅    Systemd Timer Active        Yes                                 │
+│   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
+│   🟡    Last Execution Status       Skipped [1]                         │
+│   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
 │   [1] Another instance of the scraper was running.                      │
 ╰─────────────────────────────────────────────────────────────────────────╯
