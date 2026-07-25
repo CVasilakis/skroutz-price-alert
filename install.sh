@@ -27,7 +27,7 @@ REQUIREMENTS_FILE="requirements.txt"
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
-    load_plugin_manifest || true
+    load_plugin_catalog || true
     printf '\n'
     printf '%s\n' "Usage: install.sh [-h] [--<target> ...]"
     printf '\n'
@@ -184,7 +184,7 @@ fi
 # The venv now exists, so the catalog can be queried (the single source of truth
 # for which scrapers exist). One systemd unit pair is generated per plugin.
 
-load_plugin_manifest || true
+load_plugin_catalog || true
 ALL_PLUGINS="$(list_plugins || true)"
 if [ -z "$ALL_PLUGINS" ]; then
     # Distinguishes a broken venv from a plugin whose discovery failed, and
@@ -269,20 +269,47 @@ printf "%b\n" "\n${CYAN}Setting up Systemd timer(s)...${NC}"
 
 mkdir -p "$SYSTEMD_USER_DIR"
 
-# Resolve the one framework-owned OnCalendar value for each plugin. All other timer
-# metadata is rendered by the shared framework writer.
-if ! ALL_SCHEDULES="$(list_plugin_schedules)"; then
-    printf "%b\n" "${RED}Error: Failed to resolve plugin schedules.${NC}\n"
+# Resolve config-dependent schedules separately from the immutable plugin catalog.
+# A structurally invalid config excludes only its own target from this transaction.
+if ! load_plugin_schedules || \
+   ! ALL_SCHEDULES="$(list_plugin_schedules)" || \
+   ! INTERVAL_STATUS="$(list_interval_status)" || \
+   ! SCHEDULE_ERRORS="$(list_schedule_errors)"; then
+    printf "%b\n" "${RED}Error: Failed to resolve scraper scheduling metadata.${NC}\n"
     exit 1
 fi
 
-if [ -n "$PLUGINS" ]; then
+CONFIG_FAILED=0
+PROVISION_PLUGINS=""
+OLD_IFS="$IFS"
+IFS='
+'
+# shellcheck disable=SC2086  # intentional newline-only stream iteration
+for plugin in $PLUGINS; do
+    status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS" || true)"
+    if [ -z "$status" ]; then
+        IFS="$OLD_IFS"
+        printf "%b\n" "${RED}Error: No scheduling result was returned for target '$plugin'.${NC}\n"
+        exit 1
+    fi
+    if [ "$status" = "error" ]; then
+        schedule_error="$(plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true)"
+        printf "%b\n" "\n${RED}[$plugin] Error: ${schedule_error:-Could not resolve its timer schedule.}${NC}"
+        printf "%b\n" "${YELLOW}[$plugin] Existing systemd units were left unchanged.${NC}"
+        CONFIG_FAILED=1
+        continue
+    fi
+    PROVISION_PLUGINS="$(stream_add_unique "$PROVISION_PLUGINS" "$plugin")"
+done
+IFS="$OLD_IFS"
+
+if [ -n "$PROVISION_PLUGINS" ]; then
     if [ "$IS_UPDATE" -eq 1 ]; then
         PROVISION_MODE="deferred"
     else
         PROVISION_MODE="normal"
     fi
-    if ! provision_units_transaction "$PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
+    if ! provision_units_transaction "$PROVISION_PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
         if [ "$IS_UPDATE" -eq 1 ]; then
             printf "%b\n" "${RED}Error: Transactional systemd provisioning failed during update.${NC}\n"
         else
@@ -307,7 +334,9 @@ if command -v loginctl >/dev/null 2>&1; then
     fi
 fi
 
-printf "%b\n" "${GREEN}Systemd timer(s) configured successfully.${NC}"
+if [ -n "$PROVISION_PLUGINS" ]; then
+    printf "%b\n" "${GREEN}Systemd timer(s) configured successfully.${NC}"
+fi
 
 # ------------------------------------------------------------------------------
 # LAST CHECKS
@@ -350,5 +379,12 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
 fi
 
 if [ "$IS_UPDATE" -eq 0 ]; then
-    printf "%b\n" "\n${GREEN}Installation complete!${NC}\n"
+    if [ "$CONFIG_FAILED" -eq 0 ]; then
+        printf "%b\n" "\n${GREEN}Installation complete!${NC}\n"
+    fi
+fi
+
+if [ "$CONFIG_FAILED" -ne 0 ]; then
+    printf "%b\n" "\n${RED}One or more targets were skipped because their configuration is invalid.${NC}\n"
+    exit 15
 fi

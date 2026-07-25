@@ -1,0 +1,6 @@
+# border: red
+# exit: 15
+
+[skroutz] Error: Remove unsupported keys from `config/skroutz.json`.
+[skroutz] Existing timer units were left unchanged.
+One or more targets were skipped because their configuration is invalid.

@@ -181,6 +181,29 @@ _case(
 )
 
 _case(
+    "partial_invalid_config",
+    "Healthy targets are provisioned while a malformed target remains untouched.",
+    world=ShellWorld(
+        plugins=("skroutz", "insomnia"),
+        schedule_errors={"insomnia": "Remove unsupported keys from `config/insomnia.json`."},
+        config_files=("skroutz.json", "insomnia.json", "general.json"),
+    ),
+    tags=("error", "products"),
+)
+
+_case(
+    "selected_invalid_config",
+    "A selected malformed target performs no unit transaction and exits with config failure.",
+    "--insomnia",
+    world=ShellWorld(
+        plugins=("skroutz", "insomnia"),
+        schedule_errors={"insomnia": "Remove unsupported keys from `config/insomnia.json`."},
+        config_files=("skroutz.json", "insomnia.json", "general.json"),
+    ),
+    tags=("error", "products"),
+)
+
+_case(
     "unit_write_fails",
     "The systemd user dir is unwritable, so unit rendering fails.",
     world=ShellWorld(unit_dir_readonly=True),

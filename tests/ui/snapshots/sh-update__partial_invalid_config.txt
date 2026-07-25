@@ -1,0 +1,22 @@
+# border: red
+# exit: 15
+
+Updating Scrooge Alert...
+Fetching origin/main before stopping any scraper...
+Quiescing 'alpha'...
+Quiescing 'beta'...
+
+Updating python packages in existing virtual environment...
+Python virtual environment successfully updated.
+
+Setting up Systemd timer(s)...
+
+[beta] Error: Remove unsupported keys from `config/beta.json`.
+[beta] Existing systemd units were left unchanged.
+Systemd timer(s) configured successfully.
+
+One or more targets were skipped because their configuration is invalid.
+
+
+Update complete, but one or more targets retained their existing units because their configuration
+is invalid.

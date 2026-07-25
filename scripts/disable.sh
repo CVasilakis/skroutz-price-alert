@@ -22,7 +22,7 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
-    load_plugin_manifest || true
+    load_plugin_catalog || true
     printf '\n'
     printf '%s\n' "Usage: disable.sh [-h] [--<target> ...]"
     printf '\n'
@@ -65,7 +65,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 require_systemctl
-load_plugin_manifest || true
+load_plugin_catalog || true
 
 if [ -n "$SELECTED" ]; then
     # Teardown acts on installed units. A name with an installed timer (incl. an

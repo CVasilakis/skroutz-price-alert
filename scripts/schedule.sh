@@ -19,7 +19,7 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
-    load_plugin_manifest || true
+    load_plugin_catalog || true
     _registered="$(list_plugins 2>/dev/null || true)"
     # The supported cadences come from the settings vocabulary (SUPPORTED_INTERVALS),
     # not a literal here, so this help can never drift from the code.
@@ -83,7 +83,7 @@ done
 
 require_systemctl
 
-load_plugin_manifest || true
+load_plugin_catalog || true
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"
 
@@ -156,8 +156,10 @@ fi
 # schedule actually moved. A missing config or an unsupported value leaves the timer
 # untouched (keeping the previously-applied schedule, or the default).
 
-if ! ALL_SCHEDULES="$(list_plugin_schedules)" || \
+if ! load_plugin_schedules || \
+   ! ALL_SCHEDULES="$(list_plugin_schedules)" || \
    ! INTERVAL_STATUS="$(list_interval_status)" || \
+   ! SCHEDULE_ERRORS="$(list_schedule_errors)" || \
    ! SUPPORTED_INTERVAL_KEYS="$(list_supported_intervals)" || \
    ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
     printf "%b\n" "${RED}Error: Failed to resolve plugin scheduling metadata.${NC}\n"
@@ -168,6 +170,7 @@ CHANGED=""
 ACTIVE_CHANGED=""
 INACTIVE_CHANGED=""
 FAILED=0
+CONFIG_FAILED=0
 # shellcheck disable=SC2086  # intentional newline-delimited target stream
 for plugin in $PLUGINS; do
     if ! status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")"; then
@@ -177,6 +180,13 @@ for plugin in $PLUGINS; do
     fi
 
     case "$status" in
+        error)
+            schedule_error="$(plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true)"
+            printf "%b\n" "\n${RED}[$plugin] Error: ${schedule_error:-Could not resolve its timer schedule.}${NC}"
+            printf "%b\n" "${YELLOW}[$plugin] Existing timer units were left unchanged.${NC}"
+            CONFIG_FAILED=1
+            continue
+            ;;
         nocfg)
             printf "%b\n" "\n${YELLOW}[$plugin] No config file found; leaving its timer unchanged.${NC}"
             if example_path="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"; then
@@ -275,6 +285,11 @@ fi
 
 if [ -n "$CHANGED" ]; then
     printf "%b\n" "\n${GREEN}Done. Updated:${NC} ${CYAN}$(stream_for_display "$CHANGED")${NC}\n"
-else
+elif [ "$CONFIG_FAILED" -eq 0 ]; then
     printf "%b\n" "\n${GREEN}All timers already match their configured intervals. Nothing changed.${NC}\n"
+fi
+
+if [ "$CONFIG_FAILED" -ne 0 ]; then
+    printf "%b\n" "${RED}One or more targets were skipped because their configuration is invalid.${NC}\n"
+    exit 15
 fi

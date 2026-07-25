@@ -105,6 +105,16 @@ _case(
     "--skroutz",
 )
 
+_case(
+    "dispatch_healthy_with_other_bad_config",
+    "A malformed config for another target does not block selected dispatch.",
+    "--skroutz",
+    world=ShellWorld(
+        plugins=("skroutz", "insomnia"),
+        schedule_errors={"insomnia": "Remove unsupported keys from `config/insomnia.json`."},
+    ),
+)
+
 _case("dispatch_ping", "--ping alone dispatches to ping.py.", "--ping")
 
 _case("dispatch_status", "--status alone dispatches to status.py.", "--status")

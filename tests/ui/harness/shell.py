@@ -18,7 +18,7 @@ What is faked (each a tiny POSIX-sh shim on a sandbox-only PATH):
 * ``python3`` - answers install.sh's prerequisite probes and plants the venv
   responder when asked to create a venv.
 * ``venv/bin/python3`` - the catalog responder: recognizes the stable scraper CLI
-  commands and prints a canned plugin manifest instead of importing the catalog.
+  commands and prints canned catalog and schedule reports instead of importing Python.
 
 Determinism: the environment is built from scratch (never inherited), HOME and
 SYSTEMD_USER_DIR live inside the sandbox, LC_ALL=C, all shim output is canned, and
@@ -59,7 +59,20 @@ _SCRIPT_FILES = (
 # sandbox-only, so these symlinks plus the shims are the entire command universe a
 # script can reach — the host's genuine systemctl/python3 (or any unshimmed
 # external) can never leak in.
-_REAL_TOOLS = ("dirname", "cut", "cat", "chmod", "mkdir", "rm", "cp", "mv", "id", "awk")
+_REAL_TOOLS = (
+    "dirname",
+    "cut",
+    "cat",
+    "chmod",
+    "mkdir",
+    "rm",
+    "cp",
+    "mv",
+    "id",
+    "awk",
+    "cmp",
+    "readlink",
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +84,7 @@ class ShellWorld:
         requirements: plugin -> absolute requirements path (plugins with none omitted).
         schedules: plugin -> resolved OnCalendar value; default hourly.
         interval_status: plugin -> ok|default|invalid|nocfg; default ok.
+        schedule_errors: plugin -> concise ConfigFileError display message.
         supported_intervals: The one-line cadence vocabulary shown in help text.
         discovery_error: When set, the catalog is unavailable: list_plugins prints
             nothing and catalog_diagnose reports this one-line error.
@@ -109,6 +123,7 @@ class ShellWorld:
     requirements: dict[str, str] | None = None
     schedules: dict[str, str] | None = None
     interval_status: dict[str, str] | None = None
+    schedule_errors: dict[str, str] | None = None
     supported_intervals: str = "15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h"
     discovery_error: str | None = None
 
@@ -327,7 +342,8 @@ exit 0
 # Scraper CLI invocations recognized by the venv responder. Guard-tested against
 # common.sh so the snapshot harness cannot silently drift from the shell bridge.
 VENV_RESPONDER_MARKERS: tuple[str, ...] = (
-    "manifest --config-dir",
+    "cli catalog",
+    "schedules --config-dir",
     "intervals",
     "diagnose",
 )
@@ -346,9 +362,12 @@ case "${1:-}" in
     -m)
         shift
         case "$*" in
-            "core.scrapers.tooling.cli manifest --config-dir "*)
+            "core.scrapers.tooling.cli catalog")
                 [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
-                [ -n "${FAKE_PLUGIN_MANIFEST:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_MANIFEST" ;;
+                [ -n "${FAKE_PLUGIN_CATALOG:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_CATALOG" ;;
+            "core.scrapers.tooling.cli schedules --config-dir "*)
+                [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                [ -n "${FAKE_SCHEDULE_REPORT:-}" ] && printf '%s\\n' "$FAKE_SCHEDULE_REPORT" ;;
             "core.scrapers.tooling.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
             "core.scrapers.tooling.cli diagnose")
                 if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
@@ -357,7 +376,7 @@ case "${1:-}" in
                 fi
                 _n=0
                 for _p in ${FAKE_PLUGINS:-}; do _n=$((_n + 1)); done
-                printf '  (discovery succeeded on retry: %s scraper(s) registered)\\n' "$_n" ;;
+                printf '  Plugin discovery succeeds now (%s scraper(s) registered).\\n' "$_n" ;;
             *" -r requirements.txt") [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r /"*)               [ "${FAKE_PIP_FAIL:-}" = "plugin" ] && exit 1 ;;
             *" pip")                 [ "${FAKE_PIP_FAIL:-}" = "upgrade" ] && exit 1 ;;
@@ -499,6 +518,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
     interval_status = (
         world.interval_status if world.interval_status is not None else {p: "ok" for p in plugins}
     )
+    schedule_errors = world.schedule_errors or {}
 
     return {
         # Sandbox-only in every mode (an allowlist, not shim-by-precedence): the
@@ -519,17 +539,24 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_PLUGIN_REQUIREMENTS": "\n".join(
             f"{p}\t{r}" for p, r in (world.requirements or {}).items()
         ),
-        "FAKE_SCHEDULES": "\n".join(f"{p}\t{calendar}" for p, calendar in schedules.items()),
-        "FAKE_INTERVAL_STATUS": "\n".join(f"{p}\t{s}" for p, s in interval_status.items()),
-        "FAKE_PLUGIN_MANIFEST": "\n".join(
+        "FAKE_PLUGIN_CATALOG": "\n".join(
             "\t".join(
                 (
                     plugin,
                     plugin.capitalize(),
                     f"{sandbox}/src/core/scrapers/plugins/{plugin}/config.example.json",
                     (world.requirements or {}).get(plugin, ""),
-                    schedules.get(plugin, ""),
-                    interval_status.get(plugin, ""),
+                )
+            )
+            for plugin in plugins
+        ),
+        "FAKE_SCHEDULE_REPORT": "\n".join(
+            "\t".join(
+                (
+                    plugin,
+                    "" if plugin in schedule_errors else schedules.get(plugin, ""),
+                    "error" if plugin in schedule_errors else interval_status.get(plugin, ""),
+                    schedule_errors.get(plugin, ""),
                 )
             )
             for plugin in plugins

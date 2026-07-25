@@ -108,7 +108,7 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     ./install.sh
     ```
 
-    The `install.sh` script will automatically create a Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. No `sudo` or elevated privileges are required for the installation.
+    The `install.sh` script will automatically create a Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
 
 4. **Configure your settings:**
 
@@ -311,7 +311,7 @@ Background runs expose precise exit statuses through **Last Execution Status**:
 
 | Code | Meaning |
 | :--- | :--- |
-| `15` | A scraper products config could not be loaded. |
+| `15` | At least one scraper products config could not be loaded. That target is skipped while other selected targets continue; management commands preserve its existing units. |
 | `16` | Notification configuration in `config/general.json` is unusable. |
 | `17` | The store blocked or rate-limited the scraper. |
 | `18` | A parser or unexpected scraper fault exhausted all retries. |
@@ -397,7 +397,7 @@ Applies each scraper's configured `execution_interval` (from `config/<target>.js
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
 | `-h`, `--help` | Show the help message and exit. |
-| `--<target>` | Apply only the specified target's interval (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is updated to match its configured interval. A scraper whose config file is missing, or whose `execution_interval` is unsupported, is reported and left unchanged. |
+| `--<target>` | Apply only the specified target's interval (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is updated to match its configured interval. A scraper whose config file is missing, structurally invalid, or has an unsupported `execution_interval` is reported and left unchanged. Other targets continue, and a structural config error makes the command exit `15`. |
 
 #### Remove Scrapers & Uninstall
 Performs a full or partial teardown of the background services:
@@ -426,6 +426,11 @@ discards work or switches branches. It stops and disables selected targets befor
 replacing source or unit files, then restores each timer's prior enabled/active
 state. If an update is interrupted after source replacement, affected timers stay
 disabled and the command prints the retained recovery path and status command.
+If a selected target's config is structurally invalid after the source update,
+that target's previous unit files and timer state are restored while healthy
+targets are reprovisioned; the update completes its recovery work and exits `15`.
+Transactional rollback restores unit files exactly, including symlinks and their
+original link text.
 
 ## 🔔 Notifications & Messages
 
@@ -614,7 +619,8 @@ New stores use the in-repository plugin contract: run
 `./scripts/dev/plugin-create.sh`, keep `plugin.py` import-light, export `Client` from
 `client.py`, add mocked target-owned tests, and run
 `./scripts/dev/plugin-check.sh --<target>`. The immutable plugin
-catalog and shell manifest discover the new adapter automatically, so framework,
+catalog and separate shell catalog/schedule reports discover the new adapter
+automatically, so framework,
 CLI, UI, and management-script edits are unnecessary. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the complete input, URL, field, setting, result,
 exception, dependency, and testing contracts.

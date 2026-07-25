@@ -26,6 +26,47 @@ validate_staged_pair() {
         unit_file_has_line "$_vsp_timer" "Persistent=true"
 }
 
+unit_file_matches_backup() {
+    _ufmb_backup="$1"
+    _ufmb_candidate="$2"
+    if [ -L "$_ufmb_backup" ]; then
+        [ -L "$_ufmb_candidate" ] &&
+            [ "$(readlink "$_ufmb_backup")" = "$(readlink "$_ufmb_candidate")" ]
+    elif [ -f "$_ufmb_backup" ]; then
+        [ -f "$_ufmb_candidate" ] && [ ! -L "$_ufmb_candidate" ] &&
+            cmp -s "$_ufmb_backup" "$_ufmb_candidate"
+    else
+        return 1
+    fi
+}
+
+restore_unit_file() {
+    _ruf_backup="$1"
+    _ruf_live="$2"
+    _ruf_tmp="$_ruf_live.restore.$$"
+    if [ -e "$_ruf_tmp" ] || [ -L "$_ruf_tmp" ]; then
+        printf '%s\n' "Error: Unit restore staging path already exists: $_ruf_tmp" >&2
+        return 1
+    fi
+    if ! cp -Pp "$_ruf_backup" "$_ruf_tmp"; then
+        rm -f "$_ruf_tmp"
+        return 1
+    fi
+    if ! unit_file_matches_backup "$_ruf_backup" "$_ruf_tmp"; then
+        printf '%s\n' "Error: Staged unit restore does not match its backup." >&2
+        rm -f "$_ruf_tmp"
+        return 1
+    fi
+    if ! mv "$_ruf_tmp" "$_ruf_live"; then
+        rm -f "$_ruf_tmp"
+        return 1
+    fi
+    if ! unit_file_matches_backup "$_ruf_backup" "$_ruf_live"; then
+        printf '%s\n' "Error: Restored unit does not match its backup." >&2
+        return 1
+    fi
+}
+
 capture_timer_state() {
     _cts_target="$1"
     _cts_path="$2"
@@ -150,8 +191,8 @@ rollback_provisioning() {
             _rbp_backup="$_rbp_transaction/backups/$(unit_name "$_rbp_target" "$_rbp_suffix")"
             _rbp_existed="$_rbp_transaction/existed/$(unit_name "$_rbp_target" "$_rbp_suffix")"
             if [ -f "$_rbp_existed" ]; then
-                if [ -f "$_rbp_backup" ]; then
-                    cp -p "$_rbp_backup" "$_rbp_live" || _rbp_failed=1
+                if [ -f "$_rbp_backup" ] || [ -L "$_rbp_backup" ]; then
+                    restore_unit_file "$_rbp_backup" "$_rbp_live" || _rbp_failed=1
                 else
                     printf '%s\n' \
                         "Error: Missing backup for previously-existing $(unit_name "$_rbp_target" "$_rbp_suffix")." >&2
@@ -159,6 +200,10 @@ rollback_provisioning() {
                 fi
             else
                 rm -f "$_rbp_live" || _rbp_failed=1
+                if [ -e "$_rbp_live" ] || [ -L "$_rbp_live" ]; then
+                    printf '%s\n' "Error: Newly-created unit remained after rollback: $_rbp_live" >&2
+                    _rbp_failed=1
+                fi
             fi
         done
     done
@@ -294,7 +339,9 @@ provision_units_transaction() {
             _put_name="$(unit_name "$_put_target" "$_put_suffix")"
             _put_live="$SYSTEMD_USER_DIR/$_put_name"
             if [ -f "$PROVISION_RECOVERY_DIR/existed/$_put_name" ]; then
-                if ! cp -p "$_put_live" "$PROVISION_RECOVERY_DIR/backups/$_put_name"; then
+                _put_backup="$PROVISION_RECOVERY_DIR/backups/$_put_name"
+                if ! cp -Pp "$_put_live" "$_put_backup" ||
+                   ! unit_file_matches_backup "$_put_live" "$_put_backup"; then
                     printf '%s\n' "Error: Failed to back up existing $_put_name." >&2
                     _put_backup_failed=1
                     break

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.constants import CONFIG_DIR
+from core.exceptions import ConfigFileError
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS, oncalendar_for
@@ -21,6 +22,13 @@ from core.settings import ResolvedSetting, SettingStatus
 class ScheduleResolution:
     on_calendar: str
     status: SettingStatus
+
+
+def _tsv_row(*fields: str) -> str:
+    for field in fields:
+        if any(separator in field for separator in ("\t", "\r", "\n")):
+            raise ValueError("tooling TSV fields must be single-line and tab-free")
+    return "\t".join(fields)
 
 
 def resolve_schedule(plugin: RegisteredPlugin, config_dir: str) -> ScheduleResolution:
@@ -40,29 +48,44 @@ def resolve_schedule(plugin: RegisteredPlugin, config_dir: str) -> ScheduleResol
     return ScheduleResolution(oncalendar_for(canonical), interval.status)
 
 
-def manifest(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
-    """Return the single six-column TSV manifest consumed by shell scripts."""
+def catalog_rows(catalog: PluginCatalog) -> tuple[str, ...]:
+    """Return immutable, config-independent plugin metadata for shell scripts."""
+    return tuple(
+        _tsv_row(
+            plugin.target,
+            plugin.display_name,
+            plugin.example_config_path,
+            plugin.requirements_path or "",
+        )
+        for plugin in catalog.plugins
+    )
+
+
+def schedule_rows(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
+    """Return an isolated schedule result for every registered plugin."""
     rows: list[str] = []
     for plugin in catalog.plugins:
-        schedule = resolve_schedule(plugin, config_dir)
-        rows.append(
-            "\t".join(
-                (
+        try:
+            schedule = resolve_schedule(plugin, config_dir)
+        except ConfigFileError as exc:
+            rows.append(_tsv_row(plugin.target, "", "error", str(exc)))
+        else:
+            rows.append(
+                _tsv_row(
                     plugin.target,
-                    plugin.display_name,
-                    plugin.example_config_path,
-                    plugin.requirements_path or "",
                     schedule.on_calendar,
                     schedule.status.value,
+                    "",
                 )
             )
-        )
     return tuple(rows)
 
 
 def requirements(catalog: PluginCatalog) -> tuple[str, ...]:
     """Return config-independent target/private-requirement pairs for dev tooling."""
-    return tuple(f"{plugin.target}\t{plugin.requirements_path or ''}" for plugin in catalog.plugins)
+    return tuple(
+        _tsv_row(plugin.target, plugin.requirements_path or "") for plugin in catalog.plugins
+    )
 
 
 def _diagnose() -> int:
@@ -71,15 +94,16 @@ def _diagnose() -> int:
     except Exception as exc:
         print(f"  {type(exc).__name__}: {exc}")
         return 1
-    print(f"  (discovery succeeded on retry: {len(catalog.plugins)} scraper(s) registered)")
+    print(f"  Plugin discovery succeeds now ({len(catalog.plugins)} scraper(s) registered).")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.scrapers.tooling.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    manifest_parser = subparsers.add_parser("manifest")
-    manifest_parser.add_argument("--config-dir", default=CONFIG_DIR)
+    subparsers.add_parser("catalog")
+    schedules_parser = subparsers.add_parser("schedules")
+    schedules_parser.add_argument("--config-dir", default=CONFIG_DIR)
     subparsers.add_parser("intervals")
     subparsers.add_parser("requirements")
     subparsers.add_parser("diagnose")
@@ -87,8 +111,11 @@ def main(argv: list[str] | None = None) -> int:
     plugin_check.add_argument("target")
 
     args = parser.parse_args(argv)
-    if args.command == "manifest":
-        for row in manifest(PluginCatalog.discover(), args.config_dir):
+    if args.command == "catalog":
+        for row in catalog_rows(PluginCatalog.discover()):
+            print(row)
+    elif args.command == "schedules":
+        for row in schedule_rows(PluginCatalog.discover(), args.config_dir):
             print(row)
     elif args.command == "intervals":
         print(", ".join(SUPPORTED_INTERVALS))

@@ -110,25 +110,35 @@ class TestNamingHelpers(unittest.TestCase):
         self.assertEqual(result.stdout, "custom feed.json")
 
 
-class TestManifestSnapshot(unittest.TestCase):
-    def test_all_manifest_projections_share_one_acquisition(self):
+class TestMetadataSnapshots(unittest.TestCase):
+    def test_catalog_and_schedule_projections_each_share_one_acquisition(self):
         temp_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
-        counter = temp_dir / "calls"
+        catalog_counter = temp_dir / "catalog-calls"
+        schedule_counter = temp_dir / "schedule-calls"
         script = (
-            f'catalog_cli() {{ printf x >> "{counter}"; '
-            "printf 'alpha\\tAlpha Store\\t/example.json\\t/req.txt\\thourly\\tok\\n'; }\n"
-            "load_plugin_manifest\n"
+            "catalog_cli() {\n"
+            '  case "$1" in\n'
+            f'    catalog) printf x >> "{catalog_counter}"; '
+            "printf 'alpha\\tAlpha Store\\t/example.json\\t/req.txt\\n' ;;\n"
+            f'    schedules) printf x >> "{schedule_counter}"; '
+            "printf 'alpha\\thourly\\tok\\t\\n' ;;\n"
+            "  esac\n"
+            "}\n"
+            "load_plugin_catalog\n"
             "list_plugins >/dev/null\n"
             "plugin_display_name alpha >/dev/null\n"
             "list_plugin_examples >/dev/null\n"
             "list_plugin_requirements >/dev/null\n"
+            "load_plugin_schedules\n"
             "list_plugin_schedules >/dev/null\n"
             "list_interval_status >/dev/null\n"
+            "list_schedule_errors >/dev/null\n"
         )
         result = run_sh(script)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(counter.read_text(), "x")
+        self.assertEqual(catalog_counter.read_text(), "x")
+        self.assertEqual(schedule_counter.read_text(), "x")
 
 
 class TestUnitFileRoundTrip(unittest.TestCase):
@@ -141,7 +151,10 @@ class TestUnitFileRoundTrip(unittest.TestCase):
 
     def _write(self, plugin, calendar):
         return run_sh(
-            f'mkdir -p "$SYSTEMD_USER_DIR"\nwrite_plugin_units {plugin} "{calendar}"',
+            'mkdir -p "$SYSTEMD_USER_DIR"\n'
+            f'render_plugin_service {plugin} "$SYSTEMD_USER_DIR/{plugin}-scraper.service"\n'
+            f'render_plugin_timer {plugin} "{calendar}" '
+            f'"$SYSTEMD_USER_DIR/{plugin}-scraper.timer"',
             xdg_config_home=self.tmp,
         )
 
@@ -168,21 +181,6 @@ class TestUnitFileRoundTrip(unittest.TestCase):
     def test_read_timer_calendar_missing_unit_is_empty_success(self):
         read = run_sh("read_timer_oncalendar ghost", xdg_config_home=self.tmp)
         self.assertEqual((read.returncode, read.stdout), (0, ""))
-
-    def test_failed_render_does_not_masquerade_as_success_when_old_files_exist(self):
-        self.assertEqual(self._write("foo", "hourly").returncode, 0)
-        service = self.unit_dir / "foo-scraper.service"
-        timer = self.unit_dir / "foo-scraper.timer"
-        old_service = service.read_text()
-        old_timer = timer.read_text()
-
-        failed = run_sh(
-            'render_plugin_service() { return 1; }\nwrite_plugin_units foo "daily"',
-            xdg_config_home=self.tmp,
-        )
-        self.assertNotEqual(failed.returncode, 0)
-        self.assertEqual(service.read_text(), old_service)
-        self.assertEqual(timer.read_text(), old_timer)
 
     def test_timer_only_update_does_not_rewrite_service(self):
         self.assertEqual(self._write("foo", "hourly").returncode, 0)
@@ -277,9 +275,28 @@ class TestCatalogDiagnose(unittest.TestCase):
 
         result = run_sh("catalog_diagnose", base_dir=self.tmp)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("discovery failed", result.stderr)
+        self.assertIn("catalog could not be loaded", result.stderr)
         self.assertIn("PluginDiscoveryError", result.stderr)
         self.assertIn("zzzbroken", result.stderr)
+
+    def test_transient_catalog_failure_reports_that_retry_is_safe(self):
+        python = self.tmp / "venv" / "bin" / "python3"
+        python.parent.mkdir(parents=True)
+        python.write_text("#!/bin/sh\nexit 0\n")
+        python.chmod(0o755)
+        result = run_sh(
+            "catalog_cli() {\n"
+            '  [ "$1" = diagnose ] || return 1\n'
+            "  printf '%s\\n' 'Plugin discovery succeeds now (2 plugins).'\n"
+            "}\n"
+            "catalog_diagnose",
+            base_dir=self.tmp,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("catalog could not be loaded", result.stderr)
+        self.assertIn("Plugin discovery succeeds now (2 plugins).", result.stderr)
+        self.assertIn("catalog is readable now; retry", result.stderr)
+        self.assertNotIn("Fix (or remove)", result.stderr)
 
 
 class TestListSupportedIntervals(unittest.TestCase):
@@ -321,6 +338,16 @@ class TestRealRegistryBridge(unittest.TestCase):
         result = run_sh("list_plugin_examples", base_dir=self.base_dir)
         pairs = dict(line.split("\t", 1) for line in result.stdout.splitlines())
         self.assertTrue(pairs.get("skroutz", "").endswith("/skroutz/config.example.json"))
+
+    def test_catalog_ignores_malformed_config_but_schedule_reports_it(self):
+        (self.base_dir / "config" / "insomnia.json").write_text('{"products": [], "settings": {}}')
+        catalog = run_sh("list_plugins", base_dir=self.base_dir)
+        self.assertEqual(catalog.returncode, 0, catalog.stderr)
+        self.assertIn("skroutz", catalog.stdout.split())
+        self.assertIn("insomnia", catalog.stdout.split())
+        statuses = run_sh("list_interval_status", base_dir=self.base_dir)
+        self.assertEqual(statuses.returncode, 0, statuses.stderr)
+        self.assertIn("insomnia\terror", statuses.stdout.splitlines())
 
     def test_list_plugin_schedules_is_a_value_stream(self):
         result = run_sh("list_plugin_schedules", base_dir=self.base_dir)

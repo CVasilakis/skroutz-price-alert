@@ -123,6 +123,16 @@ _case(
 )
 
 _case(
+    "malformed_config",
+    "A structurally malformed config leaves its timer unchanged and exits 15.",
+    world=replace(
+        WORLD_INSTALLED,
+        schedule_errors={"skroutz": "Remove unsupported keys from `config/skroutz.json`."},
+    ),
+    tags=("error", "products"),
+)
+
+_case(
     "missing_schedule",
     "A scheduled target has no catalog-resolved schedule - skipped.",
     world=replace(WORLD_INSTALLED, schedules={}),

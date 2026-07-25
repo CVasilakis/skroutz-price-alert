@@ -148,6 +148,20 @@ _case(
     tags=("error",),
 )
 _case(
+    "partial_invalid_config",
+    "The source update reprovisions a healthy target and preserves a malformed target.",
+    world=ShellWorld(
+        plugins=("alpha", "beta"),
+        installed_timers=("alpha", "beta"),
+        installed_services=("alpha", "beta"),
+        enabled_timers=("alpha", "beta"),
+        active_timers=("alpha", "beta"),
+        config_files=("alpha.json", "beta.json", "general.json"),
+        schedule_errors={"beta": "Remove unsupported keys from `config/beta.json`."},
+    ),
+    tags=("error", "products"),
+)
+_case(
     "timer_only_repair",
     "A timer-only damaged installation gets its service half back.",
     world=replace(_BASE, installed_services=()),

@@ -208,7 +208,12 @@ main() {
     done
     IFS="$OLD_IFS"
     UPDATE_PHASE="provisioning"
-    if ! SCROOGE_INTERNAL_UPDATE=1 "$SCRIPT_DIR/install.sh" "$@"; then
+    if SCROOGE_INTERNAL_UPDATE=1 "$SCRIPT_DIR/install.sh" "$@"; then
+        INSTALL_STATUS=0
+    else
+        INSTALL_STATUS=$?
+    fi
+    if [ "$INSTALL_STATUS" -ne 0 ] && [ "$INSTALL_STATUS" -ne 15 ]; then
         printf "%b\n" "${RED}Error: Provisioning failed after the source update.${NC}"
         printf "%b\n" "${YELLOW}Affected timers remain disabled for safety.${NC}"
         printf "%b\n" "Rerun ${CYAN}./update.sh${NC}, or inspect with ${CYAN}./scripts/run.sh --status${NC}."
@@ -216,12 +221,23 @@ main() {
         printf '%s\n' "$UPDATE_RECOVERY_DIR"
         exit 1
     fi
+    PARTIAL_CONFIG=0
+    [ "$INSTALL_STATUS" -ne 15 ] || PARTIAL_CONFIG=1
 
     # The new install deliberately left all selected timers quiesced. Restore
     # original enabled/active state, except a service-only damaged installation:
     # its newly reconstructed timer is enabled and started as a repair.
-    load_plugin_manifest || true
+    load_plugin_catalog || true
     CURRENT_TARGETS="$(list_plugins 2>/dev/null || true)"
+    if ! load_plugin_schedules; then
+        printf "%b\n" "${RED}Error: Could not reload scraper scheduling metadata after the update.${NC}"
+        printf "%b\n" "${YELLOW}Affected timers remain disabled for safety.${NC}"
+        printf '%s\n' "Recorded timer states were retained at:"
+        printf '%s\n' "$UPDATE_RECOVERY_DIR"
+        printf "%b\n" "Rerun ${CYAN}./update.sh${NC}, or inspect with ${CYAN}./scripts/run.sh --status${NC}."
+        exit 1
+    fi
+    CURRENT_INTERVAL_STATUS="$(list_interval_status)"
     ACTIVATE_FAILED=0
     UPDATE_PHASE="activating"
     IFS='
@@ -233,8 +249,12 @@ main() {
             continue
         fi
         read_captured_state "$UPDATE_RECOVERY_DIR/$target"
+        target_schedule_status="$(
+            plugin_stream_value "$target" "$CURRENT_INTERVAL_STATUS" || true
+        )"
         if [ "$CAPTURED_TIMER_LOAD" = "not-found" ] &&
-           [ "$CAPTURED_SERVICE_LOAD" = "loaded" ]; then
+           [ "$CAPTURED_SERVICE_LOAD" = "loaded" ] &&
+           [ "$target_schedule_status" != "error" ]; then
             printf "%b\n" "${CYAN}Enabling reconstructed timer for '$target'...${NC}"
             if ! enable_one "$target"; then
                 ACTIVATE_FAILED=1
@@ -284,6 +304,11 @@ main() {
     if [ -n "$NEW_TARGETS" ]; then
         printf "%b\n" "\n${YELLOW}Scrapers available but not installed:${NC} ${CYAN}$(stream_for_display "$NEW_TARGETS")${NC}"
         printf "%b\n" "Install any of them with: ${CYAN}./install.sh --<target>${NC}"
+    fi
+
+    if [ "$PARTIAL_CONFIG" -ne 0 ]; then
+        printf "%b\n" "\n${YELLOW}Update complete, but one or more targets retained their existing units because their configuration is invalid.${NC}\n"
+        exit 15
     fi
 
     printf "%b\n" "\n${GREEN}Update complete! You are now running origin/main.${NC}\n"

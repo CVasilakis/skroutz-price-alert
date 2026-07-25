@@ -28,7 +28,8 @@ case "$verb" in
         target="$(stem "$unit")"
         case "$property" in
             LoadState)
-                [ -f "$XDG_CONFIG_HOME/systemd/user/$unit" ] &&
+                { [ -e "$XDG_CONFIG_HOME/systemd/user/$unit" ] ||
+                    [ -L "$XDG_CONFIG_HOME/systemd/user/$unit" ]; } &&
                     echo LoadState=loaded || echo LoadState=not-found ;;
             UnitFileState)
                 if [ "${FAKE_UNIT_FILE_STATE_TARGET:-}" = "$target" ]; then
@@ -167,6 +168,43 @@ def test_reinstall_failure_restores_bytes_and_timer_state(shell_world):
     assert (state / "active.alpha").is_file()
 
 
+@pytest.mark.parametrize("link_kind", ("relative", "absolute", "devnull"))
+def test_reinstall_failure_restores_symlinked_units_exactly(shell_world, link_kind):
+    _, unit_dir, state, _ = shell_world
+    external = unit_dir.parent / "external"
+    external.mkdir()
+    expected_targets = {}
+    for suffix in ("service", "timer"):
+        live = unit_dir / f"alpha-scraper.{suffix}"
+        target = external / f"original.{suffix}"
+        target.write_text(f"linked {suffix}\n", encoding="utf-8")
+        if link_kind == "relative":
+            link_target = os.path.relpath(target, unit_dir)
+        elif link_kind == "absolute":
+            link_target = str(target)
+        else:
+            link_target = "/dev/null"
+        live.symlink_to(link_target)
+        expected_targets[live] = link_target
+    (state / "active.alpha").touch()
+
+    result = run_transaction(
+        shell_world,
+        "alpha",
+        "alpha\thourly",
+        FAKE_FAIL_ENABLE_TARGET="alpha",
+        FAKE_UNIT_FILE_STATE_TARGET="alpha",
+        FAKE_UNIT_FILE_STATE="linked",
+    )
+
+    assert result.returncode != 0
+    for live, target in expected_targets.items():
+        assert live.is_symlink()
+        assert os.readlink(live) == target
+    assert not (state / "enabled.alpha").exists()
+    assert (state / "active.alpha").is_file()
+
+
 def test_multi_target_failure_rolls_back_target_already_activated(shell_world):
     _, unit_dir, state, _ = shell_world
     result = run_transaction(
@@ -273,6 +311,38 @@ def test_signal_during_activation_rolls_back_new_units(shell_world):
     assert result.returncode == 143
     assert "Provisioning interrupted by TERM" in result.stderr
     assert list(unit_dir.glob("*-scraper.*")) == []
+
+
+def test_signal_during_activation_restores_symlinked_units_exactly(shell_world):
+    _, unit_dir, state, _ = shell_world
+    external = unit_dir.parent / "external"
+    external.mkdir()
+    expected_targets = {}
+    for suffix in ("service", "timer"):
+        live = unit_dir / f"alpha-scraper.{suffix}"
+        target = external / f"original.{suffix}"
+        target.write_text(f"linked {suffix}\n", encoding="utf-8")
+        link_target = os.path.relpath(target, unit_dir)
+        live.symlink_to(link_target)
+        expected_targets[live] = link_target
+    (state / "active.alpha").touch()
+
+    result = run_transaction(
+        shell_world,
+        "alpha",
+        "alpha\thourly",
+        FAKE_SIGNAL_VERB="enable",
+        FAKE_UNIT_FILE_STATE_TARGET="alpha",
+        FAKE_UNIT_FILE_STATE="linked",
+    )
+
+    assert result.returncode == 143
+    assert "Provisioning interrupted by TERM" in result.stderr
+    for live, target in expected_targets.items():
+        assert live.is_symlink()
+        assert os.readlink(live) == target
+    assert not (state / "enabled.alpha").exists()
+    assert (state / "active.alpha").is_file()
 
 
 def test_signal_during_success_cleanup_cannot_start_rollback(shell_world):

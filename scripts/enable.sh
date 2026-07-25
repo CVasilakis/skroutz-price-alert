@@ -18,7 +18,7 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 # ==============================================================================
 
 print_help() {
-    load_plugin_manifest || true
+    load_plugin_catalog || true
     _registered="$(list_plugins 2>/dev/null || true)"
 
     # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
@@ -76,7 +76,7 @@ done
 
 require_systemctl
 
-load_plugin_manifest || true
+load_plugin_catalog || true
 INSTALLED_PLUGINS="$(list_installed_plugins timer)"
 REGISTERED="$(list_plugins 2>/dev/null || true)"
 

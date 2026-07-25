@@ -66,7 +66,7 @@ esac
 require_python_310 "$VENV_PYTHON" "./install.sh" || exit 1
 
 # Registered plugins (one --<plugin> flag is accepted per registered scraper).
-load_plugin_manifest || true
+load_plugin_catalog || true
 PLUGINS="$(list_plugins || true)"
 
 # ==============================================================================

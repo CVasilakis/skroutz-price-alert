@@ -12,6 +12,7 @@ from ui.catalog.shell_inputs import (
     WORLD_INSTALLED,
     WORLD_NO_VENV,
     WORLD_ORPHAN,
+    ShellWorld,
     shell_case,
 )
 
@@ -91,6 +92,18 @@ _case("nothing_installed", "No installed scrapers at all.", world=WORLD_EMPTY)
 _case("already_enabled", "The timer is already enabled and active.", world=WORLD_HEALTHY)
 
 _case("enable_success", "An installed but dormant timer is armed.", world=WORLD_INSTALLED)
+
+_case(
+    "enable_healthy_with_other_bad_config",
+    "A malformed config for another target does not block enabling this timer.",
+    "--skroutz",
+    world=ShellWorld(
+        plugins=("skroutz", "insomnia"),
+        schedule_errors={"insomnia": "Remove unsupported keys from `config/insomnia.json`."},
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+    ),
+)
 
 _case(
     "enable_fails",

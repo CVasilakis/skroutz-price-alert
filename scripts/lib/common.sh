@@ -127,7 +127,7 @@ stream_for_display() {
 # ------------------------------------------------------------------------------
 
 # list_plugins: print the machine name of every registered plugin, one per line,
-# by filtering the immutable plugin manifest (the single source of truth). Requires the venv,
+# by filtering the immutable plugin catalog (the single source of truth). Requires the venv,
 # but plugin discovery only imports each plugin's lightweight descriptor (plugin.py)
 # - never its client/storage or transport libraries (tls_client, selenium, ...),
 # which load lazily only when a scrape actually runs. Returns non-zero (printing
@@ -138,36 +138,36 @@ catalog_cli() {
     PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" -m core.scrapers.tooling.cli "$@"
 }
 
-# Acquire one immutable manifest snapshot for the current command. A failed
+# Acquire one immutable catalog snapshot for the current command. A failed
 # acquisition is cached too, so callers can run the explicit diagnostic retry
 # without every list projection independently re-running discovery.
-PLUGIN_MANIFEST_STATE=0
-PLUGIN_MANIFEST_DATA=''
+PLUGIN_CATALOG_STATE=0
+PLUGIN_CATALOG_DATA=''
 
-load_plugin_manifest() {
-    case "$PLUGIN_MANIFEST_STATE" in
+load_plugin_catalog() {
+    case "$PLUGIN_CATALOG_STATE" in
         1) return 0 ;;
         2) return 1 ;;
     esac
-    if PLUGIN_MANIFEST_DATA="$(catalog_cli manifest --config-dir "$BASE_DIR/config" 2>/dev/null)"; then
-        PLUGIN_MANIFEST_STATE=1
+    if PLUGIN_CATALOG_DATA="$(catalog_cli catalog 2>/dev/null)"; then
+        PLUGIN_CATALOG_STATE=1
         return 0
     fi
-    PLUGIN_MANIFEST_STATE=2
-    PLUGIN_MANIFEST_DATA=''
+    PLUGIN_CATALOG_STATE=2
+    PLUGIN_CATALOG_DATA=''
     return 1
 }
 
 list_plugins() {
-    plugin_manifest | awk -F '\t' '{ print $1 }'
+    plugin_catalog | awk -F '\t' '{ print $1 }'
 }
 
 plugin_display_name() {
-    plugin_manifest | awk -F '\t' -v target="$1" '$1 == target { print $2; exit }'
+    plugin_catalog | awk -F '\t' -v target="$1" '$1 == target { print $2; exit }'
 }
 
 list_plugin_examples() {
-    plugin_manifest | awk -F '\t' '{ print $1 "\t" $3 }'
+    plugin_catalog | awk -F '\t' '{ print $1 "\t" $3 }'
 }
 
 # list_plugin_requirements: print "<plugin><TAB><abs_requirements_path>" for every
@@ -176,34 +176,60 @@ list_plugin_examples() {
 # omitted. The path is absolute, so it installs regardless of cwd. Same venv
 # requirement as list_plugins.
 list_plugin_requirements() {
-    plugin_manifest | awk -F '\t' '$4 != "" { print $1 "\t" $4 }'
+    plugin_catalog | awk -F '\t' '$4 != "" { print $1 "\t" $4 }'
 }
 
-# list_plugin_schedules: print "<plugin><TAB><OnCalendar value>" for every
-# registered plugin. The manifest resolves the user's execution_interval and carries
-# its framework-owned systemd translation; plugins cannot inject timer directives.
+# Acquire the config-dependent schedule results separately. Structural config
+# failures are represented as per-target "error" rows, so one bad config cannot
+# hide the immutable catalog or another target's schedule.
+PLUGIN_SCHEDULE_STATE=0
+PLUGIN_SCHEDULE_DATA=''
+
+load_plugin_schedules() {
+    case "$PLUGIN_SCHEDULE_STATE" in
+        1) return 0 ;;
+        2) return 1 ;;
+    esac
+    if PLUGIN_SCHEDULE_DATA="$(
+        catalog_cli schedules --config-dir "$BASE_DIR/config"
+    )"; then
+        PLUGIN_SCHEDULE_STATE=1
+        return 0
+    fi
+    PLUGIN_SCHEDULE_STATE=2
+    PLUGIN_SCHEDULE_DATA=''
+    return 1
+}
+
+plugin_schedules() {
+    load_plugin_schedules || return 1
+    [ -z "$PLUGIN_SCHEDULE_DATA" ] || printf '%s\n' "$PLUGIN_SCHEDULE_DATA"
+}
+
+# Schedule columns are target, OnCalendar, resolution status, and a concise
+# ConfigFileError message (only for status=error).
 list_plugin_schedules() {
-    plugin_manifest | awk -F '\t' '{ print $1 "\t" $5 }'
+    plugin_schedules | awk -F '\t' '$3 != "error" { print $1 "\t" $2 }'
 }
 
-# list_interval_status: print "<plugin><TAB><status>" for every registered plugin
-# (one per line), where status is how its execution_interval resolved:
+# list_interval_status: print "<plugin><TAB><status>" for every registered plugin:
 #   ok      - config present with a valid, supported interval
 #   default - no interval set; the plugin default is in effect
 #   invalid - config sets an unsupported/unparseable interval
 #   nocfg   - the config file is missing entirely
+#   error   - the config could not be structurally read or validated
 # schedule.sh uses this to decide whether to apply, warn, or skip a plugin's timer.
-# Same venv requirement as list_plugins.
 list_interval_status() {
-    plugin_manifest | awk -F '\t' '{ print $1 "\t" $6 }'
+    plugin_schedules | awk -F '\t' '{ print $1 "\t" $3 }'
 }
 
-# plugin_manifest: the only metadata bridge between POSIX scripts and Python.
-# Columns are target, display name, example config, optional requirements,
-# resolved OnCalendar, and interval status.
-plugin_manifest() {
-    load_plugin_manifest || return 1
-    [ -z "$PLUGIN_MANIFEST_DATA" ] || printf '%s\n' "$PLUGIN_MANIFEST_DATA"
+list_schedule_errors() {
+    plugin_schedules | awk -F '\t' '$3 == "error" { print $1 "\t" $4 }'
+}
+
+plugin_catalog() {
+    load_plugin_catalog || return 1
+    [ -z "$PLUGIN_CATALOG_DATA" ] || printf '%s\n' "$PLUGIN_CATALOG_DATA"
 }
 
 # list_supported_intervals: print the canonical execution_interval keys as one
@@ -228,9 +254,12 @@ catalog_diagnose() {
         printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}" >&2
         return 1
     fi
-    printf "%b\n" "${RED}Error: Scraper plugin discovery failed:${NC}" >&2
-    catalog_cli diagnose >&2 || :
-    printf "%b\n" "Fix (or remove) the offending plugin package under ${CYAN}src/core/scrapers/plugins/${NC}, then retry." >&2
+    printf "%b\n" "${RED}Error: The scraper plugin catalog could not be loaded.${NC}" >&2
+    if catalog_cli diagnose >&2; then
+        printf '%s\n' "The catalog is readable now; retry the command." >&2
+    else
+        printf "%b\n" "Fix (or remove) the offending plugin package under ${CYAN}src/core/scrapers/plugins/${NC}, then retry." >&2
+    fi
     return 1
 }
 
@@ -633,62 +662,6 @@ write_plugin_timer_unit() {
         return 1
     fi
     [ -f "$_wpt_file" ] && [ "$(read_timer_oncalendar "$_wpt_plugin")" = "$_wpt_calendar" ]
-}
-
-# write_plugin_units <plugin> <OnCalendar>: transactionally replace the plugin's
-# <plugin>-scraper.{service,timer} unit files in SYSTEMD_USER_DIR. The framework
-# owns every other timer key and the service dispatch. Requires BASE_DIR
-# (the repository root). Returns non-zero if either file was not written.
-write_plugin_units() {
-    _wpu_plugin="$1"
-    _wpu_calendar="$2"
-    _wpu_service_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpu_plugin" service)"
-    _wpu_timer_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpu_plugin" timer)"
-
-    _wpu_service_tmp="$_wpu_service_file.tmp.$$"
-    _wpu_timer_tmp="$_wpu_timer_file.tmp.$$"
-    _wpu_service_backup="$_wpu_service_file.backup.$$"
-    _wpu_timer_backup="$_wpu_timer_file.backup.$$"
-    _wpu_service_existed=0
-    _wpu_timer_existed=0
-
-    [ ! -e "$_wpu_service_tmp" ] && [ ! -e "$_wpu_timer_tmp" ] && \
-        [ ! -e "$_wpu_service_backup" ] && [ ! -e "$_wpu_timer_backup" ] || return 1
-    if ! render_plugin_service "$_wpu_plugin" "$_wpu_service_tmp" || \
-       ! render_plugin_timer "$_wpu_plugin" "$_wpu_calendar" "$_wpu_timer_tmp"; then
-        rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp"
-        return 1
-    fi
-    if [ -e "$_wpu_service_file" ]; then
-        _wpu_service_existed=1
-        if ! cp -p "$_wpu_service_file" "$_wpu_service_backup"; then
-            rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp"
-            return 1
-        fi
-    fi
-    if [ -e "$_wpu_timer_file" ]; then
-        _wpu_timer_existed=1
-        if ! cp -p "$_wpu_timer_file" "$_wpu_timer_backup"; then
-            rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp" "$_wpu_service_backup"
-            return 1
-        fi
-    fi
-    if ! mv "$_wpu_service_tmp" "$_wpu_service_file"; then
-        rm -f "$_wpu_service_tmp" "$_wpu_timer_tmp" "$_wpu_service_backup" "$_wpu_timer_backup"
-        return 1
-    fi
-    if ! mv "$_wpu_timer_tmp" "$_wpu_timer_file"; then
-        if [ "$_wpu_service_existed" -eq 1 ]; then
-            mv "$_wpu_service_backup" "$_wpu_service_file" || return 1
-        else
-            rm -f "$_wpu_service_file"
-        fi
-        rm -f "$_wpu_timer_tmp" "$_wpu_service_backup" "$_wpu_timer_backup"
-        return 1
-    fi
-    rm -f "$_wpu_service_backup" "$_wpu_timer_backup"
-    [ -f "$_wpu_service_file" ] && [ -f "$_wpu_timer_file" ] && \
-        [ "$(read_timer_oncalendar "$_wpu_plugin")" = "$_wpu_calendar" ]
 }
 
 # read_timer_oncalendar <plugin>: print the installed timer's framework-owned
