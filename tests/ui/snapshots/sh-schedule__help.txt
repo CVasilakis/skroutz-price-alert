@@ -3,16 +3,9 @@
 
 Usage: schedule.sh [-h] [--<target> ...]
 
-Apply each scraper's configured execution interval to its systemd timer. The
-interval is read from the "settings.execution_interval" field of the scraper's
-config file (config/<target>.json) and translated to the timer's schedule. With
-no target flag every installed scraper is updated; pass one or more --<target>
-flags to update only those.
-
+Apply configured execution intervals to installed scraper timers.
+Only registered targets are eligible; orphaned timers are skipped.
 Supported intervals: 15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h
-Many spellings are accepted, e.g. "1 hour", "60m" and "hourly" all mean 1h.
-An unset interval keeps the scraper's default; an unsupported value is reported
-and the timer is left unchanged.
 
 Optional arguments:
   -h, --help        show this help message and exit

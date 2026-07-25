@@ -1,216 +1,93 @@
 #!/bin/sh
 set -eu
 
-# ==============================================================================
-# GLOBAL VARIABLES
-# ==============================================================================
-
-# Get the directory where the script is located
-SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
-BASE_DIR="$( dirname "$SCRIPT_DIR" )"
-
-# Shared helpers (colors, plugin enumeration, systemd helpers)
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
+BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
-
-VENV_DIR="venv"
-
-# ==============================================================================
-# HELPER FUNCTIONS
-# ==============================================================================
+# shellcheck source=scripts/lib/systemd.sh
+. "$SCRIPT_DIR/lib/systemd.sh"
 
 print_help() {
-    load_plugin_catalog || true
-    _registered="$(list_plugins 2>/dev/null || true)"
-
-    # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
-    printf '\n'
-    printf '%s\n' "Usage: uninstall.sh [-h] [--<target> ...]"
-    printf '\n'
-    printf '%s\n' "With no flag, performs a full teardown: removes every installed systemd"
-    printf '%s\n' "timer/service and deletes the Python virtual environment (your config"
-    printf '%s\n' "and state data are kept). With one or more --<target> flags, removes only"
-    printf '%s\n' "those scrapers' units, leaving the virtual environment and other targets"
-    printf '%s\n' "intact."
-    printf '\n'
+    _ph_registered="$(list_plugins 2>/dev/null || true)"
+    _ph_installed="$(list_installed_targets 2>/dev/null || true)"
+    _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
+    printf '\n%s\n\n' "Usage: uninstall.sh [-h] [--<target> ...]"
+    printf '%s\n' "With no target, remove all installed units and the project venv."
+    printf '%s\n\n' "With target flags, remove only those targets' unit entries."
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for plugin in $_registered; do
-        printf '  --%-15s Remove only the %s scraper\n' "$plugin" "$plugin"
+    _ph_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086
+    for _ph_target in $_ph_known; do
+        printf '  --%-15s Remove only the %s scraper\n' \
+            "$_ph_target" "$_ph_target"
     done
-
-    # Leftover scrapers: a still-installed timer/service whose plugin is no longer
-    # in the catalog (removed or renamed upstream). They are not in the list
-    # above but can still be purged by name, so surface them in their own section.
-    _orphans=""
-    _installed="$(list_installed_targets)"
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for plugin in $_installed; do
-        stream_contains "$plugin" "$_registered" && continue
-        stream_contains "$plugin" "$_orphans" && continue
-        _orphans="$(stream_add_unique "$_orphans" "$plugin")"
-    done
-
-    if [ -n "$_orphans" ]; then
-        printf '\n'
-        printf '%s\n' "Leftover scrapers (no longer registered, units still installed):"
-        for plugin in $_orphans; do
-            printf '  --%-15s Remove the orphaned %s scraper units\n' "$plugin" "$plugin"
-        done
-    fi
+    IFS="$_ph_old_ifs"
     printf '\n'
 }
 
-# ------------------------------------------------------------------------------
-# ARGUMENTS
-# ------------------------------------------------------------------------------
-# Usage:
-#   ./scripts/uninstall.sh                  Full teardown (all units + venv).
-#   ./scripts/uninstall.sh --<plugin> [..]  Remove only the named plugins' units (keep venv).
-# -h/--help is honored anywhere in the argument list; a bare '--' is rejected
-# (it would otherwise parse as an empty target name and silently select nothing).
-
-SELECTED=""
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        -h|--help) print_help; exit 0 ;;
-        --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-        --*)
-            target="${1#--}"
-            require_valid_target "$target" || exit 1
-            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
-            ;;
-        *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-    esac
-    shift
-done
-
+parse_target_flags "$@" || exit 1
+if [ "$TARGET_HELP_REQUESTED" -eq 1 ]; then
+    print_help
+    exit 0
+fi
 reject_project_venv_symlink || exit 1
-require_systemctl
-load_plugin_catalog || true
+select_targets installed_union || exit 1
+REMOVE_TARGETS="$SELECTED_TARGETS"
 
-# ------------------------------------------------------------------------------
-# SELECTED-PLUGIN REMOVAL
-# ------------------------------------------------------------------------------
-
-if [ -n "$SELECTED" ]; then
-    # Validate every name up front, so a typo in a later one doesn't leave the
-    # earlier plugins half-removed. Removable if the plugin is registered OR has a
-    # leftover timer/service unit (so orphans of a plugin deleted upstream can
-    # still be purged). A name in none of those sets is a typo: reject it instead
-    # of silently "succeeding" (rm -f on absent unit files would otherwise report
-    # a misleading success).
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    INSTALLED="$(list_installed_targets)"
-    REMOVE_TARGETS=""
-    for sel in $SELECTED; do
-        if ! is_known_target "$sel" timer && ! is_known_target "$sel" service; then
-            printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
-            _available="$(known_targets_all)"
-            printf "%b\n" "Available targets: ${CYAN}$(stream_for_display "$_available")${NC}"
-            exit 1
-        fi
-        if stream_contains "$sel" "$INSTALLED"; then
-            REMOVE_TARGETS="$(stream_add_unique "$REMOVE_TARGETS" "$sel")"
-        else
-            printf "%b\n" \
-                "\n${YELLOW}[$sel] is registered but not installed - nothing to remove.${NC}"
-        fi
-    done
-
-    [ -n "$REMOVE_TARGETS" ] || exit 0
-
+# A unitless full uninstall does not need a running systemd user manager.
+if [ -n "$REMOVE_TARGETS" ]; then
+    require_systemctl || exit 1
     TEARDOWN_FAILED=0
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for sel in $REMOVE_TARGETS; do
-        printf "%b\n" "\n${CYAN}Stopping and disabling '$sel'...${NC}"
-        if ! disable_one "$sel"; then
-            printf "%b\n" "${RED}Error: '$sel' could not be made safe for removal.${NC}"
-            TEARDOWN_FAILED=1
-        fi
+    OLD_IFS="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086
+    for target in $REMOVE_TARGETS; do
+        printf '\n%s\n' "Stopping and disabling '$target'..."
+        disable_one "$target" || TEARDOWN_FAILED=1
     done
+    IFS="$OLD_IFS"
     if [ "$TEARDOWN_FAILED" -ne 0 ]; then
-        printf "%b\n" "${RED}No unit files were removed.${NC}\n"
+        printf '%s\n' "Error: No unit entries were removed." >&2
         exit 1
     fi
 
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for sel in $REMOVE_TARGETS; do
-        printf "%b\n" "\n${CYAN}Removing systemd units for '$sel'...${NC}"
-        if ! rm -f "$SYSTEMD_USER_DIR/$(unit_name "$sel" timer)" \
-                    "$SYSTEMD_USER_DIR/$(unit_name "$sel" service)"; then
-            printf "%b\n" "${RED}Error: Failed to remove '$sel' unit files.${NC}\n"
+    IFS='
+'
+    # rm -f unlinks symlinks themselves and never follows their targets.
+    # shellcheck disable=SC2086
+    for target in $REMOVE_TARGETS; do
+        rm -f "$SYSTEMD_USER_DIR/$(unit_name "$target" timer)" \
+            "$SYSTEMD_USER_DIR/$(unit_name "$target" service)" || {
+            IFS="$OLD_IFS"
+            printf '%s\n' "Error: Failed to remove '$target' unit entries." >&2
             exit 1
-        fi
-        printf "%b\n" "${GREEN}Removed '$sel' scraper units.${NC}"
+        }
+        printf '%s\n' "Removed '$target' scraper units."
     done
-    if ! systemctl --user daemon-reload; then
-        printf "%b\n" "${RED}Error: Failed to reload the systemd user manager.${NC}\n"
+    IFS="$OLD_IFS"
+    systemctl --user daemon-reload || {
+        printf '%s\n' "Error: Failed to reload the systemd user manager." >&2
         exit 1
-    fi
+    }
+fi
 
-    printf "%b\n" "The virtual environment and any other targets were left intact.\n"
+if [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ]; then
+    [ -n "$REMOVE_TARGETS" ] ||
+        printf '%s\n' "No selected target had installed units."
+    printf '%s\n' "The virtual environment and other targets were left intact."
     exit 0
 fi
 
-# ------------------------------------------------------------------------------
-# FULL SYSTEMD CLEANUP
-# ------------------------------------------------------------------------------
-# Glob every installed *-scraper.{timer,service}, so units are removed even for a
-# plugin that was already deleted from the source tree. Timers and services are
-# handled separately to also catch an orphaned half of a pair.
-
-printf "%b\n" "\n${CYAN}Disabling and removing Systemd Timer(s) and Service(s)...${NC}"
-
-INSTALLED_TARGETS="$(list_installed_targets)"
-TEARDOWN_FAILED=0
-# shellcheck disable=SC2086  # intentional newline-delimited target stream
-for plugin in $INSTALLED_TARGETS; do
-    if ! disable_one "$plugin"; then
-        printf "%b\n" "${RED}Error: '$plugin' could not be made safe for removal.${NC}"
-        TEARDOWN_FAILED=1
-    fi
-done
-if [ "$TEARDOWN_FAILED" -ne 0 ]; then
-    printf "%b\n" "${RED}No unit files or Python environment were removed.${NC}\n"
-    exit 1
-fi
-
-# shellcheck disable=SC2086  # intentional newline-delimited target stream
-for plugin in $INSTALLED_TARGETS; do
-    if ! rm -f "$SYSTEMD_USER_DIR/$(unit_name "$plugin" timer)" \
-                "$SYSTEMD_USER_DIR/$(unit_name "$plugin" service)"; then
-        printf "%b\n" "${RED}Error: Failed to remove '$plugin' unit files.${NC}\n"
-        exit 1
-    fi
-done
-
-# Reload systemd daemon to apply changes
-if ! systemctl --user daemon-reload; then
-    printf "%b\n" "${RED}Error: Failed to reload the systemd user manager.${NC}\n"
-    exit 1
-fi
-
-printf "%b\n" "${GREEN}Systemd configurations removed successfully.${NC}"
-
-# ------------------------------------------------------------------------------
-# PYTHON VIRTUAL ENVIRONMENT CLEANUP
-# ------------------------------------------------------------------------------
-
-printf "%b\n" "\n${CYAN}Removing Python virtual environment...${NC}"
-
-if [ -d "$BASE_DIR/$VENV_DIR" ]; then
-    # ${BASE_DIR:?} aborts if BASE_DIR is ever empty/unset, so this can never
-    # expand to rm -rf "/<venv>".
-    rm -rf "${BASE_DIR:?}/$VENV_DIR"
-    printf "%b\n" "${GREEN}Python virtual environment ($VENV_DIR) removed.${NC}"
+printf '\n%s\n' "Removing Python virtual environment..."
+if [ -d "$BASE_DIR/venv" ]; then
+    rm -rf "${BASE_DIR:?}/venv"
+    printf '%s\n' "Python virtual environment removed."
 else
-    printf "%b\n" "${GREEN}Python virtual environment ($VENV_DIR) already removed.${NC}"
+    printf '%s\n' "Python virtual environment already removed."
 fi
-
-printf "%b\n" "\n${GREEN}Uninstallation complete!${NC}"
-printf "%b\n" "\nUser configuration (config/*.json) was NOT removed."
-printf "%b\n" "User lingering (loginctl) was left enabled as other services might rely on it.\n"
-printf "%b\n" "To re-install the application, run: ${CYAN}./install.sh${NC}"
-printf "%b\n" "To completely purge everything, you can safely delete this folder.\n"
+printf '\n%s\n' "Uninstallation complete. Configuration and state were preserved."

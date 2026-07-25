@@ -19,6 +19,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_SH = REPO_ROOT / "scripts" / "lib" / "common.sh"
+SYSTEMD_SH = REPO_ROOT / "scripts" / "lib" / "systemd.sh"
 
 
 def test_install_does_not_invoke_configuration_migration():
@@ -48,7 +49,7 @@ def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None
             env.pop(key, None)
         else:
             env[key] = value
-    full = f'BASE_DIR="{base_dir}"\n. "{COMMON_SH}"\n{script}'
+    full = f'BASE_DIR="{base_dir}"\n. "{COMMON_SH}"\n. "{SYSTEMD_SH}"\n{script}'
     return subprocess.run(
         ["sh", "-eu", "-c", full],
         capture_output=True,
@@ -184,26 +185,42 @@ class TestUnitFileRoundTrip(unittest.TestCase):
 
 
 class TestKnownTargets(unittest.TestCase):
-    """The teardown validation set: registered ∪ installed, de-duplicated."""
+    """The policy selector uses registered and installed snapshots consistently."""
 
     STUBS = (
         "list_plugins() { printf '%s\\n' skroutz amazon; }\n"
-        "list_installed_plugins() { printf '%s\\n' amazon ghost; }\n"
+        "list_installed_units() { printf '%s\\n' amazon ghost; }\n"
+        "list_installed_targets() { printf '%s\\n' amazon ghost; }\n"
     )
 
     def test_union_preserves_first_seen_order_and_dedups(self):
-        result = run_sh(self.STUBS + "known_targets timer")
+        result = run_sh(self.STUBS + 'stream_union "$(list_plugins)" "$(list_installed_targets)"')
         self.assertEqual(result.stdout.split(), ["skroutz", "amazon", "ghost"])
 
     def test_orphan_unit_is_a_known_target(self):
-        # A unit whose plugin was removed upstream must stay tear-downable.
-        self.assertEqual(run_sh(self.STUBS + "is_known_target ghost timer").returncode, 0)
+        result = run_sh(
+            self.STUBS
+            + "TARGET_FLAGS=ghost\nTARGET_FLAGS_EXPLICIT=1\n"
+            + 'select_targets installed_union\nprintf %s "$SELECTED_TARGETS"'
+        )
+        self.assertEqual((result.returncode, result.stdout), (0, "ghost"))
 
-    def test_registered_but_uninstalled_is_a_known_target(self):
-        self.assertEqual(run_sh(self.STUBS + "is_known_target skroutz timer").returncode, 0)
+    def test_registered_but_uninstalled_is_reported_without_selection(self):
+        result = run_sh(
+            self.STUBS
+            + "TARGET_FLAGS=skroutz\nTARGET_FLAGS_EXPLICIT=1\n"
+            + 'select_targets installed_union\nprintf "\\nSELECTED=%s\\n" "$SELECTED_TARGETS"'
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("SELECTED=", result.stdout)
 
     def test_typo_is_rejected(self):
-        self.assertEqual(run_sh(self.STUBS + "is_known_target skrutz timer").returncode, 1)
+        result = run_sh(
+            self.STUBS
+            + "TARGET_FLAGS=skrutz\nTARGET_FLAGS_EXPLICIT=1\n"
+            + "select_targets installed_union"
+        )
+        self.assertEqual(result.returncode, 1)
 
     def test_installed_target_union_includes_service_only_unit(self):
         tmp = Path(tempfile.mkdtemp())
@@ -224,7 +241,7 @@ class TestKnownTargets(unittest.TestCase):
         result = run_sh("list_installed_targets", xdg_config_home=tmp)
         self.assertEqual(result.stdout.split(), ["ghost"])
 
-    def test_malformed_installed_unit_name_is_diagnosed_and_ignored(self):
+    def test_malformed_installed_unit_name_fails_discovery(self):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         unit_dir = tmp / "systemd" / "user"
@@ -232,7 +249,8 @@ class TestKnownTargets(unittest.TestCase):
         (unit_dir / "bad target-scraper.timer").touch()
         result = run_sh("list_installed_plugins timer", xdg_config_home=tmp)
         self.assertEqual(result.stdout, "")
-        self.assertIn("malformed installed unit name", result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Malformed managed unit name", result.stderr)
 
 
 class TestCatalogDiagnose(unittest.TestCase):
@@ -360,36 +378,6 @@ class TestRealRegistryBridge(unittest.TestCase):
         result = run_sh("list_interval_status", base_dir=self.base_dir)
         statuses = dict(line.split("\t") for line in result.stdout.splitlines())
         self.assertEqual(statuses.get("skroutz"), "nocfg")
-
-
-class TestVenvResponderMarkers(unittest.TestCase):
-    """The shell-snapshot harness recognizes common.sh's inline Python heredocs by
-    marker substrings. If a heredoc in common.sh is reworded past its marker, the
-    fake venv responder would silently answer nothing and the transcripts would
-    drift — so pin the coupling from both ends here."""
-
-    def test_every_marker_appears_in_common_sh_and_in_the_shim(self):
-        # Load the catalog package first: entering via ui.harness.shell directly
-        # would re-enter it mid-import through the sh_* scenario modules.
-        import ui.catalog  # noqa: F401
-        from ui.harness.shell import _VENV_PYTHON_SHIM, VENV_RESPONDER_MARKERS
-
-        common_text = COMMON_SH.read_text()
-        for marker in VENV_RESPONDER_MARKERS:
-            with self.subTest(marker=marker):
-                self.assertIn(
-                    marker,
-                    common_text,
-                    f"marker {marker!r} no longer appears in common.sh - update the "
-                    f"venv responder in tests/ui/harness/shell.py (and this list) to "
-                    f"match the reworded heredoc",
-                )
-                self.assertIn(
-                    marker,
-                    _VENV_PYTHON_SHIM,
-                    f"marker {marker!r} is declared but the shim does not match it - "
-                    f"keep VENV_RESPONDER_MARKERS and the case patterns in sync",
-                )
 
 
 if __name__ == "__main__":

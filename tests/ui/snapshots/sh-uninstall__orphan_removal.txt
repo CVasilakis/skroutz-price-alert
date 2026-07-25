@@ -2,7 +2,5 @@
 # exit: 0
 
 Stopping and disabling 'ghost'...
-
-Removing systemd units for 'ghost'...
 Removed 'ghost' scraper units.
-The virtual environment and any other targets were left intact.
+The virtual environment and other targets were left intact.

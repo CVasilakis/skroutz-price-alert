@@ -1,8 +1,7 @@
 # border: green
 # exit: 0
 
-[ghost] Stopping and disabling background schedule (timer)...
+[ghost] Stopping and disabling background execution...
 [ghost] Background execution disabled successfully.
 
 To re-enable background execution, run: ./scripts/enable.sh
-To completely remove the application, run: ./scripts/uninstall.sh

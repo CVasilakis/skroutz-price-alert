@@ -6,6 +6,5 @@ Python virtual environment successfully updated.
 
 Setting up Systemd timer(s)...
 Error: Failed to enable and start skroutz-scraper.timer.
-Error: Failed to enable the timer for 'skroutz'.
-Provisioning failed; restoring the previous unit files and timer states.
+Error: Unit replacement failed; restoring previous files and states.
 Error: Transactional systemd provisioning failed.

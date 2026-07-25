@@ -129,33 +129,6 @@ _case(
 )
 
 _case(
-    "update_skips_removed_target",
-    "--update skips a selection no longer in the catalog.",
-    "--update",
-    "--ghost",
-    "--skroutz",
-    world=replace(_CONFIGURED, internal_update=True),
-    tags=("orphan",),
-)
-
-_case(
-    "unauthorized_update_mode",
-    "The deferred internal update mode cannot be invoked directly.",
-    "--update",
-    "--skroutz",
-    world=_CONFIGURED,
-    tags=("error",),
-)
-
-_case(
-    "update_mode_requires_target",
-    "Internal update mode always requires an explicit target selection.",
-    "--update",
-    world=replace(_CONFIGURED, internal_update=True),
-    tags=("error",),
-)
-
-_case(
     "plugin_requirements_fail",
     "A plugin's own requirements.txt fails to install.",
     world=replace(

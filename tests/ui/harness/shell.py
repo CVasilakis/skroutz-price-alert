@@ -14,7 +14,7 @@ What is faked (each a tiny POSIX-sh shim on a sandbox-only PATH):
 
 * ``systemctl`` / ``loginctl`` - unit state answered from FAKE_* membership lists;
   mutating verbs succeed silently or fail on demand (FAKE_SYSTEMCTL_FAIL).
-* ``git`` - branch/dirty answers for update.sh; checkout/fetch/reset failable.
+* ``git`` - branch/dirty answers for update.sh; fetch/fast-forward failable.
 * ``python3`` - answers install.sh's prerequisite probes and plants the venv
   responder when asked to create a venv.
 * ``venv/bin/python3`` - the catalog responder: recognizes the stable scraper CLI
@@ -52,6 +52,7 @@ _SCRIPT_FILES = (
     "scripts/uninstall.sh",
     "scripts/lib/common.sh",
     "scripts/lib/preflight.sh",
+    "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
 )
 
@@ -112,7 +113,7 @@ class ShellWorld:
             exercising production postcondition checks.
         linger: The Linger= answer ("yes"/"no"); linger_enable_fails: enable-linger fails.
 
-    git (update.sh): git_branch, git_dirty, git_fail (("checkout"|"fetch"|"reset", ...)).
+    git (update.sh): git_branch, git_dirty, and failable Git verbs.
 
     User config artifacts: config_files created under config/.
 
@@ -162,7 +163,6 @@ class ShellWorld:
     python_supported: bool = True
     venv_python_version: str | None = None
     venv_python_supported: bool | None = None
-    internal_update: bool = False
     git_signal: str | None = None
 
     config_files: tuple[str, ...] = ()
@@ -316,8 +316,8 @@ case "${1:-}" in
     fetch) : > "$FAKE_GIT_STATE_DIR/fetched" ;;
     cat-file) [ "${FAKE_FETCHED_PATHS_VALID:-1}" = "1" ] ;;
     status) [ "${FAKE_GIT_DIRTY:-0}" = "1" ] && printf ' M src/core/main.py\\n' ;;
-    reset)
-        [ "${FAKE_GIT_SIGNAL:-}" = "reset" ] && kill -TERM "$PPID" ;;
+    merge)
+        [ "${FAKE_GIT_SIGNAL:-}" = "${1:-}" ] && kill -TERM "$PPID" ;;
 esac
 exit 0
 """
@@ -336,24 +336,26 @@ case "${1:-}" in
             *) [ "${FAKE_NO_ENSUREPIP:-0}" = "1" ] && exit 1; exit 0 ;;
         esac ;;
     -m)
-        if [ "${2:-}" = "venv" ]; then
-            [ "${FAKE_VENV_CREATE_FAILS:-0}" = "1" ] && exit 1
-            mkdir -p "$3/bin"
-            cp "$FAKE_VENV_TEMPLATE" "$3/bin/python3"
-            chmod 755 "$3/bin/python3"
-        fi ;;
+        case "${2:-}" in
+            venv)
+                [ "${FAKE_VENV_CREATE_FAILS:-0}" = "1" ] && exit 1
+                mkdir -p "$3/bin"
+                cp "$FAKE_VENV_TEMPLATE" "$3/bin/python3"
+                chmod 755 "$3/bin/python3" ;;
+            core.scrapers.tooling.cli)
+                case "${3:-}" in
+                    catalog)
+                        [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                        [ -n "${FAKE_PLUGIN_CATALOG:-}" ] &&
+                            printf '%s\\n' "$FAKE_PLUGIN_CATALOG" ;;
+                    diagnose)
+                        [ -z "${FAKE_DISCOVERY_ERROR:-}" ] ||
+                            { printf '%s\\n' "$FAKE_DISCOVERY_ERROR"; exit 1; } ;;
+                esac ;;
+        esac ;;
 esac
 exit 0
 """
-
-# Scraper CLI invocations recognized by the venv responder. Guard-tested against
-# common.sh so the snapshot harness cannot silently drift from the shell bridge.
-VENV_RESPONDER_MARKERS: tuple[str, ...] = (
-    "cli catalog",
-    "schedules --config-dir",
-    "intervals",
-    "diagnose",
-)
 
 # The venv responder implements the small machine-readable scraper CLI used by
 # common.sh, plus pip failure injection and run.sh's final dispatch marker.
@@ -403,14 +405,14 @@ exit 0
 
 
 def _unit_text_timer(plugin: str, block: str) -> str:
-    """A <plugin>-scraper.timer in the exact shape the shared timer renderer emits, so
-    read_timer_block round-trips and schedule.sh's changed/unchanged compare works."""
+    """Return a timer fixture matching the production renderer's owned contract."""
     return (
         "[Unit]\n"
         f"Description=Run {plugin} scraper\n"
         "\n"
         "[Timer]\n"
         f"{block}\n"
+        f"Unit={plugin}-scraper.service\n"
         "RandomizedDelaySec=180s\n"
         "Persistent=true\n"
         "\n"
@@ -479,6 +481,10 @@ def _build_sandbox(world: ShellWorld) -> Path:
         (sandbox / "config" / cfg).touch()
     if world.requirements_txt:
         (sandbox / "requirements.txt").touch()
+    for plugin in world.requirements or {}:
+        requirement_path = sandbox / "src/core/scrapers/plugins" / plugin / "requirements.txt"
+        requirement_path.parent.mkdir(parents=True, exist_ok=True)
+        requirement_path.touch()
     bin_dir = sandbox / "bin"
     bin_dir.mkdir()
     _write_shims(bin_dir, world)
@@ -526,6 +532,10 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         world.interval_status if world.interval_status is not None else {p: "ok" for p in plugins}
     )
     schedule_errors = world.schedule_errors or {}
+    requirement_paths = {
+        plugin: str(sandbox / "src/core/scrapers/plugins" / plugin / "requirements.txt")
+        for plugin in (world.requirements or {})
+    }
 
     return {
         # Sandbox-only in every mode (an allowlist, not shim-by-precedence): the
@@ -543,16 +553,14 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_PLUGIN_EXAMPLES": "\n".join(
             f"{p}\t{sandbox}/src/core/scrapers/plugins/{p}/config.example.json" for p in plugins
         ),
-        "FAKE_PLUGIN_REQUIREMENTS": "\n".join(
-            f"{p}\t{r}" for p, r in (world.requirements or {}).items()
-        ),
+        "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p}\t{r}" for p, r in requirement_paths.items()),
         "FAKE_PLUGIN_CATALOG": "\n".join(
             "\t".join(
                 (
                     plugin,
                     plugin.capitalize(),
                     f"{sandbox}/src/core/scrapers/plugins/{plugin}/config.example.json",
-                    (world.requirements or {}).get(plugin, ""),
+                    requirement_paths.get(plugin, ""),
                 )
             )
             for plugin in plugins
@@ -606,7 +614,6 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
             )
             else "0"
         ),
-        "SCROOGE_INTERNAL_UPDATE": "1" if world.internal_update else "",
         "FAKE_GIT_SIGNAL": world.git_signal or "",
     }
 
@@ -655,7 +662,7 @@ def drive_shell(
     transcript = proc.stdout.replace(str(sandbox), "<BASE_DIR>").replace("\r", "")
     transcript = re.sub(r"\.(tmp|backup)\.\d+", r".\1.<PID>", transcript)
     transcript = re.sub(
-        r"\.scrooge-(provision|schedule|update)\.[A-Za-z0-9]+",
+        r"\.scrooge-(units|update)\.[A-Za-z0-9]+",
         r".scrooge-\1.<PID>",
         transcript,
     )

@@ -3,15 +3,10 @@
 
 Usage: uninstall.sh [-h] [--<target> ...]
 
-With no flag, performs a full teardown: removes every installed systemd
-timer/service and deletes the Python virtual environment (your config
-and state data are kept). With one or more --<target> flags, removes only
-those scrapers' units, leaving the virtual environment and other targets
-intact.
+With no target, remove all installed units and the project venv.
+With target flags, remove only those targets' unit entries.
 
 Optional arguments:
   -h, --help        show this help message and exit
   --skroutz         Remove only the skroutz scraper
-
-Leftover scrapers (no longer registered, units still installed):
-  --ghost           Remove the orphaned ghost scraper units
+  --ghost           Remove only the ghost scraper

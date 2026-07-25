@@ -19,7 +19,7 @@ from ui.harness.shell import ShellWorld, drive_shell
                 enabled_timers=("skroutz",),
                 active_timers=("skroutz",),
             ),
-            "Stopping and disabling background schedule",
+            "Stopping and disabling background execution",
         ),
         (
             "scripts/stop.sh",
@@ -39,7 +39,7 @@ from ui.harness.shell import ShellWorld, drive_shell
         (
             "scripts/uninstall.sh",
             ShellWorld(installed_timers=("skroutz",), installed_services=("skroutz",)),
-            "Removing systemd units for 'skroutz'",
+            "Removed 'skroutz' scraper units",
         ),
     ),
 )

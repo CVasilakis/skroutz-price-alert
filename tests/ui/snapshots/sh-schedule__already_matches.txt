@@ -1,6 +1,6 @@
 # border: green
 # exit: 0
 
-[skroutz] Timer already matches the configured interval. Nothing to do.
+[skroutz] Timer already matches the configured interval.
 
-All timers already match their configured intervals. Nothing changed.
+All timers already match their configured intervals.

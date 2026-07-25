@@ -1,16 +1,10 @@
 # border: green
 # exit: 0
 
-Disabling and removing Systemd Timer(s) and Service(s)...
-Systemd configurations removed successfully.
+Stopping and disabling 'skroutz'...
+Removed 'skroutz' scraper units.
 
 Removing Python virtual environment...
-Python virtual environment (venv) removed.
+Python virtual environment removed.
 
-Uninstallation complete!
-
-User configuration (config/*.json) was NOT removed.
-User lingering (loginctl) was left enabled as other services might rely on it.
-
-To re-install the application, run: ./install.sh
-To completely purge everything, you can safely delete this folder.
+Uninstallation complete. Configuration and state were preserved.

@@ -3,9 +3,8 @@
 
 Usage: enable.sh [-h] [--<target> ...]
 
-Enable and start the background schedule (systemd timer) for the installed
-scraper(s). With no target flag every installed scraper's timer is enabled;
-pass one or more --<target> flags to enable only those.
+Enable and start installed, registered scraper timers.
+With no target flag, every eligible installed timer is enabled.
 
 Optional arguments:
   -h, --help        show this help message and exit

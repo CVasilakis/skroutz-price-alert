@@ -2,4 +2,3 @@
 # exit: 1
 
 Error: 'amazon' is registered but not installed.
-Install it first with: ./install.sh --amazon

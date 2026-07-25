@@ -1,4 +1,4 @@
 # border: green
 # exit: 0
 
-No scraper services found. Nothing to stop.
+No installed scraper services found. Nothing to stop.

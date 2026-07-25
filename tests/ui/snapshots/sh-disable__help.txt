@@ -3,9 +3,8 @@
 
 Usage: disable.sh [-h] [--<target> ...]
 
-Stop and disable the background schedule (systemd timer) for the scraper(s).
-With no target flag every installed scraper's timer is disabled; pass one
-or more --<target> flags to disable only those.
+Stop and disable installed scraper timer/service pairs.
+Orphaned and partial unit pairs remain selectable for teardown.
 
 Optional arguments:
   -h, --help        show this help message and exit

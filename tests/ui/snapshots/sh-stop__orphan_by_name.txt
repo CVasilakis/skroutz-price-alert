@@ -2,7 +2,6 @@
 # exit: 0
 
 [ghost] Stopping active background execution...
-[ghost] Active background execution stopped successfully.
+[ghost] Active execution stopped successfully.
 
-To disable future background executions, run: ./scripts/disable.sh
-To completely remove the application, run: ./scripts/uninstall.sh
+To disable future executions, run: ./scripts/disable.sh

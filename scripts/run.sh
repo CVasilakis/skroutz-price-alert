@@ -6,8 +6,8 @@ set -eu
 # ==============================================================================
 
 # Get the directory where the script is located
-SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
-BASE_DIR="$( dirname "$SCRIPT_DIR" )"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
+BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 
 # Shared helpers (colors, plugin enumeration)
 # shellcheck source=scripts/lib/common.sh
@@ -52,16 +52,15 @@ print_missing_venv_help() {
     printf '\n'
 }
 
-# Help remains useful before installation, but a healthy installation supplies
-# the dynamic target rows from the catalog.
-case "${1:-}" in
-    -h|--help)
-        if [ ! -x "$VENV_PYTHON" ]; then
-            print_missing_venv_help
-            exit 0
-        fi
-        ;;
-esac
+# Help remains useful before installation and is recognized in any position.
+HELP_REQUESTED=0
+for raw_arg in "$@"; do
+    case "$raw_arg" in -h|--help) HELP_REQUESTED=1 ;; esac
+done
+if [ "$HELP_REQUESTED" -eq 1 ] && [ ! -x "$VENV_PYTHON" ]; then
+    print_missing_venv_help
+    exit 0
+fi
 
 reject_project_venv_symlink || exit 1
 require_python_310 "$VENV_PYTHON" "./install.sh" || exit 1
@@ -69,13 +68,34 @@ require_python_310 "$VENV_PYTHON" "./install.sh" || exit 1
 # Registered plugins (one --<plugin> flag is accepted per registered scraper).
 load_plugin_catalog || true
 PLUGINS="$(list_plugins || true)"
+if [ "$HELP_REQUESTED" -eq 1 ]; then
+    print_help
+    exit 0
+fi
 
 # ==============================================================================
 # EXECUTION
 # ==============================================================================
 
 TARGET="main.py"
-ARGS=""
+FORWARD_COUNT=0
+
+append_forward_arg() {
+    FORWARD_COUNT=$((FORWARD_COUNT + 1))
+    # Values reaching this helper are fixed built-ins or validated target flags.
+    eval "FORWARD_$FORWARD_COUNT=\$1"
+}
+
+exec_with_forward_args() {
+    _ewfa_index="$1"
+    shift
+    if [ "$_ewfa_index" -gt "$FORWARD_COUNT" ]; then
+        exec "$VENV_PYTHON" "$BASE_DIR/src/core/$TARGET" "$@"
+    fi
+    _ewfa_value=''
+    eval "_ewfa_value=\${FORWARD_$_ewfa_index}"
+    exec_with_forward_args "$((_ewfa_index + 1))" "$@" "$_ewfa_value"
+}
 
 # Flags tracking for validation
 FLAG_PING=0
@@ -94,17 +114,14 @@ while [ "$#" -gt 0 ]; do
             # "must be used alone" validation below.
             FLAG_PING=$((FLAG_PING + 1))
             TARGET="ping.py"
-            shift
             ;;
         --status)
             FLAG_STATUS=$((FLAG_STATUS + 1))
             TARGET="status.py"
-            shift
             ;;
         --quiet)
             FLAG_QUIET=$((FLAG_QUIET + 1))
-            ARGS="$(stream_add_unique "$ARGS" "--quiet")"
-            shift
+            append_forward_arg --quiet
             ;;
         --)
             # A bare '--' would otherwise parse as an empty target name.
@@ -119,8 +136,7 @@ while [ "$#" -gt 0 ]; do
             require_valid_target "$name" || exit 1
             if stream_contains "$name" "$PLUGINS"; then
                 FLAG_PLUGIN=$((FLAG_PLUGIN + 1))
-                ARGS="$(stream_add_unique "$ARGS" "$1")"
-                shift
+                append_forward_arg "$1"
             else
                 # An empty plugin list means the flag was rejected because the
                 # catalog itself is unavailable, not because of a typo - say so.
@@ -138,6 +154,7 @@ while [ "$#" -gt 0 ]; do
             exit 1
             ;;
     esac
+    shift
 done
 
 # ==============================================================================
@@ -165,16 +182,4 @@ if [ "$FLAG_STATUS" -gt 0 ]; then
     fi
 fi
 
-# A missing venv would otherwise surface as the shell's raw "not found" from exec;
-# fail with the same repair hint catalog_diagnose gives. (The plugin-flag path
-# already routes through catalog_diagnose above.)
-set --
-OLD_IFS="$IFS"
-IFS='
-'
-# shellcheck disable=SC2086  # intentional newline-only stream iteration
-for arg in $ARGS; do
-    set -- "$@" "$arg"
-done
-IFS="$OLD_IFS"
-exec "$VENV_PYTHON" "$BASE_DIR/src/core/$TARGET" "$@"
+exec_with_forward_args 1

@@ -1,7 +1,5 @@
 # border: red
 # exit: 1
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
 Error: Unknown target 'ghost'.
 Available targets: skroutz

@@ -103,21 +103,21 @@ _case(
     tags=("error",),
 )
 _case(
-    "quiesce_fails_before_reset",
-    "A scraper that cannot quiesce aborts before reset.",
+    "quiesce_fails_before_advance",
+    "A scraper that cannot quiesce aborts before source advancement.",
     world=replace(_BASE, activating_services=("skroutz",), systemctl_fail=("stop",)),
     tags=("error",),
 )
 _case(
-    "reset_fails",
-    "A reset failure restores the prior enabled and active timer state.",
-    world=replace(_BASE, git_fail=("reset",)),
+    "fast_forward_fails",
+    "A fast-forward failure restores the prior enabled and active timer state.",
+    world=replace(_BASE, git_fail=("merge",)),
     tags=("error",),
 )
 _case(
-    "interrupted_after_reset",
-    "A signal after reset leaves timers disabled with deterministic recovery guidance.",
-    world=replace(_BASE, git_signal="reset"),
+    "interrupted_after_advance",
+    "A signal during source advancement leaves deterministic recovery guidance.",
+    world=replace(_BASE, git_signal="merge"),
     tags=("error", "interrupt"),
 )
 _case(
@@ -143,7 +143,7 @@ _case(
 )
 _case(
     "install_fails_during_update",
-    "A post-reset dependency failure leaves timers disabled.",
+    "A post-update dependency failure leaves timers disabled.",
     world=replace(_BASE, pip_fail="upgrade"),
     tags=("error",),
 )

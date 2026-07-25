@@ -3,4 +3,4 @@
 
 Error: The scraper plugin catalog could not be loaded.
   PluginDiscoveryError: plugin package 'zzzbroken' failed to import: boom
-Fix (or remove) the offending plugin package under src/core/scrapers/plugins/, then retry.
+Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry.

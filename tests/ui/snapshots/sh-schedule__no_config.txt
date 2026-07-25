@@ -1,8 +1,8 @@
 # border: green
 # exit: 0
 
-[skroutz] No config file found; leaving its timer unchanged.
-Create it by copying <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to
-config/skroutz.json.
+[skroutz] No config file found; timer left unchanged.
+Copy <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to config/skroutz.json to
+configure it.
 
-All timers already match their configured intervals. Nothing changed.
+All timers already match their configured intervals.

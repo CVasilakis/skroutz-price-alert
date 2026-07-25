@@ -1,4 +1,6 @@
 # border: green
 # exit: 0
 
-[amazon] is registered but not installed - nothing to remove.
+[amazon] is registered but not installed - nothing to do.
+No selected target had installed units.
+The virtual environment and other targets were left intact.

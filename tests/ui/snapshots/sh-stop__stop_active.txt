@@ -2,7 +2,6 @@
 # exit: 0
 
 [skroutz] Stopping active background execution...
-[skroutz] Active background execution stopped successfully.
+[skroutz] Active execution stopped successfully.
 
-To disable future background executions, run: ./scripts/disable.sh
-To completely remove the application, run: ./scripts/uninstall.sh
+To disable future executions, run: ./scripts/disable.sh

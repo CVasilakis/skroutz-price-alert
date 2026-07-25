@@ -1,7 +1,7 @@
 """Drift guard: RESERVED_PLUGIN_NAMES must equal the scripts' built-in '--<flag>' set.
 
 ``RESERVED_PLUGIN_NAMES`` exists because the management scripts match
-their built-in flags (``--help``, ``--quiet``, ``--ping``, ``--status``, ``--update``)
+their built-in flags (``--help``, ``--quiet``, ``--ping``, and ``--status``)
 *before* the per-plugin ``--*`` branch, so a plugin named after one of them would
 register fine yet never be dispatchable from the command line. The authoritative set is
 the ``case`` ladders in the shell scripts themselves; this test parses every script's

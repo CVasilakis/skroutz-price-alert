@@ -1,4 +1,4 @@
 # border: green
 # exit: 0
 
-No scraper timers found. Nothing to do.
+No installed scraper units found. Nothing to do.

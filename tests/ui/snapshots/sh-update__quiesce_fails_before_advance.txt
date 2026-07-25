@@ -4,10 +4,6 @@
 Updating Scrooge Alert...
 Fetching origin/main before stopping any scraper...
 Quiescing 'skroutz'...
-Error: Failed to stop skroutz-scraper.timer.
-Error: Failed to stop skroutz-scraper.service.
-Error: skroutz-scraper.timer is not fully stopped and disabled.
-Error: skroutz-scraper.service is still activating.
 Error: Could not safely quiesce 'skroutz'.
 Timer-state recovery data was retained at:
 <BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>

@@ -1,8 +1,5 @@
 # border: red
 # exit: 1
 
-[skroutz] Stopping and disabling background schedule (timer)...
-Error: skroutz-scraper.timer is not fully stopped and disabled.
+[skroutz] Stopping and disabling background execution...
 [skroutz] Error: Background execution was not fully disabled.
-
-One or more background schedules could not be disabled.

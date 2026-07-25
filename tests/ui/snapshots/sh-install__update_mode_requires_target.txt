@@ -1,4 +1,0 @@
-# border: red
-# exit: 1
-
-Error: Internal update mode requires at least one explicit target.

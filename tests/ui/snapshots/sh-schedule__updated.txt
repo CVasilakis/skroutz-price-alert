@@ -1,7 +1,7 @@
 # border: green
 # exit: 0
 
-[skroutz] Updating the timer schedule to match the configured interval...
+[skroutz] Updating the timer schedule...
 [skroutz] Timer unit updated.
 
-Done. Updated: skroutz
+Updated: skroutz

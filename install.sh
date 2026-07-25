@@ -5,8 +5,7 @@ set -eu
 # GLOBAL VARIABLES
 # ==============================================================================
 
-# Automatically get the directory where the script is located (repository root)
-SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
 BASE_DIR="$SCRIPT_DIR"
 
 # Shared helpers (colors, plugin enumeration, systemd helpers)
@@ -14,6 +13,8 @@ BASE_DIR="$SCRIPT_DIR"
 . "$SCRIPT_DIR/scripts/lib/common.sh"
 # shellcheck source=scripts/lib/preflight.sh
 . "$SCRIPT_DIR/scripts/lib/preflight.sh"
+# shellcheck source=scripts/lib/systemd.sh
+. "$SCRIPT_DIR/scripts/lib/systemd.sh"
 # shellcheck source=scripts/lib/provisioning.sh
 . "$SCRIPT_DIR/scripts/lib/provisioning.sh"
 
@@ -46,74 +47,78 @@ print_help() {
     printf '\n'
 }
 
-# ==============================================================================
-# ARGUMENTS
-# ==============================================================================
-# Usage:
-#   ./install.sh                        Install everything and provision every plugin.
-#   ./install.sh --<plugin> [...]       (Re)provision and enable only the named plugin(s).
-#   ./install.sh --update [<plugin>..]  Invoked by update.sh (quiet banner). Reprovisions
-#                                       only the named plugins (the set update.sh derived
-#                                       from the already-installed units), or every plugin
-#                                       when none are named. Plugins that no longer exist in
-#                                       the catalog (removed/renamed in the new version) are
-#                                       skipped instead of aborting the update.
-
-INSTALL_MODE="all"   # all | selected
-IS_UPDATE=0
-UPDATE_FLAG_COUNT=0
-SELECTED=""
-
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        -h|--help)
-            print_help
-            exit 0
-            ;;
-        --update)
-            IS_UPDATE=1
-            UPDATE_FLAG_COUNT=$((UPDATE_FLAG_COUNT + 1))
-            ;;
-        --)
-            # A bare '--' would otherwise parse as an empty target name and
-            # silently select nothing.
-            printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"
-            exit 1
-            ;;
-        --*)
-            INSTALL_MODE="selected"
-            target="${1#--}"
-            require_valid_target "$target" || exit 1
-            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
-            ;;
-        *)
-            printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"
-            exit 1
-            ;;
-    esac
-    shift
-done
-
-if [ "$IS_UPDATE" -eq 1 ]; then
-    if [ "$UPDATE_FLAG_COUNT" -ne 1 ] ||
-       [ "${SCROOGE_INTERNAL_UPDATE:-}" != "1" ]; then
-        printf "%b\n" "${RED}Error: --update is reserved for the internal update workflow.${NC}"
-        exit 1
-    fi
-    if [ "$INSTALL_MODE" != "selected" ] || [ -z "$SELECTED" ]; then
-        printf "%b\n" "${RED}Error: Internal update mode requires at least one explicit target.${NC}"
-        exit 1
-    fi
-fi
-
-# ==============================================================================
-# PREREQUISITES
-# ==============================================================================
-
 cd "$SCRIPT_DIR"
-
+CATALOG_PYTHON=python3
+parse_target_flags "$@" || exit 1
+if [ "$TARGET_HELP_REQUESTED" -eq 1 ]; then
+    print_help
+    exit 0
+fi
+case "${SCROOGE_INSTALL_CONTEXT:-normal}" in
+    normal) IS_UPDATE=0 ;;
+    deferred)
+        IS_UPDATE=1
+        if [ "${SCROOGE_INTERNAL_UPDATE:-}" != 1 ] ||
+            [ "$TARGET_FLAGS_EXPLICIT" -ne 1 ] ||
+            [ -z "$TARGET_FLAGS" ]; then
+            printf '%s\n' "Error: Invalid internal deferred-install context." >&2
+            exit 1
+        fi
+        ;;
+    *)
+        printf '%s\n' "Error: Invalid install context." >&2
+        exit 1
+        ;;
+esac
 reject_project_venv_symlink || exit 1
 require_python_310 python3 "./install.sh" || exit 1
+
+# Validate the import-light catalog, selection, source inputs, and every unit
+# destination before venv creation or package installation.
+load_plugin_catalog || {
+    catalog_diagnose || exit 1
+}
+ALL_PLUGINS="$(list_plugins)"
+if [ "$IS_UPDATE" -eq 0 ]; then
+    select_targets registered || exit 1
+    PLUGINS="$SELECTED_TARGETS"
+else
+    PLUGINS=''
+    OLD_IFS="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086
+    for sel in $TARGET_FLAGS; do
+        if stream_contains "$sel" "$ALL_PLUGINS"; then
+            PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
+        else
+            printf '%s\n' \
+                "Note: '$sel' is no longer registered; its units remain disabled."
+            printf '%s\n' \
+                "Remove them with: ./scripts/uninstall.sh --$sel"
+        fi
+    done
+    IFS="$OLD_IFS"
+fi
+
+for required_file in requirements.txt scripts/run.sh scripts/lib/common.sh \
+    scripts/lib/preflight.sh scripts/lib/systemd.sh scripts/lib/provisioning.sh; do
+    require_regular_owned_file "$BASE_DIR/$required_file" || exit 1
+done
+EARLY_PLUGIN_REQS="$(list_plugin_requirements)" || exit 1
+OLD_IFS="$IFS"
+IFS='
+'
+PAIR_TAB="$(printf '\t')"
+# shellcheck disable=SC2086
+for pair in $EARLY_PLUGIN_REQS; do
+    req_name="${pair%%"$PAIR_TAB"*}"
+    req_path="${pair#*"$PAIR_TAB"}"
+    stream_contains "$req_name" "$PLUGINS" || continue
+    require_regular_owned_file "$req_path" || exit 1
+done
+IFS="$OLD_IFS"
+validate_unit_destinations "$PLUGINS" pair || exit 1
 
 if [ -d "$VENV_DIR" ]; then
     require_python_310 "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh" || exit 1
@@ -124,28 +129,7 @@ if ! python3 -c "import ensurepip" > /dev/null 2>&1; then
     exit 1
 fi
 
-require_systemctl
-
-# Repair executable modes for every command entry point and the versioned hook.
-for s in "$BASE_DIR"/install.sh "$BASE_DIR"/update.sh "$BASE_DIR"/scripts/*.sh \
-    "$BASE_DIR"/scripts/dev/*.sh "$BASE_DIR"/.githooks/pre-push; do
-    path_entry_exists "$s" || continue
-    require_regular_owned_file "$s" || exit 1
-done
-for s in "$BASE_DIR"/scripts/lib/*.sh; do
-    path_entry_exists "$s" || continue
-    require_regular_owned_file "$s" || exit 1
-done
-for s in "$BASE_DIR"/install.sh "$BASE_DIR"/update.sh "$BASE_DIR"/scripts/*.sh \
-    "$BASE_DIR"/scripts/dev/*.sh "$BASE_DIR"/.githooks/pre-push; do
-    path_entry_exists "$s" || continue
-    chmod +x "$s"
-done
-for s in "$BASE_DIR"/scripts/lib/*.sh; do
-    path_entry_exists "$s" || continue
-    chmod a-x "$s"
-done
-
+require_systemctl || exit 1
 
 # ------------------------------------------------------------------------------
 # PYTHON VIRTUAL ENVIRONMENT SETUP
@@ -188,50 +172,17 @@ else
     printf "%b\n" "${GREEN}Python virtual environment successfully updated.${NC}"
 fi
 
-# ------------------------------------------------------------------------------
-# PLUGIN DISCOVERY
-# ------------------------------------------------------------------------------
-# The venv now exists, so the catalog can be queried (the single source of truth
-# for which scrapers exist). One systemd unit pair is generated per plugin.
-
-load_plugin_catalog || true
-ALL_PLUGINS="$(list_plugins || true)"
-if [ -z "$ALL_PLUGINS" ]; then
-    # Distinguishes a broken venv from a plugin whose discovery failed, and
-    # surfaces the actual error instead of a generic "venv may be broken".
+# Re-read the same import-light metadata through the completed venv before
+# installing plugin-private dependencies and resolving schedules.
+CATALOG_PYTHON="$BASE_DIR/venv/bin/python3"
+reset_catalog_cache
+load_plugin_catalog || {
     catalog_diagnose || exit 1
-fi
-
-if [ "$INSTALL_MODE" = "selected" ]; then
-    # PLUGINS is newline-joined (matching list_plugins' output shape): the
-    # per-plugin dependency and missing-config loops below split it under
-    # IFS=newline, where a space-joined list would arrive as one bogus
-    # " name" item and silently skip every selected plugin's requirements.
-    PLUGINS=""
-    OLD_IFS="$IFS"
-    IFS='
-'
-    # shellcheck disable=SC2086  # intentional newline-only stream iteration
-    for sel in $SELECTED; do
-        if stream_contains "$sel" "$ALL_PLUGINS"; then
-            PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
-        elif [ "$IS_UPDATE" -eq 1 ]; then
-            # During an update the selection is derived from the installed units;
-            # a plugin removed or renamed in the incoming version is no longer in
-            # the catalog. Skip it (its orphaned unit was already stopped by
-            # update.sh; uninstall clears it) rather than aborting the whole update.
-            printf "%b\n" "${YELLOW}Note: Skipping '$sel' - no longer a registered scraper in this version.${NC}"
-            printf "%b\n" "${YELLOW}      Its leftover units can be removed with: ${CYAN}./scripts/uninstall.sh --$sel${NC}"
-        else
-            printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
-            printf "%b\n" "Available targets: ${CYAN}$(stream_for_display "$ALL_PLUGINS")${NC}"
-            IFS="$OLD_IFS"
-            exit 1
-        fi
-    done
-    IFS="$OLD_IFS"
-else
-    PLUGINS="$ALL_PLUGINS"
+}
+FINAL_PLUGINS="$(list_plugins)"
+if [ "$FINAL_PLUGINS" != "$ALL_PLUGINS" ]; then
+    printf '%s\n' "Error: Plugin catalog changed during installation." >&2
+    exit 1
 fi
 
 # ------------------------------------------------------------------------------

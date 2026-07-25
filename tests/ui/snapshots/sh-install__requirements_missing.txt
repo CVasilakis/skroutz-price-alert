@@ -1,5 +1,4 @@
 # border: red
 # exit: 1
 
-Updating python packages in existing virtual environment...
-Error: requirements.txt not found. The script cannot run without its dependencies.
+Error: Required project file must be a regular file: <BASE_DIR>/requirements.txt

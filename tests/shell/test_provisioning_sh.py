@@ -119,6 +119,7 @@ def run_transaction(shell_world, targets, schedules, mode="normal", **env_update
 set -eu
 BASE_DIR={shlex_quote(str(base))}
 . {shlex_quote(str(ROOT / "scripts/lib/common.sh"))}
+. {shlex_quote(str(ROOT / "scripts/lib/systemd.sh"))}
 . {shlex_quote(str(ROOT / "scripts/lib/provisioning.sh"))}
 targets={shlex_quote(targets)}
 schedules={shlex_quote(schedules)}
@@ -134,6 +135,7 @@ def run_schedule_transaction(shell_world, targets, schedules, **env_updates):
 set -eu
 BASE_DIR={shlex_quote(str(base))}
 . {shlex_quote(str(ROOT / "scripts/lib/common.sh"))}
+. {shlex_quote(str(ROOT / "scripts/lib/systemd.sh"))}
 . {shlex_quote(str(ROOT / "scripts/lib/provisioning.sh"))}
 targets={shlex_quote(targets)}
 schedules={shlex_quote(schedules)}
@@ -174,7 +176,7 @@ def test_first_install_activation_failure_removes_every_new_unit(shell_world):
     )
     assert result.returncode != 0
     assert list(unit_dir.glob("*-scraper.*")) == []
-    assert "restoring the previous unit files" in result.stderr
+    assert "restoring previous files and states" in result.stderr
 
 
 def test_reinstall_failure_restores_bytes_and_timer_state(shell_world):
@@ -218,7 +220,7 @@ def test_reinstall_failure_restores_runtime_enabled_state(shell_world):
 
 
 @pytest.mark.parametrize("link_kind", ("relative", "absolute", "devnull"))
-def test_reinstall_failure_restores_symlinked_units_exactly(shell_world, link_kind):
+def test_reinstall_rejects_symlinked_units_before_mutation(shell_world, link_kind):
     _, unit_dir, state, _ = shell_world
     external = unit_dir.parent / "external"
     external.mkdir()
@@ -241,12 +243,12 @@ def test_reinstall_failure_restores_symlinked_units_exactly(shell_world, link_ki
         shell_world,
         "alpha",
         "alpha\thourly",
-        FAKE_FAIL_ENABLE_TARGET="alpha",
         FAKE_UNIT_FILE_STATE_TARGET="alpha",
         FAKE_UNIT_FILE_STATE="linked",
     )
 
     assert result.returncode != 0
+    assert "Refusing to replace managed unit symlink" in result.stderr
     for live, target in expected_targets.items():
         assert live.is_symlink()
         assert os.readlink(live) == target
@@ -292,7 +294,7 @@ exec /bin/cp "$@"
         "alpha\thourly\nbeta\tdaily",
     )
     assert result.returncode != 0
-    assert "before any live unit file was changed" in result.stderr
+    assert "before any live file was changed" in result.stderr
     for path, payload in expected.items():
         assert path.read_bytes() == payload
 
@@ -344,7 +346,7 @@ esac
     )
     result = run_transaction(shell_world, "alpha", "alpha\thourly")
     assert result.returncode == 143
-    assert "Provisioning interrupted by TERM" in result.stderr
+    assert "Unit replacement interrupted by TERM" in result.stderr
     assert service.read_bytes() == b"old service\n"
     assert timer.read_bytes() == b"old timer\n"
 
@@ -358,11 +360,11 @@ def test_signal_during_activation_rolls_back_new_units(shell_world):
         FAKE_SIGNAL_VERB="enable",
     )
     assert result.returncode == 143
-    assert "Provisioning interrupted by TERM" in result.stderr
+    assert "Unit replacement interrupted by TERM" in result.stderr
     assert list(unit_dir.glob("*-scraper.*")) == []
 
 
-def test_signal_during_activation_restores_symlinked_units_exactly(shell_world):
+def test_symlink_rejection_prevents_activation_signal(shell_world):
     _, unit_dir, state, _ = shell_world
     external = unit_dir.parent / "external"
     external.mkdir()
@@ -385,8 +387,8 @@ def test_signal_during_activation_restores_symlinked_units_exactly(shell_world):
         FAKE_UNIT_FILE_STATE="linked",
     )
 
-    assert result.returncode == 143
-    assert "Provisioning interrupted by TERM" in result.stderr
+    assert result.returncode != 0
+    assert "Refusing to replace managed unit symlink" in result.stderr
     for live, target in expected_targets.items():
         assert live.is_symlink()
         assert os.readlink(live) == target
@@ -401,7 +403,7 @@ def test_signal_during_success_cleanup_cannot_start_rollback(shell_world):
         "rm",
         """#!/bin/sh
 case "$*" in
-    *.scrooge-provision.*) kill -TERM "$PPID" ;;
+    *.scrooge-units.*) kill -TERM "$PPID" ;;
 esac
 exec /bin/rm "$@"
 """,
@@ -423,7 +425,7 @@ def test_rollback_failure_retains_private_recovery_artifacts(shell_world):
         FAKE_FAIL_DAEMON="1",
     )
     assert result.returncode != 0
-    recovery = list(unit_dir.glob(".scrooge-provision.*"))
+    recovery = list(unit_dir.glob(".scrooge-units.*"))
     assert len(recovery) == 1
     assert "Recovery files were retained at" in result.stderr
 
@@ -457,7 +459,7 @@ def test_disabled_like_unit_file_states_are_accepted(shell_world, unit_file_stat
     assert result.returncode == 0, result.stderr
 
 
-def test_schedule_transaction_normalizes_symlink_without_rewriting_service(shell_world):
+def test_schedule_transaction_rejects_symlink_without_rewriting_service(shell_world):
     _, unit_dir, _, _ = shell_world
     service = unit_dir / "alpha-scraper.service"
     service.write_text("preserve service bytes\n", encoding="utf-8")
@@ -474,15 +476,14 @@ def test_schedule_transaction_normalizes_symlink_without_rewriting_service(shell
         FAKE_UNIT_FILE_STATE="linked",
     )
 
-    assert result.returncode == 0, result.stderr
-    assert timer.is_file()
-    assert not timer.is_symlink()
-    assert "OnCalendar=daily" in timer.read_text(encoding="utf-8")
+    assert result.returncode != 0
+    assert timer.is_symlink()
+    assert "Refusing to replace managed unit symlink" in result.stderr
     assert service.read_text(encoding="utf-8") == "preserve service bytes\n"
     assert external.read_text(encoding="utf-8") == "OnCalendar=hourly\n"
 
 
-def test_schedule_failure_restores_dangling_symlink_text(shell_world):
+def test_schedule_rejects_dangling_symlink_text(shell_world):
     _, unit_dir, _, _ = shell_world
     (unit_dir / "alpha-scraper.service").write_text("service\n", encoding="utf-8")
     timer = unit_dir / "alpha-scraper.timer"
@@ -498,7 +499,7 @@ def test_schedule_failure_restores_dangling_symlink_text(shell_world):
     assert result.returncode != 0
     assert timer.is_symlink()
     assert os.readlink(timer) == "../missing/original.timer"
-    assert "Schedule transaction failed" in result.stderr
+    assert "Refusing to replace managed unit symlink" in result.stderr
 
 
 def test_systemd_analyze_accepts_rendered_pair_from_path_with_spaces(tmp_path):
@@ -521,6 +522,7 @@ def test_systemd_analyze_accepts_rendered_pair_from_path_with_spaces(tmp_path):
 set -eu
 BASE_DIR={shlex_quote(str(base))}
 . {shlex_quote(str(ROOT / "scripts/lib/common.sh"))}
+. {shlex_quote(str(ROOT / "scripts/lib/systemd.sh"))}
 render_plugin_service alpha {shlex_quote(str(service))}
 render_plugin_timer alpha hourly {shlex_quote(str(timer))}
 """

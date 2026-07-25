@@ -1,7 +1,7 @@
 # border: red
 # exit: 1
 
-[skroutz] Updating the timer schedule to match the configured interval...
-mktemp: failed to create directory via template
-'<BASE_DIR>/xdg/systemd/user/.scrooge-schedule.<PID>': Permission denied
-One or more timer schedules could not be applied.
+[skroutz] Updating the timer schedule...
+mktemp: failed to create directory via template '<BASE_DIR>/xdg/systemd/user/.scrooge-units.<PID>':
+Permission denied
+Error: One or more timer schedules could not be applied.

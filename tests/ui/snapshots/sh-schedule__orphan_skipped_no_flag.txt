@@ -1,9 +1,6 @@
 # border: green
 # exit: 0
 
-[ghost] Installed but no longer a registered scraper (orphan); skipping.
-Remove its leftover units with: ./scripts/uninstall.sh --ghost
+[skroutz] Timer already matches the configured interval.
 
-[skroutz] Timer already matches the configured interval. Nothing to do.
-
-All timers already match their configured intervals. Nothing changed.
+All timers already match their configured intervals.

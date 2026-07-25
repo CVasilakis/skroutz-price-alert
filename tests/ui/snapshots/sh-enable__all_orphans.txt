@@ -1,5 +1,5 @@
 # border: green
 # exit: 0
 
-Nothing to enable: every installed unit is an orphan (no longer a registered scraper).
-Remove the leftovers with ./scripts/uninstall.sh (see ./scripts/uninstall.sh --help).
+No installed, registered scraper timers found.
+Run ./install.sh to provision scrapers.

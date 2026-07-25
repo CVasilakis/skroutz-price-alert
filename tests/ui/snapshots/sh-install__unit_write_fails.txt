@@ -5,6 +5,6 @@ Updating python packages in existing virtual environment...
 Python virtual environment successfully updated.
 
 Setting up Systemd timer(s)...
-mktemp: failed to create directory via template
-'<BASE_DIR>/xdg/systemd/user/.scrooge-provision.<PID>': Permission denied
+mktemp: failed to create directory via template '<BASE_DIR>/xdg/systemd/user/.scrooge-units.<PID>':
+Permission denied
 Error: Transactional systemd provisioning failed.

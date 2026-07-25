@@ -1,5 +1,7 @@
-# border: red
-# exit: 1
+# border: green
+# exit: 0
 
-[skroutz] Has no resolved schedule; skipping.
-One or more timer schedules could not be applied.
+[skroutz] Updating the timer schedule...
+[skroutz] Timer unit updated.
+
+Updated: skroutz

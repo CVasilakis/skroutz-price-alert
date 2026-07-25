@@ -1,8 +1,8 @@
 # border: red
 # exit: 1
 
-[skroutz] Updating the timer schedule to match the configured interval...
-Error: Schedule transaction failed; restoring previous timers.
-Error: Schedule rollback was incomplete. Recovery files:
-<BASE_DIR>/xdg/systemd/user/.scrooge-schedule.<PID>
-One or more timer schedules could not be applied.
+[skroutz] Updating the timer schedule...
+Error: Unit replacement failed; restoring previous files and states.
+Error: Rollback was incomplete. Recovery files were retained at:
+<BASE_DIR>/xdg/systemd/user/.scrooge-units.<PID>
+Error: One or more timer schedules could not be applied.

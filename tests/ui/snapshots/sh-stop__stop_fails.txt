@@ -3,6 +3,4 @@
 
 [skroutz] Stopping active background execution...
 Error: Failed to stop skroutz-scraper.service.
-[skroutz] Error: Active background execution could not be stopped.
-
-One or more scraper services could not be stopped.
+[skroutz] Error: Active execution could not be stopped.

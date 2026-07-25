@@ -108,7 +108,7 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     ./install.sh
     ```
 
-    The `install.sh` script will automatically create a project-owned Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. The root `venv/` path must be a real directory, not a symlink. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
+    The `install.sh` script will automatically create a project-owned Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. The root `venv/` path must be a real directory, not a symlink. Managed unit destinations must be absent or regular files; install, schedule, and update reject systemd unit symlinks before changing packages, units, or timer state. Remove a legacy link safely with `./scripts/uninstall.sh --<target>`, then reinstall it. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
 
 4. **Configure your settings:**
 
@@ -400,9 +400,11 @@ Applies each scraper's configured `execution_interval` (from `config/<target>.js
 | `--<target>` | Apply only the specified target's interval (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is updated to match its configured interval. A scraper whose config file is missing, structurally invalid, or has an unsupported `execution_interval` is reported and left unchanged. Other targets continue, and a structural config error makes the command exit `15`. |
 
 Eligible timer changes are staged and applied as one transaction. Successful
-writes normalize managed unit paths to regular files. If writing, reloading, or
-restarting any timer fails, every changed timer is restored to its prior bytes or
-exact symlink representation and activation state.
+writes replace absent paths or regular files atomically. A timer or service
+symlink—including a relative, absolute, dangling, or `/dev/null` link—is rejected
+before mutation with an uninstall-and-reinstall remediation command. If writing,
+reloading, or restarting any timer fails, every changed regular file and timer
+activation state is restored.
 
 #### Remove Scrapers & Uninstall
 Performs a full or partial teardown of the background services:
@@ -427,17 +429,19 @@ transactionally replaces their systemd unit files:
 
 The checkout must already be on `main`, with no tracked changes, nonignored
 untracked files, unpublished commits, or diverged history. The updater never
-discards work or switches branches. It stops and disables selected targets before
-replacing source or unit files, then restores each timer's prior enabled/active
-state. If an update is interrupted after source replacement, affected timers stay
+discards work or switches branches: after verifying `origin/main`, it advances the
+checkout with a fast-forward-only merge. It stops and disables selected targets
+before replacing source or unit files, then restores each timer's prior
+enabled/active state. Unsupported unit links are rejected before any target is
+quiesced. If an update is interrupted after source replacement, affected timers stay
 disabled and the command prints the retained recovery path and status command.
 If a selected target's config is structurally invalid after the source update,
 that target's previous unit files and timer state are restored while healthy
 targets are reprovisioned; the update completes its recovery work and exits `15`.
-Successful provisioning normalizes managed unit paths to regular files.
-Transactional rollback restores the previous representation exactly, including
-relative, absolute, `/dev/null`, and dangling symlinks with their original link
-text.
+Transactional rollback restores prior regular-file bytes or prior absence and
+then verifies the original timer state. Teardown remains link-aware: disable,
+stop, and uninstall discover legacy links, and uninstall removes the link itself
+without following or modifying its target.
 
 ## 🔔 Notifications & Messages
 
@@ -551,7 +555,9 @@ unit files:
 ```
 
 The updater preserves selective installations and prior timer activation states.
-It never prompts to discard changes or switches branches automatically.
+It uses a verified fast-forward and never prompts to discard changes or switches
+branches automatically. Legacy managed-unit symlinks must be removed with
+`./scripts/uninstall.sh --<target>` before updating.
 </details>
 
 <details>

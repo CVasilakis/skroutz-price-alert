@@ -1,255 +1,138 @@
 #!/bin/sh
 set -eu
 
-# ==============================================================================
-# GLOBAL VARIABLES
-# ==============================================================================
-
-# Get the directory where the script is located
-SCRIPT_DIR="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
-BASE_DIR="$( dirname "$SCRIPT_DIR" )"
-
-# Shared helpers (colors, plugin enumeration, systemd helpers)
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
+BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=scripts/lib/systemd.sh
+. "$SCRIPT_DIR/lib/systemd.sh"
 # shellcheck source=scripts/lib/provisioning.sh
 . "$SCRIPT_DIR/lib/provisioning.sh"
 
-# ==============================================================================
-# HELPER FUNCTIONS
-# ==============================================================================
-
-# Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
-    load_plugin_catalog || true
-    _registered="$(list_plugins 2>/dev/null || true)"
-    # The supported cadences come from the settings vocabulary (SUPPORTED_INTERVALS),
-    # not a literal here, so this help can never drift from the code.
-    _intervals="$(list_supported_intervals 2>/dev/null || true)"
-
-    printf '\n'
-    printf '%s\n' "Usage: schedule.sh [-h] [--<target> ...]"
-    printf '\n'
-    printf '%s\n' "Apply each scraper's configured execution interval to its systemd timer. The"
-    printf '%s\n' "interval is read from the \"settings.execution_interval\" field of the scraper's"
-    printf '%s\n' "config file (config/<target>.json) and translated to the timer's schedule. With"
-    printf '%s\n' "no target flag every installed scraper is updated; pass one or more --<target>"
-    printf '%s\n' "flags to update only those."
-    printf '\n'
-    printf '%s\n' "Supported intervals: ${_intervals:-unavailable (run ./install.sh first)}"
-    printf '%s\n' "Many spellings are accepted, e.g. \"1 hour\", \"60m\" and \"hourly\" all mean 1h."
-    printf '%s\n' "An unset interval keeps the scraper's default; an unsupported value is reported"
-    printf '%s\n' "and the timer is left unchanged."
-    printf '\n'
+    _ph_registered="$(list_plugins 2>/dev/null || true)"
+    _ph_installed="$(list_installed_units timer 2>/dev/null || true)"
+    _ph_intervals="$(list_supported_intervals 2>/dev/null || true)"
+    printf '\n%s\n\n' "Usage: schedule.sh [-h] [--<target> ...]"
+    printf '%s\n' "Apply configured execution intervals to installed scraper timers."
+    printf '%s\n' "Only registered targets are eligible; orphaned timers are skipped."
+    printf '%s\n\n' \
+        "Supported intervals: ${_ph_intervals:-unavailable (run ./install.sh first)}"
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    _installed="$(list_installed_plugins timer)"
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for plugin in $_installed; do
-        # Skip orphans (installed but no longer a registered scraper) - they have
-        # no config to apply. If the catalog is unavailable we can't tell, so list all.
-        if [ -n "$_registered" ] && ! stream_contains "$plugin" "$_registered"; then
-            continue
-        fi
-        printf '  --%-15s Apply only the %s scraper interval\n' "$plugin" "$plugin"
+    _ph_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086
+    for _ph_target in $_ph_installed; do
+        stream_contains "$_ph_target" "$_ph_registered" || continue
+        printf '  --%-15s Apply only the %s scraper interval\n' \
+            "$_ph_target" "$_ph_target"
     done
+    IFS="$_ph_old_ifs"
     printf '\n'
 }
 
-# ------------------------------------------------------------------------------
-# TARGET RESOLUTION
-# ------------------------------------------------------------------------------
-# schedule.sh re-applies the cadence of the timers install.sh provisioned, so it
-# acts on the INSTALLED timer units intersected with the catalog: it needs Python
-# both to enumerate scrapers and to resolve each one's configured interval. An
-# installed unit whose plugin was removed (an orphan) has no config to apply, so it
-# is reported and skipped. Because resolving intervals requires the catalog, a
-# readable catalog is REQUIRED when units exist.
-# -h/--help is honored anywhere in the argument list; a bare '--' is rejected
-# (it would otherwise parse as an empty target name and silently select nothing).
-
-SELECTED=""
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        -h|--help) print_help; exit 0 ;;
-        --) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-        --*)
-            target="${1#--}"
-            require_valid_target "$target" || exit 1
-            SELECTED="$(stream_add_unique "$SELECTED" "$target")"
-            ;;
-        *) printf "%bError: Invalid argument: %s%b\n" "$RED" "$1" "$NC"; exit 1 ;;
-    esac
-    shift
-done
-
-require_systemctl
-
-load_plugin_catalog || true
-INSTALLED_PLUGINS="$(list_installed_plugins timer)"
-REGISTERED="$(list_plugins 2>/dev/null || true)"
-
-# Units exist but the catalog can't be read -> without it we can neither enumerate
-# scrapers nor resolve their intervals, so refuse rather than guess.
-# catalog_diagnose says WHY (venv missing vs. a plugin whose discovery failed).
-if [ -n "$INSTALLED_PLUGINS" ] && [ -z "$REGISTERED" ]; then
-    catalog_diagnose || exit 1
+parse_target_flags "$@" || exit 1
+if [ "$TARGET_HELP_REQUESTED" -eq 1 ]; then
+    print_help
+    exit 0
 fi
-
-if [ -n "$SELECTED" ]; then
-    PLUGINS=""
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for sel in $SELECTED; do
-        if stream_contains "$sel" "$INSTALLED_PLUGINS"; then
-            # Installed: configure it - unless the catalog omits it, i.e. it is an
-            # orphan whose code is gone, in which case point at uninstall instead.
-            if ! stream_contains "$sel" "$REGISTERED"; then
-                printf "%b\n" "${RED}Error: '$sel' is installed but no longer a registered scraper (orphan).${NC}"
-                printf "%b\n" "Remove its leftover units with: ${CYAN}./scripts/uninstall.sh --$sel${NC}"
-                exit 1
-            fi
-            PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
-        elif stream_contains "$sel" "$REGISTERED"; then
-            # A real scraper, but install.sh never provisioned its timer - there is
-            # no unit to reschedule.
-            printf "%b\n" "${RED}Error: '$sel' is registered but not installed.${NC}"
-            printf "%b\n" "Install it first with: ${CYAN}./install.sh --$sel${NC}"
-            exit 1
-        else
-            printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
-            [ -z "$INSTALLED_PLUGINS" ] || \
-                printf "%b\n" "Installed scrapers: ${CYAN}$(printf '%s ' $INSTALLED_PLUGINS)${NC}"
-            exit 1
-        fi
-    done
-else
-    # No flag: every installed timer that is STILL a registered scraper. Orphans
-    # (installed but de-registered) are reported here, then skipped - they have no
-    # config and no code to schedule.
-    PLUGINS=""
-    # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for plugin in $INSTALLED_PLUGINS; do
-        if stream_contains "$plugin" "$REGISTERED"; then
-            PLUGINS="$(stream_add_unique "$PLUGINS" "$plugin")"
-        else
-            printf "%b\n" "\n${YELLOW}[$plugin] Installed but no longer a registered scraper (orphan); skipping.${NC}"
-            printf "%b\n" "Remove its leftover units with: ${CYAN}./scripts/uninstall.sh --$plugin${NC}"
-        fi
-    done
-fi
+require_systemctl || exit 1
+select_targets installed_registered_timers || exit 1
+PLUGINS="$SELECTED_TARGETS"
 
 if [ -z "$PLUGINS" ]; then
-    if [ -n "$INSTALLED_PLUGINS" ]; then
-        printf "%b\n" "\n${YELLOW}Nothing to schedule: every installed unit is an orphan (no longer a registered scraper).${NC}"
-        printf "%b\n" "Remove the leftovers with ${CYAN}./scripts/uninstall.sh${NC} (see ${CYAN}./scripts/uninstall.sh --help${NC})."
-    else
-        printf "%b\n" "\n${YELLOW}No installed scrapers found.${NC}"
-        printf "%b\n" "Run ${CYAN}./install.sh${NC} to provision your scrapers.\n"
-    fi
+    printf '\n%s\n\n' "No installed, registered scraper timers found."
     exit 0
 fi
 
-# ------------------------------------------------------------------------------
-# APPLYING INTERVALS
-# ------------------------------------------------------------------------------
-# Each plugin's effective schedule already folds in its configured interval. We
-# compare the resolved OnCalendar value against the installed timer and rewrite only when it changed, so an
-# unchanged cadence is a true no-op and an active timer is restarted only when its
-# schedule actually moved. A missing config or an unsupported value leaves the timer
-# untouched (keeping the previously-applied schedule, or the default).
-
-if ! load_plugin_schedules || \
-   ! ALL_SCHEDULES="$(list_plugin_schedules)" || \
-   ! INTERVAL_STATUS="$(list_interval_status)" || \
-   ! SCHEDULE_ERRORS="$(list_schedule_errors)" || \
-   ! SUPPORTED_INTERVAL_KEYS="$(list_supported_intervals)" || \
-   ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
-    printf "%b\n" "${RED}Error: Failed to resolve plugin scheduling metadata.${NC}\n"
+if ! load_plugin_schedules ||
+    ! ALL_SCHEDULES="$(list_plugin_schedules)" ||
+    ! INTERVAL_STATUS="$(list_interval_status)" ||
+    ! SCHEDULE_ERRORS="$(list_schedule_errors)" ||
+    ! SUPPORTED_INTERVAL_KEYS="$(list_supported_intervals)" ||
+    ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
+    printf '%s\n' "Error: Failed to resolve scraper scheduling metadata." >&2
     exit 1
 fi
 
-CHANGED=""
-CHANGED_SCHEDULES=""
+CHANGED=''
+CHANGED_SCHEDULES=''
 FAILED=0
 CONFIG_FAILED=0
-# shellcheck disable=SC2086  # intentional newline-delimited target stream
+OLD_IFS="$IFS"
+IFS='
+'
+# shellcheck disable=SC2086
 for plugin in $PLUGINS; do
-    if ! status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")"; then
-        printf "%b\n" "\n${RED}[$plugin] Could not resolve execution_interval status; skipping.${NC}"
+    status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")" || {
+        printf '%s\n' "[$plugin] Error: No interval status was returned." >&2
         FAILED=1
         continue
-    fi
-
+    }
     case "$status" in
         error)
-            schedule_error="$(plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true)"
-            printf "%b\n" "\n${RED}[$plugin] Error: ${schedule_error:-Could not resolve its timer schedule.}${NC}"
-            printf "%b\n" "${YELLOW}[$plugin] Existing timer units were left unchanged.${NC}"
+            schedule_error="$(
+                plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true
+            )"
+            printf '\n%s\n' \
+                "[$plugin] Error: ${schedule_error:-Could not resolve its schedule.}"
+            printf '%s\n' "[$plugin] Existing timer was left unchanged."
             CONFIG_FAILED=1
-            continue
-            ;;
+            continue ;;
         nocfg)
-            printf "%b\n" "\n${YELLOW}[$plugin] No config file found; leaving its timer unchanged.${NC}"
-            if example_path="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"; then
-                printf "%b\n" "Create it by copying ${CYAN}$example_path${NC} to ${CYAN}config/$plugin.json${NC}."
+            printf '\n%s\n' "[$plugin] No config file found; timer left unchanged."
+            if example_path="$(
+                plugin_stream_value "$plugin" "$EXAMPLE_PAIRS"
+            )"; then
+                printf '%s\n' \
+                    "Copy $example_path to config/$plugin.json to configure it."
             fi
-            continue
-            ;;
+            continue ;;
         invalid)
-            printf "%b\n" "\n${YELLOW}[$plugin] Unsupported execution_interval in config; leaving its timer unchanged.${NC}"
-            printf "%b\n" "Use one of: ${CYAN}$SUPPORTED_INTERVAL_KEYS${NC}."
-            continue
-            ;;
+            printf '\n%s\n' \
+                "[$plugin] Unsupported execution_interval; timer left unchanged."
+            printf '%s\n' "Use one of: $SUPPORTED_INTERVAL_KEYS."
+            continue ;;
     esac
-
-    new_calendar="$(plugin_stream_value "$plugin" "$ALL_SCHEDULES")"
-    if [ -z "$new_calendar" ]; then
-        printf "%b\n" "\n${RED}[$plugin] Has no resolved schedule; skipping.${NC}"
+    new_calendar="$(plugin_stream_value "$plugin" "$ALL_SCHEDULES")" || {
         FAILED=1
         continue
-    fi
-
+    }
     if [ "$new_calendar" = "$(read_timer_oncalendar "$plugin")" ]; then
-        printf "%b\n" "\n${GREEN}[$plugin] Timer already matches the configured interval. Nothing to do.${NC}"
+        printf '\n%s\n' "[$plugin] Timer already matches the configured interval."
         continue
     fi
-
-    printf "%b\n" "\n${CYAN}[$plugin] Updating the timer schedule to match the configured interval...${NC}"
+    printf '\n%s\n' "[$plugin] Updating the timer schedule..."
     CHANGED="$(stream_add_unique "$CHANGED" "$plugin")"
     CHANGED_SCHEDULES="${CHANGED_SCHEDULES}${CHANGED_SCHEDULES:+
 }${plugin}	${new_calendar}"
 done
-
-# ------------------------------------------------------------------------------
-# RELOAD AND RESTART CHANGED TIMERS
-# ------------------------------------------------------------------------------
-# daemon-reload makes systemd read the rewritten unit files; timers that were
-# active before the change are restarted and verified so they recompute their next
-# elapse, while inactive timers remain stopped until explicitly enabled.
+IFS="$OLD_IFS"
 
 if [ -n "$CHANGED" ]; then
     if schedule_units_transaction "$CHANGED" "$CHANGED_SCHEDULES"; then
-        # shellcheck disable=SC2086  # intentional newline-delimited target stream
+        IFS='
+'
+        # shellcheck disable=SC2086
         for plugin in $CHANGED; do
-            printf "%b\n" "${GREEN}[$plugin] Timer unit updated.${NC}"
+            printf '%s\n' "[$plugin] Timer unit updated."
         done
+        IFS="$OLD_IFS"
     else
         FAILED=1
     fi
 fi
 
-if [ "$FAILED" -ne 0 ]; then
-    printf "%b\n" "${RED}One or more timer schedules could not be applied.${NC}\n"
+[ "$FAILED" -eq 0 ] || {
+    printf '%s\n' "Error: One or more timer schedules could not be applied." >&2
     exit 1
-fi
-
+}
 if [ -n "$CHANGED" ]; then
-    printf "%b\n" "\n${GREEN}Done. Updated:${NC} ${CYAN}$(stream_for_display "$CHANGED")${NC}\n"
+    printf '\n%s\n' "Updated: $(stream_for_display "$CHANGED")"
 elif [ "$CONFIG_FAILED" -eq 0 ]; then
-    printf "%b\n" "\n${GREEN}All timers already match their configured intervals. Nothing changed.${NC}\n"
+    printf '\n%s\n' "All timers already match their configured intervals."
 fi
-
-if [ "$CONFIG_FAILED" -ne 0 ]; then
-    printf "%b\n" "${RED}One or more targets were skipped because their configuration is invalid.${NC}\n"
-    exit 15
-fi
+[ "$CONFIG_FAILED" -eq 0 ] || exit 15

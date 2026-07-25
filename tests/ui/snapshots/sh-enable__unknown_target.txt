@@ -2,4 +2,3 @@
 # exit: 1
 
 Error: Unknown target 'bogus'.
-Installed scrapers: skroutz

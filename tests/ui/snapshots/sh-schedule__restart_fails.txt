@@ -1,7 +1,6 @@
 # border: red
 # exit: 1
 
-[skroutz] Updating the timer schedule to match the configured interval...
-Error: Failed to restart skroutz-scraper.timer.
-Error: Schedule transaction failed; restoring previous timers.
-One or more timer schedules could not be applied.
+[skroutz] Updating the timer schedule...
+Error: Unit replacement failed; restoring previous files and states.
+Error: One or more timer schedules could not be applied.

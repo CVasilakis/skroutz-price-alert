@@ -3,6 +3,4 @@
 
 Error: Could not query LoadState for skroutz-scraper.timer.
 
-[skroutz] Error: Could not determine the service and timer state.
-
-One or more background schedules could not be disabled.
+[skroutz] Error: Could not determine systemd state.

@@ -11,6 +11,8 @@ main() {
     . "$SCRIPT_DIR/scripts/lib/common.sh"
     # shellcheck source=scripts/lib/preflight.sh
     . "$SCRIPT_DIR/scripts/lib/preflight.sh"
+    # shellcheck source=scripts/lib/systemd.sh
+    . "$SCRIPT_DIR/scripts/lib/systemd.sh"
     # shellcheck source=scripts/lib/provisioning.sh
     . "$SCRIPT_DIR/scripts/lib/provisioning.sh"
 
@@ -32,30 +34,7 @@ main() {
     }
 
     restore_update_snapshot() {
-        _rus_failed=0
-        _rus_old_ifs="$IFS"
-        IFS='
-'
-        # shellcheck disable=SC2086  # intentional newline-only stream iteration
-        for _rus_target in $INSTALLED_TARGETS; do
-            for _rus_suffix in service timer; do
-                _rus_name="$(unit_name "$_rus_target" "$_rus_suffix")"
-                _rus_live="$SYSTEMD_USER_DIR/$_rus_name"
-                if [ -f "$UPDATE_RECOVERY_DIR/existed/$_rus_name" ]; then
-                    restore_unit_file "$UPDATE_RECOVERY_DIR/backups/$_rus_name" \
-                        "$_rus_live" || _rus_failed=1
-                else
-                    rm -f "$_rus_live" || _rus_failed=1
-                fi
-            done
-        done
-        IFS="$_rus_old_ifs"
-        systemctl --user daemon-reload >/dev/null || _rus_failed=1
-        if [ "$_rus_failed" -eq 0 ]; then
-            restore_captured_states "$INSTALLED_TARGETS" \
-                "$UPDATE_RECOVERY_DIR/state" || _rus_failed=1
-        fi
-        [ "$_rus_failed" -eq 0 ]
+        restore_unit_snapshot "$INSTALLED_TARGETS" pair "$UPDATE_RECOVERY_DIR"
     }
 
     # shellcheck disable=SC2317,SC2329  # invoked indirectly by HUP/INT/TERM traps
@@ -77,7 +56,7 @@ main() {
                     printf '%s\n' "$UPDATE_RECOVERY_DIR" >&2
                 fi
                 ;;
-            resetting|post_reset|provisioning|activating)
+            advancing|post_advance|provisioning|activating)
                 disable_update_targets
                 if [ "$UPDATE_DISABLE_FAILED" -eq 0 ]; then
                     printf '%s\n' "Affected timers were left disabled for safety." >&2
@@ -129,6 +108,9 @@ main() {
         printf '%s\n' "Choose targets explicitly with ./install.sh --<target>." >&2
         exit 1
     fi
+    # Updates only own absent or regular unit destinations. Reject links and
+    # special entries before fetching or quiescing any target.
+    validate_unit_destinations "$INSTALLED_TARGETS" pair || exit 1
 
     printf "%b\n" "\n${CYAN}Updating Scrooge Alert...${NC}"
     UPDATE_PHASE="fetching"
@@ -147,59 +129,33 @@ main() {
         install.sh \
         scripts/lib/common.sh \
         scripts/lib/preflight.sh \
+        scripts/lib/systemd.sh \
         scripts/lib/provisioning.sh || exit 1
 
     UPDATE_RECOVERY_DIR="$(create_private_workspace update)" || {
         printf '%s\n' "Error: Could not create private update state in $SYSTEMD_USER_DIR." >&2
         exit 1
     }
-    mkdir "$UPDATE_RECOVERY_DIR/state" "$UPDATE_RECOVERY_DIR/backups" \
-        "$UPDATE_RECOVERY_DIR/existed" || {
+    initialize_unit_snapshot "$UPDATE_RECOVERY_DIR" || {
         rm -rf "$UPDATE_RECOVERY_DIR"
         printf '%s\n' "Error: Could not initialize private update recovery data." >&2
         exit 1
     }
 
-    CAPTURE_FAILED=0
     UPDATE_PHASE="capturing"
-    OLD_IFS="$IFS"
-    IFS='
-'
-    # shellcheck disable=SC2086  # intentional newline-only stream iteration
-    for target in $INSTALLED_TARGETS; do
-        for suffix in service timer; do
-            name="$(unit_name "$target" "$suffix")"
-            live="$SYSTEMD_USER_DIR/$name"
-            if ! require_supported_unit_entry "$live"; then
-                CAPTURE_FAILED=1
-                continue
-            fi
-            if path_entry_exists "$live"; then
-                : > "$UPDATE_RECOVERY_DIR/existed/$name"
-                if ! cp -Pp "$live" "$UPDATE_RECOVERY_DIR/backups/$name" ||
-                   ! unit_file_matches_backup "$live" \
-                        "$UPDATE_RECOVERY_DIR/backups/$name"; then
-                    printf "%b\n" \
-                        "${RED}Error: Could not capture the unit file for '$target'.${NC}"
-                    CAPTURE_FAILED=1
-                fi
-            fi
-        done
-        if ! capture_timer_state "$target" "$UPDATE_RECOVERY_DIR/state/$target"; then
-            printf "%b\n" "${RED}Error: Could not capture the timer state for '$target'.${NC}"
-            CAPTURE_FAILED=1
-        fi
-    done
-    IFS="$OLD_IFS"
-    if [ "$CAPTURE_FAILED" -ne 0 ]; then
+    if ! capture_unit_snapshot "$INSTALLED_TARGETS" pair \
+        "$UPDATE_RECOVERY_DIR"; then
         rm -rf "$UPDATE_RECOVERY_DIR"
-        printf "%b\n" "${RED}Update aborted before any scraper was stopped.${NC}"
+        printf '%s\n' \
+            "Error: Could not capture unit files and timer states." >&2
+        printf '%s\n' "Update aborted before any scraper was stopped." >&2
         exit 1
     fi
 
     UPDATE_PHASE="captured"
     QUIESCE_FAILED=0
     UPDATE_PHASE="quiescing"
+    OLD_IFS="$IFS"
     IFS='
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
@@ -222,8 +178,8 @@ main() {
         exit 1
     fi
 
-    UPDATE_PHASE="resetting"
-    if ! git -C "$BASE_DIR" reset --hard --quiet origin/main; then
+    UPDATE_PHASE="advancing"
+    if ! git -C "$BASE_DIR" merge --ff-only --quiet origin/main; then
         printf "%b\n" "${RED}Error: Failed to update project files; restoring timer states.${NC}"
         if restore_update_snapshot; then
             rm -rf "$UPDATE_RECOVERY_DIR"
@@ -234,16 +190,14 @@ main() {
         fi
         exit 1
     fi
-    UPDATE_PHASE="post_reset"
+    UPDATE_PHASE="post_advance"
 
     if [ ! -f "$SCRIPT_DIR/install.sh" ] || [ -L "$SCRIPT_DIR/install.sh" ]; then
         printf "%b\n" "${RED}Error: The fetched update has no install.sh.${NC}"
         printf "%b\n" "${YELLOW}Scraper timers remain disabled. Repair the checkout, then rerun update.sh.${NC}"
         exit 1
     fi
-    chmod +x "$SCRIPT_DIR/install.sh"
-
-    set -- --update
+    set --
     IFS='
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
@@ -252,7 +206,8 @@ main() {
     done
     IFS="$OLD_IFS"
     UPDATE_PHASE="provisioning"
-    if SCROOGE_INTERNAL_UPDATE=1 "$SCRIPT_DIR/install.sh" "$@"; then
+    if SCROOGE_INTERNAL_UPDATE=1 SCROOGE_INSTALL_CONTEXT=deferred \
+        "$SCRIPT_DIR/install.sh" "$@"; then
         INSTALL_STATUS=0
     else
         INSTALL_STATUS=$?

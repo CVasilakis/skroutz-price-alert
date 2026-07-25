@@ -1,8 +1,7 @@
 # border: green
 # exit: 0
 
-[skroutz] Enabling and starting background schedule (timer)...
+[skroutz] Enabling and starting background schedule...
 [skroutz] Background execution enabled successfully.
 
 To disable background execution, run: ./scripts/disable.sh
-To completely remove the application, run: ./scripts/uninstall.sh

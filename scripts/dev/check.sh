@@ -66,10 +66,15 @@ run_shell() {
             exit 127
         fi
 
+        shell_paths="$(mktemp "${TMPDIR:-/tmp}/scrooge-shell-paths.XXXXXX")"
+        trap 'rm -f "$shell_paths"' 0 HUP INT TERM
+        if ! git ls-files --cached --others --exclude-standard -z > "$shell_paths"; then
+            printf '%s\n' "Error: Could not enumerate shell files from Git." >&2
+            exit 1
+        fi
         # The child sh, not this parent script, must expand positional values.
         # shellcheck disable=SC2016
-        git ls-files --cached --others --exclude-standard -z |
-            xargs -0 -n 1 sh -c '
+        xargs -0 -n 1 sh -c '
                 set -eu
                 shellcheck_command="$1"
                 dash_command="$2"
@@ -88,7 +93,9 @@ run_shell() {
                 "$shellcheck_command" -x "$path"
                 sh -n "$path"
                 [ -z "$dash_command" ] || "$dash_command" -n "$path"
-            ' sh "$shellcheck_binary" "$dash_binary"
+            ' sh "$shellcheck_binary" "$dash_binary" < "$shell_paths"
+        rm -f "$shell_paths"
+        trap - 0 HUP INT TERM
     )
 }
 
