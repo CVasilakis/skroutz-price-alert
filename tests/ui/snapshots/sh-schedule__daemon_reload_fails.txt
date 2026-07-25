@@ -2,8 +2,7 @@
 # exit: 1
 
 [skroutz] Updating the timer schedule to match the configured interval...
-[skroutz] Timer unit updated.
-Error: Failed to reload the systemd user manager; updated files remain on disk.
-
-Timer files written but not fully activated: skroutz
+Error: Schedule transaction failed; restoring previous timers.
+Error: Schedule rollback was incomplete. Recovery files:
+<BASE_DIR>/xdg/systemd/user/.scrooge-schedule.<PID>
 One or more timer schedules could not be applied.

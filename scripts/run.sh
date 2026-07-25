@@ -63,6 +63,7 @@ case "${1:-}" in
         ;;
 esac
 
+reject_project_venv_symlink || exit 1
 require_python_310 "$VENV_PYTHON" "./install.sh" || exit 1
 
 # Registered plugins (one --<plugin> flag is accepted per registered scraper).

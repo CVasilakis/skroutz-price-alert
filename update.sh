@@ -31,6 +31,33 @@ main() {
         IFS="$_dut_old_ifs"
     }
 
+    restore_update_snapshot() {
+        _rus_failed=0
+        _rus_old_ifs="$IFS"
+        IFS='
+'
+        # shellcheck disable=SC2086  # intentional newline-only stream iteration
+        for _rus_target in $INSTALLED_TARGETS; do
+            for _rus_suffix in service timer; do
+                _rus_name="$(unit_name "$_rus_target" "$_rus_suffix")"
+                _rus_live="$SYSTEMD_USER_DIR/$_rus_name"
+                if [ -f "$UPDATE_RECOVERY_DIR/existed/$_rus_name" ]; then
+                    restore_unit_file "$UPDATE_RECOVERY_DIR/backups/$_rus_name" \
+                        "$_rus_live" || _rus_failed=1
+                else
+                    rm -f "$_rus_live" || _rus_failed=1
+                fi
+            done
+        done
+        IFS="$_rus_old_ifs"
+        systemctl --user daemon-reload >/dev/null || _rus_failed=1
+        if [ "$_rus_failed" -eq 0 ]; then
+            restore_captured_states "$INSTALLED_TARGETS" \
+                "$UPDATE_RECOVERY_DIR/state" || _rus_failed=1
+        fi
+        [ "$_rus_failed" -eq 0 ]
+    }
+
     # shellcheck disable=SC2317,SC2329  # invoked indirectly by HUP/INT/TERM traps
     update_interrupted() {
         _ui_signal="$1"
@@ -42,7 +69,7 @@ main() {
                 [ -z "$UPDATE_RECOVERY_DIR" ] || rm -rf "$UPDATE_RECOVERY_DIR"
                 ;;
             captured|quiescing)
-                if restore_captured_states "$INSTALLED_TARGETS" "$UPDATE_RECOVERY_DIR"; then
+                if restore_update_snapshot; then
                     rm -rf "$UPDATE_RECOVERY_DIR"
                     printf '%s\n' "The original timer states were restored." >&2
                 else
@@ -89,6 +116,7 @@ main() {
     trap 'update_interrupted INT 130' INT
     trap 'update_interrupted TERM 143' TERM
 
+    reject_project_venv_symlink || exit 1
     require_systemctl
     require_git_worktree || exit 1
     require_main_branch || exit 1
@@ -121,16 +149,14 @@ main() {
         scripts/lib/preflight.sh \
         scripts/lib/provisioning.sh || exit 1
 
-    UPDATE_RECOVERY_DIR="$SYSTEMD_USER_DIR/.scrooge-update.$$"
-    [ ! -e "$UPDATE_RECOVERY_DIR" ] || {
-        printf '%s\n' "Error: Update state path already exists: $UPDATE_RECOVERY_DIR" >&2
+    UPDATE_RECOVERY_DIR="$(create_private_workspace update)" || {
+        printf '%s\n' "Error: Could not create private update state in $SYSTEMD_USER_DIR." >&2
         exit 1
     }
-    (
-        umask 077
-        mkdir "$UPDATE_RECOVERY_DIR"
-    ) || {
-        printf '%s\n' "Error: Could not create private update state in $SYSTEMD_USER_DIR." >&2
+    mkdir "$UPDATE_RECOVERY_DIR/state" "$UPDATE_RECOVERY_DIR/backups" \
+        "$UPDATE_RECOVERY_DIR/existed" || {
+        rm -rf "$UPDATE_RECOVERY_DIR"
+        printf '%s\n' "Error: Could not initialize private update recovery data." >&2
         exit 1
     }
 
@@ -141,7 +167,25 @@ main() {
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
-        if ! capture_timer_state "$target" "$UPDATE_RECOVERY_DIR/$target"; then
+        for suffix in service timer; do
+            name="$(unit_name "$target" "$suffix")"
+            live="$SYSTEMD_USER_DIR/$name"
+            if ! require_supported_unit_entry "$live"; then
+                CAPTURE_FAILED=1
+                continue
+            fi
+            if path_entry_exists "$live"; then
+                : > "$UPDATE_RECOVERY_DIR/existed/$name"
+                if ! cp -Pp "$live" "$UPDATE_RECOVERY_DIR/backups/$name" ||
+                   ! unit_file_matches_backup "$live" \
+                        "$UPDATE_RECOVERY_DIR/backups/$name"; then
+                    printf "%b\n" \
+                        "${RED}Error: Could not capture the unit file for '$target'.${NC}"
+                    CAPTURE_FAILED=1
+                fi
+            fi
+        done
+        if ! capture_timer_state "$target" "$UPDATE_RECOVERY_DIR/state/$target"; then
             printf "%b\n" "${RED}Error: Could not capture the timer state for '$target'.${NC}"
             CAPTURE_FAILED=1
         fi
@@ -168,7 +212,7 @@ main() {
     done
     IFS="$OLD_IFS"
     if [ "$QUIESCE_FAILED" -ne 0 ]; then
-        if restore_captured_states "$INSTALLED_TARGETS" "$UPDATE_RECOVERY_DIR"; then
+        if restore_update_snapshot; then
             rm -rf "$UPDATE_RECOVERY_DIR"
         else
             printf '%s\n' "Timer-state recovery data was retained at:" >&2
@@ -181,7 +225,7 @@ main() {
     UPDATE_PHASE="resetting"
     if ! git -C "$BASE_DIR" reset --hard --quiet origin/main; then
         printf "%b\n" "${RED}Error: Failed to update project files; restoring timer states.${NC}"
-        if restore_captured_states "$INSTALLED_TARGETS" "$UPDATE_RECOVERY_DIR"; then
+        if restore_update_snapshot; then
             rm -rf "$UPDATE_RECOVERY_DIR"
             printf "%b\n" "${YELLOW}The prior timer states were restored.${NC}"
         else
@@ -192,7 +236,7 @@ main() {
     fi
     UPDATE_PHASE="post_reset"
 
-    if [ ! -f "$SCRIPT_DIR/install.sh" ]; then
+    if [ ! -f "$SCRIPT_DIR/install.sh" ] || [ -L "$SCRIPT_DIR/install.sh" ]; then
         printf "%b\n" "${RED}Error: The fetched update has no install.sh.${NC}"
         printf "%b\n" "${YELLOW}Scraper timers remain disabled. Repair the checkout, then rerun update.sh.${NC}"
         exit 1
@@ -248,7 +292,7 @@ main() {
             printf "%b\n" "${YELLOW}Leaving removed target '$target' disabled.${NC}"
             continue
         fi
-        read_captured_state "$UPDATE_RECOVERY_DIR/$target"
+        read_captured_state "$UPDATE_RECOVERY_DIR/state/$target"
         target_schedule_status="$(
             plugin_stream_value "$target" "$CURRENT_INTERVAL_STATUS" || true
         )"

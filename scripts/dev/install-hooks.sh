@@ -10,7 +10,7 @@ if ! command -v git >/dev/null 2>&1 ||
 fi
 
 HOOK="$PROJECT_ROOT/.githooks/pre-push"
-if [ ! -f "$HOOK" ]; then
+if [ -L "$HOOK" ] || [ ! -f "$HOOK" ]; then
     printf '%s\n' "Error: Cannot enable hooks; .githooks/pre-push is missing." >&2
     exit 1
 fi

@@ -27,6 +27,12 @@ def test_plugin_create_help_needs_no_venv_and_has_required_inputs():
     assert "--url-prefix" in result.stdout
 
 
+def test_plugin_check_help_needs_no_venv():
+    result = _run("scripts/dev/plugin-check.sh", "--help")
+    assert result.returncode == 0, result.stderr
+    assert "Usage: ./scripts/dev/plugin-check.sh --<target>" in result.stdout
+
+
 def test_dev_setup_help_has_no_install_side_effect():
     result = _run("scripts/dev/setup.sh", "--help")
     assert result.returncode == 0, result.stderr
@@ -252,6 +258,21 @@ def test_hook_installer_repairs_nonexecutable_hook(tmp_path):
     assert os.access(hook, os.X_OK)
 
 
+def test_hook_installer_refuses_symlink_without_chmodding_target(tmp_path):
+    project, installer = _hook_project(tmp_path, "#!/bin/sh\nexit 0\n")
+    hook = project / ".githooks" / "pre-push"
+    external = tmp_path / "external-hook"
+    external.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    external.chmod(0o644)
+    hook.unlink()
+    hook.symlink_to(external)
+
+    result = subprocess.run(["sh", str(installer)], text=True, capture_output=True)
+
+    assert result.returncode != 0
+    assert external.stat().st_mode & 0o111 == 0
+
+
 def test_versioned_pre_push_hook_runs_the_canonical_gate():
     hook = ROOT / ".githooks" / "pre-push"
     assert os.access(hook, os.X_OK)
@@ -318,6 +339,31 @@ def test_dev_setup_rejects_unknown_target_before_pip_work():
     assert result.returncode == 1
     assert "Unknown target 'does_not_exist'" in result.stderr
     assert "Requirement already satisfied" not in result.stdout
+
+
+def test_dev_setup_rejects_project_venv_symlink_before_python_work(tmp_path):
+    project = tmp_path / "project"
+    for relative in (
+        "scripts/dev/setup.sh",
+        "scripts/lib/common.sh",
+        "scripts/lib/preflight.sh",
+    ):
+        destination = project / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / relative, destination)
+    external = tmp_path / "external-venv"
+    external.mkdir()
+    (project / "venv").symlink_to(external, target_is_directory=True)
+
+    result = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh")],
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "must be a project-owned directory, not a symlink" in result.stderr
+    assert (project / "venv").is_symlink()
 
 
 @pytest.fixture

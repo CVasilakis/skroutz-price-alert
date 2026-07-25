@@ -108,7 +108,7 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     ./install.sh
     ```
 
-    The `install.sh` script will automatically create a Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
+    The `install.sh` script will automatically create a project-owned Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. The root `venv/` path must be a real directory, not a symlink. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
 
 4. **Configure your settings:**
 
@@ -399,6 +399,11 @@ Applies each scraper's configured `execution_interval` (from `config/<target>.js
 | `-h`, `--help` | Show the help message and exit. |
 | `--<target>` | Apply only the specified target's interval (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is updated to match its configured interval. A scraper whose config file is missing, structurally invalid, or has an unsupported `execution_interval` is reported and left unchanged. Other targets continue, and a structural config error makes the command exit `15`. |
 
+Eligible timer changes are staged and applied as one transaction. Successful
+writes normalize managed unit paths to regular files. If writing, reloading, or
+restarting any timer fails, every changed timer is restored to its prior bytes or
+exact symlink representation and activation state.
+
 #### Remove Scrapers & Uninstall
 Performs a full or partial teardown of the background services:
 
@@ -429,8 +434,10 @@ disabled and the command prints the retained recovery path and status command.
 If a selected target's config is structurally invalid after the source update,
 that target's previous unit files and timer state are restored while healthy
 targets are reprovisioned; the update completes its recovery work and exits `15`.
-Transactional rollback restores unit files exactly, including symlinks and their
-original link text.
+Successful provisioning normalizes managed unit paths to regular files.
+Transactional rollback restores the previous representation exactly, including
+relative, absolute, `/dev/null`, and dangling symlinks with their original link
+text.
 
 ## 🔔 Notifications & Messages
 

@@ -86,6 +86,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
+reject_project_venv_symlink || exit 1
 require_systemctl
 load_plugin_catalog || true
 
@@ -101,6 +102,8 @@ if [ -n "$SELECTED" ]; then
     # of silently "succeeding" (rm -f on absent unit files would otherwise report
     # a misleading success).
     # shellcheck disable=SC2086  # intentional newline-delimited target stream
+    INSTALLED="$(list_installed_targets)"
+    REMOVE_TARGETS=""
     for sel in $SELECTED; do
         if ! is_known_target "$sel" timer && ! is_known_target "$sel" service; then
             printf "%b\n" "${RED}Error: Unknown target '$sel'.${NC}"
@@ -108,11 +111,19 @@ if [ -n "$SELECTED" ]; then
             printf "%b\n" "Available targets: ${CYAN}$(stream_for_display "$_available")${NC}"
             exit 1
         fi
+        if stream_contains "$sel" "$INSTALLED"; then
+            REMOVE_TARGETS="$(stream_add_unique "$REMOVE_TARGETS" "$sel")"
+        else
+            printf "%b\n" \
+                "\n${YELLOW}[$sel] is registered but not installed - nothing to remove.${NC}"
+        fi
     done
+
+    [ -n "$REMOVE_TARGETS" ] || exit 0
 
     TEARDOWN_FAILED=0
     # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for sel in $SELECTED; do
+    for sel in $REMOVE_TARGETS; do
         printf "%b\n" "\n${CYAN}Stopping and disabling '$sel'...${NC}"
         if ! disable_one "$sel"; then
             printf "%b\n" "${RED}Error: '$sel' could not be made safe for removal.${NC}"
@@ -125,7 +136,7 @@ if [ -n "$SELECTED" ]; then
     fi
 
     # shellcheck disable=SC2086  # intentional newline-delimited target stream
-    for sel in $SELECTED; do
+    for sel in $REMOVE_TARGETS; do
         printf "%b\n" "\n${CYAN}Removing systemd units for '$sel'...${NC}"
         if ! rm -f "$SYSTEMD_USER_DIR/$(unit_name "$sel" timer)" \
                     "$SYSTEMD_USER_DIR/$(unit_name "$sel" service)"; then

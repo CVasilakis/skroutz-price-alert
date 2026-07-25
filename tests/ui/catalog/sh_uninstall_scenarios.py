@@ -4,6 +4,7 @@ from dataclasses import replace
 
 from ui.catalog._base import Surface
 from ui.catalog.shell_inputs import (
+    WORLD_AMAZON_UNINSTALLED,
     WORLD_INSTALLED,
     WORLD_ORPHAN,
     shell_case,
@@ -48,6 +49,13 @@ _case(
     "Only the named target's units are removed; the venv stays.",
     "--skroutz",
     world=WORLD_INSTALLED,
+)
+
+_case(
+    "selected_not_installed",
+    "A registered target with no units is reported as a no-op.",
+    "--amazon",
+    world=WORLD_AMAZON_UNINSTALLED,
 )
 
 _case(

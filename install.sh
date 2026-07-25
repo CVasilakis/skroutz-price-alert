@@ -112,6 +112,7 @@ fi
 
 cd "$SCRIPT_DIR"
 
+reject_project_venv_symlink || exit 1
 require_python_310 python3 "./install.sh" || exit 1
 
 if [ -d "$VENV_DIR" ]; then
@@ -128,11 +129,20 @@ require_systemctl
 # Repair executable modes for every command entry point and the versioned hook.
 for s in "$BASE_DIR"/install.sh "$BASE_DIR"/update.sh "$BASE_DIR"/scripts/*.sh \
     "$BASE_DIR"/scripts/dev/*.sh "$BASE_DIR"/.githooks/pre-push; do
-    [ -e "$s" ] || continue
+    path_entry_exists "$s" || continue
+    require_regular_owned_file "$s" || exit 1
+done
+for s in "$BASE_DIR"/scripts/lib/*.sh; do
+    path_entry_exists "$s" || continue
+    require_regular_owned_file "$s" || exit 1
+done
+for s in "$BASE_DIR"/install.sh "$BASE_DIR"/update.sh "$BASE_DIR"/scripts/*.sh \
+    "$BASE_DIR"/scripts/dev/*.sh "$BASE_DIR"/.githooks/pre-push; do
+    path_entry_exists "$s" || continue
     chmod +x "$s"
 done
 for s in "$BASE_DIR"/scripts/lib/*.sh; do
-    [ -e "$s" ] || continue
+    path_entry_exists "$s" || continue
     chmod a-x "$s"
 done
 

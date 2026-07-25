@@ -12,6 +12,8 @@ BASE_DIR="$( dirname "$SCRIPT_DIR" )"
 # Shared helpers (colors, plugin enumeration, systemd helpers)
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=scripts/lib/provisioning.sh
+. "$SCRIPT_DIR/lib/provisioning.sh"
 
 # ==============================================================================
 # HELPER FUNCTIONS
@@ -167,8 +169,7 @@ if ! load_plugin_schedules || \
 fi
 
 CHANGED=""
-ACTIVE_CHANGED=""
-INACTIVE_CHANGED=""
+CHANGED_SCHEDULES=""
 FAILED=0
 CONFIG_FAILED=0
 # shellcheck disable=SC2086  # intentional newline-delimited target stream
@@ -213,29 +214,10 @@ for plugin in $PLUGINS; do
         continue
     fi
 
-    if ! prior_active="$(timer_is_active "$plugin")"; then
-        printf "%b\n" "\n${RED}[$plugin] Could not determine the timer's active state; skipping.${NC}"
-        FAILED=1
-        continue
-    fi
-    if [ "$prior_active" = "active" ]; then
-        ACTIVE_CHANGED="$(stream_add_unique "$ACTIVE_CHANGED" "$plugin")"
-    elif state_is_stopped "$prior_active"; then
-        INACTIVE_CHANGED="$(stream_add_unique "$INACTIVE_CHANGED" "$plugin")"
-    else
-        printf "%b\n" "\n${RED}[$plugin] Timer is in unexpected state '$prior_active'; skipping.${NC}"
-        FAILED=1
-        continue
-    fi
-
     printf "%b\n" "\n${CYAN}[$plugin] Updating the timer schedule to match the configured interval...${NC}"
-    if write_plugin_timer_unit "$plugin" "$new_calendar"; then
-        CHANGED="$(stream_add_unique "$CHANGED" "$plugin")"
-        printf "%b\n" "${GREEN}[$plugin] Timer unit updated.${NC}"
-    else
-        printf "%b\n" "${RED}[$plugin] Error: Failed to write the systemd timer unit.${NC}"
-        FAILED=1
-    fi
+    CHANGED="$(stream_add_unique "$CHANGED" "$plugin")"
+    CHANGED_SCHEDULES="${CHANGED_SCHEDULES}${CHANGED_SCHEDULES:+
+}${plugin}	${new_calendar}"
 done
 
 # ------------------------------------------------------------------------------
@@ -246,39 +228,17 @@ done
 # elapse, while inactive timers remain stopped until explicitly enabled.
 
 if [ -n "$CHANGED" ]; then
-    if systemctl --user daemon-reload; then
+    if schedule_units_transaction "$CHANGED" "$CHANGED_SCHEDULES"; then
         # shellcheck disable=SC2086  # intentional newline-delimited target stream
-        for plugin in $ACTIVE_CHANGED; do
-            if ! stream_contains "$plugin" "$CHANGED"; then
-                continue
-            fi
-            if ! restart_timer_one "$plugin"; then
-                printf "%b\n" "${RED}[$plugin] Error: The active timer could not be re-armed.${NC}"
-                FAILED=1
-            fi
-        done
-        # shellcheck disable=SC2086  # intentional newline-delimited target stream
-        for plugin in $INACTIVE_CHANGED; do
-            if ! stream_contains "$plugin" "$CHANGED"; then
-                continue
-            fi
-            if ! inactive_state="$(timer_is_active "$plugin")"; then
-                printf "%b\n" "${RED}[$plugin] Error: Could not verify the inactive timer after reload.${NC}"
-                FAILED=1
-            elif ! state_is_stopped "$inactive_state"; then
-                printf "%b\n" "${RED}[$plugin] Error: Timer unexpectedly became '$inactive_state'.${NC}"
-                FAILED=1
-            fi
+        for plugin in $CHANGED; do
+            printf "%b\n" "${GREEN}[$plugin] Timer unit updated.${NC}"
         done
     else
-        printf "%b\n" "${RED}Error: Failed to reload the systemd user manager; updated files remain on disk.${NC}"
         FAILED=1
     fi
 fi
 
 if [ "$FAILED" -ne 0 ]; then
-    [ -z "$CHANGED" ] || \
-        printf "%b\n" "\n${YELLOW}Timer files written but not fully activated:${NC} ${CYAN}$(stream_for_display "$CHANGED")${NC}"
     printf "%b\n" "${RED}One or more timer schedules could not be applied.${NC}\n"
     exit 1
 fi

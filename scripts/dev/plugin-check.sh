@@ -7,6 +7,14 @@ BASE_DIR="$PROJECT_ROOT"
 # shellcheck source=scripts/lib/preflight.sh
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
 
+case "${1:-}" in
+    -h|--help)
+        printf '%s\n' "Usage: ./scripts/dev/plugin-check.sh --<target>"
+        printf '%s\n' "Verify one plugin against its declared source, tests, and dependencies."
+        exit 0
+        ;;
+esac
+
 if [ "$#" -ne 1 ]; then
     printf '%s\n' "Usage: ./scripts/dev/plugin-check.sh --<target>" >&2
     exit 2
@@ -16,6 +24,9 @@ case "$1" in
     *) printf '%s\n' "Usage: ./scripts/dev/plugin-check.sh --<target>" >&2; exit 2 ;;
 esac
 
+if [ -z "${SCROOGE_PLUGIN_CHECK_PYTHON:-}" ]; then
+    reject_project_venv_symlink || exit 1
+fi
 plugin_check_python="${SCROOGE_PLUGIN_CHECK_PYTHON:-$BASE_DIR/venv/bin/python3}"
 require_python_310 "$plugin_check_python" "./scripts/dev/setup.sh" || exit 127
 plugin_check_python="$(

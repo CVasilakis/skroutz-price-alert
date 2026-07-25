@@ -39,6 +39,59 @@ fi
 
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
+# path_entry_exists <path>: unlike test -e, also recognizes dangling symlinks.
+path_entry_exists() {
+    [ -e "$1" ] || [ -L "$1" ]
+}
+
+require_supported_unit_entry() {
+    _rsue_path="$1"
+    if [ -d "$_rsue_path" ]; then
+        printf '%s\n' \
+            "Error: Managed systemd unit path is a directory or links to one: $_rsue_path" >&2
+        return 1
+    fi
+}
+
+require_regular_owned_file() {
+    _rrof_path="$1"
+    if [ -L "$_rrof_path" ] || [ ! -f "$_rrof_path" ]; then
+        printf '%s\n' \
+            "Error: Required project file must be a regular file, not a symlink: $_rrof_path" >&2
+        return 1
+    fi
+}
+
+# Project-owned environments must be real directories. Python is still free to
+# use its normal interpreter/library symlinks *inside* that directory.
+reject_project_venv_symlink() {
+    _rpvs_path="$BASE_DIR/venv"
+    if [ -L "$_rpvs_path" ]; then
+        printf '%s\n' \
+            "Error: $BASE_DIR/venv must be a project-owned directory, not a symlink." >&2
+        printf '%s\n' \
+            "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or ./install.sh." >&2
+        return 1
+    fi
+}
+
+# create_private_workspace <label>: create a same-filesystem, user-private
+# workspace suitable for atomic unit-file replacement.
+create_private_workspace() {
+    _cpw_label="$1"
+    case "$_cpw_label" in
+        ''|*[!a-z0-9_-]*) return 2 ;;
+    esac
+    command -v mktemp >/dev/null 2>&1 || {
+        printf '%s\n' "Error: mktemp is required for safe file replacement." >&2
+        return 1
+    }
+    (
+        umask 077
+        mktemp -d "$SYSTEMD_USER_DIR/.scrooge-$_cpw_label.XXXXXX"
+    )
+}
+
 # ------------------------------------------------------------------------------
 # ENVIRONMENT CHECKS
 # ------------------------------------------------------------------------------
@@ -134,6 +187,7 @@ stream_for_display() {
 # nothing) if the venv is unavailable, so callers can fall back to
 # list_installed_plugins.
 catalog_cli() {
+    reject_project_venv_symlink || return 1
     [ -x "$BASE_DIR/venv/bin/python3" ] || return 1
     PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" -m core.scrapers.tooling.cli "$@"
 }
@@ -249,6 +303,10 @@ list_supported_intervals() {
 #      (e.g. the PluginDiscoveryError naming the offending plugin package).
 # Callers use it when catalog discovery is unavailable: catalog_diagnose || exit 1
 catalog_diagnose() {
+    if [ -L "$BASE_DIR/venv" ]; then
+        reject_project_venv_symlink
+        return 1
+    fi
     if [ ! -x "$BASE_DIR/venv/bin/python3" ]; then
         printf "%b\n" "${RED}Error: Cannot read the plugin catalog - the Python environment looks missing or broken.${NC}" >&2
         printf "%b\n" "Reinstall it with: ${CYAN}./scripts/uninstall.sh${NC} then ${CYAN}./install.sh${NC}" >&2
@@ -271,7 +329,8 @@ list_installed_plugins() {
     _suffix="$1"
     case "$_suffix" in service|timer) ;; *) return 2 ;; esac
     for _f in "$SYSTEMD_USER_DIR"/*-scraper."$_suffix"; do
-        [ -e "$_f" ] || continue   # POSIX sh has no nullglob: skip the literal pattern
+        path_entry_exists "$_f" || continue # POSIX sh has no nullglob
+        require_supported_unit_entry "$_f" || continue
         _base="${_f##*/}"                       # strip directory
         _lip_target="${_base%-scraper."$_suffix"}"
         if ! is_valid_target "$_lip_target"; then
@@ -425,6 +484,10 @@ timer_state_is_disabled() {
     esac
 }
 
+timer_state_is_enabled() {
+    case "$1" in enabled|enabled-runtime) return 0 ;; *) return 1 ;; esac
+}
+
 # plugin_is_disabled <plugin>: 0 if the pair already meets disable_one's
 # postcondition, 1 if work is required, 2 if the state could not be queried.
 plugin_is_disabled() {
@@ -532,15 +595,42 @@ disable_one() {
         _do_service_load="query-failed"
     fi
 
+    _do_timer_state="unknown"
     if [ "$_do_timer_load" != "not-found" ] && [ "$_do_timer_load" != "query-failed" ]; then
+        if ! _do_timer_state="$(systemd_property "$_do_timer" UnitFileState)"; then
+            _do_failed=1
+            _do_timer_state="query-failed"
+        elif ! timer_state_is_enabled "$_do_timer_state" &&
+             ! timer_state_is_disabled "$_do_timer_state"; then
+            printf '%s\n' \
+                "Error: $_do_timer has unsupported unit-file state '$_do_timer_state'." >&2
+            _do_failed=1
+            _do_timer_state="unsupported"
+        fi
+    fi
+
+    if [ "$_do_timer_load" != "not-found" ] &&
+       [ "$_do_timer_load" != "query-failed" ] &&
+       [ "$_do_timer_state" != "query-failed" ] &&
+       [ "$_do_timer_state" != "unsupported" ]; then
         if ! systemctl --user stop "$_do_timer" >/dev/null; then
             printf '%s\n' "Error: Failed to stop $_do_timer." >&2
             _do_failed=1
         fi
-        if ! systemctl --user disable "$_do_timer" >/dev/null; then
-            printf '%s\n' "Error: Failed to disable $_do_timer." >&2
-            _do_failed=1
-        fi
+        case "$_do_timer_state" in
+            enabled)
+                if ! systemctl --user disable "$_do_timer" >/dev/null; then
+                    printf '%s\n' "Error: Failed to disable $_do_timer." >&2
+                    _do_failed=1
+                fi
+                ;;
+            enabled-runtime)
+                if ! systemctl --user --runtime disable "$_do_timer" >/dev/null; then
+                    printf '%s\n' "Error: Failed to disable runtime unit $_do_timer." >&2
+                    _do_failed=1
+                fi
+                ;;
+        esac
         if ! systemctl --user reset-failed "$_do_timer" >/dev/null; then
             printf '%s\n' "Error: Failed to clear the failed state of $_do_timer." >&2
             _do_failed=1
@@ -643,25 +733,6 @@ EOF
     then
         return 1
     fi
-}
-
-# write_plugin_timer_unit <plugin> <OnCalendar>: atomically replace only the timer
-# unit. schedule.sh uses this so changing cadence never rewrites the service half.
-write_plugin_timer_unit() {
-    _wpt_plugin="$1"
-    _wpt_calendar="$2"
-    _wpt_file="$SYSTEMD_USER_DIR/$(unit_name "$_wpt_plugin" timer)"
-    _wpt_tmp="$_wpt_file.tmp.$$"
-    [ ! -e "$_wpt_tmp" ] || return 1
-    if ! render_plugin_timer "$_wpt_plugin" "$_wpt_calendar" "$_wpt_tmp"; then
-        rm -f "$_wpt_tmp"
-        return 1
-    fi
-    if ! mv "$_wpt_tmp" "$_wpt_file"; then
-        rm -f "$_wpt_tmp"
-        return 1
-    fi
-    [ -f "$_wpt_file" ] && [ "$(read_timer_oncalendar "$_wpt_plugin")" = "$_wpt_calendar" ]
 }
 
 # read_timer_oncalendar <plugin>: print the installed timer's framework-owned

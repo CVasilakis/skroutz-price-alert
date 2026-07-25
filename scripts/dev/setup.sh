@@ -33,6 +33,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
+reject_project_venv_symlink || exit 1
 require_python_310 python3 "./scripts/dev/setup.sh" || exit 1
 if [ -d "$PROJECT_ROOT/venv" ]; then
     require_python_310 "$VENV_PYTHON" "./scripts/dev/setup.sh" || exit 1

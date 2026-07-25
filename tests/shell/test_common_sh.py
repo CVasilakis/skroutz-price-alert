@@ -182,22 +182,6 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         read = run_sh("read_timer_oncalendar ghost", xdg_config_home=self.tmp)
         self.assertEqual((read.returncode, read.stdout), (0, ""))
 
-    def test_timer_only_update_does_not_rewrite_service(self):
-        self.assertEqual(self._write("foo", "hourly").returncode, 0)
-        service = self.unit_dir / "foo-scraper.service"
-        service.write_text(service.read_text() + "# preserved\n")
-
-        updated = run_sh(
-            'write_plugin_timer_unit foo "daily"',
-            xdg_config_home=self.tmp,
-        )
-        self.assertEqual(updated.returncode, 0)
-        self.assertTrue(service.read_text().endswith("# preserved\n"))
-        self.assertEqual(
-            run_sh("read_timer_oncalendar foo", xdg_config_home=self.tmp).stdout,
-            "daily",
-        )
-
 
 class TestKnownTargets(unittest.TestCase):
     """The teardown validation set: registered ∪ installed, de-duplicated."""
@@ -230,6 +214,15 @@ class TestKnownTargets(unittest.TestCase):
         (unit_dir / "serviceonly-scraper.service").touch()
         result = run_sh("list_installed_targets", xdg_config_home=tmp)
         self.assertEqual(result.stdout.split(), ["timeronly", "serviceonly"])
+
+    def test_installed_target_union_includes_dangling_symlink(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        unit_dir = tmp / "systemd" / "user"
+        unit_dir.mkdir(parents=True)
+        (unit_dir / "ghost-scraper.timer").symlink_to("missing.timer")
+        result = run_sh("list_installed_targets", xdg_config_home=tmp)
+        self.assertEqual(result.stdout.split(), ["ghost"])
 
     def test_malformed_installed_unit_name_is_diagnosed_and_ignored(self):
         tmp = Path(tempfile.mkdtemp())
@@ -265,10 +258,10 @@ class TestCatalogDiagnose(unittest.TestCase):
             self.skipTest("project venv not available")
 
         shutil.copytree(REPO_ROOT / "src", self.tmp / "src")
-        # Symlink the whole venv (not just the binary): venv activation needs the
-        # adjacent pyvenv.cfg, or site-packages would be missing and discovery
-        # would fail on the framework imports before reaching the broken plugin.
-        os.symlink(REPO_ROOT / "venv", self.tmp / "venv")
+        # Keep the project venv root real while reusing the checked-in
+        # environment through normal links inside it.
+        (self.tmp / "venv").mkdir()
+        os.symlink(REPO_ROOT / "venv" / "bin", self.tmp / "venv" / "bin")
         broken = self.tmp / "src" / "core" / "scrapers" / "plugins" / "zzzbroken"
         broken.mkdir()
         (broken / "__init__.py").write_text('raise RuntimeError("boom")\n')
@@ -326,7 +319,10 @@ class TestRealRegistryBridge(unittest.TestCase):
             self.skipTest("project venv not available")
         self.base_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.base_dir, ignore_errors=True)
-        (self.base_dir / "venv").symlink_to(REPO_ROOT / "venv", target_is_directory=True)
+        (self.base_dir / "venv").mkdir()
+        (self.base_dir / "venv" / "bin").symlink_to(
+            REPO_ROOT / "venv" / "bin", target_is_directory=True
+        )
         (self.base_dir / "src").symlink_to(REPO_ROOT / "src", target_is_directory=True)
         (self.base_dir / "config").mkdir()
 

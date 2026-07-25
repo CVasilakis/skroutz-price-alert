@@ -72,6 +72,7 @@ _REAL_TOOLS = (
     "awk",
     "cmp",
     "readlink",
+    "mktemp",
 )
 
 
@@ -177,6 +178,7 @@ _SYSTEMCTL_SHIM = """#!/bin/sh
 # Stateful systemctl stand-in. Unit files live in the sandbox's real user-unit
 # directory; mutable enabled/active markers live under FAKE_SYSTEMD_STATE_DIR.
 [ "${1:-}" = "--user" ] && shift
+[ "${1:-}" = "--runtime" ] && shift
 verb="${1:-}"
 [ $# -gt 0 ] && shift
 
@@ -213,7 +215,8 @@ case "$verb" in
         unit="$3"
         case "$property" in
             LoadState)
-                if [ -e "$XDG_CONFIG_HOME/systemd/user/$unit" ]; then
+                if [ -e "$XDG_CONFIG_HOME/systemd/user/$unit" ] ||
+                   [ -L "$XDG_CONFIG_HOME/systemd/user/$unit" ]; then
                     echo "LoadState=loaded"
                 else
                     echo "LoadState=not-found"
@@ -221,6 +224,8 @@ case "$verb" in
             UnitFileState)
                 if [ -e "$(marker enabled "$unit")" ]; then
                     echo "UnitFileState=enabled"
+                elif [ -L "$XDG_CONFIG_HOME/systemd/user/$unit" ]; then
+                    echo "UnitFileState=linked"
                 else
                     echo "UnitFileState=disabled"
                 fi ;;
@@ -265,7 +270,9 @@ case "$verb" in
     disable)
         unit="$1"
         case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
-        rm -f "$(marker enabled "$unit")" ;;
+        rm -f "$(marker enabled "$unit")"
+        [ ! -L "$XDG_CONFIG_HOME/systemd/user/$unit" ] ||
+            rm -f "$XDG_CONFIG_HOME/systemd/user/$unit" ;;
     restart)
         unit="$1"
         case " ${FAKE_SYSTEMCTL_NOOP:-} " in *" $verb "*) exit 0 ;; esac
@@ -647,7 +654,11 @@ def drive_shell(
 
     transcript = proc.stdout.replace(str(sandbox), "<BASE_DIR>").replace("\r", "")
     transcript = re.sub(r"\.(tmp|backup)\.\d+", r".\1.<PID>", transcript)
-    transcript = re.sub(r"\.scrooge-(provision|update)\.\d+", r".scrooge-\1.<PID>", transcript)
+    transcript = re.sub(
+        r"\.scrooge-(provision|schedule|update)\.[A-Za-z0-9]+",
+        r".scrooge-\1.<PID>",
+        transcript,
+    )
     # sh's own diagnostics (e.g. a failed redirect in the readonly-unit-dir scenarios)
     # carry a script line number that drifts with every script edit - pin it.
     transcript = re.sub(r"\.sh: (?:line )?\d+:", ".sh: <line>:", transcript)

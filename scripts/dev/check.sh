@@ -28,6 +28,9 @@ esac
 CHECK_PYTHON="${SCROOGE_CHECK_PYTHON:-$PROJECT_ROOT/venv/bin/python3}"
 
 require_python() {
+    if [ -z "${SCROOGE_CHECK_PYTHON:-}" ]; then
+        reject_project_venv_symlink || exit 127
+    fi
     require_python_310 "$CHECK_PYTHON" "./scripts/dev/setup.sh" || exit 127
 }
 

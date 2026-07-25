@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SYSTEMCTL = r"""#!/bin/sh
 set -eu
 [ "${1:-}" = "--user" ] && shift
+runtime=0
+[ "${1:-}" = "--runtime" ] && { runtime=1; shift; }
 verb="$1"
 shift
 [ "${FAKE_SIGNAL_VERB:-}" = "$verb" ] && kill -TERM "$PPID"
@@ -32,10 +34,12 @@ case "$verb" in
                     [ -L "$XDG_CONFIG_HOME/systemd/user/$unit" ]; } &&
                     echo LoadState=loaded || echo LoadState=not-found ;;
             UnitFileState)
-                if [ "${FAKE_UNIT_FILE_STATE_TARGET:-}" = "$target" ]; then
-                    printf 'UnitFileState=%s\n' "${FAKE_UNIT_FILE_STATE:-disabled}"
-                elif [ -f "$(marker enabled "$unit")" ]; then
+                if [ -f "$(marker enabled "$unit")" ]; then
                     echo UnitFileState=enabled
+                elif [ -f "$(marker enabled_runtime "$unit")" ]; then
+                    echo UnitFileState=enabled-runtime
+                elif [ "${FAKE_UNIT_FILE_STATE_TARGET:-}" = "$target" ]; then
+                    printf 'UnitFileState=%s\n' "${FAKE_UNIT_FILE_STATE:-disabled}"
                 else
                     echo UnitFileState=disabled
                 fi ;;
@@ -58,14 +62,26 @@ case "$verb" in
            [ "${FAKE_FAIL_ENABLE_TARGET:-}" = "$(stem "$unit")" ]; then
             exit 1
         fi
-        : > "$(marker enabled "$unit")"
+        if [ "$runtime" -eq 1 ]; then
+            : > "$(marker enabled_runtime "$unit")"
+        else
+            : > "$(marker enabled "$unit")"
+        fi
         [ "$now" -eq 0 ] || : > "$(marker active "$unit")" ;;
     start)
         : > "$(marker active "$1")" ;;
     stop)
         rm -f "$(marker active "$1")" ;;
     disable)
-        rm -f "$(marker enabled "$1")" ;;
+        unit="$1"
+        if [ "$runtime" -eq 1 ]; then
+            rm -f "$(marker enabled_runtime "$unit")"
+        else
+            rm -f "$(marker enabled "$unit")"
+        fi
+        if [ -L "$XDG_CONFIG_HOME/systemd/user/$unit" ]; then
+            rm -f "$XDG_CONFIG_HOME/systemd/user/$unit"
+        fi ;;
     reset-failed) ;;
 esac
 """
@@ -107,6 +123,21 @@ BASE_DIR={shlex_quote(str(base))}
 targets={shlex_quote(targets)}
 schedules={shlex_quote(schedules)}
 provision_units_transaction "$targets" "$schedules" {shlex_quote(mode)}
+"""
+    return subprocess.run(["sh", "-c", script], text=True, capture_output=True, env=env)
+
+
+def run_schedule_transaction(shell_world, targets, schedules, **env_updates):
+    base, _, _, env = shell_world
+    env.update({key: str(value) for key, value in env_updates.items()})
+    script = f"""
+set -eu
+BASE_DIR={shlex_quote(str(base))}
+. {shlex_quote(str(ROOT / "scripts/lib/common.sh"))}
+. {shlex_quote(str(ROOT / "scripts/lib/provisioning.sh"))}
+targets={shlex_quote(targets)}
+schedules={shlex_quote(schedules)}
+schedule_units_transaction "$targets" "$schedules"
 """
     return subprocess.run(["sh", "-c", script], text=True, capture_output=True, env=env)
 
@@ -166,6 +197,24 @@ def test_reinstall_failure_restores_bytes_and_timer_state(shell_world):
     assert timer.read_bytes() == b"old timer bytes\n"
     assert (state / "enabled.alpha").is_file()
     assert (state / "active.alpha").is_file()
+
+
+def test_reinstall_failure_restores_runtime_enabled_state(shell_world):
+    _, unit_dir, state, _ = shell_world
+    (unit_dir / "alpha-scraper.service").write_text("old service\n", encoding="utf-8")
+    (unit_dir / "alpha-scraper.timer").write_text("old timer\n", encoding="utf-8")
+    (state / "enabled_runtime.alpha").touch()
+
+    result = run_transaction(
+        shell_world,
+        "alpha",
+        "alpha\thourly",
+        FAKE_FAIL_ENABLE_TARGET="alpha",
+    )
+
+    assert result.returncode != 0
+    assert (state / "enabled_runtime.alpha").is_file()
+    assert not (state / "enabled.alpha").exists()
 
 
 @pytest.mark.parametrize("link_kind", ("relative", "absolute", "devnull"))
@@ -406,6 +455,50 @@ def test_disabled_like_unit_file_states_are_accepted(shell_world, unit_file_stat
         FAKE_UNIT_FILE_STATE=unit_file_state,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_schedule_transaction_normalizes_symlink_without_rewriting_service(shell_world):
+    _, unit_dir, _, _ = shell_world
+    service = unit_dir / "alpha-scraper.service"
+    service.write_text("preserve service bytes\n", encoding="utf-8")
+    external = unit_dir.parent / "external.timer"
+    external.write_text("OnCalendar=hourly\n", encoding="utf-8")
+    timer = unit_dir / "alpha-scraper.timer"
+    timer.symlink_to(os.path.relpath(external, unit_dir))
+
+    result = run_schedule_transaction(
+        shell_world,
+        "alpha",
+        "alpha\tdaily",
+        FAKE_UNIT_FILE_STATE_TARGET="alpha",
+        FAKE_UNIT_FILE_STATE="linked",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert timer.is_file()
+    assert not timer.is_symlink()
+    assert "OnCalendar=daily" in timer.read_text(encoding="utf-8")
+    assert service.read_text(encoding="utf-8") == "preserve service bytes\n"
+    assert external.read_text(encoding="utf-8") == "OnCalendar=hourly\n"
+
+
+def test_schedule_failure_restores_dangling_symlink_text(shell_world):
+    _, unit_dir, _, _ = shell_world
+    (unit_dir / "alpha-scraper.service").write_text("service\n", encoding="utf-8")
+    timer = unit_dir / "alpha-scraper.timer"
+    timer.symlink_to("../missing/original.timer")
+
+    result = run_schedule_transaction(
+        shell_world,
+        "alpha",
+        "alpha\tdaily",
+        FAKE_FAIL_DAEMON="1",
+    )
+
+    assert result.returncode != 0
+    assert timer.is_symlink()
+    assert os.readlink(timer) == "../missing/original.timer"
+    assert "Schedule transaction failed" in result.stderr
 
 
 def test_systemd_analyze_accepts_rendered_pair_from_path_with_spaces(tmp_path):

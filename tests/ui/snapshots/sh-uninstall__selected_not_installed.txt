@@ -1,0 +1,4 @@
+# border: green
+# exit: 0
+
+[amazon] is registered but not installed - nothing to remove.
