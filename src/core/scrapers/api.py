@@ -31,6 +31,7 @@ from core.exceptions import (
     ScraperParseError,
     ServerError,
 )
+from core.schema_migrations.contracts import ConfigMigration, JsonObject
 from core.settings.model import MISSING, ResolvedSettings, SettingSpec, _MissingDefault
 
 T = TypeVar("T")
@@ -198,9 +199,12 @@ class ScraperPlugin:
     settings: Sequence[SettingSpec[Any]] = ()
     default_interval: str = "1h"
     reference_url: UrlField | None = None
+    config_schema_version: int = 1
 
 
 __all__ = [
+    "ConfigMigration",
+    "JsonObject",
     "ScraperPlugin",
     "ItemField",
     "UrlField",

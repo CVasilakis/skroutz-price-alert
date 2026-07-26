@@ -80,6 +80,14 @@ def compile_plugin(
     display_name = _safe_text(
         definition.display_name, context=f"Plugin '{target}' display_name"
     ).strip()
+    if (
+        isinstance(definition.config_schema_version, bool)
+        or not isinstance(definition.config_schema_version, int)
+        or definition.config_schema_version < 1
+    ):
+        raise PluginValidationError(
+            f"Plugin '{target}' config_schema_version must be a positive integer."
+        )
 
     if (
         not isinstance(definition.default_interval, str)
@@ -259,6 +267,7 @@ def compile_plugin(
     return RegisteredPlugin(
         target=target,
         display_name=display_name,
+        config_schema_version=definition.config_schema_version,
         domains=tuple(all_domains),
         item_fields=tuple(fields),
         url_fields=tuple(url_fields),

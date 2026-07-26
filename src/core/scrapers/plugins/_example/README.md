@@ -11,9 +11,12 @@ verifier also requires this README, `config.example.json`, and a corresponding
 and a private `requirements.txt` are optional advanced additions documented in
 `CONTRIBUTING.md`. Descriptors may use stdlib and `core.scrapers.api`; the isolated
 probe rejects third-party import effects. `client.py` must export `Client`.
-When a plugin-private configuration field genuinely changes representation, an
-optional import-light `migrations.py` may export pure `CONFIG_MIGRATIONS`; it requires
-`tests/plugins/<target>/test_migrations.py`. Framework-owned fields never migrate there.
+When a plugin-private configuration field genuinely changes representation, increment
+`config_schema_version` and add an import-light `migrations.py` exporting plain, pure
+`CONFIG_MIGRATIONS` callables. Retain every transition, update
+`plugin_schema_version` in the example, and add
+`tests/plugins/<target>/test_migrations.py`. Version-1 plugins must not contain a
+`migrations.py`; framework-owned fields never migrate there.
 
 The minimal example accepts product URLs under `/products/` and returns a
 `PriceResult`. Replace both choices with the target's real page and result shape.

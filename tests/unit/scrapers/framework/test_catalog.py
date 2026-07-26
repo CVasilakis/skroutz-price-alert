@@ -73,6 +73,7 @@ def test_fields_settings_and_canonical_defaults_are_compiled_without_mutation():
     assert "region" in setting.invalid_warning
     assert isinstance(record.settings_by_key, MappingProxyType)
     assert record.setting("region") is setting
+    assert record.config_schema_version == 1
     with pytest.raises(TypeError):
         record.settings_by_key["new"] = setting
     with pytest.raises(PluginValidationError, match="not canonical"):
@@ -81,6 +82,16 @@ def test_fields_settings_and_canonical_defaults_are_compiled_without_mutation():
         _compile(_plugin(item_fields=[field, field]))
     with pytest.raises(PluginValidationError):
         _compile(_plugin(settings=[setting, setting]))
+
+
+@pytest.mark.parametrize("version", [True, False, 0, -1, 1.5, "2", None])
+def test_config_schema_version_must_be_a_positive_integer(version):
+    with pytest.raises(PluginValidationError, match="config_schema_version"):
+        _compile(_plugin(config_schema_version=version))
+
+
+def test_explicit_config_schema_version_is_compiled():
+    assert _compile(_plugin(config_schema_version=3)).config_schema_version == 3
 
 
 def test_repeated_price_alert_suppression_is_a_framework_setting_defaulting_false():

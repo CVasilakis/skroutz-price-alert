@@ -156,7 +156,15 @@ def drive_orchestrated_run(
                 {"id": f"item-{index}", "skip": False, **item} if isinstance(item, dict) else item
             )
         with open(os.path.join(cfg_dir, "fakestore.json"), "w") as f:
-            json.dump({"schema_version": 1, "settings": {}, "items": canonical_items}, f)
+            json.dump(
+                {
+                    "schema_version": 1,
+                    "plugin_schema_version": 1,
+                    "settings": {},
+                    "items": canonical_items,
+                },
+                f,
+            )
 
         plugin = fake_plugin(
             name="fakestore",

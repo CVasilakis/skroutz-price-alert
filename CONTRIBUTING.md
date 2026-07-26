@@ -246,9 +246,10 @@ dependencies and therefore belong in `client.py`, never the descriptor.
 
 ## Config, dependencies, and tests
 
-The example config is a strict JSON object containing the current `schema_version`,
-`settings`, and at least one valid item. It must demonstrate every custom setting and item field so users do not
-need to infer store-specific configuration from Python code.
+The example config is a strict JSON object containing the current framework
+`schema_version`, the descriptor's `plugin_schema_version`, `settings`, and at least
+one valid item. It must demonstrate every custom setting and item field so users do
+not need to infer store-specific configuration from Python code.
 Every item needs a unique, stable `id`, `name`, non-negative `target_price`, and
 every required plugin field; `skip` is optional. Unknown keys, including
 `metadata`, are rejected.
@@ -294,7 +295,8 @@ contain changes outside those directories.
 
 Every persisted JSON document carries a top-level integer `schema_version`. General
 configuration, target configuration, scraper state, and reminder state have independent
-version sequences. All target configs share the framework target-config sequence.
+version sequences. Target configs also carry `plugin_schema_version`: the shared
+framework sequence and each plugin's private sequence advance independently.
 
 Runtime loaders never migrate files. `./update.sh` invokes `./scripts/migrate.sh`, and
 contributors can use `./scripts/migrate.sh --check` to validate and report without
@@ -307,21 +309,32 @@ documents and documents from earlier major releases are intentionally unsupporte
 fail closed, and must not gain version-zero compatibility transitions.
 
 Framework-owned target fields migrate in `core.scrapers.framework.migrations`. General
-configuration and reminder state migrate under `core.general`. A plugin may add
-`migrations.py` only for its private fields or settings:
+configuration and reminder state migrate under `core.general`. When a plugin changes a
+private field or setting, increment its descriptor's `config_schema_version` and add
+`migrations.py`:
 
 ```python
-from core.infrastructure.migration import MigrationPhase
+from core.scrapers.api import JsonObject
+
+
+def migrate_v1_to_v2(document: JsonObject) -> JsonObject:
+    return {**document, "changed_plugin_field": "canonical-value"}
 
 CONFIG_MIGRATIONS = {
-    1: MigrationPhase("describe v1 to v2", migrate_v1_to_v2),
+    1: migrate_v1_to_v2,
 }
 ```
 
-The framework phase runs first and the plugin phase second. The engine owns
-`schema_version`; transforms must not mutate their input, change the version, perform
-I/O, import private client dependencies, or inspect other plugins. Add
-`tests/plugins/<target>/test_migrations.py` covering each direct transition and the
-oldest supported document through the current version. Update every checked-in example
-to the new current target version. New plugins start at the current target version and
-do not implement historical no-op migrations.
+The framework chain runs first and the plugin chain second; final target validation
+runs once after both. The engine owns both version keys. Transforms must not mutate
+their input, change either version, perform I/O, import private client dependencies, or
+inspect other plugins. `CONFIG_MIGRATIONS` must retain exactly one plain callable for
+every source version from 1 through the version before current. A version-1 plugin
+must not contain `migrations.py`.
+
+Add `tests/plugins/<target>/test_migrations.py` covering every direct transition and
+the oldest supported document through the current version. Update
+`plugin_schema_version` and all changed private fields in the checked-in example and
+guide. New plugins start at version 1 and do not implement historical no-op
+migrations. Declaration modules may import the standard library,
+`core.scrapers.api`, and package-local helpers, but no other `core` internals.

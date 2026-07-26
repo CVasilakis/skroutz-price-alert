@@ -36,6 +36,7 @@ def test_preflight_loads_settings_and_items_once(tmp_path, plugin):
         tmp_path / "config" / "fakestore.json",
         {
             "schema_version": 1,
+            "plugin_schema_version": 1,
             "settings": {"log_retention_days": 3},
             "items": [
                 {
@@ -66,6 +67,7 @@ def test_preflight_distinguishes_config_and_state_failures(tmp_path, plugin):
         tmp_path / "config" / "fakestore.json",
         {
             "schema_version": 1,
+            "plugin_schema_version": 1,
             "settings": {"log_retention_days": 3},
             "items": [
                 {

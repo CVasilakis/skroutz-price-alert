@@ -17,6 +17,7 @@ class RegisteredPlugin:
 
     target: str
     display_name: str
+    config_schema_version: int
     domains: tuple[str, ...]
     item_fields: tuple[ItemField[Any], ...]
     url_fields: tuple[UrlField, ...]

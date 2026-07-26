@@ -1,16 +1,13 @@
-"""Pure, document-local JSON schema migration primitives."""
+"""Pure, document-local JSON schema migration machinery."""
 
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, TypeAlias
 
-JsonObject: TypeAlias = dict[str, Any]
-Validator: TypeAlias = Callable[[JsonObject], None]
-Transform: TypeAlias = Callable[[JsonObject], JsonObject]
+from core.schema_migrations.contracts import ConfigMigration, JsonObject
 
 
 class MigrationError(ValueError):
@@ -19,10 +16,10 @@ class MigrationError(ValueError):
 
 @dataclass(frozen=True)
 class MigrationPhase:
-    """One pure transformation inside a consecutive schema transition."""
+    """One framework-owned transformation inside a consecutive transition."""
 
     name: str
-    transform: Transform
+    transform: ConfigMigration
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
@@ -33,13 +30,15 @@ class MigrationPhase:
 
 @dataclass(frozen=True)
 class MigrationPlan:
-    """A contiguous migration chain ending at one current schema version."""
+    """A contiguous migration chain for one version key."""
 
+    version_key: str
     current_version: int
     transitions: Mapping[int, tuple[MigrationPhase, ...]]
-    validate_current: Validator
 
     def __post_init__(self) -> None:
+        if not isinstance(self.version_key, str) or not self.version_key.strip():
+            raise ValueError("migration version key must be nonblank")
         if (
             isinstance(self.current_version, bool)
             or not isinstance(self.current_version, int)
@@ -57,27 +56,25 @@ class MigrationPlan:
                 raise TypeError("migration transition phases must be a tuple")
             if not all(isinstance(phase, MigrationPhase) for phase in phases):
                 raise TypeError("migration transition members must be MigrationPhase instances")
-        if not callable(self.validate_current):
-            raise TypeError("current-schema validator must be callable")
         object.__setattr__(self, "transitions", MappingProxyType(copied))
 
 
-def schema_version(document: JsonObject) -> int:
-    """Return a strict positive integer document-local schema version."""
-    value = document.get("schema_version")
+def document_version(document: JsonObject, version_key: str) -> int:
+    """Return a strict positive integer document-local version."""
+    value = document.get(version_key)
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise MigrationError("schema_version must be a positive integer")
+        raise MigrationError(f"{version_key} must be a positive integer")
     return value
 
 
 def migrate_document(document: JsonObject, plan: MigrationPlan) -> JsonObject:
-    """Migrate a defensive copy through every consecutive transition."""
+    """Migrate a defensive copy along exactly one version axis."""
     if not isinstance(document, dict):
         raise MigrationError("top-level JSON value must be an object")
-    current = schema_version(document)
+    current = document_version(document, plan.version_key)
     if current > plan.current_version:
         raise MigrationError(
-            f"schema version {current} is newer than supported version {plan.current_version}"
+            f"{plan.version_key} {current} is newer than supported version {plan.current_version}"
         )
 
     migrated = copy.deepcopy(document)
@@ -91,31 +88,23 @@ def migrate_document(document: JsonObject, plan: MigrationPlan) -> JsonObject:
                     raise MigrationError("migration engine input was mutated")
                 if not isinstance(candidate, dict):
                     raise MigrationError("migration phase must return a JSON object")
-                if schema_version(candidate) != current:
-                    raise MigrationError("migration phases must not change schema_version")
+                if document_version(candidate, plan.version_key) != current:
+                    raise MigrationError(f"migration phases must not change {plan.version_key}")
             except Exception as exc:
                 raise MigrationError(
-                    f"v{current} to v{current + 1} phase {phase.name!r} failed: {exc}"
+                    f"{plan.version_key} v{current} to v{current + 1} "
+                    f"phase {phase.name!r} failed: {exc}"
                 ) from exc
             migrated = copy.deepcopy(candidate)
         current += 1
-        migrated["schema_version"] = current
-
-    try:
-        plan.validate_current(copy.deepcopy(migrated))
-    except Exception as exc:
-        raise MigrationError(
-            f"current-schema validation at v{plan.current_version} failed: {exc}"
-        ) from exc
+        migrated[plan.version_key] = current
     return migrated
 
 
 __all__ = [
-    "JsonObject",
     "MigrationError",
     "MigrationPhase",
     "MigrationPlan",
+    "document_version",
     "migrate_document",
-    "schema_version",
-    "Validator",
 ]

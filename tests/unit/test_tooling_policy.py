@@ -49,3 +49,15 @@ def test_plugin_artifacts_and_ci_use_the_current_package_layout() -> None:
     assert "core.scrapers.tooling.cli requirements" in workflow
     assert "src/core/scrapers/" + "*/requirements.txt" not in workflow
     assert "core.scrapers." + "cli requirements" not in workflow
+
+
+def test_contributor_docs_use_plain_plugin_migrations_and_two_target_versions() -> None:
+    contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    copyable = (ROOT / "src/core/scrapers/plugins/_example/README.md").read_text(encoding="utf-8")
+
+    assert "from core.scrapers.api import JsonObject" in contributing
+    assert "config_schema_version" in contributing
+    assert "plugin_schema_version" in contributing
+    assert "CONFIG_MIGRATIONS" in copyable
+    assert "plugin_schema_version" in copyable
+    assert "core.infrastructure.migration" not in contributing

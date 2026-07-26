@@ -20,6 +20,7 @@ NOW = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
 def _write_config(config_dir, url, *, extra=None, settings=None):
     document = {
         "schema_version": 1,
+        "plugin_schema_version": 1,
         "settings": settings or {},
         "items": [
             {

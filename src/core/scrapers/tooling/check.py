@@ -17,7 +17,7 @@ from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.migrations import (
     PluginMigrationDeclarationError,
-    load_plugin_config_migrations,
+    load_plugin_config_migration_plan,
 )
 from core.scrapers.framework.model import RegisteredPlugin
 from core.scrapers.framework.settings import framework_setting_specs
@@ -32,7 +32,7 @@ import pathlib
 import sys
 import sysconfig
 
-src_root, package, plugin_source = sys.argv[1:]
+src_root, package, plugin_source, include_migrations = sys.argv[1:]
 sys.path.insert(0, src_root)
 import core.scrapers.api
 parent_name = package.rpartition(".")[0]
@@ -44,8 +44,7 @@ before = set(sys.modules)
 try:
     importlib.import_module(package)
     importlib.import_module(package + ".plugin")
-    migration_spec = importlib.util.find_spec(package + ".migrations")
-    if migration_spec is not None:
+    if include_migrations == "yes":
         importlib.import_module(package + ".migrations")
 except Exception as exc:
     print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}))
@@ -75,7 +74,7 @@ print(json.dumps({"unsafe": unsafe}))
 """
 
 
-def _check_import_light(package: str, source: Path) -> None:
+def _check_import_light(package: str, source: Path, *, include_migrations: bool) -> None:
     src_root = Path(__file__).resolve().parents[3]
     try:
         completed = subprocess.run(
@@ -87,6 +86,7 @@ def _check_import_light(package: str, source: Path) -> None:
                 str(src_root),
                 package,
                 str(source),
+                "yes" if include_migrations else "no",
             ],
             check=True,
             capture_output=True,
@@ -103,7 +103,12 @@ def _check_import_light(package: str, source: Path) -> None:
         raise RuntimeError("descriptor discovery imported non-stdlib modules: " + ", ".join(unsafe))
 
 
-def _check_contributor_files(source: Path, tests: Path, target: str) -> str:
+def _check_contributor_files(
+    source: Path,
+    tests: Path,
+    target: str,
+    config_schema_version: int,
+) -> str:
     for filename in ("README.md", "config.example.json"):
         path = source / filename
         if not path.is_file():
@@ -116,16 +121,28 @@ def _check_contributor_files(source: Path, tests: Path, target: str) -> str:
     test_modules = tuple(tests.glob("test_*.py")) if tests.is_dir() else ()
     if not test_modules:
         raise RuntimeError(f"plugin {target!r} requires tests/plugins/{target}/test_*.py")
-    if (source / "migrations.py").exists() and not (tests / "test_migrations.py").is_file():
+    migrations = source / "migrations.py"
+    migration_tests = tests / "test_migrations.py"
+    if config_schema_version == 1 and migrations.exists():
         raise RuntimeError(
-            f"plugin {target!r} migrations.py requires tests/plugins/{target}/test_migrations.py"
+            f"plugin {target!r} at config schema version 1 must not contain migrations.py"
+        )
+    if config_schema_version > 1 and not migrations.is_file():
+        raise RuntimeError(
+            f"plugin {target!r} config schema version {config_schema_version} "
+            "requires migrations.py"
+        )
+    if config_schema_version > 1 and not migration_tests.is_file():
+        raise RuntimeError(
+            f"plugin {target!r} config schema version {config_schema_version} "
+            f"requires tests/plugins/{target}/test_migrations.py"
         )
     return (source / "README.md").read_text(encoding="utf-8")
 
 
 def _check_migrations(plugin: RegisteredPlugin) -> None:
     try:
-        load_plugin_config_migrations(plugin)
+        load_plugin_config_migration_plan(plugin)
     except PluginMigrationDeclarationError as exc:
         raise RuntimeError(str(exc)) from exc
 
@@ -161,6 +178,39 @@ def _check_self_contained(source: Path, target: str, registered_targets: frozens
                     )
 
 
+def _check_declaration_imports(source: Path, package: str, target: str) -> None:
+    """Keep import-light declarations on the public API and package-local code."""
+    for filename in ("__init__.py", "plugin.py", "migrations.py"):
+        path = source / filename
+        if not path.is_file():
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, UnicodeError, SyntaxError) as exc:
+            raise RuntimeError(f"plugin source {filename!r} is unreadable: {exc}") from exc
+        for node in ast.walk(tree):
+            modules: list[str] = []
+            if isinstance(node, ast.Import):
+                modules.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    continue
+                if node.module:
+                    modules.append(node.module)
+            for module in modules:
+                if (
+                    module == "core.scrapers.api"
+                    or module == package
+                    or module.startswith(package + ".")
+                    or not module.startswith("core")
+                ):
+                    continue
+                raise RuntimeError(
+                    f"plugin {target!r} declaration {filename} imports internal "
+                    f"module {module!r}; use core.scrapers.api or package-local helpers"
+                )
+
+
 def check_plugin(
     target: str,
     catalog: PluginCatalog | None = None,
@@ -173,16 +223,21 @@ def check_plugin(
     source = Path(plugin.source_dir)
     root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parents[4]
     tests = root / "tests" / "plugins" / target
-    _check_import_light(plugin.package, source)
-    _check_contributor_files(source, tests, target)
+    _check_import_light(
+        plugin.package,
+        source,
+        include_migrations=plugin.config_schema_version > 1,
+    )
+    _check_contributor_files(source, tests, target, plugin.config_schema_version)
     _check_self_contained(source, target, frozenset(catalog.targets))
+    _check_declaration_imports(source, plugin.package, target)
     _check_migrations(plugin)
     checks = [
         "atomic discovery",
         "isolated import-light descriptor",
         "contributor files and tests",
         "self-contained package",
-        "optional pure migrations",
+        "versioned pure migrations",
     ]
 
     for field in plugin.item_fields:

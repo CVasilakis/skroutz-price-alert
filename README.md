@@ -150,6 +150,7 @@ A complete file is structured like this:
 ```json
 {
   "schema_version": 1,
+  "plugin_schema_version": 1,
   "settings": {
     "execution_interval": "1h",
     "log_retention_days": 7,

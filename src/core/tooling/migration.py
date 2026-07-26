@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
 import stat
 import tempfile
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,22 +16,26 @@ from typing import Any
 
 from filelock import FileLock, Timeout
 
+from core.general.configuration import validate_general_document
 from core.general.migrations import GENERAL_CONFIG_MIGRATIONS, REMINDER_STATE_MIGRATIONS
-from core.infrastructure.migration import (
+from core.general.reminder_state import validate_reminder_state_document
+from core.schema_migrations.contracts import JsonObject
+from core.schema_migrations.engine import (
     MigrationError,
     MigrationPlan,
+    document_version,
     migrate_document,
-    schema_version,
 )
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.migrations import (
     SCRAPER_STATE_MIGRATIONS,
+    TARGET_CONFIG_MIGRATIONS,
     PluginMigrationDeclarationError,
-    load_plugin_config_migrations,
-    target_config_plan,
+    load_plugin_config_migration_plan,
 )
 from core.scrapers.framework.model import RegisteredPlugin
+from core.scrapers.framework.state import JsonStateRepository
 
 STATUS_CURRENT = "current"
 STATUS_MIGRATED = "migrated"
@@ -52,6 +58,9 @@ class _SourceSnapshot:
     device: int
     inode: int
     mode: int
+
+
+Validator = Callable[[JsonObject], object]
 
 
 def _read_document(path: Path) -> tuple[dict[str, Any], _SourceSnapshot]:
@@ -167,7 +176,8 @@ class MigrationRunner:
         family: str,
         target: str,
         path: Path,
-        plan: MigrationPlan,
+        plans: tuple[MigrationPlan, ...],
+        validator: Validator,
         *,
         check: bool,
     ) -> MigrationOutcome:
@@ -176,10 +186,18 @@ class MigrationRunner:
             if not path.exists() and not path.is_symlink():
                 return MigrationOutcome(family, target, shown, STATUS_MISSING)
             document, snapshot = _read_document(path)
-            original_version = schema_version(document)
-            migrated = migrate_document(document, plan)
-            if original_version == plan.current_version:
+            original_versions = tuple(
+                document_version(document, plan.version_key) for plan in plans
+            )
+            migrated = self._migrate_plans(document, plans, validator)
+            changed = tuple(
+                (plan, original)
+                for plan, original in zip(plans, original_versions, strict=True)
+                if original != plan.current_version
+            )
+            if not changed:
                 return MigrationOutcome(family, target, shown, STATUS_CURRENT)
+            version_detail = self._version_detail(plans, original_versions)
             rendered = _serialize(migrated)
             if check:
                 return MigrationOutcome(
@@ -187,7 +205,7 @@ class MigrationRunner:
                     target,
                     shown,
                     STATUS_MIGRATED,
-                    f"pending v{original_version} to v{plan.current_version}",
+                    f"pending {version_detail}",
                 )
             if not _unchanged(path, snapshot):
                 raise MigrationError("file changed while migration was being prepared")
@@ -200,10 +218,60 @@ class MigrationRunner:
                 target,
                 shown,
                 STATUS_MIGRATED,
-                f"v{original_version} to v{plan.current_version}",
+                version_detail,
             )
         except Exception as exc:
             return self._failed_outcome(family, target, shown, exc)
+
+    @staticmethod
+    def _migrate_plans(
+        document: JsonObject,
+        plans: tuple[MigrationPlan, ...],
+        validator: Validator,
+    ) -> JsonObject:
+        if not plans:
+            raise ValueError("at least one migration plan is required")
+        keys = tuple(plan.version_key for plan in plans)
+        if len(set(keys)) != len(keys):
+            raise ValueError("migration plans must own distinct version keys")
+        migrated = copy.deepcopy(document)
+        for plan in plans:
+            protected = {
+                key: document_version(migrated, key) for key in keys if key != plan.version_key
+            }
+            migrated = migrate_document(migrated, plan)
+            for key, before in protected.items():
+                if document_version(migrated, key) != before:
+                    raise MigrationError(f"{plan.version_key} migration must not change {key}")
+        try:
+            validator(copy.deepcopy(migrated))
+        except Exception as exc:
+            versions = ", ".join(f"{plan.version_key} v{plan.current_version}" for plan in plans)
+            raise MigrationError(f"current-schema validation at {versions} failed: {exc}") from exc
+        return migrated
+
+    @staticmethod
+    def _version_detail(
+        plans: tuple[MigrationPlan, ...],
+        original_versions: tuple[int, ...],
+    ) -> str:
+        changed = [
+            (plan, original)
+            for plan, original in zip(plans, original_versions, strict=True)
+            if original != plan.current_version
+        ]
+        if len(plans) == 1:
+            plan, original = changed[0]
+            return f"v{original} to v{plan.current_version}"
+        labels = {
+            "schema_version": "framework",
+            "plugin_schema_version": "plugin",
+        }
+        return "; ".join(
+            f"{labels.get(plan.version_key, plan.version_key)} "
+            f"v{original} to v{plan.current_version}"
+            for plan, original in changed
+        )
 
     @staticmethod
     def _failed_outcome(
@@ -265,20 +333,20 @@ class MigrationRunner:
             else:
                 loader = TargetConfigLoader(plugin, str(self.config_dir))
                 try:
-                    private = load_plugin_config_migrations(plugin)
+                    plugin_plan = load_plugin_config_migration_plan(plugin)
                 except PluginMigrationDeclarationError as exc:
                     raise MigrationError(str(exc)) from exc
 
                 def validate_target(document: dict[str, Any]) -> None:
                     loader.load_document(document)
 
-                config_plan = target_config_plan(validate_target, private)
                 outcomes.append(
                     self._run_one(
                         "target_config",
                         plugin.target,
                         config_path,
-                        config_plan,
+                        (TARGET_CONFIG_MIGRATIONS, plugin_plan),
+                        validate_target,
                         check=check,
                     )
                 )
@@ -297,7 +365,8 @@ class MigrationRunner:
                 "scraper_state",
                 plugin.target,
                 self.state_dir / f"{plugin.target}.json",
-                SCRAPER_STATE_MIGRATIONS,
+                (SCRAPER_STATE_MIGRATIONS,),
+                JsonStateRepository.validate_document,
                 check=check,
             )
         )
@@ -311,7 +380,8 @@ class MigrationRunner:
                     "general_config",
                     "general",
                     self.config_dir / "general.json",
-                    GENERAL_CONFIG_MIGRATIONS,
+                    (GENERAL_CONFIG_MIGRATIONS,),
+                    validate_general_document,
                     check=check,
                 )
             )
@@ -347,7 +417,8 @@ class MigrationRunner:
                             "reminder_state",
                             "general",
                             self.state_dir / "general.json",
-                            REMINDER_STATE_MIGRATIONS,
+                            (REMINDER_STATE_MIGRATIONS,),
+                            validate_reminder_state_document,
                             check=check,
                         )
                     )

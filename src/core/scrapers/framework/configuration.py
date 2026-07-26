@@ -22,7 +22,7 @@ from core.settings import (
 )
 
 SCHEMA_VERSION = 1
-TOP_LEVEL_KEYS = frozenset({"schema_version", "settings", "items"})
+TOP_LEVEL_KEYS = frozenset({"schema_version", "plugin_schema_version", "settings", "items"})
 
 
 @dataclass(frozen=True)
@@ -92,6 +92,14 @@ class TargetConfigLoader:
             raise self._validation_error(
                 messages.config_schema_version_invalid(self.display_path, SCHEMA_VERSION),
                 f"schema_version must be {SCHEMA_VERSION}",
+            )
+        plugin_version = document.get("plugin_schema_version")
+        if isinstance(plugin_version, bool) or plugin_version != self.plugin.config_schema_version:
+            raise self._validation_error(
+                messages.config_schema_version_invalid(
+                    self.display_path, self.plugin.config_schema_version
+                ),
+                f"plugin_schema_version must be {self.plugin.config_schema_version}",
             )
         if not isinstance(document.get("items"), list):
             raise self._validation_error(

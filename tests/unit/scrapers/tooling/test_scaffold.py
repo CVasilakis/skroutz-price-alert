@@ -29,6 +29,8 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     }
     assert {path.name for path in tests.iterdir()} == {"__init__.py", "test_client.py"}
     document = json.loads((source / "config.example.json").read_text(encoding="utf-8"))
+    assert document["schema_version"] == 1
+    assert document["plugin_schema_version"] == 1
     assert document["items"][0]["url"] == "https://store.example/products/sample"
     assert "pytest.fail" in (tests / "test_client.py").read_text(encoding="utf-8")
 

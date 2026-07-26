@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
-from core.infrastructure.migration import MigrationPhase, MigrationPlan
+from core.schema_migrations.engine import MigrationPhase, MigrationPlan
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.migrations import PluginMigrationDeclarationError
 from core.tooling import migration as migration_module
@@ -23,14 +23,14 @@ def _write(path: Path, document: object) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
 
 
-def _v2_plan(validator=lambda document: None):
+def _v2_plan():
     def upgrade(document):
         return {**document, "added": True}
 
     return MigrationPlan(
+        "schema_version",
         2,
         {1: (MigrationPhase("add field", upgrade),)},
-        validator,
     )
 
 
@@ -43,6 +43,135 @@ def _outcome(outcomes, family):
     return next(outcome for outcome in outcomes if outcome.family == family)
 
 
+def _axis_plan(key, current, field, calls=None):
+    def upgrade(document):
+        if calls is not None:
+            calls.append(key)
+        return {**document, field: True}
+
+    return MigrationPlan(
+        key,
+        current,
+        {1: (MigrationPhase(f"upgrade {key}", upgrade),)} if current == 2 else {},
+    )
+
+
+@pytest.mark.parametrize(
+    "framework_version,plugin_version,expected_detail",
+    [
+        (1, 2, "framework v1 to v2"),
+        (2, 1, "plugin v1 to v2"),
+        (1, 1, "framework v1 to v2; plugin v1 to v2"),
+    ],
+)
+def test_target_axes_migrate_independently_in_framework_then_plugin_order(
+    tmp_path,
+    framework_version,
+    plugin_version,
+    expected_detail,
+):
+    calls = []
+    plans = (
+        _axis_plan("schema_version", 2, "framework_changed", calls),
+        _axis_plan("plugin_schema_version", 2, "plugin_changed", calls),
+    )
+    document = {
+        "schema_version": framework_version,
+        "plugin_schema_version": plugin_version,
+        "settings": {},
+        "items": [],
+    }
+    path = tmp_path / "config" / "acme.json"
+    _write(path, document)
+    validations = []
+
+    outcome = MigrationRunner(tmp_path, PluginCatalog(()))._run_one(
+        "target_config",
+        "acme",
+        path,
+        plans,
+        lambda migrated: validations.append(dict(migrated)),
+        check=False,
+    )
+
+    assert outcome.status == STATUS_MIGRATED
+    assert outcome.detail == expected_detail
+    assert calls == [
+        key
+        for key, version in (
+            ("schema_version", framework_version),
+            ("plugin_schema_version", plugin_version),
+        )
+        if version == 1
+    ]
+    assert len(validations) == 1
+    expected_document = {
+        **document,
+        "schema_version": 2,
+        "plugin_schema_version": 2,
+    }
+    if framework_version == 1:
+        expected_document["framework_changed"] = True
+    if plugin_version == 1:
+        expected_document["plugin_changed"] = True
+    assert json.loads(path.read_text()) == expected_document
+
+
+@pytest.mark.parametrize(
+    "owner,other",
+    [
+        ("schema_version", "plugin_schema_version"),
+        ("plugin_schema_version", "schema_version"),
+    ],
+)
+def test_each_target_chain_cannot_change_the_other_version_key(owner, other):
+    def corrupt(document):
+        return {**document, other: 2}
+
+    corrupting = MigrationPlan(
+        owner,
+        2,
+        {1: (MigrationPhase("corrupt owner boundary", corrupt),)},
+    )
+    other_plan = MigrationPlan(other, 1, {})
+    plans = (corrupting, other_plan) if owner == "schema_version" else (other_plan, corrupting)
+
+    with pytest.raises(
+        migration_module.MigrationError,
+        match=rf"{owner} migration must not change {other}",
+    ):
+        MigrationRunner._migrate_plans(
+            {"schema_version": 1, "plugin_schema_version": 1},
+            plans,
+            lambda _document: None,
+        )
+
+
+def test_final_validation_occurs_after_both_axes_and_receives_a_copy():
+    calls = []
+    plans = (
+        _axis_plan("schema_version", 2, "framework_changed", calls),
+        _axis_plan("plugin_schema_version", 2, "plugin_changed", calls),
+    )
+
+    def validate(document):
+        calls.append(f"validate-{document['schema_version']}-{document['plugin_schema_version']}")
+        document["mutated_by_validator"] = True
+
+    migrated = MigrationRunner._migrate_plans(
+        {"schema_version": 1, "plugin_schema_version": 1},
+        plans,
+        validate,
+    )
+
+    assert calls == [
+        "schema_version",
+        "plugin_schema_version",
+        "validate-2-2",
+    ]
+    assert "mutated_by_validator" not in migrated
+
+
 def test_partial_failure_retains_mirrored_original_without_reverting_success(tmp_path, monkeypatch):
     general = tmp_path / "config" / "general.json"
     reminder = tmp_path / "state" / "general.json"
@@ -51,6 +180,7 @@ def test_partial_failure_retains_mirrored_original_without_reverting_success(tmp
     reminder.parent.mkdir(parents=True, exist_ok=True)
     reminder.write_text("{bad", encoding="utf-8")
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
 
     runner = MigrationRunner(tmp_path, PluginCatalog(()))
     outcomes = runner.run()
@@ -69,6 +199,7 @@ def test_complete_success_discards_recovery_and_check_mode_only_preserves_manage
     _write(general, {"schema_version": 1})
     original = general.read_bytes()
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
 
     check_runner = MigrationRunner(tmp_path, PluginCatalog(()))
     checked = check_runner.run(check=True)
@@ -96,7 +227,7 @@ def test_missing_target_config_does_not_discover_plugin_migrations_and_state_run
     def unexpected(_plugin):
         raise AssertionError("plugin migration module must not be inspected")
 
-    monkeypatch.setattr(migration_module, "load_plugin_config_migrations", unexpected)
+    monkeypatch.setattr(migration_module, "load_plugin_config_migration_plan", unexpected)
     outcomes = MigrationRunner(tmp_path, catalog).run()
 
     assert _outcome(outcomes, "target_config").status == STATUS_MISSING
@@ -107,14 +238,19 @@ def test_plugin_declaration_failure_affects_config_only_and_state_continues(tmp_
     plugin, catalog = _one_plugin_catalog()
     _write(
         tmp_path / "config" / plugin.config_filename,
-        {"schema_version": 1, "settings": {}, "items": []},
+        {
+            "schema_version": 1,
+            "plugin_schema_version": 1,
+            "settings": {},
+            "items": [],
+        },
     )
     _write(tmp_path / "state" / f"{plugin.target}.json", {"schema_version": 1, "items": {}})
 
     def invalid(_plugin):
         raise PluginMigrationDeclarationError("broken CONFIG_MIGRATIONS")
 
-    monkeypatch.setattr(migration_module, "load_plugin_config_migrations", invalid)
+    monkeypatch.setattr(migration_module, "load_plugin_config_migration_plan", invalid)
     outcomes = MigrationRunner(tmp_path, catalog).run()
 
     assert _outcome(outcomes, "target_config").status == STATUS_FAILED
@@ -125,7 +261,16 @@ def test_plugin_declaration_failure_affects_config_only_and_state_continues(tmp_
 def test_current_schema_config_error_isolated_from_state(tmp_path):
     plugin, catalog = _one_plugin_catalog()
     config = tmp_path / "config" / plugin.config_filename
-    _write(config, {"schema_version": 1, "settings": {}, "items": [], "unknown": True})
+    _write(
+        config,
+        {
+            "schema_version": 1,
+            "plugin_schema_version": 1,
+            "settings": {},
+            "items": [],
+            "unknown": True,
+        },
+    )
     original = config.read_bytes()
     _write(tmp_path / "state" / f"{plugin.target}.json", {"schema_version": 1, "items": {}})
 
@@ -133,7 +278,9 @@ def test_current_schema_config_error_isolated_from_state(tmp_path):
 
     config_outcome = _outcome(outcomes, "target_config")
     assert config_outcome.status == STATUS_FAILED
-    assert "current-schema validation at v1 failed" in config_outcome.detail
+    assert (
+        "current-schema validation at schema_version v1, plugin_schema_version v1 failed"
+    ) in config_outcome.detail
     assert _outcome(outcomes, "scraper_state").status == STATUS_CURRENT
     assert config.read_bytes() == original
 
@@ -204,6 +351,7 @@ def test_atomic_replacement_preserves_file_mode(tmp_path, monkeypatch):
     _write(general, {"schema_version": 1})
     general.chmod(0o640)
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
 
     outcomes = MigrationRunner(tmp_path, PluginCatalog(())).run()
 
@@ -216,6 +364,7 @@ def test_concurrent_change_fails_without_backup_or_replacement(tmp_path, monkeyp
     _write(general, {"schema_version": 1})
     original = general.read_bytes()
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
     monkeypatch.setattr(migration_module, "_unchanged", lambda path, snapshot: False)
 
     runner = MigrationRunner(tmp_path, PluginCatalog(()))
@@ -232,6 +381,7 @@ def test_replacement_failure_retains_exact_recovery_copy(tmp_path, monkeypatch):
     _write(general, {"schema_version": 1})
     original = general.read_bytes()
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
 
     def fail_replace(path, data, mode):
         raise RuntimeError("replacement unavailable")
