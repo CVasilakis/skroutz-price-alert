@@ -13,6 +13,21 @@ from core import messages
 from core.exceptions import ConfigFileError
 
 
+class AtomicReplacementError(OSError):
+    """A durable replacement failure that records whether replacement occurred."""
+
+    def __init__(
+        self,
+        detail: str,
+        *,
+        destination_replaced: bool,
+        error_number: int | None,
+    ) -> None:
+        self.destination_replaced = destination_replaced
+        super().__init__(detail)
+        self.errno = error_number
+
+
 def _safe_absolute_path(path: str | os.PathLike[str]) -> str:
     """Return an absolute diagnostic path without masking an active failure."""
     try:
@@ -114,13 +129,72 @@ def read_json_object(
     return document
 
 
+def fsync_directory(path: str | os.PathLike[str]) -> None:
+    """Persist directory entries and metadata for one existing directory."""
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def commit_atomic_replacement(
+    destination: str | os.PathLike[str],
+    temporary: str | os.PathLike[str],
+) -> None:
+    """Durably commit one already-written sibling temporary file."""
+    destination_path = Path(destination)
+    temporary_path = Path(temporary)
+    replaced = False
+    try:
+        descriptor = os.open(temporary_path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.replace(temporary_path, destination_path)
+        replaced = True
+        fsync_directory(destination_path.parent)
+    except OSError as exc:
+        if not replaced:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        stage = (
+            "destination was replaced but its directory could not be made durable"
+            if replaced
+            else "destination was not replaced"
+        )
+        raise AtomicReplacementError(
+            f"atomic replacement failed ({stage}): {exc}",
+            destination_replaced=replaced,
+            error_number=exc.errno,
+        ) from exc
+    except BaseException:
+        if not replaced:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        raise
+
+
 def write_json_atomically(path: str | os.PathLike[str], data: object) -> None:
     """Serialize JSON through a sibling temporary file and atomic replace."""
     destination = os.fspath(path)
     temporary = destination + ".tmp"
-    with open(temporary, mode="w", encoding="utf-8") as file:
-        json.dump(data, file, indent=2)
-    os.replace(temporary, destination)
+    try:
+        with open(temporary, mode="w", encoding="utf-8") as file:
+            json.dump(data, file, indent=2)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+    commit_atomic_replacement(destination, temporary)
 
 
 def format_utc(value: datetime) -> str:

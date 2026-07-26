@@ -16,9 +16,14 @@ from typing import Any
 
 from filelock import FileLock, Timeout
 
-from core.general.configuration import validate_general_document
+from core.general.configuration import validate_general_migration_document
 from core.general.migrations import GENERAL_CONFIG_MIGRATIONS, REMINDER_STATE_MIGRATIONS
 from core.general.reminder_state import validate_reminder_state_document
+from core.infrastructure.persistence import (
+    AtomicReplacementError,
+    commit_atomic_replacement,
+    fsync_directory,
+)
 from core.schema_migrations.contracts import JsonObject
 from core.schema_migrations.engine import (
     MigrationError,
@@ -27,7 +32,7 @@ from core.schema_migrations.engine import (
     migrate_document,
 )
 from core.scrapers.framework.catalog import PluginCatalog
-from core.scrapers.framework.configuration import TargetConfigLoader
+from core.scrapers.framework.configuration import decode_target_document
 from core.scrapers.framework.migrations import (
     SCRAPER_STATE_MIGRATIONS,
     TARGET_CONFIG_MIGRATIONS,
@@ -106,14 +111,7 @@ def _replace_atomically(path: Path, data: bytes, mode: int) -> None:
         os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        commit_atomic_replacement(path, temporary)
     except BaseException:
         try:
             os.close(descriptor)
@@ -154,22 +152,29 @@ class MigrationRunner:
     def _ensure_recovery(self) -> Path:
         if self._recovery is None:
             self.state_dir.mkdir(parents=True, exist_ok=True)
+            fsync_directory(self.state_dir)
+            fsync_directory(self.state_dir.parent)
             self._recovery = Path(
                 tempfile.mkdtemp(prefix=".migration-recovery.", dir=self.state_dir)
             )
             self._recovery.chmod(0o700)
+            fsync_directory(self._recovery)
+            fsync_directory(self.state_dir)
         return self._recovery
 
     def _backup(self, path: Path, snapshot: _SourceSnapshot) -> None:
         relative = path.relative_to(self.root)
         backup = self._ensure_recovery() / relative
         backup.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fsync_directory(backup.parent)
+        fsync_directory(backup.parent.parent)
         descriptor = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, snapshot.mode)
         os.fchmod(descriptor, snapshot.mode)
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(snapshot.data)
             stream.flush()
             os.fsync(stream.fileno())
+        fsync_directory(backup.parent)
 
     def _run_one(
         self,
@@ -221,7 +226,15 @@ class MigrationRunner:
                 version_detail,
             )
         except Exception as exc:
-            return self._failed_outcome(family, target, shown, exc)
+            return self._failed_outcome(
+                family,
+                target,
+                shown,
+                exc,
+                original_preserved=not (
+                    isinstance(exc, AtomicReplacementError) and exc.destination_replaced
+                ),
+            )
 
     @staticmethod
     def _migrate_plans(
@@ -279,8 +292,15 @@ class MigrationRunner:
         target: str,
         shown: str,
         exc: Exception,
+        *,
+        original_preserved: bool = True,
     ) -> MigrationOutcome:
-        if family == "target_config":
+        if not original_preserved:
+            advice = (
+                "A durable recovery copy was retained; the destination may already "
+                "contain the migrated bytes, so inspect both before retrying."
+            )
+        elif family == "target_config":
             advice = (
                 "Original preserved; compare it with "
                 f"src/core/scrapers/plugins/{target}/config.example.json."
@@ -331,14 +351,13 @@ class MigrationRunner:
                     )
                 )
             else:
-                loader = TargetConfigLoader(plugin, str(self.config_dir))
                 try:
                     plugin_plan = load_plugin_config_migration_plan(plugin)
                 except PluginMigrationDeclarationError as exc:
                     raise MigrationError(str(exc)) from exc
 
                 def validate_target(document: dict[str, Any]) -> None:
-                    loader.load_document(document)
+                    decode_target_document(plugin, document)
 
                 outcomes.append(
                     self._run_one(
@@ -381,7 +400,7 @@ class MigrationRunner:
                     "general",
                     self.config_dir / "general.json",
                     (GENERAL_CONFIG_MIGRATIONS,),
-                    validate_general_document,
+                    validate_general_migration_document,
                     check=check,
                 )
             )

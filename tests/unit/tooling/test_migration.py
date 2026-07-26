@@ -5,10 +5,12 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
+from core.infrastructure import persistence as persistence_module
 from core.schema_migrations.engine import MigrationPhase, MigrationPlan
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.migrations import PluginMigrationDeclarationError
 from core.tooling import migration as migration_module
+from core.tooling import migration_cli
 from core.tooling.migration import (
     STATUS_CURRENT,
     STATUS_FAILED,
@@ -180,7 +182,9 @@ def test_partial_failure_retains_mirrored_original_without_reverting_success(tmp
     reminder.parent.mkdir(parents=True, exist_ok=True)
     reminder.write_text("{bad", encoding="utf-8")
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
-    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
 
     runner = MigrationRunner(tmp_path, PluginCatalog(()))
     outcomes = runner.run()
@@ -199,7 +203,9 @@ def test_complete_success_discards_recovery_and_check_mode_only_preserves_manage
     _write(general, {"schema_version": 1})
     original = general.read_bytes()
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
-    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
 
     check_runner = MigrationRunner(tmp_path, PluginCatalog(()))
     checked = check_runner.run(check=True)
@@ -285,6 +291,49 @@ def test_current_schema_config_error_isolated_from_state(tmp_path):
     assert config.read_bytes() == original
 
 
+def test_settings_only_general_error_does_not_fail_migration(tmp_path):
+    _write(
+        tmp_path / "config" / "general.json",
+        {
+            "schema_version": 1,
+            "notifications": {"urls": ["json://localhost"]},
+            "settings": {"unknown": True},
+        },
+    )
+
+    outcomes = MigrationRunner(tmp_path, PluginCatalog(())).run()
+
+    assert _outcome(outcomes, "general_config").status == STATUS_CURRENT
+    assert migration_cli._exit_code(outcomes, check=False) == 0
+
+
+def test_target_migration_uses_the_pure_decoder(tmp_path, monkeypatch):
+    plugin, catalog = _one_plugin_catalog()
+    _write(
+        tmp_path / "config" / plugin.config_filename,
+        {
+            "schema_version": 1,
+            "plugin_schema_version": 1,
+            "settings": {},
+            "items": [],
+        },
+    )
+    calls = []
+    decode = migration_module.decode_target_document
+
+    def record(candidate_plugin, document):
+        calls.append((candidate_plugin, document))
+        return decode(candidate_plugin, document)
+
+    monkeypatch.setattr(migration_module, "decode_target_document", record)
+
+    outcomes = MigrationRunner(tmp_path, catalog).run()
+
+    assert _outcome(outcomes, "target_config").status == STATUS_CURRENT
+    assert len(calls) == 1
+    assert calls[0][0] is plugin
+
+
 def test_target_lock_contention_marks_both_target_documents_failed(tmp_path):
     plugin, catalog = _one_plugin_catalog()
     lock_path = tmp_path / "logs" / plugin.target / f"{plugin.target}_scraper_running.lock"
@@ -351,7 +400,9 @@ def test_atomic_replacement_preserves_file_mode(tmp_path, monkeypatch):
     _write(general, {"schema_version": 1})
     general.chmod(0o640)
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
-    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
 
     outcomes = MigrationRunner(tmp_path, PluginCatalog(())).run()
 
@@ -364,7 +415,9 @@ def test_concurrent_change_fails_without_backup_or_replacement(tmp_path, monkeyp
     _write(general, {"schema_version": 1})
     original = general.read_bytes()
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
-    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
     monkeypatch.setattr(migration_module, "_unchanged", lambda path, snapshot: False)
 
     runner = MigrationRunner(tmp_path, PluginCatalog(()))
@@ -381,7 +434,9 @@ def test_replacement_failure_retains_exact_recovery_copy(tmp_path, monkeypatch):
     _write(general, {"schema_version": 1})
     original = general.read_bytes()
     monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
-    monkeypatch.setattr(migration_module, "validate_general_document", lambda _document: None)
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
 
     def fail_replace(path, data, mode):
         raise RuntimeError("replacement unavailable")
@@ -392,6 +447,97 @@ def test_replacement_failure_retains_exact_recovery_copy(tmp_path, monkeypatch):
 
     assert _outcome(outcomes, "general_config").status == STATUS_FAILED
     assert general.read_bytes() == original
+    assert runner.recovery_path is not None
+    assert (runner.recovery_path / "config" / "general.json").read_bytes() == original
+
+
+def test_backup_directory_entries_are_synced_before_replacement(tmp_path, monkeypatch):
+    general = tmp_path / "config" / "general.json"
+    _write(general, {"schema_version": 1})
+    monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
+    events = []
+    sync = migration_module.fsync_directory
+    replace = migration_module._replace_atomically
+
+    def record_sync(path):
+        events.append(("sync", Path(path)))
+        sync(path)
+
+    def record_replace(path, data, mode):
+        events.append(("replace", path))
+        replace(path, data, mode)
+
+    monkeypatch.setattr(migration_module, "fsync_directory", record_sync)
+    monkeypatch.setattr(migration_module, "_replace_atomically", record_replace)
+
+    outcomes = MigrationRunner(tmp_path, PluginCatalog(())).run()
+
+    assert _outcome(outcomes, "general_config").status == STATUS_MIGRATED
+    replacement_index = events.index(("replace", general))
+    assert any(
+        kind == "sync" and path.name == "config" for kind, path in events[:replacement_index]
+    )
+    assert all(kind == "sync" for kind, _path in events[:replacement_index])
+
+
+def test_backup_directory_fsync_failure_prevents_replacement(tmp_path, monkeypatch):
+    general = tmp_path / "config" / "general.json"
+    _write(general, {"schema_version": 1})
+    original = general.read_bytes()
+    monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
+    sync = migration_module.fsync_directory
+    replacement = pytest.fail
+
+    def fail_backup_parent(path):
+        if Path(path).name == "config":
+            raise OSError("backup directory sync unavailable")
+        sync(path)
+
+    monkeypatch.setattr(migration_module, "fsync_directory", fail_backup_parent)
+    monkeypatch.setattr(
+        migration_module,
+        "_replace_atomically",
+        lambda *_args: replacement("replacement must not run"),
+    )
+
+    runner = MigrationRunner(tmp_path, PluginCatalog(()))
+    outcomes = runner.run()
+
+    assert _outcome(outcomes, "general_config").status == STATUS_FAILED
+    assert general.read_bytes() == original
+    assert runner.recovery_path is not None
+
+
+def test_destination_directory_fsync_failure_reports_possible_replacement(tmp_path, monkeypatch):
+    general = tmp_path / "config" / "general.json"
+    _write(general, {"schema_version": 1})
+    original = general.read_bytes()
+    monkeypatch.setattr(migration_module, "GENERAL_CONFIG_MIGRATIONS", _v2_plan())
+    monkeypatch.setattr(
+        migration_module, "validate_general_migration_document", lambda _document: None
+    )
+    sync = persistence_module.fsync_directory
+
+    def fail_destination_parent(path):
+        if Path(path) == general.parent:
+            raise OSError("destination directory sync unavailable")
+        sync(path)
+
+    monkeypatch.setattr(persistence_module, "fsync_directory", fail_destination_parent)
+    runner = MigrationRunner(tmp_path, PluginCatalog(()))
+
+    outcomes = runner.run()
+
+    outcome = _outcome(outcomes, "general_config")
+    assert outcome.status == STATUS_FAILED
+    assert "destination may already contain the migrated bytes" in outcome.detail
+    assert json.loads(general.read_text()) == {"schema_version": 2, "added": True}
     assert runner.recovery_path is not None
     assert (runner.recovery_path / "config" / "general.json").read_bytes() == original
 

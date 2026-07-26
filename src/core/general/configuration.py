@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import stat
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from core import messages
@@ -37,6 +38,31 @@ class GeneralConfigLoad:
     permission_warning: str | None = None
     diagnostic: str | None = None
     diagnostic_saved: bool | None = None
+
+
+class GeneralDocumentProblem(str, Enum):
+    """Document-envelope failures shared by runtime and migration."""
+
+    UNKNOWN = "unknown"
+    SCHEMA_VERSION = "schema_version"
+
+
+class GeneralDocumentError(ValueError):
+    """A path-free failure in the general document envelope."""
+
+    def __init__(self, problem: GeneralDocumentProblem, detail: str) -> None:
+        self.problem = problem
+        super().__init__(detail)
+
+
+@dataclass(frozen=True)
+class DecodedGeneralDocument:
+    """Pure, section-isolated decoding of one current-schema document."""
+
+    notifications: NotificationConfig | None
+    settings: ResolvedSettings | None
+    notification_error: NotificationValidationError | None = None
+    settings_error: GeneralSettingsConfigError | None = None
 
 
 def _permission_warning(path: str) -> str | None:
@@ -91,16 +117,48 @@ def _settings_error(path: str, error: GeneralSettingsConfigError) -> tuple[str, 
     return message, _validation_diagnostic(path, "validate general settings", detail)
 
 
-def validate_general_document(document: dict[str, object]) -> None:
-    """Validate the complete current general-config schema without I/O."""
+def decode_general_document(document: dict[str, object]) -> DecodedGeneralDocument:
+    """Decode one current general document without filesystem or presentation access."""
     unknown_top = set(document) - {"schema_version", "notifications", "settings"}
     if unknown_top:
-        raise ValueError(f"unknown top-level keys: {', '.join(sorted(unknown_top))}")
+        raise GeneralDocumentError(
+            GeneralDocumentProblem.UNKNOWN,
+            f"unknown top-level keys: {', '.join(sorted(unknown_top))}",
+        )
     version = document.get("schema_version")
     if isinstance(version, bool) or version != SCHEMA_VERSION:
-        raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
-    resolve_notification_config(document.get("notifications"))
-    resolve_general_settings(document.get("settings", {}))
+        raise GeneralDocumentError(
+            GeneralDocumentProblem.SCHEMA_VERSION,
+            f"schema_version must be {SCHEMA_VERSION}",
+        )
+
+    try:
+        notifications = resolve_notification_config(document.get("notifications"))
+        notification_error = None
+    except NotificationValidationError as exc:
+        notifications = None
+        notification_error = exc
+
+    try:
+        settings = resolve_general_settings(document.get("settings", {}))
+        settings_error = None
+    except GeneralSettingsConfigError as exc:
+        settings = None
+        settings_error = exc
+
+    return DecodedGeneralDocument(
+        notifications,
+        settings,
+        notification_error,
+        settings_error,
+    )
+
+
+def validate_general_migration_document(document: dict[str, object]) -> None:
+    """Validate only the general sections that can make scraper execution unsafe."""
+    decoded = decode_general_document(document)
+    if decoded.notification_error is not None:
+        raise decoded.notification_error
 
 
 def load_general_config(config_dir: str) -> GeneralConfigLoad:
@@ -122,45 +180,40 @@ def load_general_config(config_dir: str) -> GeneralConfigLoad:
             settings=resolve_general_settings(None),
         )
 
-    unknown_top = set(document) - {"schema_version", "notifications", "settings"}
-    if unknown_top:
+    try:
+        decoded = decode_general_document(document)
+    except GeneralDocumentError as exc:
+        if exc.problem is GeneralDocumentProblem.UNKNOWN:
+            message = messages.unsupported_config_keys(GENERAL_DISPLAY_PATH)
+        else:
+            message = messages.config_schema_version_invalid(GENERAL_DISPLAY_PATH, SCHEMA_VERSION)
         return _document_failure(
-            messages.unsupported_config_keys(GENERAL_DISPLAY_PATH),
+            message,
             permissions,
             _validation_diagnostic(
                 path,
                 "validate general configuration",
-                f"unknown top-level keys: {', '.join(sorted(unknown_top))}",
-            ),
-        )
-
-    version = document.get("schema_version")
-    if isinstance(version, bool) or version != SCHEMA_VERSION:
-        return _document_failure(
-            messages.config_schema_version_invalid(GENERAL_DISPLAY_PATH, SCHEMA_VERSION),
-            permissions,
-            _validation_diagnostic(
-                path,
-                "validate general configuration",
-                f"schema_version must be {SCHEMA_VERSION}",
+                str(exc),
             ),
         )
 
     diagnostics: list[str] = []
-    try:
-        notifications = resolve_notification_config(document.get("notifications"))
-    except NotificationValidationError as exc:
-        message, diagnostic = _notification_error(path, exc)
+    if decoded.notification_error is not None:
+        message, diagnostic = _notification_error(path, decoded.notification_error)
         notifications = NotificationConfig(error=message)
         diagnostics.append(diagnostic)
+    else:
+        assert decoded.notifications is not None
+        notifications = decoded.notifications
 
-    try:
-        settings = resolve_general_settings(document.get("settings", {}))
-        settings_error = None
-    except GeneralSettingsConfigError as exc:
-        settings_error, diagnostic = _settings_error(path, exc)
+    if decoded.settings_error is not None:
+        settings_error, diagnostic = _settings_error(path, decoded.settings_error)
         settings = None
         diagnostics.append(diagnostic)
+    else:
+        assert decoded.settings is not None
+        settings = decoded.settings
+        settings_error = None
 
     return GeneralConfigLoad(
         notifications=notifications,
@@ -174,7 +227,11 @@ def load_general_config(config_dir: str) -> GeneralConfigLoad:
 __all__ = [
     "GENERAL_DISPLAY_PATH",
     "GENERAL_PERMISSION_WARNING",
+    "DecodedGeneralDocument",
     "GeneralConfigLoad",
+    "GeneralDocumentError",
+    "GeneralDocumentProblem",
+    "decode_general_document",
     "load_general_config",
-    "validate_general_document",
+    "validate_general_migration_document",
 ]

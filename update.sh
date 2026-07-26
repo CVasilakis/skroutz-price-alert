@@ -219,6 +219,7 @@ main() {
     MIGRATION_CONFIG_FAILED=0
     MIGRATION_GENERAL_FAILED=0
     MIGRATION_STATE_FAILED=0
+    MIGRATION_RECOVERY_PATH=''
     MIGRATION_TAB="$(printf '\t')"
     OLD_IFS="$IFS"
     IFS='
@@ -230,10 +231,15 @@ main() {
         migration_target="${migration_rest%%"$MIGRATION_TAB"*}"
         migration_rest="${migration_rest#*"$MIGRATION_TAB"}"
         migration_result="${migration_rest%%"$MIGRATION_TAB"*}"
-        [ "$migration_result" = failed ] || continue
         migration_rest="${migration_rest#*"$MIGRATION_TAB"}"
         migration_path="${migration_rest%%"$MIGRATION_TAB"*}"
         migration_detail="${migration_rest#*"$MIGRATION_TAB"}"
+        if [ "$migration_family" = recovery ] &&
+           [ "$migration_result" = retained ]; then
+            MIGRATION_RECOVERY_PATH="$migration_path"
+            continue
+        fi
+        [ "$migration_result" = failed ] || continue
         printf "%b\n" "${RED}[$migration_path] Migration failed: $migration_detail${NC}"
         case "$migration_family" in
             target_config)
@@ -253,6 +259,11 @@ main() {
         esac
     done
     IFS="$OLD_IFS"
+    if [ -n "$MIGRATION_RECOVERY_PATH" ]; then
+        printf "%b\n" \
+            "${YELLOW}JSON migration recovery copies were retained at:${NC}" >&2
+        printf '%s\n' "$MIGRATION_RECOVERY_PATH" >&2
+    fi
 
     set --
     IFS='

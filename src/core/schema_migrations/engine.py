@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -67,10 +68,53 @@ def document_version(document: JsonObject, version_key: str) -> int:
     return value
 
 
+def _validate_json_value(
+    value: object,
+    *,
+    path: str = "$",
+    active_containers: set[int] | None = None,
+) -> None:
+    """Reject values that cannot be represented by the strict ``JsonObject`` contract."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise MigrationError(f"{path} must contain a finite JSON number")
+        return
+    if not isinstance(value, (dict, list)):
+        raise MigrationError(f"{path} contains unsupported JSON type {type(value).__name__}")
+
+    active = active_containers if active_containers is not None else set()
+    identity = id(value)
+    if identity in active:
+        raise MigrationError(f"{path} contains a cyclic JSON container")
+    active.add(identity)
+    try:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise MigrationError(f"{path} contains a non-string JSON object key")
+                _validate_json_value(
+                    item,
+                    path=f"{path}.{key}",
+                    active_containers=active,
+                )
+        else:
+            for index, item in enumerate(value):
+                _validate_json_value(
+                    item,
+                    path=f"{path}[{index}]",
+                    active_containers=active,
+                )
+    finally:
+        active.remove(identity)
+
+
 def migrate_document(document: JsonObject, plan: MigrationPlan) -> JsonObject:
     """Migrate a defensive copy along exactly one version axis."""
     if not isinstance(document, dict):
         raise MigrationError("top-level JSON value must be an object")
+    _validate_json_value(document)
     current = document_version(document, plan.version_key)
     if current > plan.current_version:
         raise MigrationError(
@@ -88,14 +132,16 @@ def migrate_document(document: JsonObject, plan: MigrationPlan) -> JsonObject:
                     raise MigrationError("migration engine input was mutated")
                 if not isinstance(candidate, dict):
                     raise MigrationError("migration phase must return a JSON object")
+                _validate_json_value(candidate)
                 if document_version(candidate, plan.version_key) != current:
                     raise MigrationError(f"migration phases must not change {plan.version_key}")
+                copied_candidate = copy.deepcopy(candidate)
             except Exception as exc:
                 raise MigrationError(
                     f"{plan.version_key} v{current} to v{current + 1} "
                     f"phase {phase.name!r} failed: {exc}"
                 ) from exc
-            migrated = copy.deepcopy(candidate)
+            migrated = copied_candidate
         current += 1
         migrated[plan.version_key] = current
     return migrated

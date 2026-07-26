@@ -145,6 +145,80 @@ def test_every_ordinary_phase_failure_is_annotated(transform, message):
         migrate_document({"schema_version": 1}, plan)
 
 
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ({"unsupported"}, "unsupported JSON type set"),
+        (("not", "a", "list"), "unsupported JSON type tuple"),
+        ({1: "not a string key"}, "non-string JSON object key"),
+        (float("nan"), "finite JSON number"),
+    ],
+)
+def test_phase_results_must_be_strict_json(value, message):
+    plan = MigrationPlan(
+        "schema_version",
+        2,
+        {
+            1: (
+                MigrationPhase(
+                    "invalid JSON",
+                    lambda document: {**document, "value": value},
+                ),
+            )
+        },
+    )
+
+    with pytest.raises(
+        MigrationError,
+        match=rf"schema_version v1 to v2 phase 'invalid JSON' failed: .*{message}",
+    ):
+        migrate_document({"schema_version": 1}, plan)
+
+
+def test_cyclic_phase_result_is_rejected_with_phase_context():
+    def cyclic(document):
+        result = dict(document)
+        result["cycle"] = result
+        return result
+
+    plan = MigrationPlan(
+        "schema_version",
+        2,
+        {1: (MigrationPhase("cyclic output", cyclic),)},
+    )
+
+    with pytest.raises(
+        MigrationError,
+        match="phase 'cyclic output' failed: .*cyclic JSON container",
+    ):
+        migrate_document({"schema_version": 1}, plan)
+
+
+def test_candidate_copy_failure_is_annotated_with_phase_context():
+    class NonCopyableDict(dict):
+        def __deepcopy__(self, _memo):
+            raise RuntimeError("cannot copy candidate")
+
+    plan = MigrationPlan(
+        "schema_version",
+        2,
+        {
+            1: (
+                MigrationPhase(
+                    "copy candidate",
+                    lambda document: NonCopyableDict(document),
+                ),
+            )
+        },
+    )
+
+    with pytest.raises(
+        MigrationError,
+        match=("schema_version v1 to v2 phase 'copy candidate' failed: cannot copy candidate"),
+    ):
+        migrate_document({"schema_version": 1}, plan)
+
+
 def test_base_exceptions_propagate_from_phases():
     def interrupt(_document):
         raise KeyboardInterrupt

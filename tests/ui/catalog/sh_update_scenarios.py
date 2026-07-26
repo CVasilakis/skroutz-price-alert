@@ -225,6 +225,20 @@ _case(
     tags=("error", "reminder", "system"),
 )
 _case(
+    "partial_migration_recovery_retained",
+    "A later failure surfaces recovery copies for an earlier successful migration.",
+    world=replace(
+        _BASE,
+        migration_report=(
+            "general_config\tgeneral\tmigrated\tconfig/general.json\tv1 to v2",
+            "reminder_state\tgeneral\tfailed\tstate/general.json\tinvalid legacy state",
+            "recovery\tgeneral\tretained\t/project/state/.migration-recovery.example\t",
+        ),
+        migration_status=19,
+    ),
+    tags=("error", "reminder", "system"),
+)
+_case(
     "migration_infrastructure_failure",
     "An unexpected migration status aborts update provisioning.",
     world=replace(_BASE, migration_status=1),

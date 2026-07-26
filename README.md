@@ -455,6 +455,9 @@ disabled and the command prints the retained recovery path and status command.
 If a selected target's config is structurally invalid after the source update,
 that target's previous unit files and timer state are restored while healthy
 targets are reprovisioned; the update completes its recovery work and exits `15`.
+If some JSON documents migrate before a later document fails, the updater prints
+the retained directory containing exact-byte recovery copies; inspect those copies
+before retrying the update.
 Transactional rollback restores prior regular-file bytes or prior absence and
 then verifies the original timer state. Teardown remains link-aware: disable,
 stop, and uninstall discover legacy links, and uninstall removes the link itself

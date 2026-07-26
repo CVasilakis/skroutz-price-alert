@@ -5,7 +5,11 @@ from unittest import mock
 import pytest
 
 import core.general.configuration
-from core.general.configuration import GENERAL_PERMISSION_WARNING, load_general_config
+from core.general.configuration import (
+    GENERAL_PERMISSION_WARNING,
+    load_general_config,
+    validate_general_migration_document,
+)
 from core.general.reminder import ReminderService
 from core.general.reminder_schedule import most_recent_slot, next_due_slot
 from core.general.reminder_state import (
@@ -205,6 +209,57 @@ def test_settings_failure_is_isolated_from_notifications(tmp_path):
     assert loaded.settings is None
     assert loaded.settings_error == ("Remove unsupported settings from `config/general.json`.")
     assert loaded.diagnostic is not None
+    assert "Unknown general settings: unknown" in loaded.diagnostic
+
+
+def test_settings_only_failure_is_accepted_by_migration_validation(tmp_path):
+    path = _config(tmp_path, {"unknown": 1}, {"urls": ["json://localhost"]})
+    document = json.loads(path.read_text(encoding="utf-8"))
+
+    validate_general_migration_document(document)
+
+    loaded = load_general_config(str(path.parent))
+    assert loaded.notifications.usable
+    assert loaded.settings is None
+    assert loaded.settings_error is not None
+
+
+@pytest.mark.parametrize(
+    "notifications",
+    [
+        [],
+        {"unknown": []},
+        {"urls": "json://localhost"},
+        {"urls": ["json://localhost", 1]},
+    ],
+)
+def test_notification_structure_failure_blocks_migration_validation(tmp_path, notifications):
+    path = _config(tmp_path, {"reminder": "1 week"}, notifications)
+    document = json.loads(path.read_text(encoding="utf-8"))
+
+    with pytest.raises(ValueError):
+        validate_general_migration_document(document)
+
+    loaded = load_general_config(str(path.parent))
+    assert loaded.notifications.error is not None
+    assert loaded.settings is not None
+
+
+def test_combined_section_failures_remain_isolated_but_notifications_block_migration(
+    tmp_path,
+):
+    path = _config(tmp_path, {"unknown": 1}, [])
+    document = json.loads(path.read_text(encoding="utf-8"))
+
+    with pytest.raises(ValueError, match="Notifications must be an object"):
+        validate_general_migration_document(document)
+
+    loaded = load_general_config(str(path.parent))
+    assert loaded.notifications.error is not None
+    assert loaded.settings is None
+    assert loaded.settings_error is not None
+    assert loaded.diagnostic is not None
+    assert "Notifications must be an object" in loaded.diagnostic
     assert "Unknown general settings: unknown" in loaded.diagnostic
 
 

@@ -2,7 +2,8 @@
 
 Plugin descriptor modules may import this module without loading any transport,
 parser, persistence, or UI dependency.  The framework deliberately owns item
-decoding and JSON persistence; plugins declare data and implement only a client.
+decoding and JSON persistence; plugins declare data, implement a client, and may
+provide pure configuration migration callables through the aliases re-exported here.
 
 Plugin-authored setting warnings and modeled skip-exception messages are plain
 text. Plugins cannot create Rich footnotes or references. Optional paired

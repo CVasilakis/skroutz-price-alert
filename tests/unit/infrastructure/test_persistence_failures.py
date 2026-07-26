@@ -7,7 +7,13 @@ from unittest import mock
 import pytest
 
 from core.exceptions import ConfigFileError, StateFileError, StorageFileError
-from core.infrastructure.persistence import read_json_object, storage_diagnostic
+from core.infrastructure.persistence import (
+    AtomicReplacementError,
+    read_json_object,
+    save_failure_message,
+    storage_diagnostic,
+    write_json_atomically,
+)
 from core.scrapers.framework.state import JsonStateRepository
 
 
@@ -118,3 +124,31 @@ def test_unusual_errno_cannot_break_diagnostic_generation(tmp_path):
     diagnostic = storage_diagnostic(tmp_path / "state.json", failure, operation="read state")
 
     assert f"Errno: {failure.errno} (unknown error)" in diagnostic
+
+
+def test_atomic_replacement_error_preserves_permission_classification():
+    error = AtomicReplacementError(
+        "atomic replacement failed",
+        destination_replaced=False,
+        error_number=errno.EACCES,
+    )
+
+    assert save_failure_message("state/example.json", error) == (
+        "Cannot save `state/example.json`; check its permissions."
+    )
+
+
+def test_atomic_json_writer_keeps_format_and_commits_through_shared_helper(tmp_path, monkeypatch):
+    path = tmp_path / "state.json"
+    events = []
+
+    def commit(destination, temporary):
+        events.append((Path(destination), Path(temporary)))
+        os.replace(temporary, destination)
+
+    monkeypatch.setattr("core.infrastructure.persistence.commit_atomic_replacement", commit)
+
+    write_json_atomically(path, {"value": 1})
+
+    assert events == [(path, Path(f"{path}.tmp"))]
+    assert path.read_text(encoding="utf-8") == '{\n  "value": 1\n}'

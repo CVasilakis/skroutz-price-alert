@@ -9,6 +9,7 @@ from support import catalog_sandbox, fake_plugin
 from core.exceptions import ConfigFileError, StateFileError
 from core.infrastructure.persistence import format_utc, parse_utc
 from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec, UrlField
+from core.scrapers.framework import configuration as configuration_module
 from core.scrapers.framework.compiler import compile_plugin
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.state import JsonStateRepository, StateEntry
@@ -67,20 +68,20 @@ def test_loader_keeps_query_removes_fragment_and_reports_bad_rows(tmp_path, plug
     assert [issue.index for issue in loaded.row_issues] == [2, 3]
 
 
-def test_file_load_validates_once_while_in_memory_load_still_validates(tmp_path, plugin):
+def test_file_and_in_memory_load_each_use_the_pure_decoder_once(tmp_path, plugin):
     document = _target_document([_row()])
     _write(tmp_path / "config" / "fakestore.json", document)
     loader = TargetConfigLoader(plugin, str(tmp_path / "config"))
 
     with mock.patch.object(
-        loader,
-        "validate_document",
-        wraps=loader.validate_document,
-    ) as validate:
+        configuration_module,
+        "decode_target_document",
+        wraps=configuration_module.decode_target_document,
+    ) as decode:
         loader.load()
-        assert validate.call_count == 1
+        assert decode.call_count == 1
         loader.load_document(document)
-        assert validate.call_count == 2
+        assert decode.call_count == 2
 
 
 def test_invalid_row_still_reserves_its_explicit_id(tmp_path, plugin):

@@ -247,9 +247,10 @@ dependencies and therefore belong in `client.py`, never the descriptor.
 ## Config, dependencies, and tests
 
 The example config is a strict JSON object containing the current framework
-`schema_version`, the descriptor's `plugin_schema_version`, `settings`, and at least
-one valid item. It must demonstrate every custom setting and item field so users do
-not need to infer store-specific configuration from Python code.
+`schema_version`, a `plugin_schema_version` matching the descriptor's
+`config_schema_version`, `settings`, and at least one valid item. It must demonstrate
+every custom setting and item field so users do not need to infer store-specific
+configuration from Python code.
 Every item needs a unique, stable `id`, `name`, non-negative `target_price`, and
 every required plugin field; `skip` is optional. Unknown keys, including
 `metadata`, are rejected.
