@@ -23,6 +23,8 @@ from ui.catalog._base import BuildResult
 
 # Keep a stable margin around the configured panel width.
 CONSOLE_WIDTH = PANEL_WIDTH + 25
+# Rich otherwise falls back to 80x25 for TERM=dumb even when width is explicit.
+CONSOLE_HEIGHT = 25
 
 
 def make_recording_console() -> Console:
@@ -34,6 +36,7 @@ def make_recording_console() -> Console:
         color_system="truecolor",
         no_color=False,
         width=CONSOLE_WIDTH,
+        height=CONSOLE_HEIGHT,
     )
     # Pin the clock so the scraping Spinner ("dots") renders a deterministic frame.
     console.get_time = lambda: 0.0

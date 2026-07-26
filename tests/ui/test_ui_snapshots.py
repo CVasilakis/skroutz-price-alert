@@ -60,6 +60,19 @@ class TestNoTextOutsidePanels(unittest.TestCase):
 class TestSnapshotRenderingDeterminism(unittest.TestCase):
     """Ambient terminal preferences must not change committed snapshot text."""
 
+    def test_dumb_terminal_does_not_override_recording_console_width(self):
+        scenario = next(
+            sc for sc in ALL_SCENARIOS if sc.snapshot_key == "sh-enable__catalog_unavailable"
+        )
+
+        with mock.patch.dict(os.environ, {"TERM": "xterm-256color"}):
+            normal = snapshot_body(scenario.build())
+
+        with mock.patch.dict(os.environ, {"TERM": "dumb"}):
+            dumb_terminal = snapshot_body(scenario.build())
+
+        self.assertEqual(dumb_terminal, normal)
+
     def test_no_color_environment_does_not_change_progress_bar_glyphs(self):
         scenario = next(sc for sc in ALL_SCENARIOS if sc.snapshot_key == "run__sleeping_pacing")
 
