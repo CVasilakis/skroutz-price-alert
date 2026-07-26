@@ -7,12 +7,17 @@ BASE_DIR="$PROJECT_ROOT"
 # shellcheck source=scripts/lib/preflight.sh
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
 
+print_help() {
+    printf '\n%s\n\n' "Usage: ./scripts/dev/plugin-check.sh [-h] --<target>"
+    printf '%s\n\n' "Verify one plugin against its source, tests, and private dependencies."
+    printf '%s\n' "Required arguments:"
+    printf '%s\n\n' "  --<target>        target plugin to verify (for example, --skroutz)"
+    printf '%s\n' "Optional arguments:"
+    printf '%s\n\n' "  -h, --help        show this help message and exit"
+}
+
 case "${1:-}" in
-    -h|--help)
-        printf '%s\n' "Usage: ./scripts/dev/plugin-check.sh --<target>"
-        printf '%s\n' "Verify one plugin against its declared source, tests, and dependencies."
-        exit 0
-        ;;
+    -h|--help) print_help; exit 0 ;;
 esac
 
 if [ "$#" -ne 1 ]; then

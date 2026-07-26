@@ -10,9 +10,16 @@ BASE_DIR="$PROJECT_ROOT"
 CHECK_MODE="${1:-full}"
 
 print_help() {
-    printf '%s\n' "Usage: ./scripts/dev/check.sh [full|static|shell|tests]"
+    printf '\n%s\n\n' "Usage: ./scripts/dev/check.sh [-h] [full|static|shell|tests]"
     printf '%s\n' "Run the project's non-mutating local/CI acceptance checks."
-    printf '%s\n' "With no flag, run the complete local pre-push gate."
+    printf '%s\n\n' "With no argument, run the complete local pre-push gate."
+    printf '%s\n' "Check modes:"
+    printf '%s\n' "  full              run the complete local pre-push gate"
+    printf '%s\n' "  static            run Ruff and basedpyright"
+    printf '%s\n' "  shell             run shellcheck and POSIX shell syntax checks"
+    printf '%s\n\n' "  tests             run the full pytest suite"
+    printf '%s\n' "Optional arguments:"
+    printf '%s\n\n' "  -h, --help        show this help message and exit"
 }
 
 case "$CHECK_MODE" in

@@ -68,3 +68,30 @@ def test_migrate_wrapper_forwards_environment_arguments_and_exit_status(tmp_path
         "ARG=--check",
     ]
     assert result.stderr == "forwarded stderr\n"
+
+
+def test_migrate_help_is_shell_rendered_and_needs_no_venv(tmp_path):
+    script = _sandboxed_migrate_script(tmp_path)
+    (script.parents[1] / "venv" / "bin" / "python3").unlink()
+
+    result = subprocess.run(
+        [str(script), "--help"],
+        cwd=script.parents[1],
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        "\n"
+        "Usage: migrate.sh [-h] [--check]\n"
+        "\n"
+        "Validate and migrate every known Scrooge Alert JSON document.\n"
+        "With no flag, migrate outdated managed JSON documents in place.\n"
+        "\n"
+        "Optional arguments:\n"
+        "  -h, --help        show this help message and exit\n"
+        "  --check           Validate and report without modifying JSON files\n"
+        "\n"
+    )
+    assert result.stderr == ""

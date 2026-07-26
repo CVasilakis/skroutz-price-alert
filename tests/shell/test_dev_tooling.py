@@ -6,7 +6,25 @@ from pathlib import Path
 
 import pytest
 
+from core.scrapers.framework.catalog import PluginCatalog
+
 ROOT = Path(__file__).resolve().parents[2]
+
+HELP_SCRIPTS = (
+    "install.sh",
+    "update.sh",
+    "scripts/run.sh",
+    "scripts/stop.sh",
+    "scripts/disable.sh",
+    "scripts/enable.sh",
+    "scripts/schedule.sh",
+    "scripts/uninstall.sh",
+    "scripts/migrate.sh",
+    "scripts/dev/setup.sh",
+    "scripts/dev/check.sh",
+    "scripts/dev/plugin-check.sh",
+    "scripts/dev/plugin-create.sh",
+)
 
 
 def _run(script: str, *args: str):
@@ -27,22 +45,41 @@ def test_plugin_create_help_needs_no_venv_and_has_required_inputs():
     assert "--url-prefix" in result.stdout
 
 
+@pytest.mark.parametrize("script", HELP_SCRIPTS)
+def test_shell_help_is_useful_and_framed_by_blank_lines(script):
+    result = _run(script, "--help")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout.startswith("\nUsage:")
+    assert result.stdout.endswith("\n\n")
+    assert len([line for line in result.stdout.splitlines() if line]) >= 2
+
+
 def test_plugin_check_help_needs_no_venv():
     result = _run("scripts/dev/plugin-check.sh", "--help")
     assert result.returncode == 0, result.stderr
-    assert "Usage: ./scripts/dev/plugin-check.sh --<target>" in result.stdout
+    assert "Usage: ./scripts/dev/plugin-check.sh [-h] --<target>" in result.stdout
+    assert "target plugin to verify (for example, --" in result.stdout
 
 
 def test_dev_setup_help_has_no_install_side_effect():
     result = _run("scripts/dev/setup.sh", "--help")
     assert result.returncode == 0, result.stderr
     assert "without systemd" in result.stdout
+    expected_targets = {plugin.target for plugin in PluginCatalog.discover().plugins}
+    listed_targets = {
+        line.strip().split(maxsplit=1)[0].removeprefix("--")
+        for line in result.stdout.splitlines()
+        if line.startswith("  --")
+    }
+    assert listed_targets == expected_targets
 
 
 def test_check_help_needs_no_venv_and_describes_full_gate():
     result = _run("scripts/dev/check.sh", "--help")
     assert result.returncode == 0, result.stderr
-    assert "complete local pre-push gate" in result.stdout
+    assert "With no argument, run the complete local pre-push gate." in result.stdout
 
 
 def test_check_rejects_unknown_mode_before_running_tools():
@@ -389,7 +426,6 @@ esac
     ("script", "args", "override"),
     (
         ("scripts/dev/setup.sh", (), None),
-        ("scripts/dev/plugin-create.sh", ("--help",), None),
         ("scripts/dev/check.sh", ("static",), "SCROOGE_CHECK_PYTHON"),
         ("scripts/dev/plugin-check.sh", ("--skroutz",), "SCROOGE_PLUGIN_CHECK_PYTHON"),
     ),

@@ -27,6 +27,9 @@ print_fixed_help() {
     printf '\n'
     printf '%s\n' "Usage: run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]"
     printf '\n'
+    printf '%s\n' "Run price checks, send a test notification, or inspect installation health."
+    printf '%s\n' "With no target flag, price-check every registered target."
+    printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
     printf '%s\n' "  --quiet           Run script with no console output"

@@ -5,6 +5,9 @@ Error: Invalid flag provided: --ghost
 
 Usage: run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]
 
+Run price checks, send a test notification, or inspect installation health.
+With no target flag, price-check every registered target.
+
 Optional arguments:
   -h, --help        show this help message and exit
   --quiet           Run script with no console output

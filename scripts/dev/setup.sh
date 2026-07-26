@@ -9,11 +9,26 @@ BASE_DIR="$PROJECT_ROOT"
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
 VENV_PYTHON="$PROJECT_ROOT/venv/bin/python3"
 SELECTED=""
+CATALOG_PYTHON=python3
 
 print_help() {
-    printf '%s\n' "Usage: ./scripts/dev/setup.sh [--<target>]"
-    printf '%s\n' "Create/update the development venv without systemd or user-data changes."
-    printf '%s\n' "With no target, install every plugin's private dependencies."
+    load_plugin_catalog || true
+    _ph_targets="$(list_plugins 2>/dev/null || true)"
+    printf '\n%s\n\n' "Usage: ./scripts/dev/setup.sh [-h] [--<target>]"
+    printf '%s\n' "Create or update the development venv without systemd or user-data"
+    printf '%s\n\n' "changes. With no target, install every plugin's private dependencies."
+    printf '%s\n' "Optional arguments:"
+    printf '%s\n' "  -h, --help        show this help message and exit"
+    if [ -n "$_ph_targets" ]; then
+        for _ph_target in $_ph_targets; do
+            _ph_display_name="$(plugin_display_name "$_ph_target")"
+            printf '  --%-15s Install private dependencies for only the %s target\n' \
+                "$_ph_target" "${_ph_display_name:-$_ph_target}"
+        done
+    else
+        printf '%s\n' "  --<target>        install private dependencies for only that target"
+    fi
+    printf '\n'
 }
 
 while [ "$#" -gt 0 ]; do
