@@ -1,18 +1,19 @@
 # border: green
 # exit: 0
 
-Creating python virtual environment...
-Python virtual environment successfully created.
+[+] Python Environment
+    [v] Created new virtual environment
+    [v] Installed core dependencies
 
-Setting up Systemd timer(s)...
-Enabling user lingering to allow timer to run when logged out...
-Systemd timer(s) configured successfully.
+[+] Systemd Provisioning
+    [v] Configured timers for selected plugins
+    [i] Enabled user lingering
 
-Note: Configuration required!
-- Copy <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to config/skroutz.json
-  and fill it with your desired items.
-- Copy src/core/general/config.example.json to config/general.json
-  and configure your Apprise notification URLs and preferences.
-- Read the README.md file for more information.
+[!] Configuration Required
+    - Copy <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to config/skroutz.json
+      and fill it with your desired items.
+    - Copy src/core/general/config.example.json to config/general.json
+      and configure your Apprise notification URLs and preferences.
+    - Read the README.md file for more information.
 
-Installation complete!
+[v] Installation complete!

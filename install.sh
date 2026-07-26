@@ -138,38 +138,40 @@ require_systemctl || exit 1
 # Initialize or update python virtual environment
 VENV_NEWLY_CREATED=false
 if [ ! -d "$VENV_DIR" ]; then
-    printf "%b\n" "\n${CYAN}Creating python virtual environment...${NC}"
+    printf "%b\n" "\n${CYAN}[+] Python Environment${NC}"
     if ! python3 -m venv "$VENV_DIR"; then
-        printf "%b\n" "${RED}Error: Failed to create python virtual environment.${NC}\n"
+        printf "%b\n" "    ${RED}[x] Failed to create virtual environment${NC}"
         exit 1
     fi
+    printf "%b\n" "    ${GREEN}[v] Created new virtual environment${NC}"
     VENV_NEWLY_CREATED=true
 else
-    printf "%b\n" "\n${CYAN}Updating python packages in existing virtual environment...${NC}"
+    printf "%b\n" "\n${CYAN}[+] Python Environment${NC}"
+    printf "%b\n" "    ${GREEN}[v] Found existing virtual environment${NC}"
 fi
 
 require_python_310 "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh" || exit 1
 
 # Safely upgrade pip and install matching requirements
 if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade pip; then
-    printf "%b\n" "${RED}Error: Failed to upgrade pip in the virtual environment.${NC}\n"
+    printf "%b\n" "    ${RED}[x] Failed to upgrade pip${NC}"
     exit 1
 fi
 
 if [ -f "$REQUIREMENTS_FILE" ]; then
     if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade -r "$REQUIREMENTS_FILE"; then
-        printf "%b\n" "${RED}Error: Failed to install packages from $REQUIREMENTS_FILE.${NC}\n"
+        printf "%b\n" "    ${RED}[x] Failed to install core packages${NC}"
         exit 1
     fi
 else
-    printf "%b\n" "${RED}Error: $REQUIREMENTS_FILE not found. The script cannot run without its dependencies.${NC}\n"
+    printf "%b\n" "    ${RED}[x] $REQUIREMENTS_FILE not found${NC}"
     exit 1
 fi
 
 if [ "$VENV_NEWLY_CREATED" = true ]; then
-    printf "%b\n" "${GREEN}Python virtual environment successfully created.${NC}"
+    printf "%b\n" "    ${GREEN}[v] Installed core dependencies${NC}"
 else
-    printf "%b\n" "${GREEN}Python virtual environment successfully updated.${NC}"
+    printf "%b\n" "    ${GREEN}[v] Updated core dependencies${NC}"
 fi
 
 # Re-read the same import-light metadata through the completed venv before
@@ -195,9 +197,11 @@ fi
 # that skips a heavy scraper never pulls that scraper's dependencies.
 
 if ! PLUGIN_REQS="$(list_plugin_requirements)"; then
-    printf "%b\n" "${RED}Error: Failed to read per-plugin dependency metadata.${NC}\n"
+    printf "%b\n" "    ${RED}[x] Failed to read per-plugin dependency metadata${NC}"
     exit 1
 fi
+
+HAS_PLUGIN_REQS=0
 OLD_IFS="$IFS"
 IFS='
 '
@@ -205,20 +209,32 @@ PAIR_TAB="$(printf '\t')"
 # shellcheck disable=SC2086  # intentional newline-only stream iteration
 for pair in $PLUGIN_REQS; do
     req_name="${pair%%"$PAIR_TAB"*}"
+    if stream_contains "$req_name" "$PLUGINS"; then
+        HAS_PLUGIN_REQS=1
+        break
+    fi
+done
+
+if [ "$HAS_PLUGIN_REQS" -eq 1 ]; then
+    printf "%b\n" "\n${CYAN}[+] Plugin Dependencies${NC}"
+fi
+
+for pair in $PLUGIN_REQS; do
+    req_name="${pair%%"$PAIR_TAB"*}"
     req_path="${pair#*"$PAIR_TAB"}"
     stream_contains "$req_name" "$PLUGINS" || continue
 
-    printf "%b\n" "${CYAN}Installing dependencies for the '$req_name' scraper...${NC}"
     if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade -r "$req_path"; then
         IFS="$OLD_IFS"
-        printf "%b\n" "${RED}Error: Failed to install dependencies for the '$req_name' scraper.${NC}\n"
+        printf "%b\n" "    ${RED}[x] [$req_name] Failed to install requirements${NC}"
         exit 1
     fi
+    printf "%b\n" "    ${GREEN}[v] [$req_name] Installed requirements${NC}"
 done
 IFS="$OLD_IFS"
 
 if ! "$VENV_DIR/bin/python3" -m pip check; then
-    printf "%b\n" "${RED}Error: Installed core and plugin dependencies are incompatible.${NC}\n"
+    printf "%b\n" "    ${RED}[x] Installed core and plugin dependencies are incompatible${NC}"
     exit 1
 fi
 
@@ -226,7 +242,7 @@ fi
 # SYSTEMD SETUP
 # ------------------------------------------------------------------------------
 
-printf "%b\n" "\n${CYAN}Setting up Systemd timer(s)...${NC}"
+printf "%b\n" "\n${CYAN}[+] Systemd Provisioning${NC}"
 
 mkdir -p "$SYSTEMD_USER_DIR"
 
@@ -236,7 +252,7 @@ if ! load_plugin_schedules || \
    ! ALL_SCHEDULES="$(list_plugin_schedules)" || \
    ! INTERVAL_STATUS="$(list_interval_status)" || \
    ! SCHEDULE_ERRORS="$(list_schedule_errors)"; then
-    printf "%b\n" "${RED}Error: Failed to resolve scraper scheduling metadata.${NC}\n"
+    printf "%b\n" "    ${RED}[x] Failed to resolve scraper scheduling metadata${NC}"
     exit 1
 fi
 
@@ -250,13 +266,13 @@ for plugin in $PLUGINS; do
     status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS" || true)"
     if [ -z "$status" ]; then
         IFS="$OLD_IFS"
-        printf "%b\n" "${RED}Error: No scheduling result was returned for target '$plugin'.${NC}\n"
+        printf "%b\n" "    ${RED}[x] No scheduling result was returned for target '$plugin'${NC}"
         exit 1
     fi
     if [ "$status" = "error" ]; then
         schedule_error="$(plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true)"
-        printf "%b\n" "\n${RED}[$plugin] Error: ${schedule_error:-Could not resolve its timer schedule.}${NC}"
-        printf "%b\n" "${YELLOW}[$plugin] Existing systemd units were left unchanged.${NC}"
+        printf "%b\n" "    ${RED}[x] [$plugin] ${schedule_error:-Could not resolve its timer schedule}${NC}"
+        printf "%b\n" "    ${YELLOW}[i] [$plugin] Existing systemd units were left unchanged${NC}"
         CONFIG_FAILED=1
         continue
     fi
@@ -272,14 +288,15 @@ if [ -n "$PROVISION_PLUGINS" ]; then
     fi
     if ! provision_units_transaction "$PROVISION_PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
         if [ "$IS_UPDATE" -eq 1 ]; then
-            printf "%b\n" "${RED}Error: Transactional systemd provisioning failed during update.${NC}\n"
+            printf "%b\n" "    ${RED}[x] Transactional systemd provisioning failed during update${NC}"
         else
-            printf "%b\n" "${RED}Error: Transactional systemd provisioning failed.${NC}\n"
+            printf "%b\n" "    ${RED}[x] Transactional systemd provisioning failed${NC}"
         fi
         [ -z "${PROVISION_RECOVERY_DIR:-}" ] || \
-            printf "%b\n" "${YELLOW}Recovery files: $PROVISION_RECOVERY_DIR${NC}"
+            printf "%b\n" "    ${YELLOW}[i] Recovery files: $PROVISION_RECOVERY_DIR${NC}"
         exit 1
     fi
+    printf "%b\n" "    ${GREEN}[v] Configured timers for selected plugins${NC}"
 fi
 
 if command -v loginctl >/dev/null 2>&1; then
@@ -287,16 +304,15 @@ if command -v loginctl >/dev/null 2>&1; then
     # containers/cron); fall back to `id -un` so `set -u` never aborts here.
     LINGER_USER="${USER:-$(id -un)}"
     if [ "$(loginctl show-user "$LINGER_USER" --property=Linger 2>/dev/null)" != "Linger=yes" ]; then
-        printf "%b\n" "${CYAN}Enabling user lingering to allow timer to run when logged out...${NC}"
         # Non-fatal: lingering only lets timers run while logged out; without it the
         # install is still valid (timers run while logged in), so a failure here
         # (e.g. a system that requires root to enable linger) must not abort.
-        loginctl enable-linger "$LINGER_USER" || printf "%b\n" "${YELLOW}Warning: Could not enable user lingering; timers will run only while you are logged in.${NC}"
+        if loginctl enable-linger "$LINGER_USER"; then
+            printf "%b\n" "    ${CYAN}[i] Enabled user lingering${NC}"
+        else
+            printf "%b\n" "    ${YELLOW}[i] Could not enable user lingering; timers will run only while logged in${NC}"
+        fi
     fi
-fi
-
-if [ -n "$PROVISION_PLUGINS" ]; then
-    printf "%b\n" "${GREEN}Systemd timer(s) configured successfully.${NC}"
 fi
 
 # ------------------------------------------------------------------------------
@@ -307,7 +323,7 @@ fi
 
 MISSING_CONFIGS=""
 if ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
-    printf "%b\n" "${RED}Error: Failed to read plugin configuration metadata.${NC}\n"
+    printf "%b\n" "    ${RED}[x] Failed to read plugin configuration metadata${NC}"
     exit 1
 fi
 OLD_IFS="$IFS"
@@ -323,29 +339,29 @@ GENERAL_CONFIG_MISSING=0
 [ -f "config/general.json" ] || GENERAL_CONFIG_MISSING=1
 
 if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
-    printf "%b\n" "\n${YELLOW}Note: Configuration required!${NC}"
+    printf "%b\n" "\n${YELLOW}[!] Configuration Required${NC}"
 
     for plugin in $MISSING_CONFIGS; do
         example="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"
-        printf "%b\n" "- Copy $example to config/$plugin.json"
-        printf "%b\n" "  and fill it with your desired items."
+        printf "%b\n" "    - Copy $example to config/$plugin.json"
+        printf "%b\n" "      and fill it with your desired items."
     done
 
     if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
-        printf "%b\n" "- Copy src/core/general/config.example.json to config/general.json"
-        printf "%b\n" "  and configure your Apprise notification URLs and preferences."
+        printf "%b\n" "    - Copy src/core/general/config.example.json to config/general.json"
+        printf "%b\n" "      and configure your Apprise notification URLs and preferences."
     fi
 
-    printf "%b\n" "- Read the README.md file for more information."
+    printf "%b\n" "    - Read the README.md file for more information."
 fi
 
 if [ "$IS_UPDATE" -eq 0 ]; then
     if [ "$CONFIG_FAILED" -eq 0 ]; then
-        printf "%b\n" "\n${GREEN}Installation complete!${NC}\n"
+        printf "%b\n" "\n${GREEN}[v] Installation complete!${NC}\n"
     fi
 fi
 
 if [ "$CONFIG_FAILED" -ne 0 ]; then
-    printf "%b\n" "\n${RED}One or more targets were skipped because their configuration is invalid.${NC}\n"
+    printf "%b\n" "\n${RED}[x] One or more targets were skipped because their configuration is invalid.${NC}\n"
     exit 15
 fi

@@ -1,12 +1,12 @@
 # border: green
 # exit: 0
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
-Enabling user lingering to allow timer to run when logged out...
-Warning: Could not enable user lingering; timers will run only while you are logged in.
-Systemd timer(s) configured successfully.
+[+] Systemd Provisioning
+    [v] Configured timers for selected plugins
+    [i] Could not enable user lingering; timers will run only while logged in
 
-Installation complete!
+[v] Installation complete!

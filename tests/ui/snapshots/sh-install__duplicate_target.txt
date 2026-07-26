@@ -1,11 +1,14 @@
 # border: green
 # exit: 0
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
-Installing dependencies for the 'skroutz' scraper...
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
-Systemd timer(s) configured successfully.
+[+] Plugin Dependencies
+    [v] [skroutz] Installed requirements
 
-Installation complete!
+[+] Systemd Provisioning
+    [v] Configured timers for selected plugins
+
+[v] Installation complete!

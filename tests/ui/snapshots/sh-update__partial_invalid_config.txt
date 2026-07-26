@@ -7,16 +7,16 @@ Quiescing 'alpha'...
 Quiescing 'beta'...
 Migrating JSON documents...
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
+[+] Systemd Provisioning
+    [x] [beta] Remove unsupported keys from `config/beta.json`.
+    [i] [beta] Existing systemd units were left unchanged
+    [v] Configured timers for selected plugins
 
-[beta] Error: Remove unsupported keys from `config/beta.json`.
-[beta] Existing systemd units were left unchanged.
-Systemd timer(s) configured successfully.
-
-One or more targets were skipped because their configuration is invalid.
+[x] One or more targets were skipped because their configuration is invalid.
 
 
 Update complete, but one or more targets retained their existing units because their configuration

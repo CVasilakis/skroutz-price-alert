@@ -7,11 +7,12 @@ Quiescing 'alpha'...
 Quiescing 'beta'...
 Migrating JSON documents...
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
-Systemd timer(s) configured successfully.
+[+] Systemd Provisioning
+    [v] Configured timers for selected plugins
 Error: Could not restore the timer state for 'beta'.
 The update installed successfully, but timer activation was incomplete.
 All selected targets were left disabled for safety.

@@ -1,10 +1,11 @@
 # border: red
 # exit: 1
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
+[+] Systemd Provisioning
 Error: Failed to enable and start skroutz-scraper.timer.
 Error: Unit replacement failed; restoring previous files and states.
-Error: Transactional systemd provisioning failed.
+    [x] Transactional systemd provisioning failed

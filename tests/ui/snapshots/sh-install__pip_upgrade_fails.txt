@@ -1,5 +1,6 @@
 # border: red
 # exit: 1
 
-Updating python packages in existing virtual environment...
-Error: Failed to upgrade pip in the virtual environment.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [x] Failed to upgrade pip

@@ -1,13 +1,13 @@
 # border: red
 # exit: 15
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
+[+] Systemd Provisioning
+    [x] [insomnia] Remove unsupported keys from `config/insomnia.json`.
+    [i] [insomnia] Existing systemd units were left unchanged
+    [v] Configured timers for selected plugins
 
-[insomnia] Error: Remove unsupported keys from `config/insomnia.json`.
-[insomnia] Existing systemd units were left unchanged.
-Systemd timer(s) configured successfully.
-
-One or more targets were skipped because their configuration is invalid.
+[x] One or more targets were skipped because their configuration is invalid.

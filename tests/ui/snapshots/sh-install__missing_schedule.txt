@@ -1,17 +1,18 @@
 # border: green
 # exit: 0
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
-Systemd timer(s) configured successfully.
+[+] Systemd Provisioning
+    [v] Configured timers for selected plugins
 
-Note: Configuration required!
-- Copy <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to config/skroutz.json
-  and fill it with your desired items.
-- Copy src/core/general/config.example.json to config/general.json
-  and configure your Apprise notification URLs and preferences.
-- Read the README.md file for more information.
+[!] Configuration Required
+    - Copy <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to config/skroutz.json
+      and fill it with your desired items.
+    - Copy src/core/general/config.example.json to config/general.json
+      and configure your Apprise notification URLs and preferences.
+    - Read the README.md file for more information.
 
-Installation complete!
+[v] Installation complete!

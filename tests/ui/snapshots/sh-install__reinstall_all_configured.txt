@@ -1,10 +1,11 @@
 # border: green
 # exit: 0
 
-Updating python packages in existing virtual environment...
-Python virtual environment successfully updated.
+[+] Python Environment
+    [v] Found existing virtual environment
+    [v] Updated core dependencies
 
-Setting up Systemd timer(s)...
-Systemd timer(s) configured successfully.
+[+] Systemd Provisioning
+    [v] Configured timers for selected plugins
 
-Installation complete!
+[v] Installation complete!
