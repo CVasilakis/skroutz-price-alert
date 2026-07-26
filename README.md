@@ -117,12 +117,13 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
 
 ## ⚙️ Configuration
 
-All user parameters live in strict, unversioned JSON files under `config/`. Runtime
-never modifies them; machine-owned data is stored separately under `state/`.
+All user parameters live in strict, schema-versioned JSON files under `config/`.
+Runtime never modifies them; update-time changes are handled by `./scripts/migrate.sh`.
+Machine-owned data is stored separately under `state/`.
 
 ### File 1: Scraper Configuration (`config/<target>.json`)
 
-Each scraper reads a strict, unversioned, read-only JSON file in `config/` (for example,
+Each scraper reads a strict, versioned, read-only-at-runtime JSON file in `config/` (for example,
 `config/<target>.json`) containing its settings and monitored items. Machine state is
 stored separately in the ignored, schema-versioned `state/<target>.json`. Example files
 live beside their plugins:
@@ -137,6 +138,7 @@ A complete file is structured like this:
 
 ```json
 {
+  "schema_version": 1,
   "settings": {
     "execution_interval": "1h",
     "log_retention_days": 7,
@@ -184,9 +186,9 @@ Runtime price, check, and successful price-alert history is written to
 ending in `Z`.
 
 > [!IMPORTANT]
-> Scraper state uses schema version 2. State files created by versions using schema 1
-> are intentionally not migrated. Remove the affected `state/<target>.json` once after
-> updating so the application can recreate it; invalid existing state is never overwritten.
+> Scraper state and target configuration have independent schema sequences. Both begin
+> at version 1. `./update.sh` migrates known documents before reactivating timers; use
+> `./scripts/migrate.sh --check` to inspect them without writing.
 
 Plugins declare every source input beyond the shared keys above. Most product-page
 plugins require a `url`; other adapters may use several URLs or identifiers such as a
@@ -209,6 +211,7 @@ nano config/general.json
 
 ```json
 {
+  "schema_version": 1,
   "notifications": {
     "urls": [
       "tgram://<token>/<chat_id>",
@@ -248,8 +251,8 @@ Every general setting falls back to its default when the file or key is absent:
 | `reminder_day` | String | **User-defined** | The weekday the reminder is sent, in your server's local time. A weekday name or common short form (e.g. `Saturday` (default), `sat`, `Monday`, `mon`). If an unsupported value is used, the default (`Saturday`) applies. |
 | `reminder_time` | String | **User-defined** | The time of day the reminder is sent, in your server's local time. A 24-hour `HH:MM` (or bare hour), or a 12-hour am/pm value — e.g. `13:00` (default), `13`, `1pm`, `9:30am`. Delivery is approximate (see note below), so minutes are a hint, not an exact send time. If an unsupported value is used, the default (`13:00`) applies. |
 Reminder state is stored in `state/general.json` as an RFC 3339 UTC timestamp. The
-schema-versioned state file is machine-owned; `config/general.json` remains unversioned
-and read-only.
+schema-versioned state file is machine-owned; `config/general.json` has its own schema
+sequence and remains read-only outside explicit update/migration tooling.
 
 > [!NOTE]
 > With the defaults above you get a reminder about once a month, on a Saturday around 13:00 in your server's local time. The time is approximate: the reminder goes out on the first scraper run at or after the chosen day and time, so if your scrapers only run every few hours it might arrive a little later that day (or the next morning), but never earlier. Months are counted in weeks, so `1 month` means every 4th Saturday, `3 months` means every 13th, and so on, which keeps every reminder on the same day and time.

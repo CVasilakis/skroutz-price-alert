@@ -18,6 +18,7 @@ def test_schedule_missing_and_valid_config(tmp_path):
     (tmp_path / "skroutz.json").write_text(
         json.dumps(
             {
+                "schema_version": 1,
                 "settings": {"execution_interval": "2 hours"},
                 "items": [],
             }

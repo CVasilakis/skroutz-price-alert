@@ -246,14 +246,14 @@ dependencies and therefore belong in `client.py`, never the descriptor.
 
 ## Config, dependencies, and tests
 
-The example config is a strict JSON object containing `settings` and at least one
-valid item. It must demonstrate every custom setting and item field so users do not
+The example config is a strict JSON object containing the current `schema_version`,
+`settings`, and at least one valid item. It must demonstrate every custom setting and item field so users do not
 need to infer store-specific configuration from Python code.
 Every item needs a unique, stable `id`, `name`, non-negative `target_price`, and
 every required plugin field; `skip` is optional. Unknown keys, including
 `metadata`, are rejected.
-User config is read-only. Schema-v1 machine state is owned by the framework in
-`state/<target>.json`.
+User config is read-only at runtime. Explicit migration tooling owns schema changes;
+schema-v1 machine state is owned by the framework in `state/<target>.json`.
 
 Put client-only dependencies in the colocated `requirements.txt`. A missing
 dependency must remain discoverable and produce the install hint
@@ -267,7 +267,8 @@ relevant status codes, accepted and rejected URL shapes when applicable, field
 and setting codecs, and cleanup. Never call the live store. The generic verifier checks descriptor
 imports, actual isolated import effects, contributor files, custom-schema examples,
 sibling-plugin isolation, canonical defaults, conventional client typing, URL
-acceptance, dependency guidance, schema-v2 state round trips, and clean shutdown.
+acceptance, dependency guidance, schema-v1 state round trips, optional migration
+contracts, and clean shutdown.
 
 CI additionally creates a clean environment for every plugin and installs only core
 plus that plugin's own `requirements.txt`. This prevents an undeclared dependency
@@ -289,3 +290,33 @@ because of its coverage percentage.
 The test suite itself scaffolds and discovers a temporary plugin to prove that the
 two new plugin-owned directories are sufficient. A plugin pull request should not
 contain changes outside those directories.
+# JSON schema migrations
+
+Every persisted JSON document carries a top-level integer `schema_version`. General
+configuration, target configuration, scraper state, and reminder state have independent
+version sequences. All target configs share the framework target-config sequence.
+
+Runtime loaders never migrate files. `./update.sh` invokes `./scripts/migrate.sh`, and
+contributors can use `./scripts/migrate.sh --check` for a read-only inspection.
+Migrations are consecutive, retained permanently, pure, and applied fully in memory
+before one atomic replacement.
+
+Framework-owned target fields migrate in `core.scrapers.framework.migrations`. General
+configuration and reminder state migrate under `core.general`. A plugin may add
+`migrations.py` only for its private fields or settings:
+
+```python
+from core.infrastructure.migration import MigrationPhase
+
+CONFIG_MIGRATIONS = {
+    1: MigrationPhase("describe v1 to v2", migrate_v1_to_v2),
+}
+```
+
+The framework phase runs first and the plugin phase second. The engine owns
+`schema_version`; transforms must not mutate their input, change the version, perform
+I/O, import private client dependencies, or inspect other plugins. Add
+`tests/plugins/<target>/test_migrations.py` covering each direct transition and the
+oldest supported document through the current version. Update every checked-in example
+to the new current target version. New plugins start at the current target version and
+do not implement historical no-op migrations.

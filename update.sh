@@ -56,7 +56,7 @@ main() {
                     printf '%s\n' "$UPDATE_RECOVERY_DIR" >&2
                 fi
                 ;;
-            advancing|post_advance|provisioning|activating)
+            advancing|post_advance|migrating|provisioning|activating)
                 disable_update_targets
                 if [ "$UPDATE_DISABLE_FAILED" -eq 0 ]; then
                     printf '%s\n' "Affected timers were left disabled for safety." >&2
@@ -127,6 +127,7 @@ main() {
     require_fast_forward_to_origin || exit 1
     require_revision_paths origin/main \
         install.sh \
+        scripts/migrate.sh \
         scripts/lib/common.sh \
         scripts/lib/preflight.sh \
         scripts/lib/systemd.sh \
@@ -197,16 +198,78 @@ main() {
         printf "%b\n" "${YELLOW}Scraper timers remain disabled. Repair the checkout, then rerun update.sh.${NC}"
         exit 1
     fi
+
+    UPDATE_PHASE="migrating"
+    printf "%b\n" "${CYAN}Migrating JSON documents...${NC}"
+    if MIGRATION_REPORT="$("$SCRIPT_DIR/scripts/migrate.sh" --machine)"; then
+        MIGRATION_STATUS=0
+    else
+        MIGRATION_STATUS=$?
+    fi
+    case "$MIGRATION_STATUS" in
+        0|15|16|19) ;;
+        *)
+            printf "%b\n" "${RED}Error: JSON migration infrastructure failed.${NC}"
+            printf "%b\n" "${YELLOW}Affected timers remain disabled for safety.${NC}"
+            exit "$MIGRATION_STATUS"
+            ;;
+    esac
+
+    MIGRATION_FAILED_TARGETS=''
+    MIGRATION_CONFIG_FAILED=0
+    MIGRATION_GENERAL_FAILED=0
+    MIGRATION_STATE_FAILED=0
+    MIGRATION_TAB="$(printf '\t')"
+    OLD_IFS="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086
+    for migration_row in $MIGRATION_REPORT; do
+        migration_family="${migration_row%%"$MIGRATION_TAB"*}"
+        migration_rest="${migration_row#*"$MIGRATION_TAB"}"
+        migration_target="${migration_rest%%"$MIGRATION_TAB"*}"
+        migration_rest="${migration_rest#*"$MIGRATION_TAB"}"
+        migration_result="${migration_rest%%"$MIGRATION_TAB"*}"
+        [ "$migration_result" = failed ] || continue
+        migration_rest="${migration_rest#*"$MIGRATION_TAB"}"
+        migration_path="${migration_rest%%"$MIGRATION_TAB"*}"
+        migration_detail="${migration_rest#*"$MIGRATION_TAB"}"
+        printf "%b\n" "${RED}[$migration_path] Migration failed: $migration_detail${NC}"
+        case "$migration_family" in
+            target_config)
+                MIGRATION_CONFIG_FAILED=1
+                MIGRATION_FAILED_TARGETS="$(
+                    stream_add_unique "$MIGRATION_FAILED_TARGETS" "$migration_target"
+                )"
+                ;;
+            scraper_state)
+                MIGRATION_STATE_FAILED=1
+                MIGRATION_FAILED_TARGETS="$(
+                    stream_add_unique "$MIGRATION_FAILED_TARGETS" "$migration_target"
+                )"
+                ;;
+            general_config) MIGRATION_GENERAL_FAILED=1 ;;
+            reminder_state) MIGRATION_STATE_FAILED=1 ;;
+        esac
+    done
+    IFS="$OLD_IFS"
+
     set --
     IFS='
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
+        if stream_contains "$target" "$MIGRATION_FAILED_TARGETS"; then
+            printf "%b\n" "${YELLOW}Leaving '$target' disabled after migration failure.${NC}"
+            continue
+        fi
         set -- "$@" "--$target"
     done
     IFS="$OLD_IFS"
     UPDATE_PHASE="provisioning"
-    if SCROOGE_INTERNAL_UPDATE=1 SCROOGE_INSTALL_CONTEXT=deferred \
+    if [ "$#" -eq 0 ]; then
+        INSTALL_STATUS=0
+    elif SCROOGE_INTERNAL_UPDATE=1 SCROOGE_INSTALL_CONTEXT=deferred \
         "$SCRIPT_DIR/install.sh" "$@"; then
         INSTALL_STATUS=0
     else
@@ -243,6 +306,11 @@ main() {
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
+        if [ "$MIGRATION_GENERAL_FAILED" -ne 0 ] ||
+           stream_contains "$target" "$MIGRATION_FAILED_TARGETS"; then
+            printf "%b\n" "${YELLOW}Leaving '$target' disabled after migration failure.${NC}"
+            continue
+        fi
         if ! stream_contains "$target" "$CURRENT_TARGETS"; then
             printf "%b\n" "${YELLOW}Leaving removed target '$target' disabled.${NC}"
             continue
@@ -305,9 +373,17 @@ main() {
         printf "%b\n" "Install any of them with: ${CYAN}./install.sh --<target>${NC}"
     fi
 
-    if [ "$PARTIAL_CONFIG" -ne 0 ]; then
+    if [ "$MIGRATION_CONFIG_FAILED" -ne 0 ] || [ "$PARTIAL_CONFIG" -ne 0 ]; then
         printf "%b\n" "\n${YELLOW}Update complete, but one or more targets retained their existing units because their configuration is invalid.${NC}\n"
         exit 15
+    fi
+    if [ "$MIGRATION_GENERAL_FAILED" -ne 0 ]; then
+        printf "%b\n" "\n${YELLOW}Update complete, but timers remain disabled because general configuration migration failed.${NC}\n"
+        exit 16
+    fi
+    if [ "$MIGRATION_STATE_FAILED" -ne 0 ]; then
+        printf "%b\n" "\n${YELLOW}Update complete, but one or more state migrations failed.${NC}\n"
+        exit 19
     fi
 
     printf "%b\n" "\n${GREEN}Update complete! You are now running origin/main.${NC}\n"

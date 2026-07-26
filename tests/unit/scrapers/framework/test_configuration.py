@@ -30,7 +30,7 @@ def _write(path, value):
 
 
 def _target_document(items):
-    return {"settings": {}, "items": items}
+    return {"schema_version": 1, "settings": {}, "items": items}
 
 
 def _row(**updates):
@@ -80,7 +80,7 @@ def test_invalid_row_still_reserves_its_explicit_id(tmp_path, plugin):
 
 @pytest.mark.parametrize(
     "extra",
-    [{"future": 1}, {"products": []}, {"schema_version": 1}],
+    [{"future": 1}, {"products": []}],
 )
 def test_unknown_top_level_keys_fail_closed(tmp_path, extra, plugin):
     document = _target_document([]) | extra
@@ -104,12 +104,12 @@ def test_state_missing_is_healthy_and_round_trips_aware_utc(tmp_path, plugin):
     assert parse_utc(format_utc(now)) == now
 
 
-def test_schema_v2_no_price_check_preserves_historical_price_and_clears_alerts(tmp_path):
+def test_schema_v1_no_price_check_preserves_historical_price_and_clears_alerts(tmp_path):
     path = tmp_path / "state" / "x.json"
     _write(
         path,
         {
-            "schema_version": 2,
+            "schema_version": 1,
             "items": {
                 "phone": {
                     "last_price": 190.0,
@@ -131,13 +131,13 @@ def test_schema_v2_no_price_check_preserves_historical_price_and_clears_alerts(t
 
 def test_malformed_existing_state_is_not_overwritten(tmp_path):
     path = tmp_path / "state" / "x.json"
-    _write(path, {"schema_version": 1, "items": []})
+    _write(path, {"schema_version": 2, "items": []})
     original = path.read_bytes()
     repo = JsonStateRepository(path, display_path="state/x.json")
     with pytest.raises(StateFileError) as caught:
         repo.load()
     assert str(caught.value) == ("Fix invalid state in `state/x.json`; details are logged.")
-    assert "schema_version must be 2" in (caught.value.diagnostic_detail or "")
+    assert "schema_version must be 1" in (caught.value.diagnostic_detail or "")
     assert str(path.resolve()) in (caught.value.diagnostic_detail or "")
     assert path.read_bytes() == original
 
@@ -172,19 +172,23 @@ def test_state_read_and_save_permission_failures_are_concise(tmp_path):
     [
         ([], "must contain a JSON object", "expected object"),
         (
-            {"schema_version": 1, "settings": {}, "items": []},
-            "Remove unsupported keys",
-            "unknown top-level keys: schema_version",
+            {"schema_version": 2, "settings": {}, "items": []},
+            "requires schema version 1",
+            "schema_version must be 1",
         ),
-        ({"settings": [], "items": []}, "`settings`", "settings must be an object"),
-        ({"settings": {}, "items": {}}, "`items`", "items is dict"),
         (
-            {"settings": {}, "items": [], "metadata": {}},
+            {"schema_version": 1, "settings": [], "items": []},
+            "`settings`",
+            "settings must be an object",
+        ),
+        ({"schema_version": 1, "settings": {}, "items": {}}, "`items`", "items is dict"),
+        (
+            {"schema_version": 1, "settings": {}, "items": [], "metadata": {}},
             "Remove unsupported keys",
             "unknown top-level keys: metadata",
         ),
         (
-            {"settings": {"typo": 1}, "items": []},
+            {"schema_version": 1, "settings": {"typo": 1}, "items": []},
             "Remove unsupported settings",
             "unknown settings: typo",
         ),
@@ -226,20 +230,20 @@ def test_invalid_rows_are_structured_and_never_loaded(tmp_path, changes, plugin)
     "document",
     [
         [],
-        {"schema_version": 1, "items": {}},
-        {"schema_version": 2, "items": {}, "extra": 1},
-        {"schema_version": 2, "items": []},
-        {"schema_version": 2, "items": {"x": []}},
-        {"schema_version": 2, "items": {"x": {"last_price": True}}},
-        {"schema_version": 2, "items": {"x": {"last_checked": "yesterday"}}},
-        {"schema_version": 2, "items": {"x": {"price_alert_delivered": 1}}},
-        {"schema_version": 2, "items": {"x": {"notified_offer_urls": "bad"}}},
+        {"schema_version": 2, "items": {}},
+        {"schema_version": 1, "items": {}, "extra": 1},
+        {"schema_version": 1, "items": []},
+        {"schema_version": 1, "items": {"x": []}},
+        {"schema_version": 1, "items": {"x": {"last_price": True}}},
+        {"schema_version": 1, "items": {"x": {"last_checked": "yesterday"}}},
+        {"schema_version": 1, "items": {"x": {"price_alert_delivered": 1}}},
+        {"schema_version": 1, "items": {"x": {"notified_offer_urls": "bad"}}},
         {
-            "schema_version": 2,
+            "schema_version": 1,
             "items": {"x": {"notified_offer_urls": ["https://example.com/a#fragment"]}},
         },
         {
-            "schema_version": 2,
+            "schema_version": 1,
             "items": {
                 "x": {
                     "price_alert_delivered": True,
@@ -274,7 +278,7 @@ def test_state_noop_and_save_failure_are_explicit(tmp_path):
     assert "disk full" in (caught.value.diagnostic_detail or "")
 
 
-def test_schema_v2_round_trips_alert_delivery_history(tmp_path):
+def test_schema_v1_round_trips_alert_delivery_history(tmp_path):
     path = tmp_path / "state" / "x.json"
     now = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
     repo = JsonStateRepository(path)
@@ -289,7 +293,7 @@ def test_schema_v2_round_trips_alert_delivery_history(tmp_path):
     repo.save()
 
     saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved["schema_version"] == 2
+    assert saved["schema_version"] == 1
     reloaded = JsonStateRepository(path)
     reloaded.load()
     assert reloaded.get("product").price_alert_delivered is True
@@ -315,6 +319,7 @@ def test_url_free_required_fields_and_required_settings(tmp_path):
     _write(
         path,
         {
+            "schema_version": 1,
             "settings": {},
             "items": [{"id": "one", "name": "One", "target_price": 1, "sku": "A"}],
         },
@@ -329,6 +334,7 @@ def test_url_free_required_fields_and_required_settings(tmp_path):
     _write(
         path,
         {
+            "schema_version": 1,
             "settings": {"api_token": "secret"},
             "items": [
                 {"id": "one", "name": "One", "target_price": 1, "sku": " A "},
@@ -367,6 +373,7 @@ def test_multiple_url_fields_are_validated_independently(tmp_path):
     _write(
         path,
         {
+            "schema_version": 1,
             "settings": {},
             "items": [
                 {

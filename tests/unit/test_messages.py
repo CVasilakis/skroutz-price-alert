@@ -79,6 +79,7 @@ class TestMessageCatalog(unittest.TestCase):
             "storage_save_failed": ("state/skroutz.json",),
             "invalid_state": ("state/skroutz.json",),
             "unsupported_config_keys": ("config/skroutz.json",),
+            "config_schema_version_invalid": ("config/skroutz.json", 1),
             "items_array_required": ("config/skroutz.json",),
             "settings_object_required": ("config/skroutz.json",),
             "unsupported_settings": ("config/skroutz.json",),

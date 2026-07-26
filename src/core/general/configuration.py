@@ -24,6 +24,7 @@ from core.settings import ResolvedSettings, SettingsValidationProblem
 
 GENERAL_DISPLAY_PATH = "config/general.json"
 GENERAL_PERMISSION_WARNING = "Protect notification URLs: `chmod 600 config/general.json`."
+SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,18 @@ def _settings_error(path: str, error: GeneralSettingsConfigError) -> tuple[str, 
     return message, _validation_diagnostic(path, "validate general settings", detail)
 
 
+def validate_general_document(document: dict[str, object]) -> None:
+    """Validate the complete current general-config schema without I/O."""
+    unknown_top = set(document) - {"schema_version", "notifications", "settings"}
+    if unknown_top:
+        raise ValueError(f"unknown top-level keys: {', '.join(sorted(unknown_top))}")
+    version = document.get("schema_version")
+    if isinstance(version, bool) or version != SCHEMA_VERSION:
+        raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
+    resolve_notification_config(document.get("notifications"))
+    resolve_general_settings(document.get("settings", {}))
+
+
 def load_general_config(config_dir: str) -> GeneralConfigLoad:
     """Read and independently resolve the general notification and settings sections."""
     path = general_config_path(config_dir)
@@ -109,7 +122,7 @@ def load_general_config(config_dir: str) -> GeneralConfigLoad:
             settings=resolve_general_settings(None),
         )
 
-    unknown_top = set(document) - {"notifications", "settings"}
+    unknown_top = set(document) - {"schema_version", "notifications", "settings"}
     if unknown_top:
         return _document_failure(
             messages.unsupported_config_keys(GENERAL_DISPLAY_PATH),
@@ -118,6 +131,18 @@ def load_general_config(config_dir: str) -> GeneralConfigLoad:
                 path,
                 "validate general configuration",
                 f"unknown top-level keys: {', '.join(sorted(unknown_top))}",
+            ),
+        )
+
+    version = document.get("schema_version")
+    if isinstance(version, bool) or version != SCHEMA_VERSION:
+        return _document_failure(
+            messages.config_schema_version_invalid(GENERAL_DISPLAY_PATH, SCHEMA_VERSION),
+            permissions,
+            _validation_diagnostic(
+                path,
+                "validate general configuration",
+                f"schema_version must be {SCHEMA_VERSION}",
             ),
         )
 
@@ -151,4 +176,5 @@ __all__ = [
     "GENERAL_PERMISSION_WARNING",
     "GeneralConfigLoad",
     "load_general_config",
+    "validate_general_document",
 ]

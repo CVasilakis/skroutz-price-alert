@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "notifications": {
     "urls": [
       "tgram://<token>/<chat_id>",

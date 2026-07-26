@@ -19,6 +19,7 @@ NOW = datetime(2026, 7, 18, 18, 30, tzinfo=timezone.utc)
 
 def _write_config(config_dir, url, *, extra=None, settings=None):
     document = {
+        "schema_version": 1,
         "settings": settings or {},
         "items": [
             {
@@ -78,7 +79,7 @@ def test_real_http_scrape_keeps_config_read_only_and_writes_state(tmp_path):
     assert config_path.read_bytes() == original_config
     state = json.loads((state_dir / "fakestore.json").read_text())
     assert state == {
-        "schema_version": 2,
+        "schema_version": 1,
         "items": {
             "widget": {
                 "last_price": 79.0,

@@ -218,6 +218,13 @@ def unsupported_config_keys(path: str) -> str:
     return f"Remove unsupported keys from `{path}`."
 
 
+def config_schema_version_invalid(path: str, expected: int) -> str:
+    return (
+        f"`{path}` requires schema version {expected}; "
+        "run `./scripts/migrate.sh` after installing an update."
+    )
+
+
 def items_array_required(path: str) -> str:
     return f"`items` in `{path}` must be a JSON array."
 

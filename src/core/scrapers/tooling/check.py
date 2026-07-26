@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import importlib
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -12,15 +14,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from core.exceptions import PluginDependencyError
+from core.infrastructure.migration import MigrationPhase
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.configuration import TargetConfigLoader
+from core.scrapers.framework.migrations import TARGET_CONFIG_TRANSITIONS
 from core.scrapers.framework.settings import framework_setting_specs
 from core.scrapers.framework.state import JsonStateRepository, StateEntry
 from core.settings import MISSING
 
 _IMPORT_PROBE = r"""
 import importlib
+import importlib.util
 import json
 import pathlib
 import sys
@@ -38,6 +43,9 @@ before = set(sys.modules)
 try:
     importlib.import_module(package)
     importlib.import_module(package + ".plugin")
+    migration_spec = importlib.util.find_spec(package + ".migrations")
+    if migration_spec is not None:
+        importlib.import_module(package + ".migrations")
 except Exception as exc:
     print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}))
     raise SystemExit(0)
@@ -107,7 +115,32 @@ def _check_contributor_files(source: Path, tests: Path, target: str) -> str:
     test_modules = tuple(tests.glob("test_*.py")) if tests.is_dir() else ()
     if not test_modules:
         raise RuntimeError(f"plugin {target!r} requires tests/plugins/{target}/test_*.py")
+    if (source / "migrations.py").exists() and not (tests / "test_migrations.py").is_file():
+        raise RuntimeError(
+            f"plugin {target!r} migrations.py requires tests/plugins/{target}/test_migrations.py"
+        )
     return (source / "README.md").read_text(encoding="utf-8")
+
+
+def _check_migrations(plugin: object) -> None:
+    package = getattr(plugin, "package")
+    module_name = f"{package}.migrations"
+    if importlib.util.find_spec(module_name) is None:
+        return
+    module = importlib.import_module(module_name)
+    raw = getattr(module, "CONFIG_MIGRATIONS", None)
+    if not isinstance(raw, dict):
+        raise RuntimeError("migrations.py must export CONFIG_MIGRATIONS as a dict")
+    declared = {transition.from_version for transition in TARGET_CONFIG_TRANSITIONS}
+    for version, phase in raw.items():
+        if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+            raise RuntimeError("CONFIG_MIGRATIONS keys must be positive integer versions")
+        if version not in declared:
+            raise RuntimeError(
+                f"plugin migration v{version} targets an undeclared target-config transition"
+            )
+        if not isinstance(phase, MigrationPhase):
+            raise RuntimeError("CONFIG_MIGRATIONS values must be MigrationPhase instances")
 
 
 def _check_self_contained(source: Path, target: str, registered_targets: frozenset[str]) -> None:
@@ -156,11 +189,13 @@ def check_plugin(
     _check_import_light(plugin.package, source)
     _check_contributor_files(source, tests, target)
     _check_self_contained(source, target, frozenset(catalog.targets))
+    _check_migrations(plugin)
     checks = [
         "atomic discovery",
         "isolated import-light descriptor",
         "contributor files and tests",
         "self-contained package",
+        "optional pure migrations",
     ]
 
     for field in plugin.item_fields:

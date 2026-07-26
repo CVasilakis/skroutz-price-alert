@@ -21,7 +21,8 @@ from core.settings import (
     validate_settings_block,
 )
 
-TOP_LEVEL_KEYS = frozenset({"settings", "items"})
+SCHEMA_VERSION = 1
+TOP_LEVEL_KEYS = frozenset({"schema_version", "settings", "items"})
 
 
 @dataclass(frozen=True)
@@ -75,18 +76,28 @@ class TargetConfigLoader:
     def read_document(self) -> dict[str, Any]:
         document = read_json_object(self.config_path, display_path=self.display_path)
         assert document is not None
+        self.validate_document(document)
+        return document
+
+    def validate_document(self, document: dict[str, Any]) -> None:
+        """Validate the current document-level target schema in memory."""
         unknown = set(document) - TOP_LEVEL_KEYS
         if unknown:
             raise self._validation_error(
                 messages.unsupported_config_keys(self.display_path),
                 f"unknown top-level keys: {', '.join(sorted(unknown))}",
             )
+        version = document.get("schema_version")
+        if isinstance(version, bool) or version != SCHEMA_VERSION:
+            raise self._validation_error(
+                messages.config_schema_version_invalid(self.display_path, SCHEMA_VERSION),
+                f"schema_version must be {SCHEMA_VERSION}",
+            )
         if not isinstance(document.get("items"), list):
             raise self._validation_error(
                 messages.items_array_required(self.display_path),
                 f"items is {type(document.get('items')).__name__}, expected list",
             )
-        return document
 
     def _settings(self, document: dict[str, Any]) -> ResolvedSettings:
         try:
@@ -110,7 +121,11 @@ class TargetConfigLoader:
             ) from exc
 
     def load(self) -> LoadedTargetConfig:
-        document = self.read_document()
+        return self.load_document(self.read_document())
+
+    def load_document(self, document: dict[str, Any]) -> LoadedTargetConfig:
+        """Decode one already-read current-schema document."""
+        self.validate_document(document)
         settings = self._settings(document)
         items: list[TrackedItem] = []
         issues: list[RowIssue] = []

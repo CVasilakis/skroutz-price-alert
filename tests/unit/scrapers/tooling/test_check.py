@@ -40,7 +40,10 @@ def test_verifier_rejects_an_empty_example_config(tmp_path):
     target_dir = discovery_root / "empty_store"
     shutil.copytree(Path("src/core/scrapers/plugins/_example"), target_dir)
     example = target_dir / "config.example.json"
-    example.write_text('{"settings":{"execution_interval":"1h"},"items":[]}', encoding="utf-8")
+    example.write_text(
+        '{"schema_version":1,"settings":{"execution_interval":"1h"},"items":[]}',
+        encoding="utf-8",
+    )
     tests = tmp_path / "tests" / "plugins" / "empty_store"
     tests.mkdir(parents=True)
     (tests / "test_client.py").write_text("def test_placeholder(): pass\n", encoding="utf-8")
@@ -104,6 +107,7 @@ class Client(ScraperClient):
         encoding="utf-8",
     )
     document = {
+        "schema_version": 1,
         "settings": settings,
         "items": [
             {

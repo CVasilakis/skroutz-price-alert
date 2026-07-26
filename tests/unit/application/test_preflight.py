@@ -35,6 +35,7 @@ def test_preflight_loads_settings_and_items_once(tmp_path, plugin):
     _write(
         tmp_path / "config" / "fakestore.json",
         {
+            "schema_version": 1,
             "settings": {"log_retention_days": 3},
             "items": [
                 {
@@ -64,6 +65,7 @@ def test_preflight_distinguishes_config_and_state_failures(tmp_path, plugin):
     _write(
         tmp_path / "config" / "fakestore.json",
         {
+            "schema_version": 1,
             "settings": {"log_retention_days": 3},
             "items": [
                 {
@@ -95,7 +97,7 @@ def test_preflight_distinguishes_config_and_state_failures(tmp_path, plugin):
     diagnostic_log = (
         Path(core.infrastructure.logging.LOGS_DIR) / "fakestore" / "errors.txt"
     ).read_text()
-    assert "schema_version must be 2" in diagnostic_log
+    assert "items must be an object" in diagnostic_log
     assert "JSON item 2:" in diagnostic_log
     assert "name must be a nonblank string" in diagnostic_log
 

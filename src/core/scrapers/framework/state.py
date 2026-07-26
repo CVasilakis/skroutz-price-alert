@@ -1,4 +1,4 @@
-"""Framework-owned schema-v2 JSON state for scraper targets."""
+"""Framework-owned schema-v1 JSON state for scraper targets."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from core.infrastructure.persistence import (
 )
 from core.scrapers.framework.url import canonicalize_url
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 1
 STATE_TOP_KEYS = frozenset({"schema_version", "items"})
 STATE_ITEM_KEYS = frozenset(
     {"last_price", "last_checked", "price_alert_delivered", "notified_offer_urls"}
@@ -103,7 +103,7 @@ class JsonStateRepository:
                 storage_diagnostic(path, exc, operation="read scraper state"),
             ) from exc
         try:
-            self._items = self._validate_document(document)
+            self._items = self.validate_document(document)
         except (TypeError, ValueError) as exc:
             raise StateFileError(
                 messages.invalid_state(self.display_path),
@@ -111,13 +111,14 @@ class JsonStateRepository:
             ) from exc
 
     @staticmethod
-    def _validate_document(document: object) -> dict[str, StateEntry]:
+    def validate_document(document: object) -> dict[str, StateEntry]:
         if not isinstance(document, dict):
             raise ValueError("top level must be an object")
         unknown = set(document) - STATE_TOP_KEYS
         if unknown:
             raise ValueError(f"unknown top-level keys: {', '.join(sorted(unknown))}")
-        if document.get("schema_version") != SCHEMA_VERSION:
+        version = document.get("schema_version")
+        if isinstance(version, bool) or version != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
         raw_items = document.get("items")
         if not isinstance(raw_items, dict):

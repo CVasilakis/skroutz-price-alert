@@ -67,11 +67,9 @@ class ReminderStateRepository:
         except (json.JSONDecodeError, UnicodeError):
             return ReminderStateSnapshot(None, None, ReminderStateProblem.MALFORMED)
 
-        if (
-            not isinstance(loaded, dict)
-            or loaded.get("schema_version") != SCHEMA_VERSION
-            or set(loaded) - STATE_KEYS
-        ):
+        try:
+            validate_reminder_state_document(loaded)
+        except (TypeError, ValueError):
             return ReminderStateSnapshot(None, None, ReminderStateProblem.MALFORMED)
 
         raw = loaded.get(LAST_REMINDER_FIELD)
@@ -100,6 +98,18 @@ class ReminderStateRepository:
             raise ReminderStateWriteError(str(exc)) from exc
 
 
+def validate_reminder_state_document(document: object) -> None:
+    """Validate reminder-state structure independently of timestamp policy."""
+    if not isinstance(document, dict):
+        raise ValueError("top level must be an object")
+    version = document.get("schema_version")
+    if isinstance(version, bool) or version != SCHEMA_VERSION:
+        raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
+    unknown = set(document) - STATE_KEYS
+    if unknown:
+        raise ValueError(f"unknown top-level keys: {', '.join(sorted(unknown))}")
+
+
 __all__ = [
     "ReminderStatePreservationError",
     "ReminderStateProblem",
@@ -107,4 +117,5 @@ __all__ = [
     "ReminderStateSnapshot",
     "ReminderStateWriteError",
     "general_state_path",
+    "validate_reminder_state_document",
 ]

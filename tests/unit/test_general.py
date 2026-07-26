@@ -28,7 +28,7 @@ from core.settings import SettingStatus, SettingsValidationProblem
 def _config(root, settings, notifications=None):
     path = root / "config" / "general.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    document = {"settings": settings}
+    document = {"schema_version": 1, "settings": settings}
     if notifications is not None:
         document["notifications"] = notifications
     path.write_text(json.dumps(document))
@@ -73,18 +73,23 @@ def test_general_config_is_strict_and_typed(tmp_path):
     [
         ([], "must contain a JSON object", "expected object"),
         (
-            {"schema_version": 1, "settings": {}},
-            "Remove unsupported keys",
-            "schema_version",
+            {"schema_version": 2, "settings": {}},
+            "requires schema version 1",
+            "schema_version must be 1",
         ),
         (
             {
+                "schema_version": 1,
                 "settings": [],
             },
             "`settings`",
             "General settings must be an object",
         ),
-        ({"settings": {}, "metadata": {}}, "Remove unsupported keys", "metadata"),
+        (
+            {"schema_version": 1, "settings": {}, "metadata": {}},
+            "Remove unsupported keys",
+            "metadata",
+        ),
     ],
 )
 def test_general_config_rejects_malformed_and_unknown_fields(

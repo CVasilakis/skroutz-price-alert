@@ -10,6 +10,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.scrapers.framework.configuration import SCHEMA_VERSION
 from core.scrapers.framework.naming import RESERVED_PLUGIN_NAMES, SNAKE_CASE_KEY
 from core.scrapers.framework.url import normalize_domain
 
@@ -53,6 +54,7 @@ def validate_request(request: ScaffoldRequest) -> ScaffoldRequest:
 def _source_files(request: ScaffoldRequest) -> dict[str, str]:
     sample_url = f"https://{request.domain}{request.url_prefix}sample"
     config = {
+        "schema_version": SCHEMA_VERSION,
         "settings": {
             "execution_interval": "1h",
             "log_retention_days": 7,
@@ -123,6 +125,11 @@ plugin declares a required `url` input through `URL`. Copy
 Replace the scaffolded `Client.scrape` method with bounded network access and
 fixture-driven parsing. Add a package-local `requirements.txt` only if the client
 needs dependencies outside the core environment.
+
+If a future release changes a plugin-private config field, add an import-light
+`migrations.py` containing pure `CONFIG_MIGRATIONS` phases and a matching
+`tests/plugins/{request.target}/test_migrations.py`. Framework fields are migrated
+by the framework.
 
 ## Panel text
 

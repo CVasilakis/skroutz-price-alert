@@ -45,6 +45,7 @@ _SCRIPT_FILES = (
     "install.sh",
     "update.sh",
     "scripts/run.sh",
+    "scripts/migrate.sh",
     "scripts/schedule.sh",
     "scripts/enable.sh",
     "scripts/disable.sh",
@@ -386,6 +387,7 @@ case "${1:-}" in
                 _n=0
                 for _p in ${FAKE_PLUGINS:-}; do _n=$((_n + 1)); done
                 printf '  Plugin discovery succeeds now (%s scraper(s) registered).\\n' "$_n" ;;
+            "core.tooling.migration_cli "*) : ;;
             *" -r requirements.txt") [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r /"*)               [ "${FAKE_PIP_FAIL:-}" = "plugin" ] && exit 1 ;;
             *" pip")                 [ "${FAKE_PIP_FAIL:-}" = "upgrade" ] && exit 1 ;;
