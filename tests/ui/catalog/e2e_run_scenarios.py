@@ -15,7 +15,7 @@ deterministically (spinners, sleeps, interrupts, stale timestamps) stay in
 """
 
 from core import messages
-from core.exceptions import ProductNotFoundError, ScraperParseError, ServerError
+from core.exceptions import ResourceNotFoundError, ScraperParseError, ServerError
 from core.scrapers.api import PriceResult
 from ui.catalog._base import Surface, scenario
 from ui.harness.drivers import drive_orchestrated_run
@@ -81,7 +81,7 @@ def _():
 @scenario(Surface.E2E_RUN, "failure_all_parse", "Every attempt fails to parse", tags=("error",))
 def _():
     return drive_orchestrated_run(
-        items=[{"name": "Flaky Product", "url": _URL.format(1), "target_price": 50.0}],
+        items=[{"name": "Flaky Item", "url": _URL.format(1), "target_price": 50.0}],
         results_by_url={_URL.format(1): [ScraperParseError("No price element found")]},
     )
 
@@ -95,12 +95,12 @@ def _():
 def _():
     return drive_orchestrated_run(
         items=[
-            {"name": "Paused Product", "url": _URL.format(1), "target_price": 10.0, "skip": True},
-            {"name": "Removed Product", "url": _URL.format(2), "target_price": 10.0},
-            {"name": "Untargeted Product", "url": _URL.format(3), "target_price": 0.0},
+            {"name": "Paused Item", "url": _URL.format(1), "target_price": 10.0, "skip": True},
+            {"name": "Removed Resource", "url": _URL.format(2), "target_price": 10.0},
+            {"name": "Untargeted Item", "url": _URL.format(3), "target_price": 0.0},
         ],
         results_by_url={
-            _URL.format(2): [ProductNotFoundError(messages.not_found_detail(404))],
+            _URL.format(2): [ResourceNotFoundError(messages.not_found_detail(404))],
             _URL.format(3): [PriceResult(price=55.0, currency="€")],
         },
     )
@@ -110,7 +110,7 @@ def _():
     Surface.E2E_RUN,
     "mixed_unsafe_and_valid",
     "A null row is reported while a valid row completes",
-    tags=("products", "combined"),
+    tags=("target_config", "combined"),
 )
 def _():
     return drive_orchestrated_run(

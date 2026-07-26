@@ -28,14 +28,14 @@ class InvalidScrapeResultError(ScraperParseError):
     pass
 
 
-class ProductNotFoundError(ScraperError):
-    """Raised when a product is not found or has been removed."""
+class ResourceNotFoundError(ScraperError):
+    """Raised when a requested resource is not found or has been removed."""
 
     pass
 
 
-class ProductUnavailableError(ScraperError):
-    """Raised when a product is found but has no price available."""
+class PriceUnavailableError(ScraperError):
+    """Raised when a resource is found but has no price available."""
 
     pass
 

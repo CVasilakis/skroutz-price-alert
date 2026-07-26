@@ -6,7 +6,7 @@ from core.scrapers.api import ScraperPlugin, UrlField
 
 
 def accepts_url(url: SplitResult) -> bool:
-    return url.path.startswith("/products/")
+    return url.path.startswith("/items/")
 
 
 URL = UrlField(

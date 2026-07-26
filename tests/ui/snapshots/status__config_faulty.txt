@@ -1,7 +1,7 @@
 # border: yellow
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   🟡    Monitored Items             8 loaded, 2 misconfigured [1]       │
+│   🟡    Tracked Items               8 loaded, 2 misconfigured [1]       │
 │   ✅    Execution Interval          1h                                  │
 │   ✅    Log Retention               7 days                              │
 │   ✅    Notify On Errors            true                                │

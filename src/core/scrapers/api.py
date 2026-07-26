@@ -25,14 +25,15 @@ from urllib.parse import SplitResult
 from core.exceptions import (
     InvalidScrapeResultError,
     InvalidURLError,
-    ProductNotFoundError,
-    ProductUnavailableError,
+    PriceUnavailableError,
     RateLimitError,
+    ResourceNotFoundError,
     ScraperError,
     ScraperParseError,
     ServerError,
 )
 from core.schema_migrations.contracts import ConfigMigration, JsonObject
+from core.scrapers.domain import canonicalize_url
 from core.settings.model import MISSING, ResolvedSettings, SettingSpec, _MissingDefault
 
 T = TypeVar("T")
@@ -101,8 +102,6 @@ def _nonblank(value: object, field_name: str) -> str:
 
 
 def _absolute_result_url(value: object, field_name: str) -> str:
-    from core.scrapers.framework.url import canonicalize_url
-
     try:
         return canonicalize_url(value)
     except ValueError as exc:
@@ -127,7 +126,7 @@ class Offer:
 
 @dataclass(frozen=True)
 class PriceResult:
-    """A successful product-page scrape."""
+    """A successful single-price scrape."""
 
     price: float
     currency: str
@@ -221,7 +220,7 @@ __all__ = [
     "RateLimitError",
     "ServerError",
     "ScraperParseError",
-    "ProductNotFoundError",
-    "ProductUnavailableError",
+    "ResourceNotFoundError",
+    "PriceUnavailableError",
     "InvalidURLError",
 ]

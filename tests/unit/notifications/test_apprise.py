@@ -64,10 +64,10 @@ def test_reminder_variants_and_error_summary_truncation():
     assert not notifier.notify_errors("Store", [])
 
 
-def test_old_entries_crash_and_ping_delegation():
+def test_stale_items_crash_and_ping_delegation():
     notifier, app = _notifier()
     app.notify.return_value = True
-    assert notifier.notify_old_entries("Store", [_item()], 48)
+    assert notifier.notify_stale_items("Store", [_item()], 48)
     assert notifier.notify_crash()
     server = mock.Mock()
     server.url.return_value = "tgram://token/chat"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from core.application.preflight import TargetLoad
+from core.application.preflight import TargetConfigLoad
 from core.general.configuration import GeneralConfigLoad
 from core.infrastructure.logging import try_save_diagnostic
 
@@ -17,8 +17,8 @@ def record_general_diagnostic(load: GeneralConfigLoad) -> GeneralConfigLoad:
     return replace(load, diagnostic_saved=saved)
 
 
-def record_target_load_diagnostic(load: TargetLoad) -> bool | None:
-    """Record target config/state diagnostics without producing terminal output."""
+def record_target_load_diagnostic(load: TargetConfigLoad) -> bool | None:
+    """Record target-configuration diagnostics without producing terminal output."""
     diagnostics = [
         detail
         for detail in (

@@ -1,4 +1,4 @@
-"""Strict URL validation shared by configuration and result contracts."""
+"""Strict URL and domain validation shared across the scraper domain."""
 
 import ipaddress
 from collections.abc import Iterable

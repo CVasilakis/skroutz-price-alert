@@ -11,7 +11,7 @@
     {
       "id": "sample-widget",
       "name": "Sample Widget",
-      "url": "https://store.example/products/widget?variant=blue",
+      "url": "https://store.example/items/widget?variant=blue",
       "target_price": 10.0,
       "skip": false
     }

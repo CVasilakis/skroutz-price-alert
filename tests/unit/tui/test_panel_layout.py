@@ -4,6 +4,7 @@ import pytest
 from rich.console import Console
 from rich.text import Text
 
+from core.presentation import resolved_setting_views
 from core.scrapers.api import ScraperPlugin, SettingSpec
 from core.scrapers.framework.compiler import compile_plugin
 from core.settings import resolve_settings
@@ -104,7 +105,7 @@ def test_compiled_long_plugin_warning_is_safe_in_both_panel_paths():
         package="tests.plugins.plugin",
     )
     settings = resolve_settings(plugin.setting_specs, {"plugin_mode": "invalid"})
-    view = next(view for view in settings.views() if view.label == "Plugin Mode")
+    view = next(view for view in resolved_setting_views(settings) if view.label == "Plugin Mode")
 
     status = StatusPanelBuilder("Plugin")
     add_setting_row(status, view)

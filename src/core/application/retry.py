@@ -7,15 +7,15 @@ from dataclasses import dataclass
 from core import messages
 from core.exceptions import (
     InvalidURLError,
-    ProductNotFoundError,
-    ProductUnavailableError,
+    PriceUnavailableError,
     RateLimitError,
+    ResourceNotFoundError,
     ScraperError,
     ScraperParseError,
     ServerError,
 )
 
-SKIP_ERRORS = (ProductNotFoundError, ProductUnavailableError, InvalidURLError)
+SKIP_ERRORS = (ResourceNotFoundError, PriceUnavailableError, InvalidURLError)
 ERRORS_LOG_TOKEN = "<errors_log>"
 
 

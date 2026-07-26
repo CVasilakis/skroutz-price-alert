@@ -159,7 +159,7 @@ _case(
         config_files=("alpha.json", "beta.json", "general.json"),
         schedule_errors={"beta": "Remove unsupported keys from `config/beta.json`."},
     ),
-    tags=("error", "products"),
+    tags=("error", "target_config"),
 )
 _case(
     "target_config_migration_failure",
@@ -172,7 +172,7 @@ _case(
         ),
         migration_status=15,
     ),
-    tags=("error", "products", "system"),
+    tags=("error", "target_config", "system"),
 )
 _case(
     "scraper_state_migration_failure",
@@ -210,7 +210,7 @@ _case(
         ),
         migration_status=15,
     ),
-    tags=("error", "products", "settings", "system"),
+    tags=("error", "target_config", "settings", "system"),
 )
 _case(
     "reminder_state_migration_failure",

@@ -9,8 +9,8 @@ from pathlib import Path
 from core.constants import (
     BASE_DIR,
     EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
-    EXIT_CODE_PRODUCTS_ERROR,
     EXIT_CODE_STORAGE_ERROR,
+    EXIT_CODE_TARGET_CONFIG_ERROR,
 )
 from core.scrapers.framework.catalog import PluginCatalog
 from core.tooling.migration import (
@@ -25,7 +25,7 @@ from core.tooling.migration import (
 def _exit_code(outcomes: tuple[MigrationOutcome, ...], *, check: bool) -> int:
     failed = {outcome.family for outcome in outcomes if outcome.status == STATUS_FAILED}
     if "target_config" in failed:
-        return EXIT_CODE_PRODUCTS_ERROR
+        return EXIT_CODE_TARGET_CONFIG_ERROR
     if "general_config" in failed:
         return EXIT_CODE_NOTIFICATION_CONFIG_ERROR
     if failed & {"scraper_state", "reminder_state"}:

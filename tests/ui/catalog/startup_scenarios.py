@@ -16,6 +16,7 @@ matching ``--tag`` (e.g. ``layout``).
 """
 
 from core.application.contracts import ConfigOutcome, PriceOutcome
+from core.settings import ResolvedSettings
 from ui.catalog._base import Surface, scenario
 from ui.catalog.inputs import CURRENCY, stub_logger, views_all_ok
 from ui.harness.drivers import drive_startup
@@ -25,7 +26,7 @@ LOGGER = stub_logger()
 
 def _run_script(s):
     """A minimal but realistic interactive run: open a target, scrape one item, finish."""
-    s.start_target("Skroutz", LOGGER, views_all_ok(), ConfigOutcome(5))
+    s.start_target("Skroutz", LOGGER, ResolvedSettings(views_all_ok()), ConfigOutcome(5))
     s.start_scraping("Sony WH-1000XM5", 1, 1)
     s.complete_scraping()
     s.log_price_result("Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP)

@@ -4,8 +4,8 @@ import pytest
 
 from core.constants import (
     EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
-    EXIT_CODE_PRODUCTS_ERROR,
     EXIT_CODE_STORAGE_ERROR,
+    EXIT_CODE_TARGET_CONFIG_ERROR,
 )
 from core.tooling import migration_cli
 from core.tooling.migration import (
@@ -25,7 +25,7 @@ def _outcome(family, status, detail=""):
 @pytest.mark.parametrize(
     "family,expected",
     [
-        ("target_config", EXIT_CODE_PRODUCTS_ERROR),
+        ("target_config", EXIT_CODE_TARGET_CONFIG_ERROR),
         ("general_config", EXIT_CODE_NOTIFICATION_CONFIG_ERROR),
         ("scraper_state", EXIT_CODE_STORAGE_ERROR),
         ("reminder_state", EXIT_CODE_STORAGE_ERROR),
@@ -35,13 +35,13 @@ def test_exit_codes_preserve_document_family_classes(family, expected):
     assert migration_cli._exit_code((_outcome(family, STATUS_FAILED),), check=False) == expected
 
 
-def test_products_failure_has_precedence_over_other_document_failures():
+def test_target_config_failure_has_precedence_over_other_document_failures():
     outcomes = (
         _outcome("general_config", STATUS_FAILED),
         _outcome("scraper_state", STATUS_FAILED),
         _outcome("target_config", STATUS_FAILED),
     )
-    assert migration_cli._exit_code(outcomes, check=False) == EXIT_CODE_PRODUCTS_ERROR
+    assert migration_cli._exit_code(outcomes, check=False) == EXIT_CODE_TARGET_CONFIG_ERROR
 
 
 def test_check_mode_returns_one_for_pending_migration_only():

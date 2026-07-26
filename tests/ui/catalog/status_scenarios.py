@@ -145,7 +145,7 @@ def _():
     )
 
 
-# --- Products-config ('Config' row) variants -----------------------------------------
+# --- Target-configuration ('Config' row) variants -----------------------------------------
 # The healthy 'Config' row is exercised by every scenario above (drive_service defaults to
 # a clean load); these cover the faulty and failed variants.
 
@@ -154,7 +154,7 @@ def _():
     Surface.STATUS,
     "config_faulty",
     "Some items are misconfigured (Config row)",
-    tags=("products",),
+    tags=("target_config",),
 )
 def _():
     return drive_service(
@@ -172,8 +172,8 @@ def _():
 @scenario(
     Surface.STATUS,
     "config_failed",
-    "Products config failed to load (Config row)",
-    tags=("products", "error"),
+    "Target configuration failed to load (Config row)",
+    tags=("target_config", "error"),
 )
 def _():
     return drive_service(
@@ -237,8 +237,8 @@ def _():
 
 @scenario(
     Surface.STATUS,
-    "exec_products_error",
-    "Last run failed on the products config (exit 15)",
+    "exec_target_config_error",
+    "Last run failed on the target configuration (exit 15)",
     tags=("last_run",),
 )
 def _():

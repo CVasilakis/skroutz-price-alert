@@ -4,9 +4,9 @@ import pytest
 
 from core.exceptions import (
     InvalidURLError,
-    ProductNotFoundError,
-    ProductUnavailableError,
+    PriceUnavailableError,
     RateLimitError,
+    ResourceNotFoundError,
     ScraperError,
     ScraperParseError,
     ServerError,
@@ -64,7 +64,7 @@ def test_domain_specific_headers_and_currency():
 
 
 def test_unavailable_and_unparseable_prices_are_modeled():
-    with pytest.raises(ProductUnavailableError):
+    with pytest.raises(PriceUnavailableError):
         _client(Response({"price_min": None})).scrape(
             _item("https://www.skroutz.gr/s/123/Product.html")
         )
@@ -85,8 +85,8 @@ def test_malformed_json_is_a_parse_failure():
 @pytest.mark.parametrize(
     "status,error_type",
     [
-        (404, ProductNotFoundError),
-        (410, ProductNotFoundError),
+        (404, ResourceNotFoundError),
+        (410, ResourceNotFoundError),
         (401, RateLimitError),
         (403, RateLimitError),
         (429, RateLimitError),

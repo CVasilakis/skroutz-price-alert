@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
 
 from core import messages
 from core.application.contracts import ConfigOutcome, Notes, PriceOutcome, RunReporter
-from core.settings import SettingView
+from core.presentation import resolved_setting_views
+from core.settings import ResolvedSettings
 
 
 class SilentRunReporter(RunReporter):
@@ -20,11 +20,30 @@ class SilentRunReporter(RunReporter):
     def _format_notes_suffix(notes_list: list[str]) -> str:
         return "" if not notes_list else " " + " ".join(f"({note})" for note in notes_list)
 
+    @staticmethod
+    def _normalize_notes(notes: Notes) -> list[str]:
+        if notes is None:
+            return []
+
+        def ensure_period(value: str) -> str:
+            stripped = value.strip()
+            return stripped + "." if stripped and not stripped.endswith(".") else stripped
+
+        if isinstance(notes, str):
+            return [ensure_period(notes)] if notes else []
+        return [ensure_period(note) for note in notes if note]
+
+    @staticmethod
+    def _outcome_icon(outcome: PriceOutcome, delivery_failed: bool = False) -> str:
+        if delivery_failed:
+            return "🟡"
+        return {PriceOutcome.DROP: "🎉", PriceOutcome.NO_TARGET: "🟡"}.get(outcome, "✅")
+
     def start_target(
         self,
         target_name: str,
         target_logger: logging.Logger,
-        settings_view: Sequence[SettingView],
+        settings: ResolvedSettings,
         config: ConfigOutcome,
     ) -> None:
         self.target_logger = target_logger
@@ -32,19 +51,19 @@ class SilentRunReporter(RunReporter):
             detail = config.error
             if config.diagnostic_saved is False:
                 detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
-            target_logger.warning(f"❗ Monitored Items: Failed ({detail})")
+            target_logger.warning(f"❗ Tracked Items: Failed ({detail})")
         elif config.faulty_indices:
             detail = messages.misconfigured_items(config.source_path)
             if config.diagnostic_saved is False:
                 detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
             target_logger.warning(
-                f"❗ Monitored Items: {config.loaded_count} loaded, "
+                f"❗ Tracked Items: {config.loaded_count} loaded, "
                 f"{len(config.faulty_indices)} misconfigured "
                 f"({detail})"
             )
         else:
-            target_logger.info(f"🗄️  Monitored Items: {config.loaded_count} loaded")
-        for view in settings_view:
+            target_logger.info(f"🗄️  Tracked Items: {config.loaded_count} loaded")
+        for view in resolved_setting_views(settings):
             if view.has_warning:
                 target_logger.warning(f"❗ {view.label}: {view.display_value} ({view.footnote})")
             else:

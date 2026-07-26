@@ -1,7 +1,7 @@
 # border: green
 
 ╭────────────────────────── Fake Store Scraping ──────────────────────────╮
-│   ✅    Monitored Items       1 loaded                                  │
+│   ✅    Tracked Items         1 loaded                                  │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │

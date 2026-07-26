@@ -41,6 +41,12 @@ class PluginCatalog:
         )
         records: list[RegisteredPlugin] = []
         try:
+            if not root.exists():
+                raise PluginDiscoveryError(f"Scraper plugin root '{root}' does not exist.")
+            if not root.is_dir():
+                raise PluginDiscoveryError(f"Scraper plugin root '{root}' is not a directory.")
+            if root.stat().st_mode & 0o444 == 0 or not os.access(root, os.R_OK | os.X_OK):
+                raise PluginDiscoveryError(f"Scraper plugin root '{root}' is not readable.")
             candidates = sorted(pkgutil.iter_modules([str(root)]), key=lambda item: item.name)
             for candidate in candidates:
                 target = candidate.name
@@ -67,6 +73,10 @@ class PluginCatalog:
                         source_dir=root / target,
                         where=module_name,
                     )
+                )
+            if not records:
+                raise PluginDiscoveryError(
+                    f"Scraper plugin root '{root}' contains no production plugins."
                 )
         except (PluginDiscoveryError, PluginValidationError):
             raise

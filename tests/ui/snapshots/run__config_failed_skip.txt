@@ -1,7 +1,7 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ❗    Monitored Items       Failed [1]                                │
+│   ❗    Tracked Items         Failed [1]                                │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │

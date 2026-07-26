@@ -10,9 +10,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.scrapers.domain import normalize_domain
 from core.scrapers.framework.configuration import SCHEMA_VERSION
 from core.scrapers.framework.naming import RESERVED_PLUGIN_NAMES, SNAKE_CASE_KEY
-from core.scrapers.framework.url import normalize_domain
 
 
 @dataclass(frozen=True)
@@ -107,12 +107,12 @@ from core.scrapers.plugins.{request.target}.plugin import URL
 
 class Client(ScraperClient):
     def scrape(self, item: TrackedItem) -> PriceResult:
-        _product_url = item[URL]
+        _source_url = item[URL]
         raise NotImplementedError("replace the scaffold with a mocked, tested scraper")
 ''',
         "README.md": f"""# {request.display_name} plugin
 
-Tracks product pages on `{request.domain}` whose paths begin with
+Tracks resource pages on `{request.domain}` whose paths begin with
 `{request.url_prefix}` and returns a `PriceResult`.
 
 ## Configuration
@@ -121,32 +121,27 @@ Rows use shared `id`, `name`, `target_price`, and optional `skip` fields. This
 plugin declares a required `url` input through `URL`. Copy
 `config.example.json` to `config/{request.target}.json`.
 
-## Implementation and dependencies
+## Implementation
 
 Replace the scaffolded `Client.scrape` method with bounded network access and
-fixture-driven parsing. Add a package-local `requirements.txt` only if the client
-needs dependencies outside the core environment.
+fixture-driven parsing.
 
-If a future release changes a plugin-private config field, increment
-`config_schema_version`, add an import-light `migrations.py` containing pure
-`CONFIG_MIGRATIONS` callables, update the example's `plugin_schema_version`, and add
-`tests/plugins/{request.target}/test_migrations.py`. Framework fields are migrated by
-the framework.
+## Dependencies
 
-## Panel text
-
-`SettingSpec.warning` values and modeled skip-exception messages are plain text;
-plugins cannot create Rich footnotes or references. Optional paired backticks
-mark commands, paths, or other code-like fragments. Rich tags such as `[red]`
-are displayed literally. Do not add wrapping or indentation. Long text is valid
-and will be wrapped by the TUI; setting warnings must not contain control
-characters.
+Add a package-local `requirements.txt` only if the client needs dependencies
+outside the core environment.
 
 ## Tests
 
 Replace the generated failing test with mocked success, malformed response,
 unavailable/no-match, relevant HTTP statuses, field and setting codec cases,
 URL-shape cases, and clean client shutdown.
+
+## Verification
+
+Run `./scripts/dev/plugin-check.sh --{request.target}`, then
+`./scripts/dev/check.sh`. See `CONTRIBUTING.md` for optional custom fields,
+settings, listing results, HTTP helpers, migrations, and presentation rules.
 """,
         "config.example.json": json.dumps(config, indent=2) + "\n",
     }

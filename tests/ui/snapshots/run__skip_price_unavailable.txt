@@ -1,13 +1,13 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
+│   ✅    Tracked Items         5 loaded                                  │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │   ✅    Repeat Alerts         false (default)                           │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Out Of Stock Item     Skipping (ProductUnavailableError) [1]    │
+│   ❗    Out Of Stock Item     Skipping (PriceUnavailableError) [1]      │
 │                                                                         │
-│   [1] Product found but has no available price.                         │
+│   [1] Resource has no available price.                                  │
 ╰─────────────────────────────────────────────────────────────────────────╯

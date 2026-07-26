@@ -9,7 +9,7 @@ from support import catalog_sandbox, fake_plugin, mock_notifier, mock_ui
 
 from core.application.contracts import PriceOutcome
 from core.application.orchestrator import ScrapingOrchestrator
-from core.application.preflight import load_targets
+from core.application.preflight import load_target_configs
 from core.constants import EXIT_CODE_SUCCESS
 from core.scrapers.framework.clients import ClientLoader
 from integration.fake_store import URL, FakeStoreClient, fake_store_server
@@ -39,7 +39,7 @@ def _write_config(config_dir, url, *, extra=None, settings=None):
 
 def _run(catalog, config_dir, state_dir, notifier, ui):
     loader = ClientLoader()
-    loads = load_targets([catalog.get("fakestore")], str(config_dir), str(state_dir))
+    loads = load_target_configs([catalog.get("fakestore")], str(config_dir))
     orchestrator = ScrapingOrchestrator(
         loads,
         loader,
@@ -47,6 +47,7 @@ def _run(catalog, config_dir, state_dir, notifier, ui):
         quiet=True,
         reporter=ui,
         now_fn=lambda: NOW,
+        state_dir=str(state_dir),
     )
     logger = logging.getLogger("e2e")
     with (

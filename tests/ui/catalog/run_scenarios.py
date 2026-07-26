@@ -12,8 +12,8 @@ stay as illustrative literals — they are arbitrary inputs, not framework wordi
 
 from core import messages
 from core.application.contracts import ConfigOutcome, PriceOutcome
-from core.constants import OLD_ENTRY_HOURS
-from core.settings import SettingStatus
+from core.constants import STALE_ITEM_HOURS
+from core.settings import ResolvedSettings, SettingStatus
 from ui.catalog._base import Surface, scenario
 from ui.catalog.inputs import (
     CURRENCY,
@@ -45,7 +45,7 @@ NOTIFIED_FAIL = messages.NOTE_NOTIFIED_FAIL
 NOTIFIED_NONE = messages.NOTE_NOTIFIED_NONE
 ERRORS_LOG = messages.errors_log_pointer("skroutz")
 ABORTED = messages.NOTE_RATE_LIMIT_ABORTED
-STALE = messages.stale_note("25-06-2026 09:00:00", OLD_ENTRY_HOURS)
+STALE = messages.stale_note("25-06-2026 09:00:00", STALE_ITEM_HOURS)
 
 
 def _attempts(*error_types: str) -> list[str]:
@@ -55,7 +55,12 @@ def _attempts(*error_types: str) -> list[str]:
 
 def _start(s, settings=None, target="Skroutz", config=_CONFIG_OK):
     """Opens a target with a realistic 'Config' row + settings section (defaults unless overridden)."""
-    s.start_target(target, LOGGER, views_all_default() if settings is None else settings, config)
+    s.start_target(
+        target,
+        LOGGER,
+        ResolvedSettings(views_all_default() if settings is None else settings),
+        config,
+    )
 
 
 # --- Single-attempt price outcomes --------------------------------------------------
@@ -283,23 +288,26 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_result("✅", "Paused Product", "Skipped", messages.NOTE_SKIP_FIELD)
+        s.log_result("✅", "Paused Item", "Skipped", messages.NOTE_SKIP_FIELD)
         s.complete_target()
 
     return drive_run(script)
 
 
 @scenario(
-    Surface.RUN, "skip_product_not_found", "Scraper raised ProductNotFoundError", tags=("skipped",)
+    Surface.RUN,
+    "skip_resource_not_found",
+    "Scraper raised ResourceNotFoundError",
+    tags=("skipped",),
 )
 def _():
     def script(s):
         _start(s)
-        s.start_scraping("Removed Product", 1, 3)
+        s.start_scraping("Removed Resource", 1, 3)
         s.complete_scraping()
         s.log_error(
-            "Removed Product",
-            messages.skipping_warning("ProductNotFoundError"),
+            "Removed Resource",
+            messages.skipping_warning("ResourceNotFoundError"),
             [messages.not_found_detail(404)],
         )
         s.complete_target()
@@ -309,8 +317,8 @@ def _():
 
 @scenario(
     Surface.RUN,
-    "skip_product_unavailable",
-    "Scraper raised ProductUnavailableError",
+    "skip_price_unavailable",
+    "Scraper raised PriceUnavailableError",
     tags=("skipped",),
 )
 def _():
@@ -320,8 +328,8 @@ def _():
         s.complete_scraping()
         s.log_error(
             "Out Of Stock Item",
-            messages.skipping_warning("ProductUnavailableError"),
-            ["Product found but has no available price."],
+            messages.skipping_warning("PriceUnavailableError"),
+            ["Resource has no available price."],
         )
         s.complete_target()
 
@@ -334,12 +342,12 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.start_scraping("Weird URL Product", 1, 3)
+        s.start_scraping("Invalid Source Item", 1, 3)
         s.complete_scraping()
         s.log_error(
-            "Weird URL Product",
+            "Invalid Source Item",
             messages.skipping_warning("InvalidURLError"),
-            ["Could not parse a product ID from the URL."],
+            ["Could not parse an item ID from the source input."],
         )
         s.complete_target()
 
@@ -422,11 +430,11 @@ def _():
     def script(s):
         _start(s)
         for a in (1, 2, 3):
-            s.start_scraping("Flaky Product", a, 3)
+            s.start_scraping("Flaky Item", a, 3)
             s.complete_scraping()
-            s.log_attempt("Flaky Product", a, 3, "ScraperParseError: No price element found")
+            s.log_attempt("Flaky Item", a, 3, "ScraperParseError: No price element found")
         s.log_failure(
-            "Flaky Product",
+            "Flaky Item",
             "ScraperParseError",
             _attempts("ScraperParseError", "ScraperParseError", "ScraperParseError"),
         )
@@ -491,13 +499,13 @@ def _():
     def script(s):
         _start(s)
         for a in (1, 2, 3):
-            s.start_scraping("Blocked Product", a, 3)
+            s.start_scraping("Blocked Item", a, 3)
             s.complete_scraping()
             s.log_attempt(
-                "Blocked Product", a, 3, f"RateLimitError: {messages.rate_limited_detail(429)}"
+                "Blocked Item", a, 3, f"RateLimitError: {messages.rate_limited_detail(429)}"
             )
         s.log_failure(
-            "Blocked Product",
+            "Blocked Item",
             "RateLimitError",
             _attempts("RateLimitError", "RateLimitError", "RateLimitError"),
             [ABORTED, ERRORS_LOG],
@@ -517,15 +525,13 @@ def _():
     def script(s):
         _start(s)
         for a in (1, 2, 3):
-            s.start_scraping("Blocked Product", a, 3)
+            s.start_scraping("Blocked Item", a, 3)
             s.complete_scraping()
-        s.log_attempt("Blocked Product", 1, 3, "ScraperParseError: No price element found")
-        s.log_attempt("Blocked Product", 2, 3, f"ServerError: {messages.server_error_detail(503)}")
-        s.log_attempt(
-            "Blocked Product", 3, 3, f"RateLimitError: {messages.rate_limited_detail(429)}"
-        )
+        s.log_attempt("Blocked Item", 1, 3, "ScraperParseError: No price element found")
+        s.log_attempt("Blocked Item", 2, 3, f"ServerError: {messages.server_error_detail(503)}")
+        s.log_attempt("Blocked Item", 3, 3, f"RateLimitError: {messages.rate_limited_detail(429)}")
         s.log_failure(
-            "Blocked Product",
+            "Blocked Item",
             "RateLimitError",
             _attempts("ScraperParseError", "ServerError", "RateLimitError"),
             [ABORTED, ERRORS_LOG],
@@ -690,7 +696,7 @@ def _():
 
 @scenario(
     Surface.RUN,
-    "interrupt_between_products",
+    "interrupt_between_items",
     "Ctrl+C after an item, before the next",
     tags=("interrupt",),
 )
@@ -823,7 +829,7 @@ def _():
     return drive_run(script)
 
 
-# --- Products-config ('Config' row) variants -----------------------------------------
+# --- Target-configuration ('Config' row) variants -----------------------------------------
 # The healthy 'Config' row leads every scenario above (_start defaults to a clean load);
 # these cover the faulty row and the per-target broken-config skip.
 
@@ -832,7 +838,7 @@ def _():
     Surface.RUN,
     "config_faulty",
     "Some items misconfigured (Config row leads)",
-    tags=("products",),
+    tags=("target_config",),
 )
 def _():
     def script(s):
@@ -853,8 +859,8 @@ def _():
 @scenario(
     Surface.RUN,
     "config_failed_skip",
-    "Products config failed to load; scraper skipped",
-    tags=("products", "error"),
+    "Target configuration failed to load; scraper skipped",
+    tags=("target_config", "error"),
 )
 def _():
     # Mirrors the application's per-target skip: open the panel with a failed 'Config' row
@@ -953,13 +959,13 @@ def _():
         s.complete_scraping()
         s.log_price_result("Logitech MX Master 3S", 79.0, CURRENCY, 70.0, PriceOutcome.OK)
         s.log_warning(
-            "Removed Product",
-            messages.skipping_warning("ProductNotFoundError"),
+            "Removed Resource",
+            messages.skipping_warning("ResourceNotFoundError"),
             [messages.not_found_detail(404)],
         )
-        s.log_price_result("Untargeted Product", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET)
+        s.log_price_result("Untargeted Item", 55.0, CURRENCY, 0.0, PriceOutcome.NO_TARGET)
         s.log_failure(
-            "Flaky Product",
+            "Flaky Item",
             "ConnectionError",
             _attempts("ConnectionError", "ConnectionError", "ConnectionError"),
             [ERRORS_LOG],

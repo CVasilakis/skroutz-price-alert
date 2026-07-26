@@ -1,39 +1,28 @@
-"""The run's single target configuration and state loading phase."""
+"""The run's single target-configuration loading phase."""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path
 
 from core import messages
 from core.constants import EXIT_CODE_NOTIFICATION_CONFIG_ERROR
-from core.exceptions import ConfigFileError, StateFileError
+from core.exceptions import ConfigFileError
 from core.general.configuration import GeneralConfigLoad
 from core.infrastructure.logging import get_target_logger
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.configuration import RowIssue, TargetConfigLoader
 from core.scrapers.framework.model import RegisteredPlugin
-from core.scrapers.framework.state import JsonStateRepository
 from core.settings import DEFAULT_LOG_RETENTION_DAYS, ResolvedSettings, resolve_settings
 
 
-class LoadFailureKind(str, Enum):
-    CONFIG = "config"
-    STATE = "state"
-
-
 @dataclass(frozen=True)
-class LoadFailure:
-    kind: LoadFailureKind
+class TargetConfigFailure:
     detail: str
     diagnostic: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.kind, LoadFailureKind):
-            raise TypeError("load failure kind must be CONFIG or STATE")
         if not isinstance(self.detail, str) or not self.detail.strip():
             raise ValueError("load failure detail must be nonblank")
         if self.diagnostic is not None and (
@@ -43,23 +32,17 @@ class LoadFailure:
 
 
 @dataclass(frozen=True)
-class TargetLoad:
+class TargetConfigLoad:
     plugin: RegisteredPlugin
     settings: ResolvedSettings
     items: tuple[TrackedItem, ...] = ()
     row_issues: tuple[RowIssue, ...] = ()
     row_diagnostic: str | None = None
-    state: JsonStateRepository | None = None
-    failure: LoadFailure | None = None
+    failure: TargetConfigFailure | None = None
 
     def __post_init__(self) -> None:
-        if self.failure is None and self.state is None:
-            raise ValueError("successful target load requires state")
-        if self.failure is not None and self.state is not None:
-            raise ValueError("failed target load cannot contain state")
-        if self.failure is not None and self.failure.kind is LoadFailureKind.CONFIG:
-            if self.items or self.row_issues:
-                raise ValueError("config failure cannot contain decoded items")
+        if self.failure is not None and (self.items or self.row_issues):
+            raise ValueError("config failure cannot contain decoded items")
 
     @property
     def target(self) -> str:
@@ -74,16 +57,12 @@ class TargetLoad:
         return [issue.index for issue in self.row_issues]
 
 
-def load_targets(
+def load_target_configs(
     plugins: Sequence[RegisteredPlugin],
     config_dir: str,
-    state_dir: str | None = None,
-) -> list[TargetLoad]:
+) -> list[TargetConfigLoad]:
     """Load validated plugin records without re-discovery or config re-reads."""
-    resolved_state_dir = (
-        Path(state_dir) if state_dir is not None else Path(config_dir).resolve().parent / "state"
-    )
-    results: list[TargetLoad] = []
+    results: list[TargetConfigLoad] = []
     for plugin in plugins:
         loader = TargetConfigLoader(plugin, config_dir)
         try:
@@ -91,11 +70,10 @@ def load_targets(
         except ConfigFileError as exc:
             settings = resolve_settings(plugin.setting_specs, None)
             results.append(
-                TargetLoad(
+                TargetConfigLoad(
                     plugin,
                     settings,
-                    failure=LoadFailure(
-                        LoadFailureKind.CONFIG,
+                    failure=TargetConfigFailure(
                         str(exc),
                         exc.diagnostic_detail,
                     ),
@@ -103,36 +81,13 @@ def load_targets(
             )
             continue
 
-        state = JsonStateRepository(
-            resolved_state_dir / f"{plugin.target}.json",
-            display_path=f"state/{plugin.target}.json",
-        )
-        try:
-            state.load()
-        except StateFileError as exc:
-            results.append(
-                TargetLoad(
-                    plugin=plugin,
-                    settings=loaded.settings,
-                    items=loaded.items,
-                    row_issues=loaded.row_issues,
-                    row_diagnostic=loaded.row_diagnostic,
-                    failure=LoadFailure(
-                        LoadFailureKind.STATE,
-                        str(exc),
-                        exc.diagnostic_detail,
-                    ),
-                )
-            )
-            continue
         results.append(
-            TargetLoad(
+            TargetConfigLoad(
                 plugin=plugin,
                 settings=loaded.settings,
                 items=loaded.items,
                 row_issues=loaded.row_issues,
                 row_diagnostic=loaded.row_diagnostic,
-                state=state,
             )
         )
     return results
@@ -169,9 +124,8 @@ def validate_notification_preflight(
 
 
 __all__ = [
-    "LoadFailure",
-    "LoadFailureKind",
-    "TargetLoad",
-    "load_targets",
+    "TargetConfigFailure",
+    "TargetConfigLoad",
+    "load_target_configs",
     "validate_notification_preflight",
 ]

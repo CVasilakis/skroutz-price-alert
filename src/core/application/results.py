@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from core import messages
 from core.application.contracts import PriceOutcome, RunReporter
-from core.constants import MAX_RETRIES, OLD_ENTRY_HOURS
+from core.constants import MAX_RETRIES, STALE_ITEM_HOURS
 from core.infrastructure.logging import save_traceback
 from core.infrastructure.persistence import format_utc
 from core.notifications.contracts import NotificationService
@@ -47,9 +47,9 @@ class ResultHandler:
         last_checked = self.state.get(item.id).last_checked
         if last_checked is None:
             return None
-        if self.now_fn() - last_checked > datetime.timedelta(hours=OLD_ENTRY_HOURS):
+        if self.now_fn() - last_checked > datetime.timedelta(hours=STALE_ITEM_HOURS):
             self.stale_items.append(item)
-            return messages.stale_note(format_utc(last_checked), OLD_ENTRY_HOURS)
+            return messages.stale_note(format_utc(last_checked), STALE_ITEM_HOURS)
         return None
 
     def _try_notification(self, operation: Callable[[], bool]) -> bool:

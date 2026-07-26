@@ -1,13 +1,14 @@
-# border: red
+# border: green
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Monitored Items       5 loaded                                  │
+│   ✅    Tracked Items         5 loaded                                  │
 │   ✅    Execution Interval    1h (default)                              │
 │   ✅    Log Retention         7 days (default)                          │
 │   ✅    Notify On Errors      true (default)                            │
 │   ✅    Repeat Alerts         false (default)                           │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Removed Product       Skipping (ProductNotFoundError) [1]       │
+│   🎉    Sony WH-1000XM5       248.0 € (Target: 300.0 €) [1]             │
+│   🛑    Interrupted           Received signal SIGINT                    │
 │                                                                         │
-│   [1] Product not found or removed (HTTP 404).                          │
+│   [1] Notification delivered to all valid apprise URL(s).               │
 ╰─────────────────────────────────────────────────────────────────────────╯

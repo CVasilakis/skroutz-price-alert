@@ -16,8 +16,8 @@ from typing import cast
 from unittest import mock
 
 from core.exceptions import (
-    ProductNotFoundError,
     RateLimitError,
+    ResourceNotFoundError,
     ScraperError,
     ServerError,
 )
@@ -106,7 +106,7 @@ class TestRaiseForStatus(unittest.TestCase):
 
     def test_not_found_codes(self):
         for code in (404, 410):
-            with self.subTest(code=code), self.assertRaises(ProductNotFoundError):
+            with self.subTest(code=code), self.assertRaises(ResourceNotFoundError):
                 self.client.raise_for_status(code)
 
     def test_rate_limit_codes(self):
@@ -133,7 +133,7 @@ class TestRaiseForStatus(unittest.TestCase):
             from core.settings import resolve_settings
 
             client = OddClient(resolve_settings(framework_setting_specs("1h"), {}))
-        with self.assertRaises(ProductNotFoundError):
+        with self.assertRaises(ResourceNotFoundError):
             client.raise_for_status(418)
         # 404 is no longer a not-found for this store -> generic ScraperError.
         with self.assertRaises(ScraperError):

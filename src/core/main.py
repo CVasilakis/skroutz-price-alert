@@ -15,9 +15,9 @@ from core.application.diagnostics import (
     record_target_load_diagnostic,
 )
 from core.application.orchestrator import ScrapingOrchestrator
-from core.application.preflight import load_targets, validate_notification_preflight
+from core.application.preflight import load_target_configs, validate_notification_preflight
 from core.application.reporting import SilentRunReporter
-from core.constants import CONFIG_DIR, EXIT_CODE_ERROR
+from core.constants import CONFIG_DIR, EXIT_CODE_ERROR, STATE_DIR
 from core.exceptions import UpdateCheckError
 from core.general import ReminderService, load_general_config
 from core.general.reminder_state import ReminderStateRepository, general_state_path
@@ -68,7 +68,7 @@ def main() -> None:
     # The orchestrator later reuses these same in-memory snapshots, and the per-target
     # outcomes drive each scraper's 'Config' row and its per-target broken-config skip.
     selected_plugins = [catalog.get(target) for target in targets_to_run]
-    load_results = load_targets(selected_plugins, CONFIG_DIR)
+    load_results = load_target_configs(selected_plugins, CONFIG_DIR)
     general = record_general_diagnostic(load_general_config(CONFIG_DIR))
 
     if not args.quiet:
@@ -130,6 +130,7 @@ def main() -> None:
             notifier,
             args.quiet,
             reporter,
+            state_dir=STATE_DIR,
         )
         exit_code = orchestrator.run()
 

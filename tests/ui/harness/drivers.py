@@ -129,7 +129,7 @@ def drive_orchestrated_run(
     from support import catalog_sandbox, fake_plugin, mock_notifier
 
     from core.application.orchestrator import ScrapingOrchestrator
-    from core.application.preflight import load_targets
+    from core.application.preflight import load_target_configs
     from core.scrapers.api import ScraperClient, UrlField
     from core.scrapers.framework.clients import ClientLoader
 
@@ -177,15 +177,14 @@ def drive_orchestrated_run(
             reporter.console = Console(file=io.StringIO())
 
             loader = ClientLoader()
-            loads = load_targets(
-                [catalog.get("fakestore")], cfg_dir, os.path.join(cfg_dir, "state")
-            )
+            loads = load_target_configs([catalog.get("fakestore")], cfg_dir)
             orch = ScrapingOrchestrator(
                 target_loads=loads,
                 client_loader=loader,
                 notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
                 quiet=False,
                 reporter=reporter,
+                state_dir=os.path.join(cfg_dir, "state"),
             )
             with (
                 mock.patch("core.application.pacing.Pacer.sleep"),
@@ -215,7 +214,7 @@ def drive_service(
 ) -> BuildResult:
     """Builds a per-plugin Service Status panel via ``status.build_service_panel``.
 
-    ``config`` is the leading 'Config' row (products-config health); it defaults to a
+    ``config`` is the leading 'Config' row (target-configuration health); it defaults to a
     healthy load so the common case is exercised, and is overridden with a faulty/failed
     :class:`ConfigView` per scenario.
     """
@@ -275,7 +274,7 @@ def drive_config(
 ) -> BuildResult:
     """Build the Configuration Check panel from synthetic collected inputs.
 
-    Per-scraper products-config health is no longer on this panel — it now leads each
+    Per-scraper target-configuration health is no longer on this panel — it now leads each
     Service Status (STATUS surface) and Scraping (RUN surface) panel — so this drives
     the version row, notification row, and general settings rows in production order.
 

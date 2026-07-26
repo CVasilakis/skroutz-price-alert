@@ -26,7 +26,7 @@ def stale_note(last_checked: str, hours: int) -> str:
 
     Args:
         last_checked (str): The stored UTC timestamp of the last successful check.
-        hours (int): The staleness threshold in hours (``OLD_ENTRY_HOURS``).
+        hours (int): The staleness threshold in hours (``STALE_ITEM_HOURS``).
 
     Returns:
         str: The footnote wording.
@@ -100,7 +100,7 @@ def advert_alerts_suppressed(count: int) -> str:
 # --- Skips, warnings, and failures (application execution) ----------------------------
 
 NOTE_SKIP_FIELD = "Skipped by the config's `skip` setting."
-WARN_STALE_NOTIFICATION_FAILED = "Failed to deliver the stale-products notification."
+WARN_STALE_NOTIFICATION_FAILED = "Failed to deliver the stale-items notification."
 WARN_ERROR_NOTIFICATION_FAILED = "Failed to deliver the scraping-errors notification."
 NOTE_RATE_LIMIT_ABORTED = "Rate limit reached; scraping aborted."
 ERR_LOCK_HELD = "Another instance is currently running. Aborting..."
@@ -115,7 +115,7 @@ def skipping_warning(error_type: str) -> str:
     """The warning heading for a terminal, non-retryable skip error.
 
     Args:
-        error_type (str): The exception type name (e.g. ``ProductNotFoundError``).
+        error_type (str): The exception type name (e.g. ``ResourceNotFoundError``).
 
     Returns:
         str: The warning wording.
@@ -282,7 +282,7 @@ EMPTY_RESPONSE_DETAIL = "Empty response or no status code received from server"
 
 def not_found_detail(status_code: int) -> str:
     """The detail for a removed/not-found HTTP status (default 404, 410)."""
-    return f"Product not found or removed (HTTP {status_code})."
+    return f"Resource not found or removed (HTTP {status_code})."
 
 
 def rate_limited_detail(status_code: int) -> str:

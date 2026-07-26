@@ -15,7 +15,7 @@ Generate both plugin-owned directories without installing or touching systemd:
 ./scripts/dev/plugin-create.sh acme_store \
   --display-name "Acme Store" \
   --domain store.example \
-  --url-prefix /products/
+  --url-prefix /items/
 ./scripts/dev/setup.sh --acme_store
 ```
 
@@ -41,6 +41,20 @@ versions. To apply safe Python formatting before checking, run
 `./venv/bin/ruff check --fix src tests` followed by
 `./venv/bin/ruff format src tests`. Markdown documentation is intentionally
 hand-formatted and excluded from Ruff.
+
+For a normal URL-based plugin, this is the complete path:
+
+1. Scaffold the plugin and install its selected development dependencies.
+2. Adjust the generated `UrlField` domains and path predicate to the pages the
+   client accepts.
+3. Implement `Client.scrape()` to fetch one URL and return
+   `PriceResult(price, currency, url=None)`.
+4. Replace the failing generated test with mocked success, malformed-response,
+   unavailable-resource, relevant-status, URL-shape, and cleanup cases. Keep the
+   generated config runnable with at least one tracked item.
+5. Complete the short package README, run
+   `./scripts/dev/plugin-check.sh --<target>`, then run
+   `./scripts/dev/check.sh`.
 
 ## Package layout
 
@@ -77,10 +91,10 @@ from core.scrapers.api import ScraperPlugin, UrlField
 
 
 def accepts_url(url: SplitResult) -> bool:
-    return url.path.startswith("/products/")
+    return url.path.startswith("/items/")
 
 
-PRODUCT_URL = UrlField(
+SOURCE_URL = UrlField(
     key="url",
     domains=["acme.example"],
     accepts_url=accepts_url,
@@ -88,8 +102,8 @@ PRODUCT_URL = UrlField(
 
 PLUGIN = ScraperPlugin(
     display_name="Acme",
-    item_fields=(PRODUCT_URL,),
-    reference_url=PRODUCT_URL,
+    item_fields=(SOURCE_URL,),
+    reference_url=SOURCE_URL,
     default_interval="1h",
 )
 ```
@@ -119,12 +133,12 @@ the same catalog feeds terminal panels and a TSV shell bridge.
 
 ```python
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
-from core.scrapers.plugins.acme_store.plugin import PRODUCT_URL
+from core.scrapers.plugins.acme_store.plugin import SOURCE_URL
 
 
 class Client(ScraperClient):
     def scrape(self, item: TrackedItem) -> PriceResult:
-        price = fetch_price(item[PRODUCT_URL])
+        price = fetch_price(item[SOURCE_URL])
         return PriceResult(price=price, currency="EUR")
 ```
 
@@ -135,7 +149,7 @@ write historical state.
 
 Return one of two intentional variants:
 
-- `PriceResult(price, currency, url=None)` for one product price;
+- `PriceResult(price, currency, url=None)` for one resource price;
 - `ListingResult(currency, offers)` for a listing/search, with one `Offer(title,
   price, url)` per independently alertable advert.
 
@@ -155,10 +169,17 @@ iterables are snapshotted to immutable tuples.
 For single-price alerts, a result URL takes precedence over the item's declared
 reference URL. If neither exists, the notification is sent without a link.
 
-Raise modeled exceptions from `core.scrapers.api`: `ProductNotFoundError`,
-`ProductUnavailableError`, `InvalidURLError`, `RateLimitError`, `ServerError`,
+Raise modeled exceptions from `core.scrapers.api`: `ResourceNotFoundError`,
+`PriceUnavailableError`, `InvalidURLError`, `RateLimitError`, `ServerError`,
 `ScraperParseError`, or the base `ScraperError`. Their retry preparation,
 abort, traceback, notification, and exit-status policies are application-owned.
+
+## Basic plugin complete
+
+At this point a URL-based `PriceResult` plugin is complete. A contribution does
+not need custom fields, custom settings, shared HTTP helpers, listing results,
+migrations, or presentation overrides. The remaining sections are optional
+advanced paths; use only the ones required by the source.
 
 ## Custom item fields
 

@@ -12,11 +12,11 @@ from core.application.diagnostics import (
     record_general_diagnostic,
     record_target_load_diagnostic,
 )
-from core.application.preflight import LoadFailureKind, load_targets
-from core.constants import CONFIG_DIR
-from core.exceptions import UpdateCheckError
+from core.application.preflight import load_target_configs
+from core.constants import CONFIG_DIR, STATE_DIR
+from core.exceptions import StateFileError, UpdateCheckError
 from core.general import load_general_config
-from core.infrastructure.logging import setup_global_logging
+from core.infrastructure.logging import setup_global_logging, try_save_diagnostic
 from core.infrastructure.signals import install_interrupt_handler
 from core.infrastructure.systemd import (
     get_installed_plugin_units,
@@ -28,6 +28,7 @@ from core.infrastructure.updates import check_for_updates
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.intervals import oncalendar_for
 from core.scrapers.framework.settings import KEY_INTERVAL
+from core.scrapers.framework.state import JsonStateRepository
 from core.settings import SettingStatus
 from core.tui.config_check import config_view, render_config_panel
 from core.tui.status import build_not_installed_panel, build_orphan_panel, build_service_panel
@@ -49,7 +50,7 @@ def main() -> None:
 
     catalog = PluginCatalog.discover()
     registered_scrapers = list(catalog.targets)
-    load_results = load_targets(list(catalog.plugins), CONFIG_DIR)
+    load_results = load_target_configs(list(catalog.plugins), CONFIG_DIR)
     loads_by_target = {load.target: load for load in load_results}
     general = record_general_diagnostic(load_general_config(CONFIG_DIR))
     with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
@@ -63,8 +64,20 @@ def main() -> None:
         plugin = catalog.get(target)
         load = loads_by_target.get(target)
         diagnostic_saved = None
+        state_failure_detail = None
         if load is not None:
             diagnostic_saved = record_target_load_diagnostic(load)
+            if load.failure is None:
+                state = JsonStateRepository(
+                    os.path.join(STATE_DIR, f"{target}.json"),
+                    display_path=f"state/{target}.json",
+                )
+                try:
+                    state.load()
+                except StateFileError as exc:
+                    state_failure_detail = str(exc)
+                    if exc.diagnostic_detail:
+                        try_save_diagnostic(exc.diagnostic_detail, target_name=target)
 
         timer_props = get_systemd_properties(
             scraper_unit_name(target, "timer"), "ActiveState,NextElapseUSecRealtime"
@@ -100,17 +113,13 @@ def main() -> None:
             config_view(
                 load.count,
                 load.faulty_indices,
-                load.failure.detail
-                if load.failure is not None and load.failure.kind is LoadFailureKind.CONFIG
-                else None,
+                load.failure.detail if load.failure is not None else None,
                 f"config/{plugin.config_filename}",
                 diagnostic_saved,
             ),
             plugin.display_name,
             interval_spec,
-            load.failure.detail
-            if load.failure is not None and load.failure.kind is LoadFailureKind.STATE
-            else None,
+            state_failure_detail,
         )
         console.print()
         service_panel.render(console)

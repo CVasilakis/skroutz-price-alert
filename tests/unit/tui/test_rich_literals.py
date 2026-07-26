@@ -3,7 +3,8 @@ import io
 from rich.console import Console
 
 from core.application.contracts import PriceOutcome
-from core.settings import SettingStatus, SettingView
+from core.presentation import SettingView
+from core.settings import SettingStatus
 from core.tui.config_check import add_setting_row, config_view
 from core.tui.panel import PANEL_WIDTH, StatusPanelBuilder
 from core.tui.run_reporter import InteractiveRunReporter

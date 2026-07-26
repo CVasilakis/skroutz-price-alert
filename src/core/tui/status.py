@@ -4,6 +4,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
+from core.presentation import resolved_setting_views
 from core.settings import SettingStatus
 from core.tui.config_check import (
     ConfigView,
@@ -70,8 +71,8 @@ def build_service_panel(
     """Builds the per-plugin Service Status panel from already-collected inputs.
 
     Pure presentation given the systemd property dicts, the resolved settings, the
-    products-config health, and the schedule-drift inputs (the caller queries systemd, the
-    catalog, the ``load_targets`` I/O and the on-disk timer; this only renders). Lets the
+    target-configuration health, and the schedule-drift inputs (the caller queries systemd, the
+    catalog, the ``load_target_configs`` I/O and the on-disk timer; this only renders). Lets the
     UI test harness drive every config/settings/timer/exit-code variant with synthetic inputs.
 
     Args:
@@ -82,12 +83,12 @@ def build_service_panel(
             (``ActiveState``, ``Result``, ``ExecMainStartTimestamp``, ``ExecMainStatus``).
         resolved (ResolvedSettings): The target's resolved settings (settings section +
             interval status for the drift gate).
-        config_filename (str): The plugin's config filename, for the products-error note.
+        config_filename (str): The plugin's config filename, for the target-configuration-error note.
         expected_oncalendar (str): The ``OnCalendar`` the configured interval resolves to
             (``""`` when not applicable); compared against ``active_oncalendar`` for drift.
         active_oncalendar (str): The ``OnCalendar`` currently written in the installed
             timer unit (``""`` when none/not applicable).
-        config (ConfigView | None): The target's products-config health, rendered as the
+        config (ConfigView | None): The target's target-configuration health, rendered as the
             leading 'Config' row; ``None`` when unavailable (e.g. missing dependencies).
 
     Returns:
@@ -95,13 +96,13 @@ def build_service_panel(
     """
     service_panel = StatusPanelBuilder(f"{display_name} Service Status")
 
-    # Settings section: the products-config health ('Config' row) leads, then each scraper's
+    # Settings section: the target-configuration health ('Config' row) leads, then each scraper's
     # settings (or its active default), then a separator, then the systemd status rows.
     add_config_row(service_panel, config)
     if state_failure_detail:
         ref = service_panel.add_note_ref(state_failure_detail)
         service_panel.add_row("❗", "State", f"[red]Failed[/red]{ref}")
-    for view in resolved.views():
+    for view in resolved_setting_views(resolved):
         add_setting_row(service_panel, view)
     service_panel.add_separator()
 

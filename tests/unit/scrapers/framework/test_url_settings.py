@@ -1,12 +1,12 @@
 import pytest
 
-from core.scrapers.framework.intervals import normalize_interval, oncalendar_for
-from core.scrapers.framework.url import (
+from core.scrapers.domain import (
     canonicalize_url,
     normalize_domain,
     parse_url,
     parsed_matches_domains,
 )
+from core.scrapers.framework.intervals import normalize_interval, oncalendar_for
 from core.settings.normalizers import normalize_bool, normalize_retention_days
 
 

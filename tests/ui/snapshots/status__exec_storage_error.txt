@@ -1,7 +1,7 @@
 # border: red
 
 ╭──────────────────────── Skroutz Service Status ─────────────────────────╮
-│   ✅    Monitored Items             5 loaded                            │
+│   ✅    Tracked Items               5 loaded                            │
 │   ✅    Execution Interval          1h                                  │
 │   ✅    Log Retention               7 days                              │
 │   ✅    Notify On Errors            true                                │
@@ -12,5 +12,5 @@
 │   ❗    Last Execution Status       Storage Failed [1]                  │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
-│   [1] Latest scrape state was not saved to state/skroutz.json.          │
+│   [1] Scrape state could not be loaded or saved in state/skroutz.json.  │
 ╰─────────────────────────────────────────────────────────────────────────╯

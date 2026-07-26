@@ -13,12 +13,12 @@ from core.constants import (
     EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
     EXIT_CODE_NOTIFICATION_ERROR,
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_PRODUCTS_ERROR,
     EXIT_CODE_RATE_LIMIT_ERROR,
     EXIT_CODE_SCRAPE_ERROR,
     EXIT_CODE_SKIPPED,
     EXIT_CODE_STORAGE_ERROR,
     EXIT_CODE_SUCCESS,
+    EXIT_CODE_TARGET_CONFIG_ERROR,
 )
 from core.tui.service_verdicts import classify_service_state
 
@@ -42,9 +42,9 @@ class TestClassifyServiceState(unittest.TestCase):
         self.assertEqual(verdict.label, "Failed")
         self.assertEqual(verdict.note, "Reason: signal, Exit Code: 0")
 
-    def test_products_error_fills_in_the_config_filename(self):
+    def test_target_config_error_fills_in_the_config_filename(self):
         verdict = self._classify(
-            exec_status=str(EXIT_CODE_PRODUCTS_ERROR), config="custom-name.json"
+            exec_status=str(EXIT_CODE_TARGET_CONFIG_ERROR), config="custom-name.json"
         )
         self.assertEqual((verdict.icon, verdict.label, verdict.color), ("❗", "Failed", "red"))
         self.assertEqual(verdict.note, "Issue with the `config/custom-name.json` file.")

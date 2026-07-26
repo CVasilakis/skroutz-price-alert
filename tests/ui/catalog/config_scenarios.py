@@ -1,7 +1,7 @@
 """Configuration Check panel scenarios (shared by ``--status`` and the interactive run).
 
 ``drive_config`` feeds an immutable general-config outcome to the real
-``config_check._append_*`` helpers. Per-scraper products-config health is shown on each
+``config_check._append_*`` helpers. Per-scraper target-configuration health is shown on each
 Service Status and Scraping panel instead.
 """
 

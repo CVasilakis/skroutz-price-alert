@@ -92,7 +92,7 @@ presentation-only builders.
 tests/ui/
   catalog/                 # ── WHAT to render: the scenarios (edit these to add cases)
     _base.py               #    Scenario, Surface, BuildResult, the @scenario registrar
-    inputs.py              #    shared input builders (SettingViews, ResolvedSettings,
+    inputs.py              #    shared input builders (resolved entries/settings,
                            #      ConfigView, systemd property dicts) — reused by scenarios
     run_scenarios.py       #    interactive scraping panel (a normal run)
     e2e_run_scenarios.py   #    the same panel, driven by the real application workflow
@@ -152,8 +152,8 @@ needed. This runs the existing project tests **and** the UI catalog, snapshot, a
 When output changes, you get a per-scenario failure naming the exact case, e.g.:
 
 ```
-FAIL: test_matches_snapshot (... scenario='status__exec_products_error')
-AssertionError: ... != ...  : UI output changed for 'status__exec_products_error'. ...
+FAIL: test_matches_snapshot (... scenario='status__exec_target_config_error')
+AssertionError: ... != ...  : UI output changed for 'status__exec_target_config_error'. ...
 ```
 
 Two outcomes are possible:
@@ -235,7 +235,7 @@ class Scenario:
 
 Tags come from one curated vocabulary — `TAG_VOCABULARY` in `catalog/_base.py`, a
 `tag -> one-line meaning` mapping (currently: `ok`, `error`, `skipped`, `help`,
-`retry`, `interrupt`, `in_progress`, `price_drop`, `listing`, `settings`, `products`,
+`retry`, `interrupt`, `in_progress`, `price_drop`, `listing`, `settings`, `target_config`,
 `reminder`, `timer`, `last_run`, `orphan`, `catalog`, `system`, `combined`,
 `layout`, `synthetic`). `test_ui_catalog.py` rejects a tag outside the vocabulary and a
 vocabulary entry no scenario uses, so the filter chips in the HTML report stay
@@ -271,7 +271,7 @@ real production builder:
 | `STARTUP`| Full startup transcript (test-only; hidden from gallery/report) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript on one console: Configuration Check + the real `ReminderService.run_once()` + the Scraping panel (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
 | `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
 
-The per-scraper **products-config health** (the `Config` row) is no longer a `CONFIG`-surface
+The per-scraper **target-configuration health** (the `Config` row) is no longer a `CONFIG`-surface
 concern: it leads each `STATUS` Service Status panel (`drive_service`'s `config`) and each
 `RUN` Scraping panel (the `config` passed to `_start`/`start_target`), built by the shared
 `config_check.config_view` / `add_config_row`.
@@ -369,12 +369,13 @@ So scenarios stay short and use the *real* production types (with their real dis
 formatting and warning text), `inputs.py` offers small factories:
 
 - `interval_view / retention_view / notify_view(value, status, raw)` — a single
-  `SettingView` row; `views_all_ok() / views_all_default() / views_one_invalid_each()` —
-  ready-made sets for the settings section.
+  resolved-setting entry; `views_all_ok() / views_all_default() /
+  views_one_invalid_each()` provide ready-made settings sections.
 - `resolved_settings(interval=…, retention=…, notify=…)` — a full
   `ResolvedSettings` for `--status`.
 - `timer_props(...)` / `service_props(...)` — the systemd property dicts `--status` reads.
-- `target_load(...)` — a Configuration Check row outcome.
+- `config_ok(...) / config_faulty(...) / config_failed(...)` — target
+  configuration row outcomes.
 - `stub_logger()`, `CURRENCY` — misc helpers.
 
 `run_scenarios.py` also defines a `_start(s, …)` helper and note constants (`NOTIFIED_OK`,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
@@ -12,15 +11,15 @@ from core.constants import (
     EXIT_CODE_INTERRUPT,
     EXIT_CODE_NOTIFICATION_ERROR,
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_PRODUCTS_ERROR,
     EXIT_CODE_RATE_LIMIT_ERROR,
     EXIT_CODE_SCRAPE_ERROR,
     EXIT_CODE_SKIPPED,
     EXIT_CODE_STORAGE_ERROR,
     EXIT_CODE_SUCCESS,
+    EXIT_CODE_TARGET_CONFIG_ERROR,
 )
 from core.scrapers.api import TrackedItem
-from core.settings import SettingView
+from core.settings import ResolvedSettings
 
 Notes = str | list[str] | None
 
@@ -53,7 +52,7 @@ class ItemRunOutcome:
 
 @dataclass
 class RunOutcome:
-    products_error: bool = False
+    target_config_error: bool = False
     storage_error: bool = False
     dependency_error: bool = False
     scrape_error: bool = False
@@ -64,8 +63,8 @@ class RunOutcome:
     def exit_code(self, *, interrupted: bool, target_count: int) -> int:
         if interrupted:
             return EXIT_CODE_INTERRUPT
-        if self.products_error:
-            return EXIT_CODE_PRODUCTS_ERROR
+        if self.target_config_error:
+            return EXIT_CODE_TARGET_CONFIG_ERROR
         if self.storage_error:
             return EXIT_CODE_STORAGE_ERROR
         if self.dependency_error:
@@ -84,30 +83,11 @@ class RunOutcome:
 class RunReporter(Protocol):
     """Core reporting protocol implemented by interactive and silent frontends."""
 
-    @staticmethod
-    def _outcome_icon(outcome: PriceOutcome, delivery_failed: bool = False) -> str:
-        if delivery_failed:
-            return "🟡"
-        return {PriceOutcome.DROP: "🎉", PriceOutcome.NO_TARGET: "🟡"}.get(outcome, "✅")
-
-    @staticmethod
-    def _normalize_notes(notes: Notes) -> list[str]:
-        if notes is None:
-            return []
-
-        def ensure_period(value: str) -> str:
-            stripped = value.strip()
-            return stripped + "." if stripped and not stripped.endswith(".") else stripped
-
-        if isinstance(notes, str):
-            return [ensure_period(notes)] if notes else []
-        return [ensure_period(note) for note in notes if note]
-
     def start_target(
         self,
         target_name: str,
         target_logger: logging.Logger,
-        settings_view: Sequence[SettingView],
+        settings: ResolvedSettings,
         config: ConfigOutcome,
     ) -> None: ...
 

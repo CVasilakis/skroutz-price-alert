@@ -18,7 +18,7 @@ class NotificationService(Protocol):
     def notify_low_price(
         self,
         site: str,
-        product_name: str,
+        item_name: str,
         target_price: float,
         current_price: float,
         url: str | None,
@@ -26,7 +26,7 @@ class NotificationService(Protocol):
         advert_title: str | None = None,
     ) -> bool: ...
 
-    def notify_old_entries(
+    def notify_stale_items(
         self,
         site: str,
         stale_items: Sequence[TrackedItem],

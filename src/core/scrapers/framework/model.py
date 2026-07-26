@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.scrapers.api import ItemField, TrackedItem, UrlField
-from core.scrapers.framework.url import canonicalize_url, parse_url, parsed_matches_domains
+from core.scrapers.domain import canonicalize_url, parse_url, parsed_matches_domains
 from core.settings import MISSING, SettingSpec
 
 

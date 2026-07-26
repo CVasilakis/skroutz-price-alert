@@ -5,8 +5,8 @@ import os
 EXIT_CODE_SUCCESS: int = 0
 EXIT_CODE_ERROR: int = 1
 EXIT_CODE_INTERRUPT: int = 130  # Script was interrupted (user or system termination)
-EXIT_CODE_PRODUCTS_ERROR: int = (
-    15  # Issue with a plugin's products config file (e.g. config/skroutz.json)
+EXIT_CODE_TARGET_CONFIG_ERROR: int = (
+    15  # Issue with a target's tracked-items config file (e.g. config/skroutz.json)
 )
 EXIT_CODE_NOTIFICATION_CONFIG_ERROR: int = 16  # Unusable notification configuration
 EXIT_CODE_RATE_LIMIT_ERROR: int = 17  # Blocked by server due to rate limits
@@ -19,6 +19,7 @@ EXIT_CODE_SKIPPED: int = 42  # Skipped execution (another instance running)
 # --- Base Directory Paths ---
 BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONFIG_DIR: str = os.path.join(BASE_DIR, "config")
+STATE_DIR: str = os.path.join(BASE_DIR, "state")
 LOGS_DIR: str = os.path.join(BASE_DIR, "logs")
 
 # --- Notification Configuration ---
@@ -38,7 +39,7 @@ APPRISE_PLACEHOLDERS: list[str] = [
 MAX_RETRIES: int = 3
 
 # Number of hours after which an item check is considered old, triggering a stale warning
-OLD_ENTRY_HOURS: int = 48
+STALE_ITEM_HOURS: int = 48
 
 # Base delay in seconds between processing each item to avoid rate limits
 MIN_DELAY_SECONDS: int = 20

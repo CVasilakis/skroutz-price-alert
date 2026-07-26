@@ -7,7 +7,6 @@ from core.settings.model import (
     ResolvedSettings,
     SettingSpec,
     SettingStatus,
-    SettingView,
 )
 from core.settings.normalizers import (
     DEFAULT_LOG_RETENTION_DAYS,
@@ -23,7 +22,6 @@ from core.settings.resolve import (
     SettingsValidationProblem,
     resolve_settings,
     resolve_spec,
-    setting_view,
     validate_settings_block,
 )
 
@@ -33,7 +31,6 @@ __all__ = [
     "ResolvedSetting",
     "ResolvedSettings",
     "SettingStatus",
-    "SettingView",
     "SettingsValidationError",
     "SettingsValidationProblem",
     "fold_token",
@@ -46,6 +43,5 @@ __all__ = [
     "unsupported_value_message",
     "resolve_spec",
     "resolve_settings",
-    "setting_view",
     "validate_settings_block",
 ]

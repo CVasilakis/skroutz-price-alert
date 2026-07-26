@@ -22,7 +22,7 @@
 5. [Configuration](#%EF%B8%8F-configuration)
    - [Scraper Configuration (config/<target>.json)](#file-1-scraper-configuration-configtargetjson)
      - [Scraper Settings](#scraper-settings)
-     - [Monitored Items](#monitored-items)
+     - [Tracked Items](#tracked-items)
    - [General Configuration (config/general.json)](#file-2-general-configuration-configgeneraljson)
      - [Notification Settings](#notification-settings)
      - [General Settings](#general-settings)
@@ -108,7 +108,15 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     ./install.sh
     ```
 
-    The `install.sh` script will automatically create a project-owned Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. The root `venv/` path must be a real directory, not a symlink. Managed unit destinations must be absent or regular files; install, schedule, and update reject systemd unit symlinks before changing packages, units, or timer state. Remove a legacy link safely with `./scripts/uninstall.sh --<target>`, then reinstall it. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
+    The `install.sh` script will automatically create a project-owned Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
+
+    Scrooge Alert creates a real root `venv/` directory and regular canonical
+    systemd unit files. The enablement symlinks created by systemd below
+    directories such as `timers.target.wants/` are expected and are not managed
+    unit destinations. A symlink placed at a managed destination is unsupported:
+    install, schedule, and update reject it before changing packages, units, or
+    timer state. Remove such a unit entry safely with
+    `./scripts/uninstall.sh --<target>`, then reinstall it.
 
 4. **Configure your settings:**
 
@@ -135,7 +143,7 @@ Machine-owned data is stored separately under `state/`.
 ### File 1: Scraper Configuration (`config/<target>.json`)
 
 Each scraper reads a strict, versioned, read-only-at-runtime JSON file in `config/` (for example,
-`config/<target>.json`) containing its settings and monitored items. Machine state is
+`config/<target>.json`) containing its settings and tracked items. Machine state is
 stored separately in the ignored, schema-versioned `state/<target>.json`. Example files
 live beside their plugins:
 
@@ -177,12 +185,12 @@ The optional top-level `settings` holds per-scraper preferences, separate from y
 | `execution_interval` | String | How often the scraper's background timer runs. One of `15m`, `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `24h`. If omitted, the scraper's built-in default is used. |
 | `log_retention_days` | Integer / String | How many days of log files each scraper keeps. It should be an integer between **1–30**, written as a number or a day string (`"7d"`, `"7 days"`). Only days are supported (no hours/weeks/months), and logging cannot be disabled. If omitted or an unsupported value is used, the default of 7 days is used. |
 | `notify_scraping_errors` | Boolean | Whether to send the **Scraping Errors** notification for a scraper. Defaults to `true`. Set it to `false` to stop those alerts. The scraping errors are still logged, and the **Tracking Stale** and **Script Crash** alerts are unaffected — so a persistent problem still surfaces. If omitted or an unsupported value is used, the default (`true`, notify) applies. |
-| `suppress_repeated_price_alerts` | Boolean | Whether to suppress a price alert that was already delivered successfully for the same active deal. Defaults to `false`, so below-target prices alert on every run. When `true`, single-product alerts resume only after the price is observed at or above the target and later drops again; listing alerts are deduplicated by canonical offer URL and resume if an offer leaves the below-target result set and later returns. Failed deliveries remain eligible for retry. |
+| `suppress_repeated_price_alerts` | Boolean | Whether to suppress a price alert that was already delivered successfully for the same active deal. Defaults to `false`, so below-target prices alert on every run. When `true`, single-price alerts resume only after the price is observed at or above the target and later drops again; listing alerts are deduplicated by canonical offer URL and resume if an offer leaves the below-target result set and later returns. Failed deliveries remain eligible for retry. |
 
 > [!NOTE]
 > Changing `execution_interval` does not take effect on its own. After editing it, apply it to the live timer with the [Set Execution Interval](#set-execution-interval) script: `./scripts/schedule.sh`.
 
-#### Monitored Items
+#### Tracked Items
 
 The `items` array lists the entries you want to monitor. Every row needs a unique,
 stable `id`; separate IDs may intentionally use the same source input.
@@ -328,7 +336,7 @@ Background runs expose precise exit statuses through **Last Execution Status**:
 
 | Code | Meaning |
 | :--- | :--- |
-| `15` | At least one scraper products config could not be loaded. That target is skipped while other selected targets continue; management commands preserve its existing units. |
+| `15` | At least one target configuration could not be loaded. That target is skipped while other selected targets continue; management commands preserve its existing units. |
 | `16` | Notification configuration in `config/general.json` is unusable. |
 | `17` | The store blocked or rate-limited the scraper. |
 | `18` | A parser or unexpected scraper fault exhausted all retries. |
@@ -417,11 +425,9 @@ Applies each scraper's configured `execution_interval` (from `config/<target>.js
 | `--<target>` | Apply only the specified target's interval (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is updated to match its configured interval. A scraper whose config file is missing, structurally invalid, or has an unsupported `execution_interval` is reported and left unchanged. Other targets continue, and a structural config error makes the command exit `15`. |
 
 Eligible timer changes are staged and applied as one transaction. Successful
-writes replace absent paths or regular files atomically. A timer or service
-symlink—including a relative, absolute, dangling, or `/dev/null` link—is rejected
-before mutation with an uninstall-and-reinstall remediation command. If writing,
-reloading, or restarting any timer fails, every changed regular file and timer
-activation state is restored.
+writes replace absent paths or regular files atomically. If writing, reloading,
+or restarting any timer fails, every changed regular file and timer activation
+state is restored.
 
 #### Remove Scrapers & Uninstall
 Performs a full or partial teardown of the background services:
@@ -576,8 +582,7 @@ unit files:
 
 The updater preserves selective installations and prior timer activation states.
 It uses a verified fast-forward and never prompts to discard changes or switches
-branches automatically. Legacy managed-unit symlinks must be removed with
-`./scripts/uninstall.sh --<target>` before updating.
+branches automatically.
 </details>
 
 <details>

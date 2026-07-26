@@ -82,41 +82,6 @@ class ResolvedSetting(Generic[T]):
     status: SettingStatus
 
 
-@dataclass(frozen=True)
-class SettingView:
-    label: str
-    display_value: str
-    status: SettingStatus
-    footnote: str | None = None
-
-    @property
-    def icon(self) -> str:
-        return "🟡" if self.status in (SettingStatus.INVALID, SettingStatus.MISSING) else "✅"
-
-    @property
-    def has_warning(self) -> bool:
-        return self.status in (SettingStatus.INVALID, SettingStatus.MISSING)
-
-    @property
-    def is_default(self) -> bool:
-        return self.status not in (SettingStatus.OK, SettingStatus.INVALID)
-
-    def render_value(
-        self,
-        note_ref: str = "",
-        *,
-        default_marker: str,
-        value_text: str | None = None,
-        default_note_ref: str = "",
-    ) -> str:
-        text = self.display_value if value_text is None else value_text
-        if self.has_warning:
-            return f"{text}{note_ref}"
-        if self.is_default:
-            return f"{text}{default_marker}{default_note_ref}"
-        return text
-
-
 class ResolvedSettings:
     """An immutable typed lookup keyed by the exact ``SettingSpec`` object."""
 
@@ -137,7 +102,7 @@ class ResolvedSettings:
     def status(self, spec: object) -> SettingStatus:
         return self._values[spec].status
 
-    def views(self) -> list[SettingView]:
-        from core.settings.resolve import setting_view
-
-        return [setting_view(cast(Any, spec), resolved) for spec, resolved in self._pairs]
+    @property
+    def entries(self) -> tuple[tuple[Any, ResolvedSetting[Any]], ...]:
+        """Return the immutable declaration/resolution entries in declaration order."""
+        return self._pairs

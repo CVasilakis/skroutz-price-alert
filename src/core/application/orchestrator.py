@@ -8,10 +8,9 @@ import signal
 from collections.abc import Callable
 from types import FrameType
 
-from core import messages
 from core.application.contracts import ConfigOutcome, RunOutcome, RunReporter
 from core.application.diagnostics import record_target_load_diagnostic
-from core.application.preflight import LoadFailureKind, TargetLoad
+from core.application.preflight import TargetConfigLoad
 from core.application.reporting import SilentRunReporter
 from core.application.target import TargetRunner
 from core.infrastructure.locking import acquire_lock
@@ -20,6 +19,7 @@ from core.infrastructure.signals import describe_signal
 from core.notifications.contracts import NotificationService
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.settings import KEY_RETENTION
+from core.scrapers.framework.state import JsonStateRepository
 
 
 def _utc_now() -> datetime.datetime:
@@ -31,12 +31,14 @@ class ScrapingOrchestrator:
 
     def __init__(
         self,
-        target_loads: list[TargetLoad],
+        target_loads: list[TargetConfigLoad],
         client_loader: ClientLoader,
         notifier: NotificationService,
         quiet: bool = False,
         reporter: RunReporter | None = None,
         now_fn: Callable[[], datetime.datetime] = _utc_now,
+        state_dir: str = "state",
+        state_repository_factory: Callable[..., JsonStateRepository] = JsonStateRepository,
     ) -> None:
         self.target_loads = tuple(target_loads)
         self.client_loader = client_loader
@@ -44,6 +46,8 @@ class ScrapingOrchestrator:
         self.quiet = quiet
         self.reporter = reporter or SilentRunReporter()
         self.now_fn = now_fn
+        self.state_dir = state_dir
+        self.state_repository_factory = state_repository_factory
         self.interrupted = False
         self._interrupt_message = ""
         self._current_target = ""
@@ -53,7 +57,7 @@ class ScrapingOrchestrator:
         self._interrupt_message = f"Received signal {describe_signal(signum)}"
         self.interrupted = True
 
-    def _start_target(self, load: TargetLoad) -> tuple[logging.Logger, bool | None]:
+    def _start_target(self, load: TargetConfigLoad) -> logging.Logger:
         plugin = load.plugin
         logger = get_target_logger(
             plugin.target,
@@ -61,15 +65,11 @@ class ScrapingOrchestrator:
             load.settings[plugin.setting(KEY_RETENTION)],
         )
         diagnostic_saved = record_target_load_diagnostic(load)
-        config_error = (
-            load.failure.detail
-            if load.failure is not None and load.failure.kind is LoadFailureKind.CONFIG
-            else None
-        )
+        config_error = load.failure.detail if load.failure is not None else None
         self.reporter.start_target(
             plugin.display_name,
             logger,
-            load.settings.views(),
+            load.settings,
             ConfigOutcome(
                 load.count,
                 tuple(load.faulty_indices),
@@ -78,7 +78,7 @@ class ScrapingOrchestrator:
                 diagnostic_saved,
             ),
         )
-        return logger, diagnostic_saved
+        return logger
 
     def run(self) -> int:
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -90,33 +90,20 @@ class ScrapingOrchestrator:
                 break
             plugin = load.plugin
             self._current_target = plugin.target
-            self._current_logger, diagnostic_saved = self._start_target(load)
+            self._current_logger = self._start_target(load)
 
             if load.failure is not None:
-                if load.failure.kind is LoadFailureKind.STATE:
-                    notes: str | list[str] = load.failure.detail
-                    if diagnostic_saved is False:
-                        notes = [load.failure.detail, messages.DIAGNOSTIC_WRITE_FAILED]
-                    self.reporter.log_error(
-                        "Storage",
-                        messages.state_load_failed(plugin.target),
-                        notes,
-                    )
-                    outcome.storage_error = True
-                else:
-                    outcome.products_error = True
+                outcome.target_config_error = True
                 self.reporter.complete_target()
                 continue
-            if not load.items:
-                self.reporter.complete_target()
-                continue
-            assert load.state is not None
 
             target_runner = TargetRunner(
                 client_loader=self.client_loader,
                 notifier=self.notifier,
                 reporter=self.reporter,
                 now_fn=self.now_fn,
+                state_dir=self.state_dir,
+                state_repository_factory=self.state_repository_factory,
                 acquire_lock_fn=acquire_lock,
                 save_traceback_fn=save_traceback,
             )

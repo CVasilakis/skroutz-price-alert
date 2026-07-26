@@ -3,18 +3,26 @@ from unittest import mock
 
 from core.application.contracts import ConfigOutcome, PriceOutcome
 from core.application.reporting import SilentRunReporter
-from core.settings import SettingStatus, SettingView
+from core.settings import ResolvedSetting, ResolvedSettings, SettingSpec, SettingStatus
 
 
 def test_silent_reporter_covers_config_settings_and_result_levels():
     logger = mock.create_autospec(logging.Logger, instance=True)
     reporter = SilentRunReporter()
-    valid = SettingView("Mode", "fast", SettingStatus.OK)
-    invalid = SettingView("Limit", "2", SettingStatus.INVALID, "bad limit")
+    mode = SettingSpec("mode", str, default="slow")
+    limit = SettingSpec("limit", int, default=2, warning="bad limit")
+    settings = ResolvedSettings(
+        (
+            (mode, ResolvedSetting("fast", SettingStatus.OK)),
+            (limit, ResolvedSetting(2, SettingStatus.INVALID)),
+        )
+    )
 
-    reporter.start_target("Store", logger, [valid, invalid], ConfigOutcome(3))
-    reporter.start_target("Store", logger, (), ConfigOutcome(2, (1, 3)))
-    reporter.start_target("Store", logger, (), ConfigOutcome(0, error="bad config"))
+    reporter.start_target("Store", logger, settings, ConfigOutcome(3))
+    reporter.start_target("Store", logger, ResolvedSettings(()), ConfigOutcome(2, (1, 3)))
+    reporter.start_target(
+        "Store", logger, ResolvedSettings(()), ConfigOutcome(0, error="bad config")
+    )
     reporter.start_scraping("Item", 1, 3)
     reporter.complete_scraping()
     reporter.log_result("✅", "Item", "Done", ["one", "two."])

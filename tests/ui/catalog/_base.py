@@ -122,7 +122,7 @@ TAG_VOCABULARY: dict[str, str] = {
     "price_drop": "Price fell below target (notification flow)",
     "listing": "Listing-type scrape (multi-advert search rows)",
     "settings": "The settings section / an invalid setting",
-    "products": "Products-config health (Config row / load failures)",
+    "target_config": "Target-configuration health (Config row / load failures)",
     "reminder": "Reminder cadence settings",
     "timer": "Systemd timer state / schedule drift",
     "last_run": "Last-execution verdict rows",

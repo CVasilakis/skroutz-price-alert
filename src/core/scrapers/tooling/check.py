@@ -189,25 +189,33 @@ def _check_declaration_imports(source: Path, package: str, target: str) -> None:
         except (OSError, UnicodeError, SyntaxError) as exc:
             raise RuntimeError(f"plugin source {filename!r} is unreadable: {exc}") from exc
         for node in ast.walk(tree):
-            modules: list[str] = []
+            imports: list[tuple[str, str]] = []
             if isinstance(node, ast.Import):
-                modules.extend(alias.name for alias in node.names)
+                imports.extend((alias.name, ast.unparse(node)) for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
-                if node.level:
+                rendered = ast.unparse(node)
+                if node.level >= 2:
+                    raise RuntimeError(
+                        f"plugin {target!r} descriptor {filename} uses escaped relative "
+                        f"import {rendered!r}; only level-1 plugin-local imports are allowed"
+                    )
+                if node.level == 1:
                     continue
                 if node.module:
-                    modules.append(node.module)
-            for module in modules:
+                    imports.append((node.module, rendered))
+            for module, rendered in imports:
+                top_level = module.split(".", 1)[0]
                 if (
                     module == "core.scrapers.api"
                     or module == package
                     or module.startswith(package + ".")
-                    or not module.startswith("core")
+                    or top_level in sys.stdlib_module_names
                 ):
                     continue
                 raise RuntimeError(
-                    f"plugin {target!r} declaration {filename} imports internal "
-                    f"module {module!r}; use core.scrapers.api or package-local helpers"
+                    f"plugin {target!r} descriptor {filename} imports disallowed module "
+                    f"{module!r} via {rendered!r}; use the standard library, "
+                    "core.scrapers.api, or level-1/package-local helpers"
                 )
 
 

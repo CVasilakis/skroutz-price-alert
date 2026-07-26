@@ -7,20 +7,27 @@ import logging
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from core import messages
 from core.application.contracts import RunReporter
 from core.application.items import ItemExecutor
-from core.application.preflight import TargetLoad
-from core.constants import OLD_ENTRY_HOURS
-from core.exceptions import LockAcquisitionError, PluginDependencyError, StorageFileError
+from core.application.preflight import TargetConfigLoad
+from core.constants import STALE_ITEM_HOURS
+from core.exceptions import (
+    LockAcquisitionError,
+    PluginDependencyError,
+    StateFileError,
+    StorageFileError,
+)
 from core.infrastructure.locking import acquire_lock
 from core.infrastructure.logging import save_traceback, try_save_diagnostic
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.settings import KEY_NOTIFY, KEY_SUPPRESS_REPEATED_PRICE_ALERTS
+from core.scrapers.framework.state import JsonStateRepository
 
 
 @dataclass
@@ -45,6 +52,8 @@ class TargetRunner:
         notifier: NotificationService,
         reporter: RunReporter,
         now_fn: Callable[[], datetime.datetime],
+        state_dir: str,
+        state_repository_factory: Callable[..., JsonStateRepository] = JsonStateRepository,
         executor_type: type[ItemExecutor] | None = None,
         acquire_lock_fn: Callable[[str], AbstractContextManager[Any]] = acquire_lock,
         save_traceback_fn: Callable[..., None] = save_traceback,
@@ -53,6 +62,8 @@ class TargetRunner:
         self.notifier = notifier
         self.reporter = reporter
         self.now_fn = now_fn
+        self.state_dir = Path(state_dir)
+        self.state_repository_factory = state_repository_factory
         self.executor_type = executor_type or ItemExecutor
         self.acquire_lock_fn = acquire_lock_fn
         self.save_traceback_fn = save_traceback_fn
@@ -75,7 +86,7 @@ class TargetRunner:
 
     def run(
         self,
-        load: TargetLoad,
+        load: TargetConfigLoad,
         logger: logging.Logger,
         interrupted: Callable[[], bool],
     ) -> TargetRunOutcome:
@@ -85,17 +96,41 @@ class TargetRunner:
         executor: ItemExecutor | None = None
         try:
             with self.acquire_lock_fn(plugin.target):
-                assert load.state is not None
+                state = self.state_repository_factory(
+                    self.state_dir / f"{plugin.target}.json",
+                    display_path=f"state/{plugin.target}.json",
+                )
+                try:
+                    state.load()
+                except StateFileError as exc:
+                    diagnostic_saved = None
+                    if exc.diagnostic_detail:
+                        diagnostic_saved = try_save_diagnostic(
+                            exc.diagnostic_detail,
+                            target_name=plugin.target,
+                        )
+                    load_notes: str | list[str] = str(exc)
+                    if diagnostic_saved is False:
+                        load_notes = [str(exc), messages.DIAGNOSTIC_WRITE_FAILED]
+                    self.reporter.log_error(
+                        "Storage",
+                        messages.state_load_failed(plugin.target),
+                        load_notes,
+                    )
+                    result.storage_error = True
+                    return result
                 client = None
                 primary_error: Exception | None = None
                 cleanup_error: Exception | None = None
                 try:
+                    if not load.items:
+                        return result
                     client = self.client_loader.load(plugin, load.settings)
                     executor = self.executor_type(
                         target=plugin.target,
                         display_name=plugin.display_name,
                         client=client,
-                        state=load.state,
+                        state=state,
                         notifier=self.notifier,
                         reporter=self.reporter,
                         logger=logger,
@@ -117,9 +152,9 @@ class TargetRunner:
                         result.rate_limited |= item_outcome.rate_limited
                         result.scrape_error |= item_outcome.affects_scrape_status
                         result.notification_error |= item_outcome.notification_failed
-                    if load.state.has_pending:
+                    if state.has_pending:
                         try:
-                            load.state.save()
+                            state.save()
                         except StorageFileError as exc:
                             diagnostic_saved = None
                             if exc.diagnostic_detail:
@@ -155,10 +190,10 @@ class TargetRunner:
             stale_items = executor.stale_items if executor is not None else []
             if not interrupted() and stale_items and self.notifier.has_services:
                 delivered = self._try_notification(
-                    lambda: self.notifier.notify_old_entries(
+                    lambda: self.notifier.notify_stale_items(
                         plugin.display_name,
                         stale_items,
-                        OLD_ENTRY_HOURS,
+                        STALE_ITEM_HOURS,
                         plugin.item_reference_url,
                     ),
                     logger=logger,

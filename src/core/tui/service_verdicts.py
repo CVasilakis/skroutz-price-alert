@@ -5,12 +5,12 @@ from core.constants import (
     EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
     EXIT_CODE_NOTIFICATION_ERROR,
     EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_PRODUCTS_ERROR,
     EXIT_CODE_RATE_LIMIT_ERROR,
     EXIT_CODE_SCRAPE_ERROR,
     EXIT_CODE_SKIPPED,
     EXIT_CODE_STORAGE_ERROR,
     EXIT_CODE_SUCCESS,
+    EXIT_CODE_TARGET_CONFIG_ERROR,
 )
 
 
@@ -41,7 +41,7 @@ _VERDICTS: dict[int, ServiceVerdict] = {
     EXIT_CODE_SKIPPED: ServiceVerdict(
         "🟡", "Skipped", "yellow", "Another instance of the scraper was running."
     ),
-    EXIT_CODE_PRODUCTS_ERROR: ServiceVerdict(
+    EXIT_CODE_TARGET_CONFIG_ERROR: ServiceVerdict(
         "❗", "Failed", "red", "Issue with the `config/{detail}` file."
     ),
     EXIT_CODE_NOTIFICATION_CONFIG_ERROR: ServiceVerdict(
@@ -63,7 +63,7 @@ _VERDICTS: dict[int, ServiceVerdict] = {
         "❗",
         "Storage Failed",
         "red",
-        "Latest scrape state was not saved to `state/{target}.json`.",
+        "Scrape state could not be loaded or saved in `state/{target}.json`.",
     ),
     EXIT_CODE_NOTIFICATION_ERROR: ServiceVerdict(
         "🟡",
@@ -101,7 +101,7 @@ def classify_service_state(
         exec_status (str): The process exit code as a string (``ExecMainStatus``).
         target (str): The scraper target, used in actionable paths and commands.
         config_filename (str): The target's config filename, used to fill the
-            products-error note's ``{detail}`` placeholder.
+            target-configuration-error note's ``{detail}`` placeholder.
 
     Returns:
         ServiceVerdict: The icon/label/color and a fully-resolved note (or None).

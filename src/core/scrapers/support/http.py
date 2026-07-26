@@ -10,8 +10,8 @@ from tls_client.response import Response
 
 from core import messages
 from core.scrapers.api import (
-    ProductNotFoundError,
     RateLimitError,
+    ResourceNotFoundError,
     ScraperClient,
     ScraperError,
     ServerError,
@@ -67,7 +67,7 @@ class HttpScraperClient(ScraperClient):
         if status_code == 200:
             return
         if status_code in self.NOT_FOUND_CODES:
-            raise ProductNotFoundError(messages.not_found_detail(status_code))
+            raise ResourceNotFoundError(messages.not_found_detail(status_code))
         if status_code in self.RATE_LIMIT_CODES:
             raise RateLimitError(messages.rate_limited_detail(status_code))
         if 500 <= status_code < 600:

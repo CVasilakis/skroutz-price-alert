@@ -48,7 +48,7 @@ class AppriseNotifier:
     def notify_low_price(
         self,
         site: str,
-        product_name: str,
+        item_name: str,
         target_price: float,
         current_price: float,
         url: str | None,
@@ -58,7 +58,7 @@ class AppriseNotifier:
         return self._dispatch(
             price_drop_message(
                 site,
-                product_name,
+                item_name,
                 target_price,
                 current_price,
                 url,
@@ -67,7 +67,7 @@ class AppriseNotifier:
             )
         )
 
-    def notify_old_entries(
+    def notify_stale_items(
         self,
         site: str,
         stale_items: Sequence[TrackedItem],

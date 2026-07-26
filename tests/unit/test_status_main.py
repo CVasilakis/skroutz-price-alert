@@ -49,7 +49,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         mock.patch("core.status.Console", return_value=console),
         mock.patch("core.status.PluginCatalog.discover", return_value=catalog),
         mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar,
-        mock.patch("core.status.load_targets", return_value=(load,)),
+        mock.patch("core.status.load_target_configs", return_value=(load,)),
         mock.patch("core.status.load_general_config") as load_general,
         mock.patch(
             "core.status.record_general_diagnostic",
@@ -65,6 +65,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         mock.patch("core.status.get_systemd_properties", side_effect=systemd_properties),
         mock.patch("core.status.read_timer_oncalendar", return_value="daily"),
         mock.patch("core.status.config_view", return_value="config-view"),
+        mock.patch("core.status.JsonStateRepository") as state_repository,
         mock.patch("core.status.build_service_panel", return_value=service_panel) as build_service,
         mock.patch(
             "core.status.build_not_installed_panel", return_value=not_installed
@@ -78,6 +79,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
         core.status.main()
 
     oncalendar.assert_called_once_with("1h")
+    state_repository.return_value.load.assert_called_once()
     load_general.assert_called_once_with(core.status.CONFIG_DIR)
     render_config.assert_called_once_with(console, load_general.return_value, False)
     build_service.assert_called_once()

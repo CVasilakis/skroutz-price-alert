@@ -105,6 +105,7 @@ def test_declaration_imports_allow_stdlib_public_api_and_package_local(tmp_path)
     (source / "plugin.py").write_text(
         "import json\n"
         "from core.scrapers.api import ScraperPlugin\n"
+        "from .helper import LOCAL\n"
         "from plugins.acme.helper import VALUE\n",
         encoding="utf-8",
     )
@@ -120,7 +121,32 @@ def test_declaration_imports_reject_other_core_internals(tmp_path):
         encoding="utf-8",
     )
 
-    with pytest.raises(RuntimeError, match="imports internal module"):
+    with pytest.raises(RuntimeError, match="imports disallowed module"):
+        _check_declaration_imports(source, "plugins.acme", "acme")
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "from ..other import VALUE\n",
+        "from ....exceptions import ResourceNotFoundError\n",
+    ],
+)
+def test_declaration_imports_reject_upward_relative_imports(tmp_path, statement):
+    source = tmp_path / "acme"
+    source.mkdir()
+    (source / "plugin.py").write_text(statement, encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=r"descriptor plugin.py.*escaped relative import"):
+        _check_declaration_imports(source, "plugins.acme", "acme")
+
+
+def test_declaration_imports_reject_absolute_third_party_modules(tmp_path):
+    source = tmp_path / "acme"
+    source.mkdir()
+    (source / "__init__.py").write_text("import requests\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=r"descriptor __init__.py.*'import requests'"):
         _check_declaration_imports(source, "plugins.acme", "acme")
 
 

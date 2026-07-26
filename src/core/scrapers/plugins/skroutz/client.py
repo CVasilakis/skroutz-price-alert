@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from core.scrapers.api import (
     InvalidURLError,
     PriceResult,
-    ProductUnavailableError,
+    PriceUnavailableError,
     ScraperParseError,
     TrackedItem,
 )
@@ -96,8 +96,8 @@ class Client(HttpScraperClient):
             PriceResult: The scraped price and currency.
 
         Raises:
-            ProductNotFoundError: If the product is not found.
-            ProductUnavailableError: If the product is found but price is unavailable.
+            ResourceNotFoundError: If the product is not found.
+            PriceUnavailableError: If the product is found but price is unavailable.
             InvalidURLError: If the provided URL is invalid.
             ScraperError: For generic scraping errors (e.g. empty response, unexpected HTTP code).
             RateLimitError: If the server blocks the request or limits the rate.
@@ -133,7 +133,7 @@ class Client(HttpScraperClient):
             raise ScraperParseError(f"No JSON response: {e}")
 
         if response_data.get("price_min") is None:
-            raise ProductUnavailableError("Not available")
+            raise PriceUnavailableError("Not available")
 
         # parse_price is the single shared price normalizer (handles currency symbols
         # and European/US grouping); None means the value was unparseable and is raised

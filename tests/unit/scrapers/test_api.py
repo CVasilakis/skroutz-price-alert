@@ -1,6 +1,7 @@
 import pytest
 
 from core.exceptions import InvalidScrapeResultError
+from core.presentation import resolved_setting_views
 from core.scrapers.api import (
     ItemField,
     ListingResult,
@@ -57,13 +58,13 @@ def test_required_and_sensitive_setting_never_exposes_raw_value():
     token = SettingSpec("api_token", str, sensitive=True)
     missing = resolve_settings((token,), {})
     assert missing.status(token) is SettingStatus.MISSING
-    assert missing.views()[0].display_value == "not configured"
+    assert resolved_setting_views(missing)[0].display_value == "not configured"
     with pytest.raises(RuntimeError, match="was not resolved"):
         _ = missing[token]
 
     configured = resolve_settings((token,), {"api_token": "super-secret"})
     assert configured[token] == "super-secret"
-    view = configured.views()[0]
+    view = resolved_setting_views(configured)[0]
     assert view.display_value == "configured"
     assert "super-secret" not in repr(view)
 

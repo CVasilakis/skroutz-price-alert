@@ -6,12 +6,14 @@ from rich.markup import escape
 
 from core import messages
 from core.general.configuration import GeneralConfigLoad
+from core.presentation import SettingView, resolved_setting_views
+from core.settings import SettingStatus
 from core.tui.panel import StatusPanelBuilder
 
 
 @dataclass(frozen=True)
 class ConfigView:
-    """Presentation summary of a target's products-config health (the 'Config' row).
+    """Presentation summary of a target's target-configuration health (the 'Config' row).
 
     The single rendering-agnostic model behind the 'Config' row shown atop each Service
     Status panel (``--status``) and Scraping panel (a run). Built by :func:`config_view`
@@ -71,13 +73,13 @@ def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
 
     Args:
         panel (StatusPanelBuilder): The panel being built.
-        view (ConfigView): The resolved products-config health.
+        view (ConfigView): The resolved target-configuration health.
     """
     ref = panel.add_note_ref(view.footnote) if view.footnote else ""
-    panel.add_row(view.icon, "Monitored Items", f"{view.value}{ref}")
+    panel.add_row(view.icon, "Tracked Items", f"{view.value}{ref}")
 
 
-def add_setting_row(panel: StatusPanelBuilder, view) -> None:
+def add_setting_row(panel: StatusPanelBuilder, view: SettingView) -> None:
     """Renders one resolved setting as a row in the panel's settings section.
 
     A valid, explicitly-set value shows as ``✅``. An unset value (or a missing config)
@@ -92,13 +94,16 @@ def add_setting_row(panel: StatusPanelBuilder, view) -> None:
         panel (StatusPanelBuilder): The panel being built.
         view (SettingView): The resolved setting (label, display value, status, footnote).
     """
-    note_ref = panel.add_note_ref(view.footnote) if view.has_warning else ""
-    value = view.render_value(
-        note_ref,
-        default_marker=" [dim](default)[/dim]",
-        value_text=escape(view.display_value),
+    note_ref = (
+        panel.add_note_ref(view.footnote) if view.has_warning and view.footnote is not None else ""
     )
-    panel.add_row(view.icon, escape(view.label), value)
+    value = escape(view.display_value)
+    if view.has_warning:
+        value = f"{value}{note_ref}"
+    elif view.is_default:
+        value = f"{value} [dim](default)[/dim]"
+    icon = "🟡" if view.status in (SettingStatus.INVALID, SettingStatus.MISSING) else "✅"
+    panel.add_row(icon, escape(view.label), value)
 
 
 def _append_version_row(panel: StatusPanelBuilder, update_available: bool | None) -> None:
@@ -127,7 +132,7 @@ def _append_general_rows(panel: StatusPanelBuilder, general: GeneralConfigLoad) 
         ref = panel.add_note_ref(detail)
         panel.add_row("❗", "General Config", f"[red]Failed{ref}[/red]")
         return
-    for view in general.settings.views():
+    for view in resolved_setting_views(general.settings):
         add_setting_row(panel, view)
 
 
@@ -190,7 +195,7 @@ def render_config_panel(
     """Builds and renders the shared 'Configuration Check' panel (global checks only).
 
     Renders already-collected update and project-wide configuration results.
-    Per-scraper products-config health is intentionally not shown here — it is surfaced
+    Per-scraper target-configuration health is intentionally not shown here — it is surfaced
     as a 'Config' row atop each Service Status panel (``--status``) and Scraping panel
     (a run). This is the single presentation path shared by the interactive scraper run
     (main.py) and the health check (status.py); it performs no config-file I/O itself.

@@ -12,6 +12,12 @@ from urllib.parse import urlsplit
 
 from core.exceptions import PluginValidationError
 from core.scrapers.api import ItemField, ScraperPlugin, UrlField
+from core.scrapers.domain import (
+    canonicalize_url,
+    normalize_domain,
+    parse_url,
+    parsed_matches_domains,
+)
 from core.scrapers.framework.model import RegisteredPlugin
 from core.scrapers.framework.naming import (
     FRAMEWORK_ITEM_KEYS,
@@ -19,12 +25,6 @@ from core.scrapers.framework.naming import (
     SNAKE_CASE_KEY,
 )
 from core.scrapers.framework.settings import SUPPORTED_INTERVALS, framework_setting_specs
-from core.scrapers.framework.url import (
-    canonicalize_url,
-    normalize_domain,
-    parse_url,
-    parsed_matches_domains,
-)
 from core.settings import SettingSpec
 
 RUNTIME_PLUGIN_FILES = ("__init__.py", "plugin.py", "client.py")

@@ -9,8 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import messages
 from core.exceptions import (
-    ProductNotFoundError,
     RateLimitError,
+    ResourceNotFoundError,
     ScraperError,
     ServerError,
 )
@@ -35,7 +35,7 @@ class FakeStoreClient(ScraperClient):
         if status == 200:
             return
         if status in (404, 410):
-            raise ProductNotFoundError(messages.not_found_detail(status))
+            raise ResourceNotFoundError(messages.not_found_detail(status))
         if status in (401, 403, 429):
             raise RateLimitError(messages.rate_limited_detail(status))
         if 500 <= status < 600:

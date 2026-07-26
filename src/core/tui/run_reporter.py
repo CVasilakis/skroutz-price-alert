@@ -13,7 +13,8 @@ from rich.text import Text
 
 from core import messages
 from core.application.contracts import ConfigOutcome, Notes, PriceOutcome, RunReporter
-from core.settings import SettingView
+from core.presentation import SettingView, resolved_setting_views
+from core.settings import ResolvedSettings, SettingStatus
 from core.tui.config_check import ConfigView, config_view
 from core.tui.footnotes import FootnoteRegistry, inline_text
 from core.tui.panel import PANEL_WIDTH, primary_column_max, uniform_column_widths
@@ -49,7 +50,7 @@ class InteractiveRunReporter(RunReporter):
         self,
         target_name: str,
         target_logger: logging.Logger,
-        settings_view: Sequence[SettingView],
+        settings: ResolvedSettings,
         config: ConfigOutcome,
     ) -> None:
         """Starts a new live display session for the given target."""
@@ -75,7 +76,7 @@ class InteractiveRunReporter(RunReporter):
             config.source_path,
             config.diagnostic_saved,
         )
-        self.settings_rows = self._build_settings_rows(settings_view, view)
+        self.settings_rows = self._build_settings_rows(resolved_setting_views(settings), view)
 
         self.live = Live(self._generate_panel(), refresh_per_second=10)
         self.live.start()
@@ -83,24 +84,25 @@ class InteractiveRunReporter(RunReporter):
     def _build_settings_rows(
         self, settings_view: Sequence[SettingView], config_view: ConfigView
     ) -> list[tuple]:
-        """Renders the products-config health + resolved settings into ``(icon, label, value)`` rows.
+        """Renders the target-configuration health + resolved settings into ``(icon, label, value)`` rows.
 
-        The 'Config' row (products-config health) leads the section when ``config_view`` is
+        The 'Config' row (target-configuration health) leads the section when ``config_view`` is
         set. A valid setting shows as ``✅``; an unset value (or missing config) shows its
         active default as ``✅`` with a dim ``(default)`` marker; an invalid value shows
         the default it fell back to as ``🟡`` plus a footnote naming the problem. A
         """
         rows: list[tuple] = []
         refs = self._build_note_refs(config_view.footnote) if config_view.footnote else ""
-        rows.append((config_view.icon, "Monitored Items", f"{config_view.value}{refs}"))
+        rows.append((config_view.icon, "Tracked Items", f"{config_view.value}{refs}"))
         for view in settings_view:
             note_ref = self._build_note_refs(view.footnote) if view.has_warning else ""
-            value = view.render_value(
-                note_ref,
-                default_marker=" [dim](default)[/dim]",
-                value_text=escape(view.display_value),
-            )
-            rows.append((view.icon, escape(view.label), value))
+            value = escape(view.display_value)
+            if view.has_warning:
+                value = f"{value}{note_ref}"
+            elif view.is_default:
+                value = f"{value} [dim](default)[/dim]"
+            icon = "🟡" if view.status in (SettingStatus.INVALID, SettingStatus.MISSING) else "✅"
+            rows.append((icon, escape(view.label), value))
         return rows
 
     @staticmethod
@@ -298,6 +300,12 @@ class InteractiveRunReporter(RunReporter):
             notes,
             attempt_notes,
         )
+
+    @staticmethod
+    def _outcome_icon(outcome: PriceOutcome, delivery_failed: bool = False) -> str:
+        if delivery_failed:
+            return "🟡"
+        return {PriceOutcome.DROP: "🎉", PriceOutcome.NO_TARGET: "🟡"}.get(outcome, "✅")
 
     def log_warning(
         self, name: str, warning_str: str, notes: Notes = None, attempt_notes: Notes = None

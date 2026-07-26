@@ -161,7 +161,7 @@ _case(
         schedule_errors={"insomnia": "Remove unsupported keys from `config/insomnia.json`."},
         config_files=("skroutz.json", "insomnia.json", "general.json"),
     ),
-    tags=("error", "products"),
+    tags=("error", "target_config"),
 )
 
 _case(
@@ -173,7 +173,7 @@ _case(
         schedule_errors={"insomnia": "Remove unsupported keys from `config/insomnia.json`."},
         config_files=("skroutz.json", "insomnia.json", "general.json"),
     ),
-    tags=("error", "products"),
+    tags=("error", "target_config"),
 )
 
 _case(

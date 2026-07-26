@@ -9,7 +9,7 @@ import pytest
 from support import mock_notifier, mock_ui
 
 from core.application.orchestrator import ScrapingOrchestrator
-from core.application.preflight import load_targets
+from core.application.preflight import load_target_configs
 from core.scrapers.api import ScraperClient
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
@@ -68,13 +68,14 @@ def test_copyable_template_runs_end_to_end_without_framework_edits(tmp_path):
         state_dir = tmp_path / "state"
         config_dir.mkdir()
         shutil.copy2(target_dir / "config.example.json", config_dir / "template_store.json")
-        loads = load_targets([catalog.get("template_store")], str(config_dir), str(state_dir))
+        loads = load_target_configs([catalog.get("template_store")], str(config_dir))
         orchestrator = ScrapingOrchestrator(
             loads,
             ClientLoader(),
             mock_notifier(),
             quiet=True,
             reporter=mock_ui(),
+            state_dir=str(state_dir),
         )
         with (
             mock.patch("core.application.pacing.Pacer.sleep"),

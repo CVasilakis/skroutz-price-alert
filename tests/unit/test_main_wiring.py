@@ -4,7 +4,7 @@
 Everything main() touches is patched with ``autospec=True``, so this asserts the wiring
 (that the reminder is constructed and run, in the right order) *and* that every
 constructor/function call still matches the real signatures — a parameter added to
-``ScrapingOrchestrator``, ``ReminderService``, ``AppriseNotifier``, ``load_targets`` or
+``ScrapingOrchestrator``, ``ReminderService``, ``AppriseNotifier``, ``load_target_configs`` or
 ``validate_notification_preflight`` fails here instead of passing silently. It does not test any scraping
 behavior.
 """
@@ -25,7 +25,7 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.setup_global_logging", autospec=True),
             mock.patch("core.main.PluginCatalog", autospec=True) as Catalog,
             mock.patch("core.main.ClientLoader", autospec=True),
-            mock.patch("core.main.load_targets", autospec=True, return_value=[]),
+            mock.patch("core.main.load_target_configs", autospec=True, return_value=[]),
             mock.patch("core.main.load_general_config", autospec=True) as load_general,
             mock.patch(
                 "core.main.record_general_diagnostic",
@@ -72,7 +72,7 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.PluginCatalog", autospec=True) as Catalog,
             mock.patch("core.main.ClientLoader", autospec=True),
             mock.patch(
-                "core.main.load_targets",
+                "core.main.load_target_configs",
                 autospec=True,
                 return_value=[failed_load],
             ),
@@ -107,7 +107,7 @@ class TestMainWiring(unittest.TestCase):
             mock.patch("core.main.setup_global_logging"),
             mock.patch("core.main.PluginCatalog") as Catalog,
             mock.patch("core.main.ClientLoader") as ClientLoader,
-            mock.patch("core.main.load_targets", return_value=[]) as load_targets,
+            mock.patch("core.main.load_target_configs", return_value=[]) as load_target_configs,
             mock.patch("core.main.load_general_config") as load_general,
             mock.patch(
                 "core.main.record_general_diagnostic",
@@ -134,13 +134,18 @@ class TestMainWiring(unittest.TestCase):
                 core.main.main()
 
         self.assertEqual(caught.exception.code, 0)
-        load_targets.assert_called_once_with([plugin], core.main.CONFIG_DIR)
+        load_target_configs.assert_called_once_with([plugin], core.main.CONFIG_DIR)
         render_config.assert_called_once_with(
             Console.return_value, load_general.return_value, False
         )
         install_handler.assert_called_once()
         Orchestrator.assert_called_once_with(
-            [], ClientLoader.return_value, mock.ANY, False, reporter_type.return_value
+            [],
+            ClientLoader.return_value,
+            mock.ANY,
+            False,
+            reporter_type.return_value,
+            state_dir=core.main.STATE_DIR,
         )
 
 

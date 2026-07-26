@@ -23,7 +23,7 @@ class NotificationMessage:
 
 def price_drop_message(
     site: str,
-    product_name: str,
+    item_name: str,
     target_price: float,
     current_price: float,
     url: str | None,
@@ -34,7 +34,7 @@ def price_drop_message(
     link_line = f"\nView it here: {url}" if url else ""
     return NotificationMessage(
         TITLE_PRICE_DROP,
-        f"{product_name} is now available for {current_price}{currency} in {site}, "
+        f"{item_name} is now available for {current_price}{currency} in {site}, "
         f"which is below your target of {target_price}{currency}.{advert_line}{link_line}",
     )
 
@@ -72,7 +72,7 @@ def stale_items_message(
     return _summary_message(
         title=f"Scrooge Alert - Tracking Stale on {site}",
         header=(
-            f"{len(stale_items)} product(s) on {site} haven't been successfully scraped "
+            f"{len(stale_items)} tracked item(s) on {site} haven't been successfully scraped "
             f"in over {hours} hours:\n"
         ),
         items=stale_items,
@@ -90,7 +90,7 @@ def scraping_errors_message(
         title=f"Scrooge Alert - Scraping Errors on {site}",
         header=(
             f"The script encountered errors while checking {len(failed_items)} "
-            f"product(s) on {site}:\n"
+            f"tracked item(s) on {site}:\n"
         ),
         items=failed_items,
         format_item=lambda pair: f"{pair[0].name}: {type(pair[1]).__name__}",

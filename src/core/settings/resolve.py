@@ -12,7 +12,6 @@ from core.settings.model import (
     ResolvedSettings,
     SettingSpec,
     SettingStatus,
-    SettingView,
 )
 
 
@@ -88,26 +87,3 @@ def validate_settings_block(specs: Sequence[SettingSpec[Any]], block: object) ->
     if unresolved:
         raise SettingsValidationError(SettingsValidationProblem.REQUIRED, unresolved)
     return resolved
-
-
-def setting_view(spec: SettingSpec[Any], resolved: ResolvedSetting[Any]) -> SettingView:
-    if spec.sensitive:
-        display_value = (
-            "configured"
-            if resolved.value is not MISSING and not spec.is_unset(resolved.value)
-            else "not configured"
-        )
-    elif resolved.value is MISSING:
-        display_value = "required"
-    else:
-        display_value = spec.display(resolved.value)
-    return SettingView(
-        label=spec.display_label,
-        display_value=display_value,
-        status=resolved.status,
-        footnote=(
-            spec.invalid_warning
-            if resolved.status in (SettingStatus.INVALID, SettingStatus.MISSING)
-            else None
-        ),
-    )

@@ -20,7 +20,7 @@ from core.infrastructure.persistence import (
     storage_diagnostic,
     write_json_atomically,
 )
-from core.scrapers.framework.url import canonicalize_url
+from core.scrapers.domain import canonicalize_url
 
 SCHEMA_VERSION = 1
 STATE_TOP_KEYS = frozenset({"schema_version", "items"})

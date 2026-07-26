@@ -2,7 +2,7 @@ from types import MappingProxyType
 
 import pytest
 
-from core.exceptions import PluginValidationError
+from core.exceptions import PluginDiscoveryError, PluginValidationError
 from core.scrapers.api import (
     ItemField,
     ScraperPlugin,
@@ -175,6 +175,38 @@ def test_overlapping_domains_are_allowed_between_adapters():
         catalog.get("missing")
     with pytest.raises(PluginValidationError, match="Duplicate"):
         PluginCatalog([first, first])
+
+
+def test_direct_empty_catalog_remains_available_for_isolated_tests():
+    assert PluginCatalog(()).plugins == ()
+    assert PluginCatalog(()).targets == ()
+
+
+def test_discovery_fails_closed_for_missing_non_directory_and_empty_roots(tmp_path):
+    missing = tmp_path / "missing"
+    with pytest.raises(PluginDiscoveryError, match="does not exist"):
+        PluginCatalog.discover(missing, package="plugins")
+
+    regular_file = tmp_path / "plugins.py"
+    regular_file.write_text("")
+    with pytest.raises(PluginDiscoveryError, match="not a directory"):
+        PluginCatalog.discover(regular_file, package="plugins")
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "_example").mkdir()
+    (empty / "_example" / "__init__.py").write_text("")
+    with pytest.raises(PluginDiscoveryError, match="no production plugins"):
+        PluginCatalog.discover(empty, package="plugins")
+
+
+def test_discovery_fails_closed_for_unreadable_root(tmp_path, monkeypatch):
+    root = tmp_path / "plugins"
+    root.mkdir()
+    monkeypatch.setattr("core.scrapers.framework.catalog.os.access", lambda *_args: False)
+
+    with pytest.raises(PluginDiscoveryError, match="not readable"):
+        PluginCatalog.discover(root, package="plugins")
 
 
 def test_url_free_and_multiple_url_plugins_compile():

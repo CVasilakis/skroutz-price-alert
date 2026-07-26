@@ -129,7 +129,7 @@ _case(
         WORLD_INSTALLED,
         schedule_errors={"skroutz": "Remove unsupported keys from `config/skroutz.json`."},
     ),
-    tags=("error", "products"),
+    tags=("error", "target_config"),
 )
 
 _case(

@@ -8,6 +8,7 @@ from support import catalog_sandbox, fake_plugin
 
 from core.exceptions import ConfigFileError, StateFileError
 from core.infrastructure.persistence import format_utc, parse_utc
+from core.presentation import resolved_setting_views
 from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec, UrlField
 from core.scrapers.framework import configuration as configuration_module
 from core.scrapers.framework.compiler import compile_plugin
@@ -434,7 +435,7 @@ def test_url_free_required_fields_and_required_settings(tmp_path):
     assert loaded.items[0][sku] == "A"
     assert loaded.row_issues[0].message == "sku is required"
     assert loaded.settings[token] == "secret"
-    assert loaded.settings.views()[-1].display_value == "configured"
+    assert resolved_setting_views(loaded.settings)[-1].display_value == "configured"
 
 
 def test_multiple_url_fields_are_validated_independently(tmp_path):
