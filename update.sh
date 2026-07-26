@@ -306,8 +306,10 @@ main() {
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
-        if [ "$MIGRATION_GENERAL_FAILED" -ne 0 ] ||
-           stream_contains "$target" "$MIGRATION_FAILED_TARGETS"; then
+        if stream_contains "$target" "$MIGRATION_FAILED_TARGETS"; then
+            continue
+        fi
+        if [ "$MIGRATION_GENERAL_FAILED" -ne 0 ]; then
             printf "%b\n" "${YELLOW}Leaving '$target' disabled after migration failure.${NC}"
             continue
         fi

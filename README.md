@@ -126,9 +126,11 @@ Machine-owned data is stored separately under `state/`.
 > release. Unversioned documents and documents from earlier major releases are
 > unsupported: migration fails closed and leaves them untouched. Recreate target
 > configs from the current plugin `config.example.json` files and recreate
-> `config/general.json` from `src/core/general/config.example.json`. Delete incompatible
-> files under `state/` only when you accept losing their stored check and alert history;
-> the application will recreate that machine state.
+> `config/general.json` from `src/core/general/config.example.json`. Delete an incompatible
+> `state/<target>.json` only when you accept losing that scraper's stored checks and alert
+> history. Deleting an incompatible `state/general.json` loses the stored reminder
+> timestamp and scheduling history and may cause a reminder to be sent again. The
+> application will recreate the deleted machine state.
 
 ### File 1: Scraper Configuration (`config/<target>.json`)
 

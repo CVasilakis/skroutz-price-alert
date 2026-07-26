@@ -219,11 +219,19 @@ class MigrationRunner:
             )
         elif family == "general_config":
             advice = "Original preserved; compare it with src/core/general/config.example.json."
-        else:
+        elif family == "scraper_state":
             advice = (
                 f"Original preserved; repair it or delete {shown} to recreate it "
                 "(stored check and alert history will be lost)."
             )
+        elif family == "reminder_state":
+            advice = (
+                f"Original preserved; repair it or delete {shown} to recreate it "
+                "(the stored reminder timestamp and scheduling history will be lost, "
+                "and a reminder may be sent again)."
+            )
+        else:
+            advice = "Original preserved."
         detail = str(exc)
         separator = " " if detail.endswith((".", "!", "?")) else ". "
         return MigrationOutcome(

@@ -150,6 +150,27 @@ def test_target_lock_contention_marks_both_target_documents_failed(tmp_path):
     assert "another process holds lock" in _outcome(outcomes, "target_config").detail
 
 
+def test_state_failure_recovery_guidance_is_family_specific():
+    scraper = MigrationRunner._failed_outcome(
+        "scraper_state",
+        "insomnia",
+        "state/insomnia.json",
+        RuntimeError("invalid legacy state"),
+    )
+    reminder = MigrationRunner._failed_outcome(
+        "reminder_state",
+        "general",
+        "state/general.json",
+        RuntimeError("invalid legacy state"),
+    )
+
+    assert "stored check and alert history will be lost" in scraper.detail
+    assert "reminder" not in scraper.detail
+    assert "stored reminder timestamp and scheduling history will be lost" in reminder.detail
+    assert "a reminder may be sent again" in reminder.detail
+    assert "check and alert history" not in reminder.detail
+
+
 @pytest.mark.parametrize("family_path", ["config/general.json", "state/general.json"])
 def test_symlink_documents_fail_without_following_target(tmp_path, family_path):
     outside = tmp_path / "outside.json"

@@ -7,6 +7,5 @@ Quiescing 'skroutz'...
 Migrating JSON documents...
 [state/skroutz.json] Migration failed: invalid legacy state
 Leaving 'skroutz' disabled after migration failure.
-Leaving 'skroutz' disabled after migration failure.
 
 Update complete, but one or more state migrations failed.

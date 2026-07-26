@@ -200,6 +200,19 @@ _case(
     tags=("error", "settings", "system"),
 )
 _case(
+    "general_and_target_migration_failure",
+    "Combined general and target migration failures report the target only once.",
+    world=replace(
+        _BASE,
+        migration_report=(
+            "general_config\tgeneral\tfailed\tconfig/general.json\tinvalid legacy config",
+            "target_config\tskroutz\tfailed\tconfig/skroutz.json\tinvalid legacy config",
+        ),
+        migration_status=15,
+    ),
+    tags=("error", "products", "settings", "system"),
+)
+_case(
     "reminder_state_migration_failure",
     "A reminder-state migration failure reports storage failure after provisioning.",
     world=replace(

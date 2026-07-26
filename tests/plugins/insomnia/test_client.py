@@ -85,6 +85,20 @@ def test_invalid_advert_links_are_parse_failures(anchor):
         _client(html).scrape(_search())
 
 
+def test_blank_advert_title_is_a_title_specific_parse_failure():
+    html = """
+    <li class="insAdvertsList">
+      <h4><a href="/classifieds/ad/1/">   </a></h4>
+      <p class="cFilePrice">100 €</p>
+    </li>
+    """
+    with pytest.raises(ScraperParseError) as raised:
+        _client(html).scrape(_search())
+
+    assert "title" in str(raised.value).casefold()
+    assert "url" not in str(raised.value).casefold()
+
+
 def test_minimum_price_floor_filters_only_implausibly_cheap_adverts():
     result = _client(floor=400).scrape(_search())
     assert [offer.price for offer in result.offers] == [450.0]
