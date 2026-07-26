@@ -148,6 +148,11 @@ service_state() {
     systemd_property "$(unit_name "$1" service)" ActiveState
 }
 
+reset_failed_if_failed() {
+    _rfif_active="$(systemd_property "$1" ActiveState)" || return 1
+    [ "$_rfif_active" != failed ] || systemctl --user reset-failed "$1" >/dev/null
+}
+
 plugin_is_disabled() {
     _pid_timer="$(unit_name "$1" timer)"
     _pid_service="$(unit_name "$1" service)"
@@ -214,6 +219,7 @@ disable_one() {
                     "Error: $_do_timer has unsupported state '$_do_enabled'." >&2
                 _do_failed=1
             else
+                reset_failed_if_failed "$_do_timer" || _do_failed=1
                 systemctl --user stop "$_do_timer" >/dev/null || _do_failed=1
                 case "$_do_enabled" in
                     enabled)
@@ -223,17 +229,16 @@ disable_one() {
                         systemctl --user --runtime disable "$_do_timer" >/dev/null ||
                             _do_failed=1 ;;
                 esac
-                systemctl --user reset-failed "$_do_timer" >/dev/null ||
-                    _do_failed=1
             fi
         fi
     fi
     if [ "$_do_service_load" != not-found ]; then
+        reset_failed_if_failed "$_do_service" || _do_failed=1
         systemctl --user stop "$_do_service" >/dev/null || _do_failed=1
-        systemctl --user reset-failed "$_do_service" >/dev/null || _do_failed=1
     fi
 
-    if [ "$_do_timer_load" != not-found ]; then
+    _do_timer_load="$(systemd_property "$_do_timer" LoadState)" || _do_failed=1
+    if [ "$_do_failed" -eq 0 ] && [ "$_do_timer_load" != not-found ]; then
         _do_active="$(systemd_property "$_do_timer" ActiveState)" || _do_failed=1
         _do_enabled="$(systemd_property "$_do_timer" UnitFileState)" || _do_failed=1
         if [ "$_do_failed" -eq 0 ]; then
@@ -241,7 +246,8 @@ disable_one() {
                 timer_state_is_disabled "$_do_enabled" || _do_failed=1
         fi
     fi
-    if [ "$_do_service_load" != not-found ]; then
+    _do_service_load="$(systemd_property "$_do_service" LoadState)" || _do_failed=1
+    if [ "$_do_failed" -eq 0 ] && [ "$_do_service_load" != not-found ]; then
         _do_active="$(systemd_property "$_do_service" ActiveState)" || _do_failed=1
         [ "$_do_failed" -ne 0 ] || state_is_stopped "$_do_active" ||
             _do_failed=1

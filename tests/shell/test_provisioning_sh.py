@@ -82,7 +82,7 @@ case "$verb" in
         if [ -L "$XDG_CONFIG_HOME/systemd/user/$unit" ]; then
             rm -f "$XDG_CONFIG_HOME/systemd/user/$unit"
         fi ;;
-    reset-failed) ;;
+    reset-failed) [ "${FAKE_FAIL_RESET_FAILED:-0}" != "1" ;;
 esac
 """
 
@@ -142,6 +142,33 @@ schedules={shlex_quote(schedules)}
 schedule_units_transaction "$targets" "$schedules"
 """
     return subprocess.run(["sh", "-c", script], text=True, capture_output=True, env=env)
+
+
+def run_disable_one(shell_world, target, **env_updates):
+    base, unit_dir, state, env = shell_world
+    env.update({key: str(value) for key, value in env_updates.items()})
+    for suffix in ("timer", "service"):
+        (unit_dir / f"{target}-scraper.{suffix}").touch()
+    (state / f"enabled.{target}").touch()
+    (state / f"active.{target}").touch()
+    script = f"""
+set -eu
+BASE_DIR={shlex_quote(str(base))}
+. {shlex_quote(str(ROOT / "scripts/lib/common.sh"))}
+. {shlex_quote(str(ROOT / "scripts/lib/systemd.sh"))}
+disable_one {shlex_quote(target)}
+"""
+    return subprocess.run(["sh", "-c", script], text=True, capture_output=True, env=env)
+
+
+def test_disable_does_not_reset_a_healthy_unit(shell_world):
+    result = run_disable_one(
+        shell_world,
+        "alpha",
+        FAKE_FAIL_RESET_FAILED="1",
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def shlex_quote(value: str) -> str:
