@@ -58,14 +58,21 @@ def main(argv: list[str] | None = None) -> int:
         prog="./scripts/migrate.sh",
         description="Validate and migrate every known Scrooge Alert JSON document.",
     )
-    parser.add_argument("--check", action="store_true", help="report without changing files")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "validate and report without modifying managed JSON documents; "
+            "lock metadata may be created"
+        ),
+    )
     parser.add_argument("--machine", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--root", default=BASE_DIR, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
         runner = MigrationRunner(args.root, PluginCatalog.discover())
         outcomes = runner.run(check=args.check)
-    except (OSError, RuntimeError, ValueError) as exc:
+    except Exception as exc:
         print(f"Migration could not start: {exc}", file=sys.stderr)
         return 1
     if args.machine:

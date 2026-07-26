@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
-import importlib.util
 import json
 import os
 import shutil
@@ -19,14 +17,18 @@ from filelock import FileLock, Timeout
 from core.general.migrations import GENERAL_CONFIG_MIGRATIONS, REMINDER_STATE_MIGRATIONS
 from core.infrastructure.migration import (
     MigrationError,
-    MigrationPhase,
     MigrationPlan,
     migrate_document,
     schema_version,
 )
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
-from core.scrapers.framework.migrations import SCRAPER_STATE_MIGRATIONS, target_config_plan
+from core.scrapers.framework.migrations import (
+    SCRAPER_STATE_MIGRATIONS,
+    PluginMigrationDeclarationError,
+    load_plugin_config_migrations,
+    target_config_plan,
+)
 from core.scrapers.framework.model import RegisteredPlugin
 
 STATUS_CURRENT = "current"
@@ -115,28 +117,6 @@ def _replace_atomically(path: Path, data: bytes, mode: int) -> None:
         raise
 
 
-def _plugin_phases(plugin: RegisteredPlugin) -> dict[int, MigrationPhase]:
-    module_name = f"{plugin.package}.migrations"
-    try:
-        spec = importlib.util.find_spec(module_name)
-    except (ImportError, AttributeError, ValueError) as exc:
-        raise MigrationError(f"could not inspect optional plugin migrations: {exc}") from exc
-    if spec is None:
-        return {}
-    module = importlib.import_module(module_name)
-    raw = getattr(module, "CONFIG_MIGRATIONS", None)
-    if not isinstance(raw, dict):
-        raise MigrationError("plugin migrations must export CONFIG_MIGRATIONS as a dict")
-    phases: dict[int, MigrationPhase] = {}
-    for version, phase in raw.items():
-        if isinstance(version, bool) or not isinstance(version, int):
-            raise MigrationError("plugin migration keys must be integer source versions")
-        if not isinstance(phase, MigrationPhase):
-            raise MigrationError("plugin migration values must be MigrationPhase instances")
-        phases[version] = phase
-    return phases
-
-
 @contextmanager
 def _held_lock(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,7 +137,6 @@ class MigrationRunner:
         self.state_dir = self.root / "state"
         self.logs_dir = self.root / "logs"
         self._recovery: Path | None = None
-        self._failed = False
 
     @property
     def recovery_path(self) -> Path | None:
@@ -193,9 +172,9 @@ class MigrationRunner:
         check: bool,
     ) -> MigrationOutcome:
         shown = str(path.relative_to(self.root))
-        if not path.exists() and not path.is_symlink():
-            return MigrationOutcome(family, target, shown, STATUS_MISSING)
         try:
+            if not path.exists() and not path.is_symlink():
+                return MigrationOutcome(family, target, shown, STATUS_MISSING)
             document, snapshot = _read_document(path)
             original_version = schema_version(document)
             migrated = migrate_document(document, plan)
@@ -223,29 +202,97 @@ class MigrationRunner:
                 STATUS_MIGRATED,
                 f"v{original_version} to v{plan.current_version}",
             )
-        except (MigrationError, OSError, TypeError, ValueError) as exc:
-            self._failed = True
-            if family == "target_config":
-                advice = (
-                    f" Original preserved; compare it with "
-                    f"src/core/scrapers/plugins/{target}/config.example.json."
-                )
-            elif family == "general_config":
-                advice = (
-                    " Original preserved; compare it with src/core/general/config.example.json."
+        except Exception as exc:
+            return self._failed_outcome(family, target, shown, exc)
+
+    @staticmethod
+    def _failed_outcome(
+        family: str,
+        target: str,
+        shown: str,
+        exc: Exception,
+    ) -> MigrationOutcome:
+        if family == "target_config":
+            advice = (
+                "Original preserved; compare it with "
+                f"src/core/scrapers/plugins/{target}/config.example.json."
+            )
+        elif family == "general_config":
+            advice = "Original preserved; compare it with src/core/general/config.example.json."
+        else:
+            advice = (
+                f"Original preserved; repair it or delete {shown} to recreate it "
+                "(stored check and alert history will be lost)."
+            )
+        detail = str(exc)
+        separator = " " if detail.endswith((".", "!", "?")) else ". "
+        return MigrationOutcome(
+            family,
+            target,
+            shown,
+            STATUS_FAILED,
+            f"{detail}{separator}{advice}",
+        )
+
+    def _run_target_locked(
+        self,
+        plugin: RegisteredPlugin,
+        outcomes: list[MigrationOutcome],
+        *,
+        check: bool,
+    ) -> None:
+        config_path = self.config_dir / plugin.config_filename
+        config_shown = f"config/{plugin.config_filename}"
+        try:
+            config_missing = not config_path.exists() and not config_path.is_symlink()
+            if config_missing:
+                outcomes.append(
+                    MigrationOutcome(
+                        "target_config",
+                        plugin.target,
+                        config_shown,
+                        STATUS_MISSING,
+                    )
                 )
             else:
-                advice = (
-                    f" Original preserved; repair it or delete {shown} to recreate it "
-                    "(stored check and alert history will be lost)."
+                loader = TargetConfigLoader(plugin, str(self.config_dir))
+                try:
+                    private = load_plugin_config_migrations(plugin)
+                except PluginMigrationDeclarationError as exc:
+                    raise MigrationError(str(exc)) from exc
+
+                def validate_target(document: dict[str, Any]) -> None:
+                    loader.load_document(document)
+
+                config_plan = target_config_plan(validate_target, private)
+                outcomes.append(
+                    self._run_one(
+                        "target_config",
+                        plugin.target,
+                        config_path,
+                        config_plan,
+                        check=check,
+                    )
                 )
-            return MigrationOutcome(
-                family,
-                target,
-                shown,
-                STATUS_FAILED,
-                f"{exc}.{advice}",
+        except Exception as exc:
+            outcomes.append(
+                self._failed_outcome(
+                    "target_config",
+                    plugin.target,
+                    config_shown,
+                    exc,
+                )
             )
+
+        outcomes.append(
+            self._run_one(
+                "scraper_state",
+                plugin.target,
+                self.state_dir / f"{plugin.target}.json",
+                SCRAPER_STATE_MIGRATIONS,
+                check=check,
+            )
+        )
 
     def run(self, *, check: bool = False) -> tuple[MigrationOutcome, ...]:
         outcomes: list[MigrationOutcome] = []
@@ -266,52 +313,21 @@ class MigrationRunner:
                 )
                 try:
                     with _held_lock(target_lock):
-                        loader = TargetConfigLoader(plugin, str(self.config_dir))
-                        private = _plugin_phases(plugin)
-
-                        def validate_target(document: dict[str, Any]) -> None:
-                            loader.load_document(document)
-
-                        config_plan = target_config_plan(
-                            validate_target,
-                            private,
-                        )
-                        outcomes.append(
-                            self._run_one(
-                                "target_config",
-                                plugin.target,
-                                self.config_dir / plugin.config_filename,
-                                config_plan,
-                                check=check,
-                            )
-                        )
-                        outcomes.append(
-                            self._run_one(
-                                "scraper_state",
-                                plugin.target,
-                                self.state_dir / f"{plugin.target}.json",
-                                SCRAPER_STATE_MIGRATIONS,
-                                check=check,
-                            )
-                        )
-                except (MigrationError, OSError, TypeError, ValueError) as exc:
-                    self._failed = True
-                    detail = str(exc)
+                        self._run_target_locked(plugin, outcomes, check=check)
+                except Exception as exc:
                     outcomes.extend(
                         (
-                            MigrationOutcome(
+                            self._failed_outcome(
                                 "target_config",
                                 plugin.target,
                                 f"config/{plugin.config_filename}",
-                                STATUS_FAILED,
-                                detail,
+                                exc,
                             ),
-                            MigrationOutcome(
+                            self._failed_outcome(
                                 "scraper_state",
                                 plugin.target,
                                 f"state/{plugin.target}.json",
-                                STATUS_FAILED,
-                                detail,
+                                exc,
                             ),
                         )
                     )
@@ -327,19 +343,18 @@ class MigrationRunner:
                             check=check,
                         )
                     )
-            except (MigrationError, OSError) as exc:
-                self._failed = True
+            except Exception as exc:
                 outcomes.append(
-                    MigrationOutcome(
+                    self._failed_outcome(
                         "reminder_state",
                         "general",
                         "state/general.json",
-                        STATUS_FAILED,
-                        str(exc),
+                        exc,
                     )
                 )
 
-        if not self._failed and self._recovery is not None:
+        failed = any(outcome.status == STATUS_FAILED for outcome in outcomes)
+        if not failed and self._recovery is not None:
             shutil.rmtree(self._recovery)
             self._recovery = None
         return tuple(outcomes)

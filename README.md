@@ -121,6 +121,15 @@ All user parameters live in strict, schema-versioned JSON files under `config/`.
 Runtime never modifies them; update-time changes are handled by `./scripts/migrate.sh`.
 Machine-owned data is stored separately under `state/`.
 
+> [!IMPORTANT]
+> Migration is supported only between schema versions declared within this major
+> release. Unversioned documents and documents from earlier major releases are
+> unsupported: migration fails closed and leaves them untouched. Recreate target
+> configs from the current plugin `config.example.json` files and recreate
+> `config/general.json` from `src/core/general/config.example.json`. Delete incompatible
+> files under `state/` only when you accept losing their stored check and alert history;
+> the application will recreate that machine state.
+
 ### File 1: Scraper Configuration (`config/<target>.json`)
 
 Each scraper reads a strict, versioned, read-only-at-runtime JSON file in `config/` (for example,
@@ -188,7 +197,9 @@ ending in `Z`.
 > [!IMPORTANT]
 > Scraper state and target configuration have independent schema sequences. Both begin
 > at version 1. `./update.sh` migrates known documents before reactivating timers; use
-> `./scripts/migrate.sh --check` to inspect them without writing.
+> `./scripts/migrate.sh --check` to validate and report without modifying managed JSON
+> documents. Check mode still takes the cooperative locks, so lock directories and
+> metadata may be created.
 
 Plugins declare every source input beyond the shared keys above. Most product-page
 plugins require a `url`; other adapters may use several URLs or identifiers such as a

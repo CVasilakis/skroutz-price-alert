@@ -1,0 +1,13 @@
+# border: red
+# exit: 15
+
+Updating Scrooge Alert...
+Fetching origin/main before stopping any scraper...
+Quiescing 'skroutz'...
+Migrating JSON documents...
+[config/skroutz.json] Migration failed: invalid legacy config
+Leaving 'skroutz' disabled after migration failure.
+Leaving 'skroutz' disabled after migration failure.
+
+Update complete, but one or more targets retained their existing units because their configuration
+is invalid.

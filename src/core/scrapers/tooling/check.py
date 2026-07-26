@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import ast
-import importlib
-import importlib.util
 import json
 import shutil
 import subprocess
@@ -14,11 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from core.exceptions import PluginDependencyError
-from core.infrastructure.migration import MigrationPhase
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.configuration import TargetConfigLoader
-from core.scrapers.framework.migrations import TARGET_CONFIG_TRANSITIONS
+from core.scrapers.framework.migrations import (
+    PluginMigrationDeclarationError,
+    load_plugin_config_migrations,
+)
+from core.scrapers.framework.model import RegisteredPlugin
 from core.scrapers.framework.settings import framework_setting_specs
 from core.scrapers.framework.state import JsonStateRepository, StateEntry
 from core.settings import MISSING
@@ -122,25 +123,11 @@ def _check_contributor_files(source: Path, tests: Path, target: str) -> str:
     return (source / "README.md").read_text(encoding="utf-8")
 
 
-def _check_migrations(plugin: object) -> None:
-    package = getattr(plugin, "package")
-    module_name = f"{package}.migrations"
-    if importlib.util.find_spec(module_name) is None:
-        return
-    module = importlib.import_module(module_name)
-    raw = getattr(module, "CONFIG_MIGRATIONS", None)
-    if not isinstance(raw, dict):
-        raise RuntimeError("migrations.py must export CONFIG_MIGRATIONS as a dict")
-    declared = {transition.from_version for transition in TARGET_CONFIG_TRANSITIONS}
-    for version, phase in raw.items():
-        if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-            raise RuntimeError("CONFIG_MIGRATIONS keys must be positive integer versions")
-        if version not in declared:
-            raise RuntimeError(
-                f"plugin migration v{version} targets an undeclared target-config transition"
-            )
-        if not isinstance(phase, MigrationPhase):
-            raise RuntimeError("CONFIG_MIGRATIONS values must be MigrationPhase instances")
+def _check_migrations(plugin: RegisteredPlugin) -> None:
+    try:
+        load_plugin_config_migrations(plugin)
+    except PluginMigrationDeclarationError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def _check_self_contained(source: Path, target: str, registered_targets: frozenset[str]) -> None:

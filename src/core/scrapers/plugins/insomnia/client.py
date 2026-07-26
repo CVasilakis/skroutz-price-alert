@@ -151,6 +151,10 @@ class Client(HttpScraperClient):
                 raise ScraperParseError(
                     "Advert card without a title link or price element (markup change?)"
                 )
+            href = title_tag.get("href")
+            if not isinstance(href, str) or not href.strip():
+                raise ScraperParseError("Advert title link has no valid URL")
+            advert_url = urljoin(listing_url, href.strip())
 
             price_text = price_tag.get_text(strip=True)
             if price_text == _NO_PRICE_TEXT:
@@ -171,11 +175,8 @@ class Client(HttpScraperClient):
             if any(term.casefold() in folded for term in exclude):
                 continue
 
-            matches.append(
-                Offer(
-                    title=title,
-                    price=price,
-                    url=urljoin(listing_url, str(title_tag.get("href", ""))),
-                )
-            )
+            try:
+                matches.append(Offer(title=title, price=price, url=advert_url))
+            except ScraperParseError as exc:
+                raise ScraperParseError(f"Advert title link has an invalid URL: {exc}") from exc
         return matches

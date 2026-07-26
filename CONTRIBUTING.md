@@ -297,9 +297,14 @@ configuration, target configuration, scraper state, and reminder state have inde
 version sequences. All target configs share the framework target-config sequence.
 
 Runtime loaders never migrate files. `./update.sh` invokes `./scripts/migrate.sh`, and
-contributors can use `./scripts/migrate.sh --check` for a read-only inspection.
-Migrations are consecutive, retained permanently, pure, and applied fully in memory
-before one atomic replacement.
+contributors can use `./scripts/migrate.sh --check` to validate and report without
+modifying managed JSON documents. Check mode still acquires cooperative locks, so it
+may create lock directories and metadata. Migrations are consecutive, retained
+permanently, pure, and applied fully in memory before one atomic replacement.
+
+Migration support begins with this major release's version 1 documents. Unversioned
+documents and documents from earlier major releases are intentionally unsupported,
+fail closed, and must not gain version-zero compatibility transitions.
 
 Framework-owned target fields migrate in `core.scrapers.framework.migrations`. General
 configuration and reminder state migrate under `core.general`. A plugin may add

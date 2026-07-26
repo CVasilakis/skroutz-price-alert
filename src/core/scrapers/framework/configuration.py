@@ -121,11 +121,14 @@ class TargetConfigLoader:
             ) from exc
 
     def load(self) -> LoadedTargetConfig:
-        return self.load_document(self.read_document())
+        return self._decode_document(self.read_document())
 
     def load_document(self, document: dict[str, Any]) -> LoadedTargetConfig:
         """Decode one already-read current-schema document."""
         self.validate_document(document)
+        return self._decode_document(document)
+
+    def _decode_document(self, document: dict[str, Any]) -> LoadedTargetConfig:
         settings = self._settings(document)
         items: list[TrackedItem] = []
         issues: list[RowIssue] = []

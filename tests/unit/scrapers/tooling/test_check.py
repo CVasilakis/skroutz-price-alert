@@ -1,12 +1,16 @@
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from core.infrastructure.migration import MigrationPhase
+from core.scrapers.framework import migrations as framework_migrations
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.tooling.check import (
     _check_contributor_files,
+    _check_migrations,
     _check_self_contained,
     check_plugin,
 )
@@ -20,6 +24,67 @@ def test_contributor_files_require_target_owned_tests(tmp_path):
 
     with pytest.raises(RuntimeError, match="tests/plugins/acme/test_"):
         _check_contributor_files(source, tmp_path / "missing-tests", "acme")
+
+
+def test_contributor_files_require_target_owned_migration_tests(tmp_path):
+    source = tmp_path / "source"
+    tests = tmp_path / "tests"
+    source.mkdir()
+    tests.mkdir()
+    (source / "README.md").write_text("guide", encoding="utf-8")
+    (source / "config.example.json").write_text("{}", encoding="utf-8")
+    (source / "migrations.py").write_text("CONFIG_MIGRATIONS = {}", encoding="utf-8")
+    (tests / "test_client.py").write_text("def test_it(): pass", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="test_migrations.py"):
+        _check_contributor_files(source, tests, "acme")
+
+
+@pytest.mark.parametrize(
+    "export,expected",
+    [
+        (None, "must export CONFIG_MIGRATIONS as a dict"),
+        ([], "must export CONFIG_MIGRATIONS as a dict"),
+        ({True: object()}, "keys must be positive integer versions"),
+        ({2: object()}, "targets an undeclared"),
+        ({1: object()}, "values must be MigrationPhase"),
+    ],
+)
+def test_migration_verifier_uses_shared_declaration_validation(monkeypatch, export, expected):
+    module = SimpleNamespace()
+    if export is not None:
+        module.CONFIG_MIGRATIONS = export
+    monkeypatch.setattr(framework_migrations.importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(framework_migrations.importlib, "import_module", lambda name: module)
+    monkeypatch.setattr(framework_migrations, "TARGET_CONFIG_TRANSITIONS", {1: ()})
+
+    with pytest.raises(RuntimeError, match=expected):
+        _check_migrations(SimpleNamespace(package="plugins.acme"))
+
+
+def test_migration_verifier_accepts_valid_phase_and_absent_module(monkeypatch):
+    plugin = SimpleNamespace(package="plugins.acme")
+    monkeypatch.setattr(framework_migrations, "TARGET_CONFIG_TRANSITIONS", {1: ()})
+    monkeypatch.setattr(framework_migrations.importlib.util, "find_spec", lambda name: None)
+    _check_migrations(plugin)
+
+    module = SimpleNamespace(
+        CONFIG_MIGRATIONS={1: MigrationPhase("private", lambda document: dict(document))}
+    )
+    monkeypatch.setattr(framework_migrations.importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(framework_migrations.importlib, "import_module", lambda name: module)
+    _check_migrations(plugin)
+
+
+def test_migration_verifier_translates_import_failure(monkeypatch):
+    monkeypatch.setattr(framework_migrations.importlib.util, "find_spec", lambda name: object())
+
+    def fail(name):
+        raise ImportError("boom")
+
+    monkeypatch.setattr(framework_migrations.importlib, "import_module", fail)
+    with pytest.raises(RuntimeError, match="could not import.*boom"):
+        _check_migrations(SimpleNamespace(package="plugins.acme"))
 
 
 def test_self_contained_check_rejects_sibling_plugin_import(tmp_path):

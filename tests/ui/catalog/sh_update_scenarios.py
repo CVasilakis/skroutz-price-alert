@@ -162,6 +162,62 @@ _case(
     tags=("error", "products"),
 )
 _case(
+    "target_config_migration_failure",
+    "A target-config migration failure isolates that target during reprovisioning.",
+    world=replace(
+        _BASE,
+        migration_report=(
+            "target_config\tskroutz\tfailed\tconfig/skroutz.json\tinvalid legacy config",
+            "scraper_state\tskroutz\tcurrent\tstate/skroutz.json\t",
+        ),
+        migration_status=15,
+    ),
+    tags=("error", "products", "system"),
+)
+_case(
+    "scraper_state_migration_failure",
+    "A scraper-state migration failure isolates its target and reports storage failure.",
+    world=replace(
+        _BASE,
+        migration_report=(
+            "target_config\tskroutz\tcurrent\tconfig/skroutz.json\t",
+            "scraper_state\tskroutz\tfailed\tstate/skroutz.json\tinvalid legacy state",
+        ),
+        migration_status=19,
+    ),
+    tags=("error", "system"),
+)
+_case(
+    "general_config_migration_failure",
+    "A general-config migration failure keeps every timer disabled.",
+    world=replace(
+        _BASE,
+        migration_report=(
+            "general_config\tgeneral\tfailed\tconfig/general.json\tinvalid legacy config",
+        ),
+        migration_status=16,
+    ),
+    tags=("error", "settings", "system"),
+)
+_case(
+    "reminder_state_migration_failure",
+    "A reminder-state migration failure reports storage failure after provisioning.",
+    world=replace(
+        _BASE,
+        migration_report=(
+            "reminder_state\tgeneral\tfailed\tstate/general.json\tinvalid legacy state",
+        ),
+        migration_status=19,
+    ),
+    tags=("error", "reminder", "system"),
+)
+_case(
+    "migration_infrastructure_failure",
+    "An unexpected migration status aborts update provisioning.",
+    world=replace(_BASE, migration_status=1),
+    tags=("error", "system"),
+)
+_case(
     "timer_only_repair",
     "A timer-only damaged installation gets its service half back.",
     world=replace(_BASE, installed_services=()),
