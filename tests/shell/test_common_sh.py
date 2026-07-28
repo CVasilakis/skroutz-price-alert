@@ -96,27 +96,35 @@ class TestPresentationHelpers(unittest.TestCase):
             'task_status success "Completed"\n'
             'task_status failure "Failed"\n'
             'task_status info "Details"\n'
+            'task_status warning "Caution"\n'
             "end_operational_output",
             extra_env={"NO_COLOR": "1"},
         )
         self.assertEqual(
             result.stdout,
-            "\n[+] Ready\n[!] Attention\n  [v] Completed\n  [x] Failed\n  [i] Details\n\n",
+            "\n[+] Ready\n[!] Attention\n"
+            "    [v] Completed\n"
+            "    [x] Failed\n"
+            "    [i] Details\n"
+            "    [!] Caution\n\n",
         )
 
-    def test_guidance_and_bullets_wrap_with_indented_continuations(self):
+    def test_tasks_guidance_and_bullets_use_four_and_eight_space_indentation(self):
         result = run_sh(
             "COLUMNS=24\n"
+            'task_status info "one two three four five six"\n'
             'guidance "one two three four five six"\n'
             'bullet "one two three four five six"'
         )
         self.assertEqual(
             result.stdout.splitlines(),
             [
-                "  one two three four",
-                "  five six",
-                "  - one two three four",
-                "    five six",
+                "    [i] one two three",
+                "        four five six",
+                "    one two three four",
+                "        five six",
+                "    - one two three four",
+                "        five six",
             ],
         )
 
@@ -128,7 +136,7 @@ class TestPresentationHelpers(unittest.TestCase):
                     f'guidance "{message}"',
                     extra_env={"COLUMNS": columns},
                 )
-                self.assertEqual(result.stdout, f"  {message}\n")
+                self.assertEqual(result.stdout, f"    {message}\n")
 
 
 class TestDebugExecution(unittest.TestCase):

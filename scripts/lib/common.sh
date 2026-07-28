@@ -46,10 +46,12 @@ task_status() {
         success) _ts_marker='v'; _ts_color="$GREEN" ;;
         failure) _ts_marker='x'; _ts_color="$RED" ;;
         info) _ts_marker='i'; _ts_color="$CYAN" ;;
+        warning) _ts_marker='!'; _ts_color="$YELLOW" ;;
         *) return 2 ;;
     esac
     shift
-    printf '  %b[%s]%b %s\n' "$_ts_color" "$_ts_marker" "$NC" "$*"
+    _ts_prefix="    ${_ts_color}[${_ts_marker}]${NC} "
+    _print_indented_wrapped "$_ts_prefix" '        ' "$@"
 }
 
 _print_indented_wrapped() {
@@ -83,11 +85,11 @@ _print_indented_wrapped() {
 }
 
 guidance() {
-    _print_indented_wrapped '  ' '  ' "$@"
+    _print_indented_wrapped '    ' '        ' "$@"
 }
 
 bullet() {
-    _print_indented_wrapped '  - ' '    ' "$@"
+    _print_indented_wrapped '    - ' '        ' "$@"
 }
 
 end_operational_output() {
