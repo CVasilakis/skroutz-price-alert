@@ -107,11 +107,11 @@ run_action() {
 }
 
 # run_captured <command> [arguments...]
-# Exports the command's stdout through CAPTURED_COMMAND_OUTPUT. Diagnostics are
-# quiet normally and mirrored to the terminal diagnostics stream after capture
-# in debug mode. Using stderr for the mirror keeps stdout safe when a caller
-# itself captures this helper's output. The command is always run exactly once,
-# and its precise status is returned.
+# Exports the command's stdout through CAPTURED_COMMAND_OUTPUT and stderr through
+# CAPTURED_COMMAND_STDERR. Both streams remain quiet normally and are mirrored to
+# the terminal diagnostics stream after capture in debug mode. Using stderr for
+# the mirror keeps stdout safe when a caller itself captures this helper's output.
+# The command is always run exactly once, and its precise status is returned.
 run_captured() {
     command -v mktemp >/dev/null 2>&1 || {
         printf '%s\n' "Error: mktemp is required for command capture." >&2
@@ -133,6 +133,7 @@ run_captured() {
         _rc_status=$?
     fi
     CAPTURED_COMMAND_OUTPUT="$(cat "$_rc_stdout")"
+    CAPTURED_COMMAND_STDERR="$(cat "$_rc_stderr")"
     if [ "$DEBUG_MODE" -eq 1 ]; then
         cat "$_rc_stdout" >&2
         cat "$_rc_stderr" >&2

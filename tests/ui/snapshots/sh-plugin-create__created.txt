@@ -1,0 +1,13 @@
+# border: green
+# exit: 0
+
+[+] Target scaffold
+    [v] [acme] Created the target source package.
+    [v] [acme] Created the target test package.
+
+[+] Next steps
+    [i] Run ./scripts/dev/setup.sh --acme.
+    [i] Run ./scripts/dev/plugin-check.sh --acme.
+
+[+] Scaffold result
+    [v] [acme] Target scaffold created.

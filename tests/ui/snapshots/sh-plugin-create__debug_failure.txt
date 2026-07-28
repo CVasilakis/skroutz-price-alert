@@ -1,0 +1,8 @@
+# border: red
+# exit: 23
+
+[+] Target scaffold
+3.12.0
+injected scaffold diagnostic
+    [x] Target scaffold could not be created.
+    [i] Review the underlying diagnostic above, then retry.

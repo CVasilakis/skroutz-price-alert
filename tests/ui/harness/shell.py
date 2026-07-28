@@ -56,6 +56,7 @@ _SCRIPT_FILES = (
     "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
     "scripts/dev/setup.sh",
+    "scripts/dev/plugin-create.sh",
     "scripts/dev/install-hooks.sh",
     "scripts/dev/requirements-dev.txt",
     ".githooks/pre-push",
@@ -186,6 +187,10 @@ class ShellWorld:
     migration_report: tuple[str, ...] = ()
     migration_stderr: str = ""
     migration_status: int = 0
+    scaffold_target: str = "acme"
+    scaffold_output: str | None = None
+    scaffold_stderr: str = ""
+    scaffold_status: int = 0
     hook_state: str = "valid"
 
     tools: str = "full"
@@ -403,6 +408,12 @@ case "${1:-}" in
                         [ -z "${FAKE_DISCOVERY_ERROR:-}" ] ||
                             { printf '%s\\n' "$FAKE_DISCOVERY_ERROR"; exit 1; } ;;
                 esac ;;
+            core.scrapers.tooling.scaffold)
+                [ -z "${FAKE_SCAFFOLD_OUTPUT:-}" ] ||
+                    printf '%s\\n' "$FAKE_SCAFFOLD_OUTPUT"
+                [ -z "${FAKE_SCAFFOLD_STDERR:-}" ] ||
+                    printf '%s\\n' "$FAKE_SCAFFOLD_STDERR" >&2
+                exit "${FAKE_SCAFFOLD_STATUS:-0}" ;;
         esac ;;
 esac
 exit 0
@@ -697,6 +708,13 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_MIGRATION_REPORT": "\n".join(world.migration_report),
         "FAKE_MIGRATION_STDERR": world.migration_stderr,
         "FAKE_MIGRATION_STATUS": str(world.migration_status),
+        "FAKE_SCAFFOLD_OUTPUT": (
+            world.scaffold_output
+            if world.scaffold_output is not None
+            else (f"scaffold\t1\t{world.scaffold_target}" if world.scaffold_status == 0 else "")
+        ),
+        "FAKE_SCAFFOLD_STDERR": world.scaffold_stderr,
+        "FAKE_SCAFFOLD_STATUS": str(world.scaffold_status),
     }
 
 

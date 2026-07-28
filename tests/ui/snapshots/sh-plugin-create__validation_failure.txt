@@ -1,0 +1,6 @@
+# border: red
+# exit: 1
+
+[+] Target scaffold
+    [x] Target scaffold could not be created.
+    [i] Target scaffold failed: target must be a non-reserved snake_case name

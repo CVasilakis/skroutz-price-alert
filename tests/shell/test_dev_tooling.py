@@ -29,13 +29,13 @@ HELP_SCRIPTS = (
 )
 
 
-def _run(script: str, *args: str):
+def _run(script: str, *args: str, env: dict[str, str] | None = None):
     return subprocess.run(
         ["sh", str(ROOT / script), *args],
         cwd=ROOT,
         text=True,
         capture_output=True,
-        env=os.environ.copy(),
+        env=env or os.environ.copy(),
     )
 
 
@@ -45,6 +45,200 @@ def test_plugin_create_help_needs_no_venv_and_has_required_inputs():
     assert "--display-name" in result.stdout
     assert "--domain" in result.stdout
     assert "--url-prefix" in result.stdout
+    assert "--debug" in result.stdout
+
+
+def _plugin_create_args(repo_root: Path, target: str = "acme_store") -> list[str]:
+    return [
+        target,
+        "--display-name",
+        "Acme Store With Spaces",
+        "--domain",
+        "store.example",
+        "--url-prefix",
+        "/products/",
+        "--repo-root",
+        str(repo_root),
+    ]
+
+
+def test_plugin_create_success_uses_sectioned_tui_and_preserves_spaced_values(tmp_path):
+    result = _run("scripts/dev/plugin-create.sh", *_plugin_create_args(tmp_path))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr == ""
+    assert result.stdout == (
+        "\n"
+        "[+] Target scaffold\n"
+        "    [v] [acme_store] Created the target source package.\n"
+        "    [v] [acme_store] Created the target test package.\n"
+        "\n"
+        "[+] Next steps\n"
+        "    [i] Run ./scripts/dev/setup.sh --acme_store.\n"
+        "    [i] Run ./scripts/dev/plugin-check.sh --acme_store.\n"
+        "\n"
+        "[+] Scaffold result\n"
+        "    [v] [acme_store] Target scaffold created.\n"
+        "\n"
+    )
+    plugin = tmp_path / "src/core/scrapers/plugins/acme_store/plugin.py"
+    assert "Acme Store With Spaces" in plugin.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("debug_index", [0, 1, 3, 5, 7, 9])
+def test_plugin_create_accepts_debug_between_complete_arguments(tmp_path, debug_index):
+    args = _plugin_create_args(tmp_path / str(debug_index), target=f"acme_{debug_index}")
+    args.insert(debug_index, "--debug")
+
+    result = _run("scripts/dev/plugin-create.sh", *args)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert_task_status(result.stdout, "v", f"[acme_{debug_index}] Target scaffold created.")
+    assert f"scaffold\t1\tacme_{debug_index}" in result.stderr
+
+
+def test_plugin_create_debug_alone_preserves_parser_status_and_exposes_diagnostics():
+    result = _run("scripts/dev/plugin-create.sh", "--debug")
+
+    assert result.returncode == 2
+    assert "the following arguments are required" in result.stderr
+    assert_task_status(result.stdout, "x", "Target scaffold could not be created.")
+    assert result.stdout.startswith("\n")
+    assert result.stdout.endswith("\n\n")
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--help", "--debug"),
+        ("bad", "--help"),
+        ("--debug", "--help", "bad"),
+        ("--help", "--help"),
+    ),
+)
+def test_plugin_create_help_has_precedence_in_every_position(args):
+    result = _run("scripts/dev/plugin-create.sh", *args)
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert result.stdout.startswith("\nUsage:")
+    assert result.stdout.endswith("\n\n")
+
+
+def test_plugin_create_accepts_duplicate_debug_without_forwarding_it(tmp_path):
+    result = _run(
+        "scripts/dev/plugin-create.sh",
+        "--debug",
+        *_plugin_create_args(tmp_path),
+        "--debug",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr.count("scaffold\t1\tacme_store") == 1
+
+
+def test_plugin_create_preserves_duplicate_option_and_invalid_argument_semantics(tmp_path):
+    duplicate_option = _run(
+        "scripts/dev/plugin-create.sh",
+        *_plugin_create_args(tmp_path),
+        "--display-name",
+        "Last Store Name",
+    )
+    invalid = _run("scripts/dev/plugin-create.sh", "--unknown")
+    duplicate_target = _run(
+        "scripts/dev/plugin-create.sh",
+        *_plugin_create_args(tmp_path / "duplicate"),
+        "second_target",
+    )
+
+    assert duplicate_option.returncode == 0
+    plugin = tmp_path / "src/core/scrapers/plugins/acme_store/plugin.py"
+    assert "Last Store Name" in plugin.read_text(encoding="utf-8")
+    assert invalid.returncode == 2
+    assert duplicate_target.returncode == 2
+    assert "unrecognized arguments" not in invalid.stdout
+    assert "unrecognized arguments" not in invalid.stderr
+    assert_task_status(invalid.stdout, "x", "Target scaffold could not be created.")
+    assert_task_status(duplicate_target.stdout, "x", "Target scaffold could not be created.")
+
+
+def _noisy_python(tmp_path: Path, scaffold_status: int | None = None) -> dict[str, str]:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(parents=True)
+    fake_python = bin_dir / "python3"
+    scaffold_failure = ""
+    if scaffold_status is not None:
+        scaffold_failure = (
+            'case "$*" in\n'
+            '  *"core.scrapers.tooling.scaffold"*)\n'
+            '    printf "%s\\n" "injected scaffold noise" >&2\n'
+            f"    exit {scaffold_status}\n"
+            "    ;;\n"
+            "esac\n"
+        )
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        'printf "%s\\n" "injected python noise" >&2\n'
+        f"{scaffold_failure}"
+        f'exec "{sys.executable}" "$@"\n',
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    return env
+
+
+def test_plugin_create_normal_hides_subprocess_noise(tmp_path):
+    result = _run(
+        "scripts/dev/plugin-create.sh",
+        *_plugin_create_args(tmp_path / "output"),
+        env=_noisy_python(tmp_path),
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "injected python noise" not in result.stdout
+    assert "injected python noise" not in result.stderr
+
+
+def test_plugin_create_normal_failure_hides_raw_noise_and_preserves_status(tmp_path):
+    result = _run(
+        "scripts/dev/plugin-create.sh",
+        *_plugin_create_args(tmp_path / "output"),
+        env=_noisy_python(tmp_path, scaffold_status=23),
+    )
+
+    assert result.returncode == 23
+    assert "injected python noise" not in result.stdout
+    assert "injected python noise" not in result.stderr
+    assert "injected scaffold noise" not in result.stdout
+    assert "injected scaffold noise" not in result.stderr
+    assert_task_status(result.stdout, "x", "Target scaffold could not be created.")
+    assert_task_status(
+        result.stdout,
+        "i",
+        "Run ./scripts/dev/plugin-create.sh --debug to inspect the failure.",
+    )
+
+
+def test_plugin_create_debug_exposes_noise_and_preserves_command_failure(tmp_path):
+    result = _run(
+        "scripts/dev/plugin-create.sh",
+        "--debug",
+        *_plugin_create_args(tmp_path / "output"),
+        env=_noisy_python(tmp_path, scaffold_status=23),
+    )
+
+    assert result.returncode == 23
+    assert "injected python noise" in result.stderr
+    assert "injected scaffold noise" in result.stderr
+    assert_task_status(result.stdout, "x", "Target scaffold could not be created.")
+    assert "injected scaffold noise" not in result.stdout
+    assert_task_status(
+        result.stdout,
+        "i",
+        "Review the underlying diagnostic above, then retry.",
+    )
 
 
 @pytest.mark.parametrize("script", HELP_SCRIPTS)

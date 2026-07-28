@@ -123,3 +123,45 @@ def test_scaffold_cli_reports_success_and_collision(tmp_path, capsys):
     assert "./scripts/dev/plugin-check.sh --acme_store" in capsys.readouterr().out
     assert main(args) == 1
     assert "refusing to overwrite" in capsys.readouterr().err
+
+
+def test_scaffold_cli_shell_output_is_structured_and_hidden_from_help(tmp_path, capsys):
+    args = [
+        "acme_store",
+        "--display-name",
+        "Acme Store",
+        "--domain",
+        "store.example",
+        "--url-prefix",
+        "/products/",
+        "--repo-root",
+        str(tmp_path),
+        "--shell-output",
+    ]
+
+    assert main(args) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "scaffold\t1\tacme_store\n"
+    assert captured.err == ""
+
+    with pytest.raises(SystemExit, match="0"):
+        main(["--help"])
+    assert "--shell-output" not in capsys.readouterr().out
+
+
+def test_scaffold_cli_shell_output_uses_validated_target(tmp_path, capsys):
+    args = [
+        " acme_store ",
+        "--display-name",
+        "Acme Store",
+        "--domain",
+        "store.example",
+        "--url-prefix",
+        "/products/",
+        "--repo-root",
+        str(tmp_path),
+        "--shell-output",
+    ]
+
+    assert main(args) == 0
+    assert capsys.readouterr().out == "scaffold\t1\tacme_store\n"

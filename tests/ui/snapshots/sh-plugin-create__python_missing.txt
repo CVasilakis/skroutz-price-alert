@@ -1,0 +1,6 @@
+# border: red
+# exit: 127
+
+[+] Target scaffold
+    [x] System Python 3.10 or newer is required.
+    [i] Install a supported Python, then run ./scripts/dev/setup.sh.

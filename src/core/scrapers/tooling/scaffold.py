@@ -198,7 +198,7 @@ def create_plugin(repo_root: Path, request: ScaffoldRequest) -> tuple[Path, Path
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="./scripts/dev/plugin-create.sh",
-        description="Create an additive in-repository scraper plugin scaffold.",
+        description="Create an additive in-repository scraper target scaffold.",
     )
     parser.add_argument("target")
     parser.add_argument("--display-name", required=True)
@@ -207,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repo-root", default=str(Path(__file__).resolve().parents[4]), help=argparse.SUPPRESS
     )
+    parser.add_argument("--shell-output", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
         source, tests = create_plugin(
@@ -214,12 +215,15 @@ def main(argv: list[str] | None = None) -> int:
             ScaffoldRequest(args.target, args.display_name, args.domain, args.url_prefix),
         )
     except (OSError, ValueError) as exc:
-        print(f"Plugin scaffold failed: {exc}", file=sys.stderr)
+        print(f"Target scaffold failed: {exc}", file=sys.stderr)
         return 1
-    print(f"Created {source}")
-    print(f"Created {tests}")
-    print(f"Next: ./scripts/dev/setup.sh --{args.target}")
-    print(f"Then: ./scripts/dev/plugin-check.sh --{args.target}")
+    if args.shell_output:
+        print(f"scaffold\t1\t{source.name}")
+    else:
+        print(f"Created {source}")
+        print(f"Created {tests}")
+        print(f"Next: ./scripts/dev/setup.sh --{args.target}")
+        print(f"Then: ./scripts/dev/plugin-check.sh --{args.target}")
     return 0
 
 

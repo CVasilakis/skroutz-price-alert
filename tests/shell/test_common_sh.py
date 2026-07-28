@@ -171,9 +171,10 @@ class TestDebugExecution(unittest.TestCase):
         result = run_sh(
             self.COMMAND
             + "if run_captured probe; then status=0; else status=$?; fi\n"
-            + 'printf "captured=%s status=%s\\n" "$CAPTURED_COMMAND_OUTPUT" "$status"'
+            + 'printf "stdout=%s stderr=%s status=%s\\n" '
+            + '"$CAPTURED_COMMAND_OUTPUT" "$CAPTURED_COMMAND_STDERR" "$status"'
         )
-        self.assertEqual(result.stdout, "captured=stdout-line status=23\n")
+        self.assertEqual(result.stdout, "stdout=stdout-line stderr=stderr-line status=23\n")
         self.assertEqual(result.stderr, "")
 
     def test_debug_capture_mirrors_both_channels_without_double_execution(self):

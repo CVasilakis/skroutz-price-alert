@@ -1,0 +1,17 @@
+# border: green
+# exit: 0
+
+Usage: ./scripts/dev/plugin-create.sh [-h] [--debug] <target> --display-name <name>
+       --domain <domain> --url-prefix <prefix>
+
+Create an additive in-repository scraper target scaffold.
+
+Required arguments:
+  <target>                  non-reserved snake_case target name
+  --display-name <name>     user-facing store name
+  --domain <domain>         supported hostname or IP address
+  --url-prefix <prefix>     URL path prefix beginning with /
+
+Optional arguments:
+  -h, --help                show this help message and exit
+  --debug                   show underlying command output
