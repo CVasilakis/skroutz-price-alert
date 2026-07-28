@@ -1,0 +1,5 @@
+# border: green
+# exit: 0
+
+[+] Git hook setup
+    [i] Git hooks were not configured (no Git worktree found).

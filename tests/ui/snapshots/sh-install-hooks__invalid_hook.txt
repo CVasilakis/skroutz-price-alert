@@ -1,0 +1,7 @@
+# border: red
+# exit: 1
+
+[+] Git hook setup
+    [v] Pre-push hook is executable.
+    [x] .githooks/pre-push has invalid POSIX shell syntax.
+    [i] Restore or repair .githooks/pre-push, then retry.

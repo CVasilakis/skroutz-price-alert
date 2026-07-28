@@ -36,6 +36,7 @@ class Surface(Enum):
     # Shell surfaces: the transcript a management script prints to the terminal.
     # The "sh-" prefix groups them in the gallery and keeps "sh-run" clear of RUN.
     SH_INSTALL = "sh-install"  # install.sh (repo root)
+    SH_INSTALL_HOOKS = "sh-install-hooks"  # scripts/dev/install-hooks.sh
     SH_RUN = "sh-run"  # scripts/run.sh
     SH_MIGRATE = "sh-migrate"  # scripts/migrate.sh
     SH_SCHEDULE = "sh-schedule"  # scripts/schedule.sh
@@ -90,6 +91,9 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     ),
     Surface.SH_INSTALL: SurfaceInfo(
         "install.sh", "First-time installation transcript (venv, dependencies, systemd units)."
+    ),
+    Surface.SH_INSTALL_HOOKS: SurfaceInfo(
+        "install-hooks.sh", "Enabling the repository-local versioned pre-push checks."
     ),
     Surface.SH_RUN: SurfaceInfo(
         "run.sh", "Argument handling and dispatch of the main wrapper script."

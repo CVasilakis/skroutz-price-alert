@@ -1,0 +1,6 @@
+# border: red
+# exit: 1
+
+[+] Git hook setup
+    [x] Cannot enable hooks; .githooks/pre-push is missing.
+    [i] Restore .githooks/pre-push, then retry.

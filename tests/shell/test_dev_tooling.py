@@ -21,6 +21,7 @@ HELP_SCRIPTS = (
     "scripts/uninstall.sh",
     "scripts/migrate.sh",
     "scripts/dev/setup.sh",
+    "scripts/dev/install-hooks.sh",
     "scripts/dev/check.sh",
     "scripts/dev/plugin-check.sh",
     "scripts/dev/plugin-create.sh",
@@ -71,7 +72,7 @@ def test_dev_setup_help_has_no_install_side_effect():
     listed_targets = {
         line.strip().split(maxsplit=1)[0].removeprefix("--")
         for line in result.stdout.splitlines()
-        if line.startswith("  --")
+        if line.startswith("  --") and not line.startswith("  --debug")
     }
     assert listed_targets == expected_targets
 
@@ -225,6 +226,9 @@ def test_hook_installer_sets_only_repository_local_hooks_path(tmp_path):
         ROOT / "scripts" / "dev" / "install-hooks.sh",
         dev_scripts / "install-hooks.sh",
     )
+    lib = project / "scripts" / "lib"
+    lib.mkdir()
+    shutil.copy(ROOT / "scripts" / "lib" / "common.sh", lib / "common.sh")
     hooks = project / ".githooks"
     hooks.mkdir()
     shutil.copy(ROOT / ".githooks" / "pre-push", hooks / "pre-push")
@@ -252,6 +256,9 @@ def _hook_project(tmp_path: Path, hook_text: str | None):
     dev_scripts = project / "scripts" / "dev"
     dev_scripts.mkdir(parents=True)
     shutil.copy(ROOT / "scripts" / "dev" / "install-hooks.sh", dev_scripts / "install-hooks.sh")
+    lib = project / "scripts" / "lib"
+    lib.mkdir()
+    shutil.copy(ROOT / "scripts" / "lib" / "common.sh", lib / "common.sh")
     if hook_text is not None:
         hooks = project / ".githooks"
         hooks.mkdir()
@@ -264,7 +271,7 @@ def test_hook_installer_refuses_missing_hook_before_configuring(tmp_path):
     project, installer = _hook_project(tmp_path, None)
     result = subprocess.run(["sh", str(installer)], text=True, capture_output=True)
     assert result.returncode != 0
-    assert "missing" in result.stderr
+    assert "[x] Cannot enable hooks; .githooks/pre-push is missing." in result.stdout
     configured = subprocess.run(
         ["git", "-C", str(project), "config", "--local", "--get", "core.hooksPath"],
         text=True,
@@ -277,7 +284,7 @@ def test_hook_installer_refuses_invalid_hook_before_configuring(tmp_path):
     project, installer = _hook_project(tmp_path, "#!/bin/sh\nif\n")
     result = subprocess.run(["sh", str(installer)], text=True, capture_output=True)
     assert result.returncode != 0
-    assert "invalid POSIX shell syntax" in result.stderr
+    assert "[x] .githooks/pre-push has invalid POSIX shell syntax." in result.stdout
     configured = subprocess.run(
         ["git", "-C", str(project), "config", "--local", "--get", "core.hooksPath"],
         text=True,
@@ -308,6 +315,165 @@ def test_hook_installer_refuses_symlink_without_chmodding_target(tmp_path):
 
     assert result.returncode != 0
     assert external.stat().st_mode & 0o111 == 0
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--debug",),
+        ("--debug", "--debug"),
+    ),
+)
+def test_hook_installer_accepts_debug_and_duplicate_debug(tmp_path, args):
+    project, installer = _hook_project(tmp_path, "#!/bin/sh\nexit 0\n")
+    result = subprocess.run(
+        ["sh", str(installer), *args],
+        cwd=project,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Repository-local pre-push checks are enabled." in result.stdout
+    assert "true" in result.stderr
+    assert ".githooks" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--help", "--debug"),
+        ("bad", "--help"),
+        ("--debug", "--help", "bad"),
+        ("--help", "--help"),
+    ),
+)
+def test_hook_installer_help_has_precedence_in_every_position(tmp_path, args):
+    project, installer = _hook_project(tmp_path, None)
+    result = subprocess.run(
+        ["sh", str(installer), *args],
+        cwd=project,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert result.stdout.startswith("\nUsage:")
+    assert result.stdout.endswith("\n\n")
+    assert "--debug" in result.stdout
+
+
+@pytest.mark.parametrize("argument", ("bad", "--", "--unknown"))
+def test_hook_installer_rejects_invalid_arguments_with_framed_ui(tmp_path, argument):
+    project, installer = _hook_project(tmp_path, None)
+    result = subprocess.run(
+        ["sh", str(installer), argument],
+        cwd=project,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 1
+    assert result.stderr == ""
+    assert result.stdout.startswith("\n[+]")
+    assert result.stdout.endswith("\n\n")
+    assert f"[x] Invalid argument: {argument}" in result.stdout
+
+
+def _noisy_git(tmp_path: Path):
+    fake_bin = tmp_path / "noisy-bin"
+    fake_bin.mkdir()
+    git = fake_bin / "git"
+    real_git = shutil.which("git")
+    assert real_git is not None
+    git.write_text(
+        f"""#!/bin/sh
+printf '%s\\n' 'injected git stderr' >&2
+case " $* " in
+    *" config "*)
+        case " $* " in
+            *" --get "*) ;;
+            *)
+                printf '%s\\n' 'injected git stdout'
+                [ "${{NOISY_GIT_FAIL_CONFIG:-0}}" != "1" ] || exit 23 ;;
+        esac ;;
+esac
+exec {real_git} "$@"
+""",
+        encoding="utf-8",
+    )
+    git.chmod(0o755)
+    return fake_bin
+
+
+def test_hook_installer_debug_exposes_noise_hidden_by_normal_mode(tmp_path):
+    project, installer = _hook_project(tmp_path, "#!/bin/sh\nexit 0\n")
+    fake_bin = _noisy_git(tmp_path)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+
+    normal = subprocess.run(
+        ["sh", str(installer)],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+    debug = subprocess.run(
+        ["sh", str(installer), "--debug"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert normal.returncode == debug.returncode == 0
+    assert "injected git" not in normal.stdout + normal.stderr
+    assert "injected git stdout" in debug.stdout + debug.stderr
+    assert "injected git stderr" in debug.stdout + debug.stderr
+
+
+def test_hook_installer_debug_preserves_noisy_command_failure_status(tmp_path):
+    project, installer = _hook_project(tmp_path, "#!/bin/sh\nexit 0\n")
+    fake_bin = _noisy_git(tmp_path)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["NOISY_GIT_FAIL_CONFIG"] = "1"
+
+    normal = subprocess.run(
+        ["sh", str(installer)],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+    debug = subprocess.run(
+        ["sh", str(installer), "--debug"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert normal.returncode == debug.returncode == 23
+    assert "injected git" not in normal.stdout + normal.stderr
+    assert "injected git stdout" in debug.stdout + debug.stderr
+    assert "injected git stderr" in debug.stdout + debug.stderr
+    assert "[x] Could not configure the repository-local hooks path." in normal.stdout
+    assert "[x] Could not configure the repository-local hooks path." in debug.stdout
+
+
+def test_hook_installer_no_worktree_is_a_framed_no_op(tmp_path):
+    project, installer = _hook_project(tmp_path, "#!/bin/sh\nexit 0\n")
+    shutil.rmtree(project / ".git")
+    result = subprocess.run(
+        ["sh", str(installer)],
+        cwd=project,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0
+    assert result.stdout.startswith("\n[+]")
+    assert result.stdout.endswith("\n\n")
+    assert "[i] Git hooks were not configured" in result.stdout
 
 
 def test_versioned_pre_push_hook_runs_the_canonical_gate():
@@ -516,6 +682,8 @@ esac
     assert str(project / "scripts/dev/requirements-dev.txt") in calls
     assert str(alpha) in calls
     assert str(beta) in calls
+    assert "[+] Git hook setup" not in result.stdout
+    assert "    [v] Repository-local pre-push checks are enabled." in result.stdout
 
 
 def test_dev_setup_rejects_existing_python39_venv_with_supported_system_python(tmp_path):

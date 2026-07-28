@@ -55,6 +55,8 @@ _SCRIPT_FILES = (
     "scripts/lib/preflight.sh",
     "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
+    "scripts/dev/install-hooks.sh",
+    ".githooks/pre-push",
 )
 
 # The coreutils allowlist symlinked into the sandbox bin/ in EVERY mode. PATH is
@@ -75,6 +77,7 @@ _REAL_TOOLS = (
     "cmp",
     "readlink",
     "mktemp",
+    "sh",
 )
 
 
@@ -170,6 +173,7 @@ class ShellWorld:
     migration_report: tuple[str, ...] = ()
     migration_stderr: str = ""
     migration_status: int = 0
+    hook_state: str = "valid"
 
     tools: str = "full"
 
@@ -322,6 +326,16 @@ case "${1:-}" in
     status) [ "${FAKE_GIT_DIRTY:-0}" = "1" ] && printf ' M src/core/main.py\\n' ;;
     merge)
         [ "${FAKE_GIT_SIGNAL:-}" = "${1:-}" ] && kill -TERM "$PPID" ;;
+    config)
+        shift
+        [ "${1:-}" = "--local" ] && shift
+        case "${1:-}" in
+            --get)
+                [ -f "$FAKE_GIT_STATE_DIR/hooks-path" ] &&
+                    printf '%s\\n' "$(cat "$FAKE_GIT_STATE_DIR/hooks-path")" ;;
+            core.hooksPath)
+                printf '%s\\n' "$2" > "$FAKE_GIT_STATE_DIR/hooks-path" ;;
+        esac ;;
 esac
 exit 0
 """
@@ -481,9 +495,13 @@ def _build_sandbox(world: ShellWorld) -> Path:
     sandbox = Path(tempfile.mkdtemp(prefix="scrooge-shell-")).resolve()
 
     for rel in _SCRIPT_FILES:
+        if rel == ".githooks/pre-push" and world.hook_state == "missing":
+            continue
         dst = sandbox / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / rel, dst)
+    if world.hook_state == "invalid":
+        (sandbox / ".githooks/pre-push").write_text("#!/bin/sh\nif\n")
 
     (sandbox / "home").mkdir()
     (sandbox / "config").mkdir()

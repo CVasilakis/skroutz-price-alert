@@ -1,0 +1,10 @@
+# border: green
+# exit: 0
+
+Usage: ./scripts/dev/install-hooks.sh [-h] [--debug]
+
+Enable the versioned pre-push checks for this Git worktree.
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --debug           show underlying command output

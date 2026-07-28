@@ -1,0 +1,7 @@
+# border: green
+# exit: 0
+
+[+] Git hook setup
+    [v] Pre-push hook is executable.
+    [v] Pre-push hook syntax is valid.
+    [v] Repository-local pre-push checks are enabled.

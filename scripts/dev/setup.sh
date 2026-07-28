@@ -14,11 +14,12 @@ CATALOG_PYTHON=python3
 print_help() {
     load_plugin_catalog || true
     _ph_targets="$(list_plugins 2>/dev/null || true)"
-    printf '\n%s\n\n' "Usage: ./scripts/dev/setup.sh [-h] [--<target>]"
+    printf '\n%s\n\n' "Usage: ./scripts/dev/setup.sh [-h] [--debug] [--<target>]"
     printf '%s\n' "Create or update the development venv without systemd or user-data"
     printf '%s\n\n' "changes. With no target, install every plugin's private dependencies."
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
+    printf '%s\n' "  --debug           show underlying command output"
     if [ -n "$_ph_targets" ]; then
         for _ph_target in $_ph_targets; do
             _ph_display_name="$(plugin_display_name "$_ph_target")"
@@ -31,9 +32,24 @@ print_help() {
     printf '\n'
 }
 
+HELP_REQUESTED=0
+for argument in "$@"; do
+    case "$argument" in
+        -h|--help) HELP_REQUESTED=1 ;;
+    esac
+done
+if [ "$HELP_REQUESTED" -eq 1 ]; then
+    print_help
+    exit 0
+fi
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        -h|--help) print_help; exit 0 ;;
+        --debug)
+            DEBUG_MODE=1
+            SCROOGE_INTERNAL_DEBUG=1
+            export DEBUG_MODE SCROOGE_INTERNAL_DEBUG
+            ;;
         --) printf '%s\n' "Error: Invalid argument: $1" >&2; exit 1 ;;
         --?*)
             [ -z "$SELECTED" ] || {
@@ -91,5 +107,18 @@ for row in $PLUGIN_REQUIREMENTS; do
 done
 IFS="$OLD_IFS"
 "$VENV_PYTHON" -m pip check
-"$PROJECT_ROOT/scripts/dev/install-hooks.sh"
+if (
+    export SCROOGE_INSTALL_HOOKS_CONTEXT=setup
+    run_action "$PROJECT_ROOT/scripts/dev/install-hooks.sh"
+); then
+    printf '    %b[v]%b %s\n' "$GREEN" "$NC" \
+        "Repository-local pre-push checks are enabled."
+else
+    hook_status=$?
+    printf '    %b[x]%b %s\n' "$RED" "$NC" \
+        "Repository-local pre-push checks could not be enabled." >&2
+    printf '%s\n' \
+        "        Run ./scripts/dev/install-hooks.sh --debug for recovery details." >&2
+    exit "$hook_status"
+fi
 printf '%s\n' "Development environment is ready."

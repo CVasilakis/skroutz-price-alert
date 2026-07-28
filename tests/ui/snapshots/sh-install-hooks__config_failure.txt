@@ -1,0 +1,8 @@
+# border: red
+# exit: 1
+
+[+] Git hook setup
+    [v] Pre-push hook is executable.
+    [v] Pre-push hook syntax is valid.
+    [x] Could not configure the repository-local hooks path.
+    [i] Fix the worktree's .git/config permissions, then retry.
