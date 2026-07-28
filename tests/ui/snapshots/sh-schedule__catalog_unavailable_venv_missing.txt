@@ -1,5 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Cannot read the plugin catalog - the Python environment looks missing or broken.
-Reinstall it with: ./scripts/uninstall.sh then ./install.sh
+[+] Schedule preflight
+    [x] The target catalog could not be loaded.
+    [!] Reinstall it with: ./scripts/uninstall.sh then ./install.sh

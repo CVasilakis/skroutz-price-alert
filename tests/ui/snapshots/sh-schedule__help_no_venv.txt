@@ -1,11 +1,12 @@
 # border: green
 # exit: 0
 
-Usage: schedule.sh [-h] [--<target> ...]
+Usage: schedule.sh [-h] [--debug] [--<target> ...]
 
-Apply configured execution intervals to installed scraper timers.
+Apply configured execution intervals to installed target timers.
 Only registered targets are eligible; orphaned timers are skipped.
 Supported intervals: unavailable (run ./install.sh first)
 
 Optional arguments:
   -h, --help        show this help message and exit
+  --debug           show underlying command output

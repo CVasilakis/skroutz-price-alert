@@ -1,5 +1,9 @@
 # border: red
 # exit: 15
 
-[skroutz] Error: Remove unsupported keys from `config/skroutz.json`.
-[skroutz] Existing timer was left unchanged.
+[+] Execution intervals
+    [x] [skroutz] Remove unsupported keys from `config/skroutz.json`.
+    [i] [skroutz] Existing timer was left unchanged.
+
+[+] Schedule result
+    [!] Invalid target configuration left the affected timer unchanged.

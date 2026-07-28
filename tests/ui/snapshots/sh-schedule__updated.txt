@@ -1,7 +1,11 @@
 # border: green
 # exit: 0
 
-[skroutz] Updating the timer schedule...
-[skroutz] Timer unit updated.
+[+] Execution intervals
+    [i] [skroutz] Timer schedule change queued.
 
-Updated: skroutz
+[+] Timer updates
+    [v] [skroutz] Timer updated and its previous state preserved.
+
+[+] Schedule result
+    [v] Updated targets: skroutz

@@ -89,7 +89,8 @@ def test_write_workflows_reject_unit_links_without_file_or_state_changes(script,
             assert "A managed systemd unit destination is unsafe." in result.stdout
             assert "Refusing to replace managed unit symlink" not in result.stderr
         else:
-            assert "Refusing to replace managed unit symlink" in result.stderr
+            assert "One or more timer schedules could not be applied." in result.stdout
+            assert "Refusing to replace managed unit symlink" not in result.stderr
         assert {
             path.name: os.readlink(path) for path in unit_dir.glob("alpha-scraper.*")
         } == before_links

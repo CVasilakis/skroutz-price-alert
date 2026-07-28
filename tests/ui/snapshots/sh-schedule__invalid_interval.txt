@@ -1,7 +1,9 @@
 # border: green
 # exit: 0
 
-[skroutz] Unsupported execution_interval; timer left unchanged.
-Use one of: 15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h.
+[+] Execution intervals
+    [!] [skroutz] Unsupported execution_interval; timer left unchanged.
+    [!] [skroutz] Use one of: 15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h.
 
-All timers already match their configured intervals.
+[+] Schedule result
+    [v] No eligible timer changes were required.

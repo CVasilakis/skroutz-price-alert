@@ -1,4 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Invalid argument: foo
+[+] Schedule preflight
+    [x] The command-line arguments are invalid.
+    [i] Run ./scripts/schedule.sh --help for usage.

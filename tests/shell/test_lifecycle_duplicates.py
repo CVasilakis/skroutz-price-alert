@@ -34,7 +34,7 @@ from ui.harness.shell import ShellWorld, drive_shell
                 active_timers=("skroutz",),
                 schedules={"skroutz": "daily"},
             ),
-            "Updating the timer schedule",
+            "Timer schedule change queued",
         ),
         (
             "scripts/uninstall.sh",

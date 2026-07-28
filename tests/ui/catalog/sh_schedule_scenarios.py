@@ -16,6 +16,7 @@ from ui.catalog.shell_inputs import (
     WORLD_INSTALLED,
     WORLD_NO_VENV,
     WORLD_ORPHAN,
+    ShellWorld,
     shell_case,
 )
 
@@ -148,6 +149,30 @@ _case(
 _case("updated", "The cadence changed - the timer unit is rewritten and re-armed.", world=_CHANGED)
 
 _case(
+    "partial_config_failure",
+    "A healthy cadence is applied while a malformed target remains unchanged.",
+    world=ShellWorld(
+        plugins=("skroutz", "amazon"),
+        installed_timers=("skroutz", "amazon"),
+        installed_services=("skroutz", "amazon"),
+        schedules={"skroutz": "*-*-* 00/2:00:00", "amazon": "hourly"},
+        schedule_errors={"amazon": "Remove unsupported keys from `config/amazon.json`."},
+    ),
+    tags=("error", "target_config"),
+)
+
+_case(
+    "debug_updated",
+    "Debug mode exposes catalog, schedule, and systemd command output.",
+    "--debug",
+    world=replace(
+        _CHANGED,
+        systemctl_stdout="injected systemctl stdout",
+        systemctl_stderr="injected systemctl stderr",
+    ),
+)
+
+_case(
     "restart_fails",
     "An active changed timer cannot be re-armed; the desired file is retained.",
     world=replace(
@@ -155,6 +180,21 @@ _case(
         enabled_timers=("skroutz",),
         active_timers=("skroutz",),
         systemctl_fail=("restart",),
+    ),
+    tags=("error",),
+)
+
+_case(
+    "debug_restart_fails",
+    "Debug mode preserves failure status while exposing the failing command output.",
+    "--debug",
+    world=replace(
+        _CHANGED,
+        enabled_timers=("skroutz",),
+        active_timers=("skroutz",),
+        systemctl_fail=("restart",),
+        systemctl_stdout="injected failing systemctl stdout",
+        systemctl_stderr="injected failing systemctl stderr",
     ),
     tags=("error",),
 )

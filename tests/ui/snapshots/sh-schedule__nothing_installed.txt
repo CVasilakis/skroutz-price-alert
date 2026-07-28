@@ -1,4 +1,6 @@
 # border: green
 # exit: 0
 
-No installed, registered scraper timers found.
+[+] Execution intervals
+    [i] No installed, registered target timers found.
+    [!] Run ./install.sh to provision targets.

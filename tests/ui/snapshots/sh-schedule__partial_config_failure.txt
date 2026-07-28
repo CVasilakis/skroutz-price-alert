@@ -1,7 +1,9 @@
-# border: green
-# exit: 0
+# border: red
+# exit: 15
 
 [+] Execution intervals
+    [x] [amazon] Remove unsupported keys from `config/amazon.json`.
+    [i] [amazon] Existing timer was left unchanged.
     [i] [skroutz] Timer schedule change queued.
 
 [+] Timer updates
