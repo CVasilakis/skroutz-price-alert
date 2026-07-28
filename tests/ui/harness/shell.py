@@ -168,6 +168,7 @@ class ShellWorld:
 
     config_files: tuple[str, ...] = ()
     migration_report: tuple[str, ...] = ()
+    migration_stderr: str = ""
     migration_status: int = 0
 
     tools: str = "full"
@@ -392,6 +393,8 @@ case "${1:-}" in
             "core.tooling.migration_cli "*)
                 [ -z "${FAKE_MIGRATION_REPORT:-}" ] ||
                     printf '%s\\n' "$FAKE_MIGRATION_REPORT"
+                [ -z "${FAKE_MIGRATION_STDERR:-}" ] ||
+                    printf '%s\\n' "$FAKE_MIGRATION_STDERR" >&2
                 exit "${FAKE_MIGRATION_STATUS:-0}" ;;
             *" -r requirements.txt") [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r /"*)               [ "${FAKE_PIP_FAIL:-}" = "plugin" ] && exit 1 ;;
@@ -623,6 +626,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         ),
         "FAKE_GIT_SIGNAL": world.git_signal or "",
         "FAKE_MIGRATION_REPORT": "\n".join(world.migration_report),
+        "FAKE_MIGRATION_STDERR": world.migration_stderr,
         "FAKE_MIGRATION_STATUS": str(world.migration_status),
     }
 

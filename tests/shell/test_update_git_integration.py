@@ -169,6 +169,53 @@ def test_activation_failure_disables_every_selected_target():
         _cleanup(checkout)
 
 
+def test_update_machine_migration_hides_child_noise_and_parses_only_tsv():
+    report = ("target_config\tskroutz\tfailed\tconfig/skroutz.json\tinvalid legacy config",)
+    world = ShellWorld(
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+        enabled_timers=("skroutz",),
+        active_timers=("skroutz",),
+        config_files=("skroutz.json", "general.json"),
+        migration_report=report,
+        migration_stderr="injected migration noise",
+        migration_status=15,
+    )
+    checkout = _build_sandbox(world)
+    try:
+        result = run_update(checkout, _fake_env(checkout, world))
+        assert result.returncode == 15
+        assert "injected migration noise" not in result.stdout + result.stderr
+        assert report[0] not in result.stdout + result.stderr
+        assert "[config/skroutz.json] Migration failed: invalid legacy config" in result.stdout
+    finally:
+        _cleanup(checkout)
+
+
+def test_update_internal_debug_mirrors_migration_tsv_to_stderr_without_corrupting_it():
+    report = "general_config\tgeneral\tcurrent\tconfig/general.json\t"
+    world = ShellWorld(
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+        enabled_timers=("skroutz",),
+        active_timers=("skroutz",),
+        config_files=("skroutz.json", "general.json"),
+        migration_report=(report,),
+        migration_stderr="injected migration noise",
+    )
+    checkout = _build_sandbox(world)
+    try:
+        env = _fake_env(checkout, world)
+        env["SCROOGE_INTERNAL_DEBUG"] = "1"
+        result = run_update(checkout, env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert report in result.stderr.splitlines()
+        assert "injected migration noise" in result.stderr.splitlines()
+        assert report not in result.stdout
+    finally:
+        _cleanup(checkout)
+
+
 def test_signal_during_update_success_cleanup_cannot_disable_restored_target():
     world = ShellWorld(
         installed_timers=("alpha",),

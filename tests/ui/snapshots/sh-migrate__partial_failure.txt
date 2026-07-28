@@ -1,0 +1,12 @@
+# border: red
+# exit: 15
+
+[+] General configuration
+    [v] config/general.json is current.
+
+[+] Target configuration
+    [x] config/skroutz.json: invalid JSON. Original preserved; compare it with the target
+        example.
+
+[+] Target state
+    [v] state/skroutz.json is current.

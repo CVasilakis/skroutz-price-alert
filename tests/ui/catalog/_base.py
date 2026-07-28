@@ -37,6 +37,7 @@ class Surface(Enum):
     # The "sh-" prefix groups them in the gallery and keeps "sh-run" clear of RUN.
     SH_INSTALL = "sh-install"  # install.sh (repo root)
     SH_RUN = "sh-run"  # scripts/run.sh
+    SH_MIGRATE = "sh-migrate"  # scripts/migrate.sh
     SH_SCHEDULE = "sh-schedule"  # scripts/schedule.sh
     SH_ENABLE = "sh-enable"  # scripts/enable.sh
     SH_DISABLE = "sh-disable"  # scripts/disable.sh
@@ -92,6 +93,9 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     ),
     Surface.SH_RUN: SurfaceInfo(
         "run.sh", "Argument handling and dispatch of the main wrapper script."
+    ),
+    Surface.SH_MIGRATE: SurfaceInfo(
+        "migrate.sh", "Validating and migrating managed JSON documents."
     ),
     Surface.SH_SCHEDULE: SurfaceInfo(
         "schedule.sh", "Re-applying a configured execution interval to the installed timers."

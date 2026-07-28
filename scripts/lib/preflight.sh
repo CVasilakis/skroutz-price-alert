@@ -27,13 +27,14 @@ require_python_310() {
         return 1
     fi
 
-    if ! _rp_version="$("$_rp_python" -c \
-        'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null)"; then
+    if run_captured "$_rp_python" -c \
+        'import sys; print(".".join(map(str, sys.version_info[:3])))'; then
+        _rp_version="$CAPTURED_COMMAND_OUTPUT"
+    else
         _rp_version="unusable"
     fi
-    if ! "$_rp_python" -c \
-        'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
-        >/dev/null 2>&1; then
+    if ! run_action "$_rp_python" -c \
+        'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
         [ -n "$_rp_version" ] || _rp_version="unknown"
         printf '%s\n' \
             "Error: Detected Python $_rp_version; Python 3.10 or newer is required." >&2

@@ -1,0 +1,14 @@
+# border: green
+# exit: 0
+
+[+] General configuration
+    [v] config/general.json migrated: v1 to v2.
+
+[+] Target configuration
+    [v] config/skroutz.json migrated: framework v1 to v2.
+
+[+] Target state
+    [v] state/skroutz.json is current.
+
+[!] Recovery copies
+    [!] Retained at /project/state/.migration-recovery.example.

@@ -1,0 +1,5 @@
+# border: red
+# exit: 1
+
+[+] General configuration
+    [i] config/general.json requires migration: v1 to v2.

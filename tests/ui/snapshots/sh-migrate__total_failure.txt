@@ -1,0 +1,14 @@
+# border: red
+# exit: 15
+
+[+] General configuration
+    [x] config/general.json: general config failed
+
+[+] Target configuration
+    [x] config/skroutz.json: target config failed
+
+[+] Target state
+    [x] state/skroutz.json: target state failed
+
+[+] Reminder state
+    [x] state/general.json: reminder state failed

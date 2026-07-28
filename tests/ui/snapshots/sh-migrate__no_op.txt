@@ -1,0 +1,8 @@
+# border: green
+# exit: 0
+
+[+] General configuration
+    [v] config/general.json is current.
+
+[+] Target state
+    [v] state/skroutz.json is current.

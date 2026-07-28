@@ -1,12 +1,14 @@
 """Drift guard: RESERVED_PLUGIN_NAMES must equal the scripts' built-in '--<flag>' set.
 
-``RESERVED_PLUGIN_NAMES`` exists because the management scripts match
+``RESERVED_PLUGIN_NAMES`` exists because target-selecting management scripts match
 their built-in flags (``--help``, ``--quiet``, ``--ping``, and ``--status``)
 *before* the per-plugin ``--*`` branch, so a plugin named after one of them would
 register fine yet never be dispatchable from the command line. The authoritative set is
-the ``case`` ladders in the shell scripts themselves; this test parses every script's
-literal flag branches and asserts set-equality, so adding a new built-in flag to a
-script without reserving the name (or vice versa) fails loudly instead of drifting.
+the ``case`` ladders in those shell scripts; this test parses their literal flag
+branches and asserts set-equality, so adding a new built-in target-selection flag
+without reserving the name (or vice versa) fails loudly instead of drifting. Flags
+owned only by non-target interfaces such as migrate.sh's ``--check`` and hidden
+``--machine`` protocol do not shadow target names and are deliberately excluded.
 """
 
 import re
@@ -20,6 +22,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #: Every executable script that parses command-line flags.
 SCRIPTS = sorted(
     [REPO_ROOT / "install.sh", REPO_ROOT / "update.sh"] + list((REPO_ROOT / "scripts").glob("*.sh"))
+)
+TARGET_SELECTING_SCRIPTS = tuple(
+    script for script in SCRIPTS if script.name not in {"migrate.sh", "update.sh"}
 )
 SHARED_PARSERS = (REPO_ROOT / "scripts/lib/common.sh",)
 
@@ -43,10 +48,11 @@ class TestReservedFlagNames(unittest.TestCase):
     def test_scripts_were_found(self):
         # Guard against a silent-green pass if the layout changes.
         self.assertGreaterEqual(len(SCRIPTS), 8, SCRIPTS)
+        self.assertGreaterEqual(len(TARGET_SELECTING_SCRIPTS), 6, TARGET_SELECTING_SCRIPTS)
 
     def test_reserved_names_match_the_scripts_builtin_flags(self):
         claimed: set[str] = set()
-        for script in (*SCRIPTS, *SHARED_PARSERS):
+        for script in (*TARGET_SELECTING_SCRIPTS, *SHARED_PARSERS):
             claimed |= builtin_flags_of(script)
         self.assertEqual(
             claimed | {"general"},

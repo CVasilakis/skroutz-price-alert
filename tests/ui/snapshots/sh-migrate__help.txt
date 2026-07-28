@@ -1,0 +1,12 @@
+# border: green
+# exit: 0
+
+Usage: migrate.sh [-h] [--check] [--debug]
+
+Validate and migrate every known Scrooge Alert JSON document.
+With no flag, migrate outdated managed JSON documents in place.
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --check           Validate and report without modifying JSON files
+  --debug           show underlying command output
