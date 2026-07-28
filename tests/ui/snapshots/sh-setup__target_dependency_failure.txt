@@ -1,0 +1,19 @@
+# border: red
+# exit: 1
+
+[+] Environment checks
+    [v] The development venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing development venv uses a supported Python.
+    [v] Dependency plan loaded for all targets.
+
+[+] Python environment
+    [i] Updating the existing development venv.
+    [v] The development venv is ready.
+
+[+] Development dependencies
+    [v] Packaging tools updated.
+    [v] Core and development dependencies installed.
+    [x] Private dependencies for the skroutz target could not be installed.
+    [i] Check that target's requirements, then run ./scripts/dev/setup.sh --debug
+        --skroutz.

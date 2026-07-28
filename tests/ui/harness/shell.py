@@ -55,7 +55,9 @@ _SCRIPT_FILES = (
     "scripts/lib/preflight.sh",
     "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
+    "scripts/dev/setup.sh",
     "scripts/dev/install-hooks.sh",
+    "scripts/dev/requirements-dev.txt",
     ".githooks/pre-push",
 )
 
@@ -366,6 +368,10 @@ case "${1:-}" in
                         [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
                         [ -n "${FAKE_PLUGIN_CATALOG:-}" ] &&
                             printf '%s\\n' "$FAKE_PLUGIN_CATALOG" ;;
+                    requirements)
+                        [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                        [ -n "${FAKE_PLUGIN_REQUIREMENTS_REPORT:-}" ] &&
+                            printf '%s\\n' "$FAKE_PLUGIN_REQUIREMENTS_REPORT" ;;
                     diagnose)
                         [ -z "${FAKE_DISCOVERY_ERROR:-}" ] ||
                             { printf '%s\\n' "$FAKE_DISCOVERY_ERROR"; exit 1; } ;;
@@ -410,10 +416,12 @@ case "${1:-}" in
                 [ -z "${FAKE_MIGRATION_STDERR:-}" ] ||
                     printf '%s\\n' "$FAKE_MIGRATION_STDERR" >&2
                 exit "${FAKE_MIGRATION_STATUS:-0}" ;;
+            "pip check")             [ "${FAKE_PIP_FAIL:-}" = "check" ] && exit 1 ;;
+            *" -r ${FAKE_BASE_DIR}/requirements.txt "*)
+                [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r requirements.txt") [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r /"*)               [ "${FAKE_PIP_FAIL:-}" = "plugin" ] && exit 1 ;;
             *" pip")                 [ "${FAKE_PIP_FAIL:-}" = "upgrade" ] && exit 1 ;;
-            "pip check")             [ "${FAKE_PIP_FAIL:-}" = "check" ] && exit 1 ;;
         esac ;;
     *)
         # run.sh's final exec: leave a marker line the golden can lock.
@@ -582,6 +590,9 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
             f"{p}\t{sandbox}/src/core/scrapers/plugins/{p}/config.example.json" for p in plugins
         ),
         "FAKE_PLUGIN_REQUIREMENTS": "\n".join(f"{p}\t{r}" for p, r in requirement_paths.items()),
+        "FAKE_PLUGIN_REQUIREMENTS_REPORT": "\n".join(
+            f"{plugin}\t{requirement_paths.get(plugin, '')}" for plugin in plugins
+        ),
         "FAKE_PLUGIN_CATALOG": "\n".join(
             "\t".join(
                 (
@@ -609,6 +620,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_NO_ENSUREPIP": "1" if world.ensurepip_missing else "0",
         "FAKE_VENV_CREATE_FAILS": "1" if world.venv_create_fails else "0",
         "FAKE_VENV_TEMPLATE": str(sandbox / "bin" / "venv-python-template"),
+        "FAKE_BASE_DIR": str(sandbox),
         "FAKE_PIP_FAIL": world.pip_fail or "",
         "FAKE_ENABLED_TIMERS": " ".join(world.enabled_timers),
         "FAKE_ACTIVE_TIMERS": " ".join(world.active_timers),

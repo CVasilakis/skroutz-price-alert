@@ -21,6 +21,7 @@ from ui.catalog import (
     sh_migrate_scenarios,  # noqa: F401
     sh_run_scenarios,  # noqa: F401
     sh_schedule_scenarios,  # noqa: F401
+    sh_setup_scenarios,  # noqa: F401
     sh_stop_scenarios,  # noqa: F401
     sh_uninstall_scenarios,  # noqa: F401
     sh_update_scenarios,  # noqa: F401

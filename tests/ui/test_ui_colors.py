@@ -59,6 +59,8 @@ EXPECTED_COLORS = {
     # SHELL (border derives from the exit code: 0 -> green, else red)
     "sh-install__systemctl_missing": "red",
     "sh-install__reinstall_all_configured": "green",
+    "sh-setup__all_dependencies": "green",
+    "sh-setup__target_dependency_failure": "red",
     "sh-install-hooks__configured": "green",
     "sh-install-hooks__missing_hook": "red",
     "sh-update__dirty_tree": "red",

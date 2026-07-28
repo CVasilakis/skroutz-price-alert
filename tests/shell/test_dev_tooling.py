@@ -528,19 +528,24 @@ def test_plugin_check_runs_from_external_venv_without_root_venv(tmp_path):
 def test_dev_setup_rejects_invalid_argument_before_installing():
     result = _run("scripts/dev/setup.sh", "target")
     assert result.returncode == 1
-    assert "Invalid argument" in result.stderr
+    assert result.stderr == ""
+    assert result.stdout.startswith("\n[+] Setup arguments\n")
+    assert "    [x] Invalid argument: target" in result.stdout
+    assert result.stdout.endswith("\n\n")
 
 
 def test_dev_setup_rejects_multiple_targets_before_installing():
     result = _run("scripts/dev/setup.sh", "--skroutz", "--insomnia")
     assert result.returncode == 1
-    assert "at most one" in result.stderr
+    assert result.stderr == ""
+    assert "    [x] Select at most one target." in result.stdout
 
 
 def test_dev_setup_rejects_unknown_target_before_pip_work():
     result = _run("scripts/dev/setup.sh", "--does_not_exist")
     assert result.returncode == 1
-    assert "Unknown target 'does_not_exist'" in result.stderr
+    assert result.stderr == ""
+    assert "    [x] Unknown target 'does_not_exist'." in result.stdout
     assert "Requirement already satisfied" not in result.stdout
 
 
@@ -565,7 +570,8 @@ def test_dev_setup_rejects_project_venv_symlink_before_python_work(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "must be a project-owned directory, not a symlink" in result.stderr
+    assert result.stderr == ""
+    assert "    [x] The development venv path is a symlink." in result.stdout
     assert (project / "venv").is_symlink()
 
 
@@ -609,8 +615,12 @@ def test_development_wrappers_reject_python39(python39, script, args, override):
         env=env,
     )
     assert result.returncode != 0
-    assert "Detected Python 3.9.18" in result.stderr
-    assert "3.10 or newer" in result.stderr
+    output = result.stdout + result.stderr
+    if script == "scripts/dev/setup.sh":
+        assert "System Python 3.10 or newer is required." in output
+    else:
+        assert "Detected Python 3.9.18" in output
+    assert "3.10 or newer" in output
 
 
 def test_dev_setup_installs_core_dev_and_all_plugin_requirements(tmp_path):
@@ -737,7 +747,210 @@ esac
         env=env,
     )
     assert result.returncode != 0
-    assert "Detected Python 3.9.18" in result.stderr
+    assert result.stderr == ""
+    assert "existing development venv uses an unsupported Python" in result.stdout
+
+
+def _setup_project(tmp_path: Path):
+    project = tmp_path / "project"
+    for relative in (
+        "scripts/dev/setup.sh",
+        "scripts/dev/install-hooks.sh",
+        "scripts/lib/common.sh",
+        "scripts/lib/preflight.sh",
+        ".githooks/pre-push",
+        "requirements.txt",
+        "scripts/dev/requirements-dev.txt",
+    ):
+        destination = project / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / relative, destination)
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+
+    fake_bin = tmp_path / "setup-bin"
+    fake_bin.mkdir()
+    fake_python = fake_bin / "python3"
+    fake_python.write_text(
+        """#!/bin/sh
+set -eu
+if [ "${SETUP_NOISE:-0}" = "1" ]; then
+    printf '%s\\n' 'injected python stdout'
+    printf '%s\\n' 'injected python stderr' >&2
+fi
+case "${1:-}" in
+    -c)
+        case "${2:-}" in *print*) printf '%s\\n' '3.12.0' ;; esac
+        exit 0 ;;
+    -m)
+        case "${2:-}" in
+            core.scrapers.tooling.cli)
+                printf 'alpha\\t%s\\nbeta\\t\\n' "$ALPHA_REQ"
+                exit 0 ;;
+            venv)
+                mkdir -p "$3/bin"
+                cp "$0" "$3/bin/python3"
+                chmod 755 "$3/bin/python3"
+                exit 0 ;;
+            pip)
+                stage=packaging
+                case " $* " in
+                    *" check "*) stage=check ;;
+                    *" requirements.txt "*) stage=requirements ;;
+                    *" $ALPHA_REQ "*) stage=target ;;
+                esac
+                [ "${SETUP_FAIL_STAGE:-}" != "$stage" ] || exit 23
+                exit 0 ;;
+        esac ;;
+esac
+exit 0
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    alpha = tmp_path / "alpha-private.req"
+    alpha.touch()
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{fake_bin}:{env['PATH']}",
+            "ALPHA_REQ": str(alpha),
+        }
+    )
+    return project, env
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--debug",),
+        ("--debug", "--debug"),
+        ("--alpha", "--debug"),
+        ("--debug", "--alpha"),
+    ),
+)
+def test_dev_setup_accepts_debug_in_supported_positions(tmp_path, args):
+    project, env = _setup_project(tmp_path)
+    result = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh"), *args],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.startswith("\n[+] Environment checks\n")
+    assert result.stdout.endswith("\n\n")
+    assert "[+] Setup complete" in result.stdout
+    if "--debug" in args:
+        assert "alpha\t" not in result.stdout
+        assert "alpha\t" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--help", "--debug"),
+        ("bad", "--help"),
+        ("--debug", "--help", "bad"),
+        ("--help", "--help"),
+    ),
+)
+def test_dev_setup_help_has_precedence_in_every_position(tmp_path, args):
+    project, env = _setup_project(tmp_path)
+    result = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh"), *args],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert result.stdout.startswith("\nUsage:")
+    assert result.stdout.endswith("\n\n")
+    assert "--debug" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--",),
+        ("bad",),
+        ("--alpha", "--alpha"),
+        ("--debug", "--alpha", "--beta"),
+    ),
+)
+def test_dev_setup_invalid_and_duplicate_flags_keep_exit_one(tmp_path, args):
+    project, env = _setup_project(tmp_path)
+    result = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh"), *args],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == ""
+    assert result.stdout.startswith("\n[+] Setup arguments\n")
+    assert result.stdout.endswith("\n\n")
+
+
+def test_dev_setup_normal_hides_noise_and_debug_exposes_it(tmp_path):
+    project, env = _setup_project(tmp_path)
+    env["SETUP_NOISE"] = "1"
+
+    normal = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh")],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+    debug = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh"), "--debug"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert normal.returncode == debug.returncode == 0
+    assert "injected python" not in normal.stdout + normal.stderr
+    assert "injected python stdout" in debug.stdout + debug.stderr
+    assert "injected python stderr" in debug.stdout + debug.stderr
+
+
+def test_dev_setup_debug_preserves_noisy_command_failure_status(tmp_path):
+    project, env = _setup_project(tmp_path)
+    env.update({"SETUP_NOISE": "1", "SETUP_FAIL_STAGE": "target"})
+
+    normal = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh")],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+    debug = subprocess.run(
+        ["sh", str(project / "scripts/dev/setup.sh"), "--debug"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert normal.returncode == debug.returncode == 23
+    assert "injected python" not in normal.stdout + normal.stderr
+    assert "injected python stdout" in debug.stdout + debug.stderr
+    assert "injected python stderr" in debug.stdout + debug.stderr
+    message = "    [x] Private dependencies for the alpha target could not be installed."
+    assert message in normal.stdout
+    assert message in debug.stdout
+    assert normal.stdout.startswith("\n[+] Environment checks\n")
+    assert normal.stdout.endswith("\n\n")
 
 
 def test_developer_requirements_are_visible_without_unignoring_arbitrary_text():

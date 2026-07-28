@@ -1,0 +1,12 @@
+# border: green
+# exit: 0
+
+Usage: ./scripts/dev/setup.sh [-h] [--debug] [--<target>]
+
+Create or update the development venv without systemd or user-data
+changes. With no target, install every target's private dependencies.
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --debug           show underlying command output
+  --skroutz         Install private dependencies for only the Skroutz target
