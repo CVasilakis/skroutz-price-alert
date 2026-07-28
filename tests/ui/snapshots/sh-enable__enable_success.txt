@@ -1,7 +1,8 @@
 # border: green
 # exit: 0
 
-[skroutz] Enabling and starting background schedule...
-[skroutz] Background execution enabled successfully.
+[+] Background schedules
+    [v] [skroutz] Background schedule enabled and started.
 
-To disable background execution, run: ./scripts/disable.sh
+[+] Optional controls
+    [i] If needed, disable background execution with: ./scripts/disable.sh

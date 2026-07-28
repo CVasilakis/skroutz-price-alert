@@ -1,5 +1,6 @@
 # border: green
 # exit: 0
 
-No installed, registered scraper timers found.
-Run ./install.sh to provision scrapers.
+[+] Background schedules
+    [i] No installed, registered target timers found.
+    [!] Run ./install.sh to provision targets.

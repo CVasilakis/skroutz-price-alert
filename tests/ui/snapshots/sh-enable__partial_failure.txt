@@ -1,0 +1,7 @@
+# border: red
+# exit: 1
+
+[+] Background schedules
+    [x] [amazon] Failed to enable and start the timer.
+    [i] [amazon] Run ./scripts/enable.sh --debug --amazon for underlying diagnostics.
+    [v] [skroutz] Background schedule enabled and started.

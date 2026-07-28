@@ -1,6 +1,7 @@
 # border: red
 # exit: 1
 
-Error: The scraper plugin catalog could not be loaded.
-  PluginDiscoveryError: plugin package 'zzzbroken' failed to import: boom
-Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry.
+[+] Enable preflight
+    [x] The target catalog could not be loaded.
+    [!] Fix (or remove) the offending package under src/core/scrapers/plugins/, then
+        retry.

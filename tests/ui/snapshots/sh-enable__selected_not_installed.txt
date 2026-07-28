@@ -1,4 +1,6 @@
 # border: red
 # exit: 1
 
-Error: 'amazon' is registered but not installed.
+[+] Enable preflight
+    [x] 'amazon' is registered but not installed.
+    [!] Install it with: ./install.sh --amazon

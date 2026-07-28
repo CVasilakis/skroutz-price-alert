@@ -1,11 +1,12 @@
 # border: green
 # exit: 0
 
-Usage: enable.sh [-h] [--<target> ...]
+Usage: enable.sh [-h] [--debug] [--<target> ...]
 
 Enable and start installed, registered scraper timers.
 With no target flag, every eligible installed timer is enabled.
 
 Optional arguments:
   -h, --help        show this help message and exit
+  --debug           show underlying command output
   --skroutz         Enable only the skroutz scraper

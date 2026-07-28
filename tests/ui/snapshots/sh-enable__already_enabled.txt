@@ -1,6 +1,8 @@
 # border: green
 # exit: 0
 
-[skroutz] Timer is already enabled and active.
+[+] Background schedules
+    [i] [skroutz] Timer is already enabled and active.
 
-To disable background execution, run: ./scripts/disable.sh
+[+] Optional controls
+    [i] If needed, disable background execution with: ./scripts/disable.sh

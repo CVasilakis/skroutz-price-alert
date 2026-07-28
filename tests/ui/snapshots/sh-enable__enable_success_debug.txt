@@ -1,0 +1,16 @@
+# border: green
+# exit: 0
+
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+[+] Background schedules
+UnitFileState=disabled
+ActiveState=inactive
+injected systemctl stdout
+injected systemctl stderr
+LoadState=loaded
+UnitFileState=enabled
+ActiveState=active
+    [v] [skroutz] Background schedule enabled and started.
+
+[+] Optional controls
+    [i] If needed, disable background execution with: ./scripts/disable.sh

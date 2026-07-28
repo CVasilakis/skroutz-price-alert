@@ -118,6 +118,8 @@ class ShellWorld:
         systemctl_fail: Verbs that exit 1 (e.g. ("enable",)).
         systemctl_noop: Mutating verbs that return success without changing state,
             exercising production postcondition checks.
+        systemctl_stdout / systemctl_stderr: Noise emitted by mutating systemctl
+            commands for normal/debug stream assertions.
         linger: The Linger= answer ("yes"/"no"); linger_enable_fails: enable-linger fails.
 
     git (update.sh): git_branch, git_dirty, and failable Git verbs.
@@ -158,6 +160,8 @@ class ShellWorld:
     systemctl_fail_target: str | None = None
     systemctl_noop: tuple[str, ...] = ()
     systemctl_signal: str | None = None
+    systemctl_stdout: str = ""
+    systemctl_stderr: str = ""
     linger: str = "yes"
     linger_enable_fails: bool = False
 
@@ -196,6 +200,16 @@ _SYSTEMCTL_SHIM = """#!/bin/sh
 [ "${1:-}" = "--runtime" ] && shift
 verb="${1:-}"
 [ $# -gt 0 ] && shift
+
+case "$verb" in
+    show) ;;
+    *)
+        [ -z "${FAKE_SYSTEMCTL_STDOUT:-}" ] ||
+            printf '%s\\n' "$FAKE_SYSTEMCTL_STDOUT"
+        [ -z "${FAKE_SYSTEMCTL_STDERR:-}" ] ||
+            printf '%s\\n' "$FAKE_SYSTEMCTL_STDERR" >&2
+        ;;
+esac
 
 stem() {
     _u="${1##*/}"
@@ -643,6 +657,8 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_SYSTEMCTL_FAIL_TARGET": world.systemctl_fail_target or "",
         "FAKE_SYSTEMCTL_NOOP": " ".join(world.systemctl_noop),
         "FAKE_SYSTEMCTL_SIGNAL": world.systemctl_signal or "",
+        "FAKE_SYSTEMCTL_STDOUT": world.systemctl_stdout,
+        "FAKE_SYSTEMCTL_STDERR": world.systemctl_stderr,
         "FAKE_SYSTEMD_STATE_DIR": str(sandbox / "systemd-state"),
         "FAKE_LINGER": world.linger,
         "FAKE_LINGER_ENABLE_FAILS": "1" if world.linger_enable_fails else "0",

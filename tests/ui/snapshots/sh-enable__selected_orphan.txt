@@ -1,5 +1,6 @@
 # border: red
 # exit: 1
 
-Error: 'ghost' is installed but no longer registered (orphan).
-Remove it with: ./scripts/uninstall.sh --ghost
+[+] Enable preflight
+    [x] 'ghost' is installed but no longer registered (orphan).
+    [!] Remove it with: ./scripts/uninstall.sh --ghost

@@ -1,4 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Unknown target 'bogus'.
+[+] Enable preflight
+    [x] Unknown target 'bogus'.
+    [i] Run ./scripts/enable.sh --help for available targets.

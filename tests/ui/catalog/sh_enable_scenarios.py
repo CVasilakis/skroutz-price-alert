@@ -94,6 +94,17 @@ _case("already_enabled", "The timer is already enabled and active.", world=WORLD
 _case("enable_success", "An installed but dormant timer is armed.", world=WORLD_INSTALLED)
 
 _case(
+    "enable_success_debug",
+    "Debug exposes the underlying systemd protocol and command output.",
+    "--debug",
+    world=replace(
+        WORLD_INSTALLED,
+        systemctl_stdout="injected systemctl stdout",
+        systemctl_stderr="injected systemctl stderr",
+    ),
+)
+
+_case(
     "enable_healthy_with_other_bad_config",
     "A malformed config for another target does not block enabling this timer.",
     "--skroutz",
@@ -123,5 +134,18 @@ _case(
     "query_fails",
     "A failed timer-state query is not treated as a dormant timer.",
     world=replace(WORLD_INSTALLED, systemctl_fail=("show",)),
+    tags=("error",),
+)
+
+_case(
+    "partial_failure",
+    "One target fails to enable while a second target still succeeds.",
+    world=ShellWorld(
+        plugins=("skroutz", "amazon"),
+        installed_timers=("skroutz", "amazon"),
+        installed_services=("skroutz", "amazon"),
+        systemctl_fail=("enable",),
+        systemctl_fail_target="amazon",
+    ),
     tags=("error",),
 )

@@ -9,7 +9,7 @@ from ui.harness.shell import ShellWorld, drive_shell
         (
             "scripts/enable.sh",
             ShellWorld(installed_timers=("skroutz",), installed_services=("skroutz",)),
-            "Enabling and starting background schedule",
+            "Background schedule enabled and started",
         ),
         (
             "scripts/disable.sh",

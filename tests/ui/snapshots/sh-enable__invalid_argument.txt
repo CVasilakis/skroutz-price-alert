@@ -1,4 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Invalid argument: foo
+[+] Enable preflight
+    [x] The command-line arguments are invalid.
+    [i] Run ./scripts/enable.sh --help for usage.
