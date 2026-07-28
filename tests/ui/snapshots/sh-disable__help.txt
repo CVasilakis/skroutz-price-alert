@@ -1,12 +1,13 @@
 # border: green
 # exit: 0
 
-Usage: disable.sh [-h] [--<target> ...]
+Usage: disable.sh [-h] [--debug] [--<target> ...]
 
 Stop and disable installed scraper timer/service pairs.
 Orphaned and partial unit pairs remain selectable for teardown.
 
 Optional arguments:
   -h, --help        show this help message and exit
+  --debug           show underlying command output
   --skroutz         Disable only the skroutz scraper
   --ghost           Disable only the ghost scraper

@@ -1,0 +1,30 @@
+# border: green
+# exit: 0
+
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+[+] Background execution
+LoadState=loaded
+LoadState=loaded
+ActiveState=active
+UnitFileState=enabled
+    [i] [skroutz] Stopping and disabling background execution.
+LoadState=loaded
+LoadState=loaded
+UnitFileState=enabled
+ActiveState=active
+injected systemctl stdout
+injected systemctl stderr
+injected systemctl stdout
+injected systemctl stderr
+ActiveState=inactive
+injected systemctl stdout
+injected systemctl stderr
+LoadState=loaded
+ActiveState=inactive
+UnitFileState=disabled
+LoadState=loaded
+ActiveState=inactive
+    [v] [skroutz] Background execution disabled.
+
+[+] Optional controls
+    [i] To re-enable background execution, run: ./scripts/enable.sh

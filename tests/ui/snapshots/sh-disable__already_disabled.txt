@@ -1,6 +1,8 @@
 # border: green
 # exit: 0
 
-[skroutz] Background service and timer are already disabled.
+[+] Background execution
+    [i] [skroutz] Background timer and service are already disabled.
 
-To re-enable background execution, run: ./scripts/enable.sh
+[+] Optional controls
+    [i] To re-enable background execution, run: ./scripts/enable.sh

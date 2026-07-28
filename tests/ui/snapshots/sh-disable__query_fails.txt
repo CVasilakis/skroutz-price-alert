@@ -1,6 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Could not query LoadState for skroutz-scraper.timer.
-
-[skroutz] Error: Could not determine systemd state.
+[+] Background execution
+    [x] [skroutz] Could not determine the systemd state.
+    [i] [skroutz] Run ./scripts/disable.sh --debug --skroutz for underlying diagnostics.

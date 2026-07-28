@@ -1,7 +1,9 @@
 # border: green
 # exit: 0
 
-[skroutz] Stopping and disabling background execution...
-[skroutz] Background execution disabled successfully.
+[+] Background execution
+    [i] [skroutz] Stopping and disabling background execution.
+    [v] [skroutz] Background execution disabled.
 
-To re-enable background execution, run: ./scripts/enable.sh
+[+] Optional controls
+    [i] To re-enable background execution, run: ./scripts/enable.sh

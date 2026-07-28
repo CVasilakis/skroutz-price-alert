@@ -1,4 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Invalid argument: --
+[+] Disable preflight
+    [x] The command-line arguments are invalid.
+    [i] Run ./scripts/disable.sh --help for usage.

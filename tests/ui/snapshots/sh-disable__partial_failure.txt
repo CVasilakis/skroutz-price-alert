@@ -1,0 +1,9 @@
+# border: red
+# exit: 1
+
+[+] Background execution
+    [i] [amazon] Stopping and disabling background execution.
+    [x] [amazon] Background execution was not fully disabled.
+    [i] [amazon] Run ./scripts/disable.sh --debug --amazon for underlying diagnostics.
+    [i] [skroutz] Stopping and disabling background execution.
+    [v] [skroutz] Background execution disabled.

@@ -1,7 +1,9 @@
 # border: green
 # exit: 0
 
-[ghost] Stopping and disabling background execution...
-[ghost] Background execution disabled successfully.
+[+] Background execution
+    [i] [ghost] Stopping and disabling background execution.
+    [v] [ghost] Background execution disabled.
 
-To re-enable background execution, run: ./scripts/enable.sh
+[+] Optional controls
+    [i] To re-enable background execution, run: ./scripts/enable.sh

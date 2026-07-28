@@ -77,6 +77,17 @@ _case(
 )
 
 _case(
+    "disable_success_debug",
+    "Debug exposes the underlying systemd protocol and command output.",
+    "--debug",
+    world=replace(
+        WORLD_HEALTHY,
+        systemctl_stdout="injected systemctl stdout",
+        systemctl_stderr="injected systemctl stderr",
+    ),
+)
+
+_case(
     "disable_fails",
     "A rejected disable request is reported and returns nonzero.",
     world=replace(WORLD_HEALTHY, systemctl_fail=("disable",)),
@@ -87,6 +98,21 @@ _case(
     "disable_noop_detected",
     "A no-op disable cannot satisfy the enabled-state postcondition.",
     world=replace(WORLD_HEALTHY, systemctl_noop=("disable",)),
+    tags=("error",),
+)
+
+_case(
+    "partial_failure",
+    "One target fails to disable while a second target still succeeds.",
+    world=ShellWorld(
+        plugins=("skroutz", "amazon"),
+        installed_timers=("skroutz", "amazon"),
+        installed_services=("skroutz", "amazon"),
+        enabled_timers=("skroutz", "amazon"),
+        active_timers=("skroutz", "amazon"),
+        systemctl_fail=("disable",),
+        systemctl_fail_target="amazon",
+    ),
     tags=("error",),
 )
 
