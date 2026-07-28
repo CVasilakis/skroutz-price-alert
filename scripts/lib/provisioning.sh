@@ -91,17 +91,17 @@ restore_timer_state() {
     _rts_failed=0
     [ "$_rts_load" != not-found ] || return 0
 
-    systemctl --user stop "$_rts_timer" >/dev/null || _rts_failed=1
-    systemctl --user reset-failed "$_rts_timer" >/dev/null || _rts_failed=1
+    run_action systemctl --user stop "$_rts_timer" || _rts_failed=1
+    run_action systemctl --user reset-failed "$_rts_timer" || _rts_failed=1
     case "$_rts_enabled" in
         enabled)
-            systemctl --user enable "$_rts_timer" >/dev/null || _rts_failed=1 ;;
+            run_action systemctl --user enable "$_rts_timer" || _rts_failed=1 ;;
         enabled-runtime)
-            systemctl --user --runtime enable "$_rts_timer" >/dev/null ||
+            run_action systemctl --user --runtime enable "$_rts_timer" ||
                 _rts_failed=1 ;;
     esac
     [ "$_rts_active" != active ] ||
-        systemctl --user start "$_rts_timer" >/dev/null || _rts_failed=1
+        run_action systemctl --user start "$_rts_timer" || _rts_failed=1
 
     _rts_now_enabled="$(systemd_property "$_rts_timer" UnitFileState)" ||
         return 1
@@ -219,7 +219,7 @@ restore_unit_snapshot() {
         done
     done
     IFS="$_rus_old_ifs"
-    systemctl --user daemon-reload >/dev/null || _rus_failed=1
+    run_action systemctl --user daemon-reload || _rus_failed=1
     if [ "$_rus_failed" -eq 0 ]; then
         restore_captured_states "$_rus_targets" "$_rus_workspace/state" ||
             _rus_failed=1
@@ -350,7 +350,7 @@ replace_units_transaction() {
     done
     IFS="$_rut_old_ifs"
     if [ "$_rut_failed" -eq 0 ]; then
-        systemctl --user daemon-reload || _rut_failed=1
+        run_action systemctl --user daemon-reload || _rut_failed=1
     fi
 
     if [ "$_rut_failed" -eq 0 ]; then

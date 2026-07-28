@@ -38,7 +38,7 @@ def _compile(definition=None, target="teststore"):
     return compile_plugin(definition or _plugin(), target=target, package=f"tests.plugins.{target}")
 
 
-@pytest.mark.parametrize("target", ["Bad", "1bad", "general"])
+@pytest.mark.parametrize("target", ["Bad", "1bad", "debug", "general"])
 def test_invalid_or_reserved_target_rejected(target):
     with pytest.raises(PluginValidationError):
         _compile(target=target)

@@ -15,6 +15,10 @@ runtime=0
 verb="$1"
 shift
 [ "${FAKE_SIGNAL_VERB:-}" = "$verb" ] && kill -TERM "$PPID"
+if [ "${FAKE_SYSTEMCTL_DIAGNOSTICS:-0}" = "1" ]; then
+    [ "$verb" = show ] || printf 'systemctl-%s-stdout\n' "$verb"
+    printf 'systemctl-%s-stderr\n' "$verb" >&2
+fi
 stem() {
     value="${1##*/}"
     value="${value%-scraper.timer}"
@@ -191,6 +195,31 @@ def test_successful_first_install_writes_and_activates_pair(shell_world):
     assert (unit_dir / "alpha-scraper.timer").is_file()
     assert (state / "enabled.alpha").is_file()
     assert (state / "active.alpha").is_file()
+
+
+def test_nested_systemctl_output_is_quiet_normally_and_visible_in_debug(shell_world):
+    normal = run_transaction(
+        shell_world,
+        "alpha",
+        "alpha\thourly",
+        FAKE_SYSTEMCTL_DIAGNOSTICS="1",
+    )
+    assert normal.returncode == 0, normal.stderr
+    assert normal.stdout == ""
+    assert normal.stderr == ""
+
+    debug = run_transaction(
+        shell_world,
+        "beta",
+        "beta\thourly",
+        FAKE_SYSTEMCTL_DIAGNOSTICS="1",
+        SCROOGE_INTERNAL_DEBUG="1",
+    )
+    assert debug.returncode == 0, debug.stderr
+    assert debug.stdout == "systemctl-daemon-reload-stdout\nsystemctl-enable-stdout\n"
+    assert "LoadState=not-found" in debug.stderr
+    assert "systemctl-show-stderr" in debug.stderr
+    assert "systemctl-enable-stderr" in debug.stderr
 
 
 def test_first_install_activation_failure_removes_every_new_unit(shell_world):

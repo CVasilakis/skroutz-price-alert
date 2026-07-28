@@ -17,11 +17,11 @@ from core.scrapers.framework.naming import RESERVED_PLUGIN_NAMES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: Every script that parses command-line flags. lib/common.sh is sourced, not executed,
-#: and parses no arguments.
+#: Every executable script that parses command-line flags.
 SCRIPTS = sorted(
     [REPO_ROOT / "install.sh", REPO_ROOT / "update.sh"] + list((REPO_ROOT / "scripts").glob("*.sh"))
 )
+SHARED_PARSERS = (REPO_ROOT / "scripts/lib/common.sh",)
 
 # A case branch whose pattern is made of literal flags, e.g. "-h|--help)" or "--ping)".
 # Deliberately excludes the globs ("--*)", "*)") and the bare "--)" separator branch.
@@ -46,7 +46,7 @@ class TestReservedFlagNames(unittest.TestCase):
 
     def test_reserved_names_match_the_scripts_builtin_flags(self):
         claimed: set[str] = set()
-        for script in SCRIPTS:
+        for script in (*SCRIPTS, *SHARED_PARSERS):
             claimed |= builtin_flags_of(script)
         self.assertEqual(
             claimed | {"general"},

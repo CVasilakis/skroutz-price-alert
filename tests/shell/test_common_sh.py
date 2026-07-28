@@ -87,6 +87,142 @@ class TestColorGuard(unittest.TestCase):
         self.assertEqual(self._red(NO_COLOR="1", CLICOLOR_FORCE="1"), "")
 
 
+class TestPresentationHelpers(unittest.TestCase):
+    def test_sections_statuses_and_spacing_are_source_silent_and_colorless(self):
+        result = run_sh(
+            "begin_operational_output\n"
+            'section_heading success "Ready"\n'
+            'section_heading warning "Attention"\n'
+            'task_status success "Completed"\n'
+            'task_status failure "Failed"\n'
+            'task_status info "Details"\n'
+            "end_operational_output",
+            extra_env={"NO_COLOR": "1"},
+        )
+        self.assertEqual(
+            result.stdout,
+            "\n[+] Ready\n[!] Attention\n  [v] Completed\n  [x] Failed\n  [i] Details\n\n",
+        )
+
+    def test_guidance_and_bullets_wrap_with_indented_continuations(self):
+        result = run_sh(
+            "COLUMNS=24\n"
+            'guidance "one two three four five six"\n'
+            'bullet "one two three four five six"'
+        )
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "  one two three four",
+                "  five six",
+                "  - one two three four",
+                "    five six",
+            ],
+        )
+
+
+class TestDebugExecution(unittest.TestCase):
+    COMMAND = (
+        "probe() {\n"
+        "  printf '%s\\n' stdout-line\n"
+        "  printf '%s\\n' stderr-line >&2\n"
+        "  return 23\n"
+        "}\n"
+    )
+
+    def test_action_is_quiet_normally_and_preserves_failure_status(self):
+        result = run_sh(
+            self.COMMAND
+            + "if run_action probe; then status=0; else status=$?; fi\n"
+            + 'printf "status=%s\\n" "$status"'
+        )
+        self.assertEqual((result.stdout, result.stderr), ("status=23\n", ""))
+
+    def test_action_streams_both_channels_in_debug(self):
+        result = run_sh(
+            self.COMMAND
+            + "DEBUG_MODE=1\n"
+            + "if run_action probe; then status=0; else status=$?; fi\n"
+            + 'printf "status=%s\\n" "$status"'
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "stdout-line\nstatus=23\n")
+        self.assertEqual(result.stderr, "stderr-line\n")
+
+    def test_capture_keeps_stdout_quiet_diagnostics_and_exact_status(self):
+        result = run_sh(
+            self.COMMAND
+            + "if run_captured probe; then status=0; else status=$?; fi\n"
+            + 'printf "captured=%s status=%s\\n" "$CAPTURED_COMMAND_OUTPUT" "$status"'
+        )
+        self.assertEqual(result.stdout, "captured=stdout-line status=23\n")
+        self.assertEqual(result.stderr, "")
+
+    def test_debug_capture_mirrors_both_channels_without_double_execution(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        counter = temp_dir / "counter"
+        result = run_sh(
+            "probe() {\n"
+            f'  printf x >> "{counter}"\n'
+            "  printf '%s\\n' stdout-line\n"
+            "  printf '%s\\n' stderr-line >&2\n"
+            "  return 37\n"
+            "}\n"
+            "DEBUG_MODE=1\n"
+            "if run_captured probe; then status=0; else status=$?; fi\n"
+            'printf "captured=%s status=%s\\n" "$CAPTURED_COMMAND_OUTPUT" "$status"',
+            extra_env={"TMPDIR": str(temp_dir)},
+        )
+        self.assertEqual(
+            result.stdout,
+            "captured=stdout-line status=37\n",
+        )
+        self.assertEqual(result.stderr, "stdout-line\nstderr-line\n")
+        self.assertEqual(counter.read_text(), "x")
+        self.assertEqual(list(temp_dir.glob("scrooge-capture.*")), [])
+
+    def test_capture_workspace_is_removed_after_success(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        result = run_sh(
+            "run_captured printf output",
+            extra_env={"TMPDIR": str(temp_dir)},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(list(temp_dir.iterdir()), [])
+
+
+class TestTargetFlagParsing(unittest.TestCase):
+    def test_debug_is_recognized_anywhere_and_targets_stay_deduplicated(self):
+        result = run_sh(
+            "parse_target_flags --alpha --debug --beta --alpha\n"
+            "printf 'debug=%s explicit=%s help=%s internal=%s\\n%s\\n' "
+            '"$DEBUG_MODE" "$TARGET_FLAGS_EXPLICIT" "$TARGET_HELP_REQUESTED" '
+            '"$SCROOGE_INTERNAL_DEBUG" "$TARGET_FLAGS"'
+        )
+        self.assertEqual(
+            result.stdout.splitlines(),
+            ["debug=1 explicit=1 help=0 internal=1", "alpha", "beta"],
+        )
+
+    def test_help_precedence_is_preserved_with_debug_and_invalid_arguments(self):
+        result = run_sh(
+            "parse_target_flags --alpha bad --debug --help --beta\n"
+            "printf 'debug=%s explicit=%s help=%s targets=%s\\n' "
+            '"$DEBUG_MODE" "$TARGET_FLAGS_EXPLICIT" "$TARGET_HELP_REQUESTED" "$TARGET_FLAGS"'
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "debug=1 explicit=0 help=1 targets=\n")
+
+    def test_normal_parse_resets_inherited_internal_debug_state(self):
+        result = run_sh(
+            'parse_target_flags --alpha\nprintf "%s:%s" "$DEBUG_MODE" "$SCROOGE_INTERNAL_DEBUG"',
+            extra_env={"SCROOGE_INTERNAL_DEBUG": "1"},
+        )
+        self.assertEqual(result.stdout, "0:0")
+
+
 class TestNamingHelpers(unittest.TestCase):
     def test_unit_name(self):
         result = run_sh("unit_name skroutz timer")

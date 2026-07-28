@@ -18,6 +18,127 @@ fi
 
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
+# DEBUG_MODE is process-local public state. SCROOGE_INTERNAL_DEBUG is only for
+# propagating that state between project scripts; invalid inherited values fail
+# closed to normal (quiet) execution.
+case "${SCROOGE_INTERNAL_DEBUG:-0}" in
+    1) DEBUG_MODE=1 ;;
+    *) DEBUG_MODE=0 ;;
+esac
+export DEBUG_MODE
+
+begin_operational_output() {
+    printf '\n'
+}
+
+section_heading() {
+    case "$1" in
+        success) _sh_marker='+'; _sh_color="$GREEN" ;;
+        warning) _sh_marker='!'; _sh_color="$YELLOW" ;;
+        *) return 2 ;;
+    esac
+    shift
+    printf '%b[%s]%b %s\n' "$_sh_color" "$_sh_marker" "$NC" "$*"
+}
+
+task_status() {
+    case "$1" in
+        success) _ts_marker='v'; _ts_color="$GREEN" ;;
+        failure) _ts_marker='x'; _ts_color="$RED" ;;
+        info) _ts_marker='i'; _ts_color="$CYAN" ;;
+        *) return 2 ;;
+    esac
+    shift
+    printf '  %b[%s]%b %s\n' "$_ts_color" "$_ts_marker" "$NC" "$*"
+}
+
+_print_indented_wrapped() {
+    _piw_first="$1"
+    _piw_continuation="$2"
+    shift 2
+    _piw_width="${COLUMNS:-80}"
+    case "$_piw_width" in
+        ''|*[!0-9]*) _piw_width=80 ;;
+    esac
+    [ "$_piw_width" -ge 20 ] || _piw_width=20
+    printf '%s\n' "$*" | awk \
+        -v first="$_piw_first" \
+        -v continuation="$_piw_continuation" \
+        -v width="$_piw_width" '
+        {
+            prefix = first
+            line = prefix
+            for (i = 1; i <= NF; i++) {
+                separator = (line == prefix ? "" : " ")
+                if (length(line separator $i) > width && line != prefix) {
+                    print line
+                    prefix = continuation
+                    line = prefix $i
+                } else {
+                    line = line separator $i
+                }
+            }
+            print line
+        }'
+}
+
+guidance() {
+    _print_indented_wrapped '  ' '  ' "$@"
+}
+
+bullet() {
+    _print_indented_wrapped '  - ' '    ' "$@"
+}
+
+end_operational_output() {
+    printf '\n'
+}
+
+# run_action <command> [arguments...]
+# Quiet by default; in debug mode the command owns the terminal streams.
+run_action() {
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+        "$@"
+    else
+        "$@" >/dev/null 2>&1
+    fi
+}
+
+# run_captured <command> [arguments...]
+# Exports the command's stdout through CAPTURED_COMMAND_OUTPUT. Diagnostics are
+# quiet normally and mirrored to the terminal diagnostics stream after capture
+# in debug mode. Using stderr for the mirror keeps stdout safe when a caller
+# itself captures this helper's output. The command is always run exactly once,
+# and its precise status is returned.
+run_captured() {
+    command -v mktemp >/dev/null 2>&1 || {
+        printf '%s\n' "Error: mktemp is required for command capture." >&2
+        return 1
+    }
+    _rc_parent="${TMPDIR:-/tmp}"
+    if ! _rc_workspace="$(
+        umask 077
+        mktemp -d "$_rc_parent/scrooge-capture.XXXXXX"
+    )"; then
+        printf '%s\n' "Error: Could not create a private command-capture workspace." >&2
+        return 1
+    fi
+    _rc_stdout="$_rc_workspace/stdout"
+    _rc_stderr="$_rc_workspace/stderr"
+    if "$@" >"$_rc_stdout" 2>"$_rc_stderr"; then
+        _rc_status=0
+    else
+        _rc_status=$?
+    fi
+    CAPTURED_COMMAND_OUTPUT="$(cat "$_rc_stdout")"
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+        cat "$_rc_stdout" >&2
+        cat "$_rc_stderr" >&2
+    fi
+    rm -rf "$_rc_workspace"
+    return "$_rc_status"
+}
+
 path_entry_exists() {
     [ -e "$1" ] || [ -L "$1" ]
 }
@@ -130,21 +251,28 @@ plugin_stream_value() {
 }
 
 # parse_target_flags <arguments...>
-# Exports TARGET_FLAGS, TARGET_FLAGS_EXPLICIT, and TARGET_HELP_REQUESTED.
+# Exports TARGET_FLAGS, TARGET_FLAGS_EXPLICIT, TARGET_HELP_REQUESTED, and the
+# shared DEBUG_MODE. SCROOGE_INTERNAL_DEBUG propagates debug state only to child
+# project scripts and is intentionally not a public command-line interface.
 # Help is recognized in any position before other arguments are interpreted.
 parse_target_flags() {
     TARGET_FLAGS=''
     TARGET_FLAGS_EXPLICIT=0
     TARGET_HELP_REQUESTED=0
+    DEBUG_MODE=0
     for _ptf_arg in "$@"; do
         case "$_ptf_arg" in
             -h|--help) TARGET_HELP_REQUESTED=1 ;;
+            --debug) DEBUG_MODE=1 ;;
         esac
     done
+    SCROOGE_INTERNAL_DEBUG="$DEBUG_MODE"
+    export DEBUG_MODE SCROOGE_INTERNAL_DEBUG
     [ "$TARGET_HELP_REQUESTED" -eq 0 ] || return 0
 
     for _ptf_arg in "$@"; do
         case "$_ptf_arg" in
+            --debug) ;;
             --)
                 printf '%s\n' "Error: Invalid argument: $_ptf_arg" >&2
                 return 1

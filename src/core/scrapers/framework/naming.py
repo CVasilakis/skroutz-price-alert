@@ -2,7 +2,7 @@
 
 import re
 
-RESERVED_PLUGIN_NAMES = frozenset({"general", "help", "quiet", "ping", "status"})
+RESERVED_PLUGIN_NAMES = frozenset({"debug", "general", "help", "quiet", "ping", "status"})
 FRAMEWORK_ITEM_KEYS = frozenset({"id", "name", "target_price", "skip"})
 SNAKE_CASE_KEY = re.compile(r"[a-z][a-z0-9_]*\Z")
 

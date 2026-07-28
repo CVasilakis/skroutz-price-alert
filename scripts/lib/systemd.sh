@@ -107,10 +107,11 @@ validate_unit_destinations() {
 }
 
 systemd_property() {
-    if ! _sdp_output="$(systemctl --user show -p "$2" "$1")"; then
+    if ! run_captured systemctl --user show -p "$2" "$1"; then
         printf '%s\n' "Error: Could not query $2 for $1." >&2
         return 1
     fi
+    _sdp_output="$CAPTURED_COMMAND_OUTPUT"
     case "$_sdp_output" in
         "$2="*) printf '%s' "${_sdp_output#*=}" ;;
         *)
@@ -150,7 +151,8 @@ service_state() {
 
 reset_failed_if_failed() {
     _rfif_active="$(systemd_property "$1" ActiveState)" || return 1
-    [ "$_rfif_active" != failed ] || systemctl --user reset-failed "$1" >/dev/null
+    [ "$_rfif_active" != failed ] ||
+        run_action systemctl --user reset-failed "$1"
 }
 
 plugin_is_disabled() {
@@ -172,7 +174,7 @@ plugin_is_disabled() {
 
 enable_one() {
     _eo_timer="$(unit_name "$1" timer)"
-    systemctl --user enable --now "$_eo_timer" >/dev/null || {
+    run_action systemctl --user enable --now "$_eo_timer" || {
         printf '%s\n' "Error: Failed to enable and start $_eo_timer." >&2
         return 1
     }
@@ -191,7 +193,7 @@ stop_one() {
     _so_service="$(unit_name "$1" service)"
     _so_load="$(systemd_property "$_so_service" LoadState)" || return 1
     [ "$_so_load" != not-found ] || return 0
-    systemctl --user stop "$_so_service" >/dev/null || {
+    run_action systemctl --user stop "$_so_service" || {
         printf '%s\n' "Error: Failed to stop $_so_service." >&2
         return 1
     }
@@ -220,13 +222,13 @@ disable_one() {
                 _do_failed=1
             else
                 reset_failed_if_failed "$_do_timer" || _do_failed=1
-                systemctl --user stop "$_do_timer" >/dev/null || _do_failed=1
+                run_action systemctl --user stop "$_do_timer" || _do_failed=1
                 case "$_do_enabled" in
                     enabled)
-                        systemctl --user disable "$_do_timer" >/dev/null ||
+                        run_action systemctl --user disable "$_do_timer" ||
                             _do_failed=1 ;;
                     enabled-runtime)
-                        systemctl --user --runtime disable "$_do_timer" >/dev/null ||
+                        run_action systemctl --user --runtime disable "$_do_timer" ||
                             _do_failed=1 ;;
                 esac
             fi
@@ -234,7 +236,7 @@ disable_one() {
     fi
     if [ "$_do_service_load" != not-found ]; then
         reset_failed_if_failed "$_do_service" || _do_failed=1
-        systemctl --user stop "$_do_service" >/dev/null || _do_failed=1
+        run_action systemctl --user stop "$_do_service" || _do_failed=1
     fi
 
     _do_timer_load="$(systemd_property "$_do_timer" LoadState)" || _do_failed=1
@@ -257,7 +259,7 @@ disable_one() {
 
 restart_timer_one() {
     _rto_timer="$(unit_name "$1" timer)"
-    systemctl --user restart "$_rto_timer" >/dev/null || return 1
+    run_action systemctl --user restart "$_rto_timer" || return 1
     [ "$(systemd_property "$_rto_timer" ActiveState)" = active ]
 }
 
