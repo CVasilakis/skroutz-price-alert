@@ -1,7 +1,17 @@
 # border: red
 # exit: 1
 
-[+] Python Environment
-    [v] Found existing virtual environment
-    [v] Updated core dependencies
-    [x] Installed core and plugin dependencies are incompatible
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
+
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [v] Updated core dependencies.
+    [x] Installed core and target dependencies are incompatible.
+    [i] Resolve the dependency conflict, then run ./install.sh --debug.

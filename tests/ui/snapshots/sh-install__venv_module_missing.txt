@@ -1,4 +1,9 @@
 # border: red
 # exit: 1
 
-Error: The python venv module is not available. Please install it first.
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [x] Python venv support is not available.
+    [i] Install the Python venv module, then run ./install.sh again.

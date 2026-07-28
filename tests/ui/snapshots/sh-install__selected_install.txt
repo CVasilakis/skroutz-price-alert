@@ -1,14 +1,25 @@
 # border: green
 # exit: 0
 
-[+] Python Environment
-    [v] Found existing virtual environment
-    [v] Updated core dependencies
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
 
-[+] Plugin Dependencies
-    [v] [skroutz] Installed requirements
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [v] Updated core dependencies.
 
-[+] Systemd Provisioning
-    [v] Configured timers for selected plugins
+[+] Target dependencies
+    [v] [skroutz] Installed private dependencies.
+    [v] All installed dependencies are compatible.
 
-[v] Installation complete!
+[+] Target provisioning
+    [v] Configured timers for the selected targets.
+
+[+] Installation result
+    [v] Installation complete.

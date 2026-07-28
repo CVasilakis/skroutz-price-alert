@@ -21,6 +21,9 @@ BASE_DIR="$SCRIPT_DIR"
 # Environment and File Configurations
 VENV_DIR="venv"
 REQUIREMENTS_FILE="requirements.txt"
+INSTALL_OUTPUT_STARTED=0
+INSTALL_SECTION_STARTED=0
+IS_UPDATE=0
 
 # ==============================================================================
 # HELPER FUNCTIONS
@@ -30,7 +33,7 @@ REQUIREMENTS_FILE="requirements.txt"
 print_help() {
     load_plugin_catalog || true
     printf '\n'
-    printf '%s\n' "Usage: install.sh [-h] [--<target> ...]"
+    printf '%s\n' "Usage: install.sh [-h] [--debug] [--<target> ...]"
     printf '\n'
     printf '%s\n' "Set up the Python virtual environment and install the systemd timer(s) and"
     printf '%s\n' "service(s). With no target flag every registered scraper is installed and"
@@ -40,6 +43,7 @@ print_help() {
     printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
+    printf '%s\n' "  --debug           show underlying command output"
     for plugin in $(list_plugins 2>/dev/null || true); do
         display_name="$(plugin_display_name "$plugin")"
         printf '  --%-15s Install and enable only the %s scraper\n' "$plugin" "${display_name:-$plugin}"
@@ -47,9 +51,126 @@ print_help() {
     printf '\n'
 }
 
+install_begin() {
+    if [ "$INSTALL_OUTPUT_STARTED" -eq 0 ]; then
+        begin_operational_output
+        INSTALL_OUTPUT_STARTED=1
+    fi
+}
+
+install_section() {
+    install_begin
+    if [ "$INSTALL_SECTION_STARTED" -eq 1 ]; then
+        printf '\n'
+    fi
+    section_heading success "$@"
+    INSTALL_SECTION_STARTED=1
+}
+
+install_warning_section() {
+    install_begin
+    if [ "$INSTALL_SECTION_STARTED" -eq 1 ]; then
+        printf '\n'
+    fi
+    section_heading warning "$@"
+    INSTALL_SECTION_STARTED=1
+}
+
+install_task() {
+    _it_kind="$1"
+    shift
+    case "$_it_kind" in
+        success) _it_marker='v'; _it_color="$GREEN" ;;
+        failure) _it_marker='x'; _it_color="$RED" ;;
+        info) _it_marker='i'; _it_color="$CYAN" ;;
+        warning) _it_marker='!'; _it_color="$YELLOW" ;;
+        *) return 2 ;;
+    esac
+    _it_prefix="    ${_it_color}[${_it_marker}]${NC} "
+    _print_indented_wrapped "$_it_prefix" '        ' "$@"
+}
+
+install_command() {
+    printf '        %s\n' "$1"
+}
+
+install_finish() {
+    if [ "$IS_UPDATE" -eq 0 ] && [ "$INSTALL_OUTPUT_STARTED" -eq 1 ]; then
+        end_operational_output
+    fi
+}
+
+install_exit() {
+    _ie_status="$1"
+    install_finish
+    exit "$_ie_status"
+}
+
+install_fail() {
+    install_task failure "$1"
+    shift
+    for _if_guidance in "$@"; do
+        install_task info "$_if_guidance"
+    done
+    install_exit 1
+}
+
+pip_install() {
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+        run_action "$VENV_DIR/bin/python3" -m pip install --upgrade "$@"
+    else
+        run_action "$VENV_DIR/bin/python3" -m pip install -q --upgrade "$@"
+    fi
+}
+
+install_load_catalog() {
+    case "$PLUGIN_CATALOG_STATE" in
+        1) return 0 ;;
+        2) return 1 ;;
+    esac
+    if run_captured catalog_cli catalog; then
+        PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
+        PLUGIN_CATALOG_STATE=1
+        return 0
+    fi
+    PLUGIN_CATALOG_DATA=''
+    PLUGIN_CATALOG_STATE=2
+    return 1
+}
+
+install_load_schedules() {
+    case "$PLUGIN_SCHEDULE_STATE" in
+        1) return 0 ;;
+        2) return 1 ;;
+    esac
+    if run_captured catalog_cli schedules --config-dir "$BASE_DIR/config"; then
+        PLUGIN_SCHEDULE_DATA="$CAPTURED_COMMAND_OUTPUT"
+        PLUGIN_SCHEDULE_STATE=1
+        return 0
+    fi
+    PLUGIN_SCHEDULE_DATA=''
+    PLUGIN_SCHEDULE_STATE=2
+    return 1
+}
+
 cd "$SCRIPT_DIR"
 CATALOG_PYTHON=python3
-parse_target_flags "$@" || exit 1
+INHERITED_DEBUG="$DEBUG_MODE"
+for argument in "$@"; do
+    case "$argument" in
+        --debug)
+            DEBUG_MODE=1
+            SCROOGE_INTERNAL_DEBUG=1
+            export DEBUG_MODE SCROOGE_INTERNAL_DEBUG
+            ;;
+    esac
+done
+if ! run_action parse_target_flags "$@"; then
+    install_section "Installation arguments"
+    install_task failure "The command-line arguments are invalid."
+    install_task info "Run ./install.sh --help for usage."
+    install_exit 1
+fi
 if [ "$TARGET_HELP_REQUESTED" -eq 1 ]; then
     print_help
     exit 0
@@ -61,26 +182,53 @@ case "${SCROOGE_INSTALL_CONTEXT:-normal}" in
         if [ "${SCROOGE_INTERNAL_UPDATE:-}" != 1 ] ||
             [ "$TARGET_FLAGS_EXPLICIT" -ne 1 ] ||
             [ -z "$TARGET_FLAGS" ]; then
-            printf '%s\n' "Error: Invalid internal deferred-install context." >&2
-            exit 1
+            install_section "Installation context"
+            install_fail "The internal deferred-install context is invalid." \
+                "Rerun ./update.sh to restart the update safely."
+        fi
+        if [ "$INHERITED_DEBUG" -eq 1 ]; then
+            DEBUG_MODE=1
+            SCROOGE_INTERNAL_DEBUG=1
+            export DEBUG_MODE SCROOGE_INTERNAL_DEBUG
         fi
         ;;
     *)
-        printf '%s\n' "Error: Invalid install context." >&2
-        exit 1
+        install_section "Installation context"
+        install_fail "The installation context is invalid." \
+            "Run ./install.sh directly without internal environment overrides."
         ;;
 esac
-reject_project_venv_symlink || exit 1
-require_python_310 python3 "./install.sh" || exit 1
+
+install_section "Installation checks"
+if ! run_action reject_project_venv_symlink; then
+    install_fail "The project venv path is a symlink." \
+        "Remove the venv symlink, then run ./install.sh again."
+fi
+install_task success "The project venv path is safe."
+if ! run_action require_python_310 python3 "./install.sh"; then
+    install_fail "System Python 3.10 or newer is required." \
+        "Install a supported Python, then run ./install.sh again."
+fi
+install_task success "System Python 3.10 or newer is available."
 
 # Validate the import-light catalog, selection, source inputs, and every unit
 # destination before venv creation or package installation.
-load_plugin_catalog || {
-    catalog_diagnose || exit 1
-}
-ALL_PLUGINS="$(list_plugins)"
+if ! install_load_catalog; then
+    run_action catalog_diagnose || true
+    install_fail "The target catalog could not be loaded." \
+        "Fix the catalog error, then run ./install.sh --debug."
+fi
+if run_captured list_plugins; then
+    ALL_PLUGINS="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "The registered targets could not be read." \
+        "Fix the target catalog, then run ./install.sh --debug."
+fi
 if [ "$IS_UPDATE" -eq 0 ]; then
-    select_targets registered || exit 1
+    if ! run_action select_targets registered; then
+        install_fail "The requested target selection is invalid." \
+            "Run ./install.sh --help to list available targets."
+    fi
     PLUGINS="$SELECTED_TARGETS"
 else
     PLUGINS=''
@@ -92,10 +240,9 @@ else
         if stream_contains "$sel" "$ALL_PLUGINS"; then
             PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
         else
-            printf '%s\n' \
-                "Note: '$sel' is no longer registered; its units remain disabled."
-            printf '%s\n' \
-                "Remove them with: ./scripts/uninstall.sh --$sel"
+            install_task info \
+                "Target '$sel' is no longer registered; its units remain disabled."
+            install_task info "Remove them with ./scripts/uninstall.sh --$sel."
         fi
     done
     IFS="$OLD_IFS"
@@ -103,9 +250,17 @@ fi
 
 for required_file in requirements.txt scripts/run.sh scripts/lib/common.sh \
     scripts/lib/preflight.sh scripts/lib/systemd.sh scripts/lib/provisioning.sh; do
-    require_regular_owned_file "$BASE_DIR/$required_file" || exit 1
+    if ! run_action require_regular_owned_file "$BASE_DIR/$required_file"; then
+        install_fail "Required project file '$required_file' is missing or unsafe." \
+            "Restore the regular project file, then run ./install.sh again."
+    fi
 done
-EARLY_PLUGIN_REQS="$(list_plugin_requirements)" || exit 1
+if run_captured list_plugin_requirements; then
+    EARLY_PLUGIN_REQS="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "Target dependency metadata could not be read." \
+        "Fix the target catalog, then run ./install.sh --debug."
+fi
 OLD_IFS="$IFS"
 IFS='
 '
@@ -115,21 +270,40 @@ for pair in $EARLY_PLUGIN_REQS; do
     req_name="${pair%%"$PAIR_TAB"*}"
     req_path="${pair#*"$PAIR_TAB"}"
     stream_contains "$req_name" "$PLUGINS" || continue
-    require_regular_owned_file "$req_path" || exit 1
+    if ! run_action require_regular_owned_file "$req_path"; then
+        IFS="$OLD_IFS"
+        install_fail "[$req_name] Its requirements file is missing or unsafe." \
+            "Restore the target's regular requirements.txt, then run ./install.sh again."
+    fi
 done
 IFS="$OLD_IFS"
-validate_unit_destinations "$PLUGINS" pair || exit 1
+if ! run_action validate_unit_destinations "$PLUGINS" pair; then
+    install_fail "A managed systemd unit destination is unsafe." \
+        "Remove the unsafe unit with ./scripts/uninstall.sh --<target>, then retry."
+fi
 
 if [ -d "$VENV_DIR" ]; then
-    require_python_310 "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh" || exit 1
+    if ! run_action require_python_310 \
+        "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh"; then
+        install_fail "The existing Python environment is unusable." \
+            "Run ./scripts/uninstall.sh, then run ./install.sh again."
+    fi
+    install_task success "The existing Python environment uses a supported Python."
+else
+    install_task info "A new Python environment is required."
 fi
 
-if ! python3 -c "import ensurepip" > /dev/null 2>&1; then
-    printf "%b\n" "${RED}Error: The python venv module is not available. Please install it first.${NC}"
-    exit 1
+if ! run_action python3 -c "import ensurepip"; then
+    install_fail "Python venv support is not available." \
+        "Install the Python venv module, then run ./install.sh again."
 fi
+install_task success "Python venv support is available."
 
-require_systemctl || exit 1
+if ! run_action require_systemctl; then
+    install_fail "Systemd user services are not available." \
+        "Install or enable systemd user services, then run ./install.sh again."
+fi
+install_task success "Systemd user services are available."
 
 # ------------------------------------------------------------------------------
 # PYTHON VIRTUAL ENVIRONMENT SETUP
@@ -137,54 +311,66 @@ require_systemctl || exit 1
 
 # Initialize or update python virtual environment
 VENV_NEWLY_CREATED=false
+install_section "Python environment"
 if [ ! -d "$VENV_DIR" ]; then
-    printf "%b\n" "\n${CYAN}[+] Python Environment${NC}"
-    if ! python3 -m venv "$VENV_DIR"; then
-        printf "%b\n" "    ${RED}[x] Failed to create virtual environment${NC}"
-        exit 1
+    if ! run_action python3 -m venv "$VENV_DIR"; then
+        install_fail "The Python environment could not be created." \
+            "Fix Python venv support, then run ./install.sh --debug."
     fi
-    printf "%b\n" "    ${GREEN}[v] Created new virtual environment${NC}"
+    install_task success "Created a new Python environment."
     VENV_NEWLY_CREATED=true
 else
-    printf "%b\n" "\n${CYAN}[+] Python Environment${NC}"
-    printf "%b\n" "    ${GREEN}[v] Found existing virtual environment${NC}"
+    install_task info "Updating the existing Python environment."
 fi
 
-require_python_310 "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh" || exit 1
+if ! run_action require_python_310 \
+    "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh"; then
+    install_fail "The Python environment is not usable with Python 3.10 or newer." \
+        "Run ./scripts/uninstall.sh, then run ./install.sh again."
+fi
+install_task success "The Python environment is ready."
 
 # Safely upgrade pip and install matching requirements
-if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade pip; then
-    printf "%b\n" "    ${RED}[x] Failed to upgrade pip${NC}"
-    exit 1
+if ! pip_install pip; then
+    install_fail "Packaging tools could not be updated." \
+        "Check package-index access, then run ./install.sh --debug."
 fi
+install_task success "Packaging tools updated."
 
 if [ -f "$REQUIREMENTS_FILE" ]; then
-    if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade -r "$REQUIREMENTS_FILE"; then
-        printf "%b\n" "    ${RED}[x] Failed to install core packages${NC}"
-        exit 1
+    if ! pip_install -r "$REQUIREMENTS_FILE"; then
+        install_fail "Core dependencies could not be installed." \
+            "Check requirements.txt and package-index access, then run ./install.sh --debug."
     fi
 else
-    printf "%b\n" "    ${RED}[x] $REQUIREMENTS_FILE not found${NC}"
-    exit 1
+    install_fail "$REQUIREMENTS_FILE was not found." \
+        "Restore requirements.txt, then run ./install.sh again."
 fi
 
 if [ "$VENV_NEWLY_CREATED" = true ]; then
-    printf "%b\n" "    ${GREEN}[v] Installed core dependencies${NC}"
+    install_task success "Installed core dependencies."
 else
-    printf "%b\n" "    ${GREEN}[v] Updated core dependencies${NC}"
+    install_task success "Updated core dependencies."
 fi
 
 # Re-read the same import-light metadata through the completed venv before
 # installing plugin-private dependencies and resolving schedules.
 CATALOG_PYTHON="$BASE_DIR/venv/bin/python3"
 reset_catalog_cache
-load_plugin_catalog || {
-    catalog_diagnose || exit 1
-}
-FINAL_PLUGINS="$(list_plugins)"
+if ! install_load_catalog; then
+    run_action catalog_diagnose || true
+    install_fail "The target catalog could not be loaded from the completed environment." \
+        "Fix the catalog error, then run ./install.sh --debug."
+fi
+if run_captured list_plugins; then
+    FINAL_PLUGINS="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "The registered targets could not be re-read." \
+        "Fix the target catalog, then run ./install.sh --debug."
+fi
 if [ "$FINAL_PLUGINS" != "$ALL_PLUGINS" ]; then
-    printf '%s\n' "Error: Plugin catalog changed during installation." >&2
-    exit 1
+    install_fail "The target catalog changed during installation." \
+        "Retry ./install.sh after the source tree is stable."
 fi
 
 # ------------------------------------------------------------------------------
@@ -196,9 +382,11 @@ fi
 # requirements of the plugin(s) being provisioned are installed, so an install
 # that skips a heavy scraper never pulls that scraper's dependencies.
 
-if ! PLUGIN_REQS="$(list_plugin_requirements)"; then
-    printf "%b\n" "    ${RED}[x] Failed to read per-plugin dependency metadata${NC}"
-    exit 1
+if run_captured list_plugin_requirements; then
+    PLUGIN_REQS="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "Target dependency metadata could not be read." \
+        "Fix the target catalog, then run ./install.sh --debug."
 fi
 
 HAS_PLUGIN_REQS=0
@@ -216,7 +404,7 @@ for pair in $PLUGIN_REQS; do
 done
 
 if [ "$HAS_PLUGIN_REQS" -eq 1 ]; then
-    printf "%b\n" "\n${CYAN}[+] Plugin Dependencies${NC}"
+    install_section "Target dependencies"
 fi
 
 for pair in $PLUGIN_REQS; do
@@ -224,36 +412,59 @@ for pair in $PLUGIN_REQS; do
     req_path="${pair#*"$PAIR_TAB"}"
     stream_contains "$req_name" "$PLUGINS" || continue
 
-    if ! "$VENV_DIR/bin/python3" -m pip install -q --upgrade -r "$req_path"; then
+    if ! pip_install -r "$req_path"; then
         IFS="$OLD_IFS"
-        printf "%b\n" "    ${RED}[x] [$req_name] Failed to install requirements${NC}"
-        exit 1
+        install_fail "[$req_name] Its private dependencies could not be installed." \
+            "Check that target's requirements, then run ./install.sh --debug --$req_name."
     fi
-    printf "%b\n" "    ${GREEN}[v] [$req_name] Installed requirements${NC}"
+    install_task success "[$req_name] Installed private dependencies."
 done
 IFS="$OLD_IFS"
 
-if ! "$VENV_DIR/bin/python3" -m pip check; then
-    printf "%b\n" "    ${RED}[x] Installed core and plugin dependencies are incompatible${NC}"
-    exit 1
+if ! run_action "$VENV_DIR/bin/python3" -m pip check; then
+    install_fail "Installed core and target dependencies are incompatible." \
+        "Resolve the dependency conflict, then run ./install.sh --debug."
+fi
+if [ "$HAS_PLUGIN_REQS" -eq 1 ]; then
+    install_task success "All installed dependencies are compatible."
+else
+    install_task success "Core dependencies are compatible."
 fi
 
 # ------------------------------------------------------------------------------
 # SYSTEMD SETUP
 # ------------------------------------------------------------------------------
 
-printf "%b\n" "\n${CYAN}[+] Systemd Provisioning${NC}"
+install_section "Target provisioning"
 
-mkdir -p "$SYSTEMD_USER_DIR"
+if ! run_action mkdir -p "$SYSTEMD_USER_DIR"; then
+    install_fail "The systemd user directory could not be created." \
+        "Fix its ownership or permissions, then run ./install.sh --debug."
+fi
 
 # Resolve config-dependent schedules separately from the immutable plugin catalog.
 # A structurally invalid config excludes only its own target from this transaction.
-if ! load_plugin_schedules || \
-   ! ALL_SCHEDULES="$(list_plugin_schedules)" || \
-   ! INTERVAL_STATUS="$(list_interval_status)" || \
-   ! SCHEDULE_ERRORS="$(list_schedule_errors)"; then
-    printf "%b\n" "    ${RED}[x] Failed to resolve scraper scheduling metadata${NC}"
-    exit 1
+if ! install_load_schedules; then
+    install_fail "Target scheduling metadata could not be resolved." \
+        "Fix the target configuration, then run ./install.sh --debug."
+fi
+if run_captured list_plugin_schedules; then
+    ALL_SCHEDULES="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "Resolved target schedules could not be read." \
+        "Fix the target configuration, then run ./install.sh --debug."
+fi
+if run_captured list_interval_status; then
+    INTERVAL_STATUS="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "Target schedule statuses could not be read." \
+        "Fix the target configuration, then run ./install.sh --debug."
+fi
+if run_captured list_schedule_errors; then
+    SCHEDULE_ERRORS="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "Target schedule errors could not be read." \
+        "Fix the target configuration, then run ./install.sh --debug."
 fi
 
 CONFIG_FAILED=0
@@ -266,13 +477,14 @@ for plugin in $PLUGINS; do
     status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS" || true)"
     if [ -z "$status" ]; then
         IFS="$OLD_IFS"
-        printf "%b\n" "    ${RED}[x] No scheduling result was returned for target '$plugin'${NC}"
-        exit 1
+        install_fail "No scheduling result was returned for target '$plugin'." \
+            "Fix the target catalog, then run ./install.sh --debug."
     fi
     if [ "$status" = "error" ]; then
         schedule_error="$(plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true)"
-        printf "%b\n" "    ${RED}[x] [$plugin] ${schedule_error:-Could not resolve its timer schedule}${NC}"
-        printf "%b\n" "    ${YELLOW}[i] [$plugin] Existing systemd units were left unchanged${NC}"
+        install_task failure \
+            "[$plugin] ${schedule_error:-Could not resolve its timer schedule.}"
+        install_task info "[$plugin] Existing systemd units were left unchanged."
         CONFIG_FAILED=1
         continue
     fi
@@ -286,31 +498,58 @@ if [ -n "$PROVISION_PLUGINS" ]; then
     else
         PROVISION_MODE="normal"
     fi
-    if ! provision_units_transaction "$PROVISION_PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
+    if ! run_action provision_units_transaction \
+        "$PROVISION_PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
         if [ "$IS_UPDATE" -eq 1 ]; then
-            printf "%b\n" "    ${RED}[x] Transactional systemd provisioning failed during update${NC}"
+            install_task failure \
+                "Transactional systemd provisioning failed during the update."
         else
-            printf "%b\n" "    ${RED}[x] Transactional systemd provisioning failed${NC}"
+            install_task failure "Transactional systemd provisioning failed."
         fi
-        [ -z "${PROVISION_RECOVERY_DIR:-}" ] || \
-            printf "%b\n" "    ${YELLOW}[i] Recovery files: $PROVISION_RECOVERY_DIR${NC}"
-        exit 1
+        if [ -n "${UNIT_RECOVERY_DIR:-}" ]; then
+            install_task warning "Recovery files were retained at $UNIT_RECOVERY_DIR."
+        fi
+        install_task info \
+            "Rerun ./install.sh --debug, or inspect with ./scripts/run.sh --status."
+        install_exit 1
     fi
-    printf "%b\n" "    ${GREEN}[v] Configured timers for selected plugins${NC}"
+    install_task success "Configured timers for the selected targets."
+else
+    if [ -n "$PLUGINS" ]; then
+        install_task info "No valid selected targets could be provisioned."
+    else
+        install_task info "No registered targets require systemd provisioning."
+    fi
 fi
 
 if command -v loginctl >/dev/null 2>&1; then
     # $USER is conventionally exported but not guaranteed (clean env, some
     # containers/cron); fall back to `id -un` so `set -u` never aborts here.
-    LINGER_USER="${USER:-$(id -un)}"
-    if [ "$(loginctl show-user "$LINGER_USER" --property=Linger 2>/dev/null)" != "Linger=yes" ]; then
+    if [ -n "${USER:-}" ]; then
+        LINGER_USER="$USER"
+    elif run_captured id -un; then
+        LINGER_USER="$CAPTURED_COMMAND_OUTPUT"
+    else
+        install_task warning \
+            "Could not identify the user for lingering; timers may run only while logged in."
+        LINGER_USER=''
+    fi
+    LINGER_STATUS=''
+    if [ -n "$LINGER_USER" ] &&
+       run_captured loginctl show-user "$LINGER_USER" --property=Linger; then
+        LINGER_STATUS="$CAPTURED_COMMAND_OUTPUT"
+    fi
+    if [ -n "$LINGER_USER" ] && [ "$LINGER_STATUS" != "Linger=yes" ]; then
         # Non-fatal: lingering only lets timers run while logged out; without it the
         # install is still valid (timers run while logged in), so a failure here
         # (e.g. a system that requires root to enable linger) must not abort.
-        if loginctl enable-linger "$LINGER_USER"; then
-            printf "%b\n" "    ${CYAN}[i] Enabled user lingering${NC}"
+        if run_action loginctl enable-linger "$LINGER_USER"; then
+            install_task success "Enabled user lingering."
         else
-            printf "%b\n" "    ${YELLOW}[i] Could not enable user lingering; timers will run only while logged in${NC}"
+            install_task warning \
+                "Could not enable user lingering; timers will run only while logged in."
+            install_task info \
+                "Ask the system administrator to enable lingering for '$LINGER_USER'."
         fi
     fi
 fi
@@ -322,9 +561,11 @@ fi
 # whether the shared general configuration is missing.
 
 MISSING_CONFIGS=""
-if ! EXAMPLE_PAIRS="$(list_plugin_examples)"; then
-    printf "%b\n" "    ${RED}[x] Failed to read plugin configuration metadata${NC}"
-    exit 1
+if run_captured list_plugin_examples; then
+    EXAMPLE_PAIRS="$CAPTURED_COMMAND_OUTPUT"
+else
+    install_fail "Target configuration metadata could not be read." \
+        "Fix the target catalog, then run ./install.sh --debug."
 fi
 OLD_IFS="$IFS"
 IFS='
@@ -339,29 +580,60 @@ GENERAL_CONFIG_MISSING=0
 [ -f "config/general.json" ] || GENERAL_CONFIG_MISSING=1
 
 if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
-    printf "%b\n" "\n${YELLOW}[!] Configuration Required${NC}"
+    install_warning_section "Configuration required"
+    CONFIG_COMMANDS=''
 
     for plugin in $MISSING_CONFIGS; do
         example="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"
-        printf "%b\n" "    - Copy $example to config/$plugin.json"
-        printf "%b\n" "      and fill it with your desired items."
+        case "$example" in
+            "$BASE_DIR"/*) example="${example#"$BASE_DIR"/}" ;;
+        esac
+        install_task warning "[$plugin] Its tracked-items configuration is missing."
+        CONFIG_COMMANDS="${CONFIG_COMMANDS}${CONFIG_COMMANDS:+
+}cp $example config/$plugin.json"
     done
 
     if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
-        printf "%b\n" "    - Copy src/core/general/config.example.json to config/general.json"
-        printf "%b\n" "      and configure your Apprise notification URLs and preferences."
+        install_task warning "The general configuration is missing."
+        CONFIG_COMMANDS="${CONFIG_COMMANDS}${CONFIG_COMMANDS:+
+}cp src/core/general/config.example.json config/general.json"
     fi
 
-    printf "%b\n" "    - Read the README.md file for more information."
+    install_task info "From the project directory, run:"
+    [ -d config ] || install_command "mkdir -p config"
+    OLD_IFS="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # intentional newline-only command iteration
+    for config_command in $CONFIG_COMMANDS; do
+        install_command "$config_command"
+    done
+    IFS="$OLD_IFS"
+    if [ -n "$MISSING_CONFIGS" ]; then
+        install_task info \
+            "Fill each new target configuration with the items you want to track."
+    fi
+    if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
+        install_task info \
+            "Configure notification URLs and preferences in config/general.json."
+    fi
+    install_task info "Read README.md for configuration guidance."
 fi
 
 if [ "$IS_UPDATE" -eq 0 ]; then
     if [ "$CONFIG_FAILED" -eq 0 ]; then
-        printf "%b\n" "\n${GREEN}[v] Installation complete!${NC}\n"
+        install_section "Installation result"
+        install_task success "Installation complete."
     fi
 fi
 
 if [ "$CONFIG_FAILED" -ne 0 ]; then
-    printf "%b\n" "\n${RED}[x] One or more targets were skipped because their configuration is invalid.${NC}\n"
-    exit 15
+    install_section "Installation result"
+    install_task failure \
+        "One or more targets were skipped because their configuration is invalid."
+    install_task info \
+        "Fix each reported target configuration, then run ./install.sh again."
+    install_exit 15
 fi
+
+install_finish

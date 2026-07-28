@@ -1,5 +1,13 @@
 # border: red
 # exit: 1
 
-[+] Python Environment
-    [x] Failed to create virtual environment
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [i] A new Python environment is required.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
+
+[+] Python environment
+    [x] The Python environment could not be created.
+    [i] Fix Python venv support, then run ./install.sh --debug.

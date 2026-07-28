@@ -1,5 +1,7 @@
 # border: red
 # exit: 1
 
-Error: Python interpreter not found: python3.
-Python 3.10 or newer is required. Run ./install.sh.
+[+] Installation checks
+    [v] The project venv path is safe.
+    [x] System Python 3.10 or newer is required.
+    [i] Install a supported Python, then run ./install.sh again.

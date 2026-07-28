@@ -1,25 +1,22 @@
-# border: green
-# exit: 0
+# border: red
+# exit: 1
 
 [+] Installation checks
     [v] The project venv path is safe.
+3.12.0
     [v] System Python 3.10 or newer is available.
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+skroutz
+3.12.0
     [v] The existing Python environment uses a supported Python.
     [v] Python venv support is available.
     [v] Systemd user services are available.
 
 [+] Python environment
     [i] Updating the existing Python environment.
+3.12.0
     [v] The Python environment is ready.
-    [v] Packaging tools updated.
-    [v] Updated core dependencies.
-
-[+] Target dependencies
-    [v] [skroutz] Installed private dependencies.
-    [v] All installed dependencies are compatible.
-
-[+] Target provisioning
-    [v] Configured timers for the selected targets.
-
-[+] Installation result
-    [v] Installation complete.
+injected failing pip stdout
+injected failing pip stderr
+    [x] Packaging tools could not be updated.
+    [i] Check package-index access, then run ./install.sh --debug.

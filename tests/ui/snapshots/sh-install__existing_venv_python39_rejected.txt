@@ -1,5 +1,8 @@
 # border: red
 # exit: 1
 
-Error: Detected Python 3.9.18; Python 3.10 or newer is required.
-Run ./scripts/uninstall.sh then ./install.sh after installing a supported Python.
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [x] The existing Python environment is unusable.
+    [i] Run ./scripts/uninstall.sh, then run ./install.sh again.

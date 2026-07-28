@@ -1,9 +1,19 @@
 # border: red
 # exit: 1
 
-[+] Python Environment
-    [v] Found existing virtual environment
-    [v] Updated core dependencies
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
 
-[+] Plugin Dependencies
-    [x] [skroutz] Failed to install requirements
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [v] Updated core dependencies.
+
+[+] Target dependencies
+    [x] [skroutz] Its private dependencies could not be installed.
+    [i] Check that target's requirements, then run ./install.sh --debug --skroutz.

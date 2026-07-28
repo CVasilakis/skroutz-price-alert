@@ -102,6 +102,7 @@ class ShellWorld:
         ensurepip_missing: python3 -c "import ensurepip" fails (install.sh prereq).
         venv_create_fails: python3 -m venv fails.
         pip_fail: None | "upgrade" | "requirements" | "plugin" | "check" - failing pip call.
+        pip_stdout / pip_stderr: injected package-command output for quiet/debug assertions.
         requirements_txt: The root requirements.txt exists.
 
     Installed unit state (real files in the sandbox SYSTEMD_USER_DIR):
@@ -121,7 +122,8 @@ class ShellWorld:
 
     git (update.sh): git_branch, git_dirty, and failable Git verbs.
 
-    User config artifacts: config_files created under config/.
+    User config artifacts: config_dir controls whether config/ exists; config_files
+        are created beneath it.
 
     tools: which shims exist. "full" = all four; "no-systemctl"/"no-python3" drops
         that one shim (PATH is sandbox-only in every mode, with _REAL_TOOLS symlinked in).
@@ -139,6 +141,8 @@ class ShellWorld:
     ensurepip_missing: bool = False
     venv_create_fails: bool = False
     pip_fail: str | None = None
+    pip_stdout: str = ""
+    pip_stderr: str = ""
     requirements_txt: bool = True
 
     installed_timers: tuple[str, ...] = ()
@@ -171,6 +175,7 @@ class ShellWorld:
     venv_python_supported: bool | None = None
     git_signal: str | None = None
 
+    config_dir: bool = True
     config_files: tuple[str, ...] = ()
     migration_report: tuple[str, ...] = ()
     migration_stderr: str = ""
@@ -395,6 +400,11 @@ case "${1:-}" in
     -m)
         shift
         case "$*" in
+            pip\\ *)
+                [ -z "${FAKE_PIP_STDOUT:-}" ] || printf '%s\\n' "$FAKE_PIP_STDOUT"
+                [ -z "${FAKE_PIP_STDERR:-}" ] || printf '%s\\n' "$FAKE_PIP_STDERR" >&2 ;;
+        esac
+        case "$*" in
             "core.scrapers.tooling.cli catalog")
                 [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
                 [ -n "${FAKE_PLUGIN_CATALOG:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_CATALOG" ;;
@@ -512,9 +522,10 @@ def _build_sandbox(world: ShellWorld) -> Path:
         (sandbox / ".githooks/pre-push").write_text("#!/bin/sh\nif\n")
 
     (sandbox / "home").mkdir()
-    (sandbox / "config").mkdir()
-    for cfg in world.config_files:
-        (sandbox / "config" / cfg).touch()
+    if world.config_dir:
+        (sandbox / "config").mkdir()
+        for cfg in world.config_files:
+            (sandbox / "config" / cfg).touch()
     if world.requirements_txt:
         (sandbox / "requirements.txt").touch()
     for plugin in world.requirements or {}:
@@ -622,6 +633,8 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_VENV_TEMPLATE": str(sandbox / "bin" / "venv-python-template"),
         "FAKE_BASE_DIR": str(sandbox),
         "FAKE_PIP_FAIL": world.pip_fail or "",
+        "FAKE_PIP_STDOUT": world.pip_stdout,
+        "FAKE_PIP_STDERR": world.pip_stderr,
         "FAKE_ENABLED_TIMERS": " ".join(world.enabled_timers),
         "FAKE_ACTIVE_TIMERS": " ".join(world.active_timers),
         "FAKE_ACTIVE_SERVICES": " ".join(world.active_services),

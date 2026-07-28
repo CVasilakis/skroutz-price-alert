@@ -6,12 +6,22 @@ Fetching origin/main before stopping any scraper...
 Quiescing 'skroutz'...
 Migrating JSON documents...
 
-[+] Python Environment
-    [v] Found existing virtual environment
-    [v] Updated core dependencies
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
 
-[+] Systemd Provisioning
-    [v] Configured timers for selected plugins
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [v] Updated core dependencies.
+    [v] Core dependencies are compatible.
+
+[+] Target provisioning
+    [v] Configured timers for the selected targets.
 Enabling reconstructed timer for 'skroutz'...
 
 Update complete! You are now running origin/main.

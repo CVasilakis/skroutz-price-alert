@@ -7,17 +7,28 @@ Quiescing 'alpha'...
 Quiescing 'beta'...
 Migrating JSON documents...
 
-[+] Python Environment
-    [v] Found existing virtual environment
-    [v] Updated core dependencies
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
 
-[+] Systemd Provisioning
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [v] Updated core dependencies.
+    [v] Core dependencies are compatible.
+
+[+] Target provisioning
     [x] [beta] Remove unsupported keys from `config/beta.json`.
-    [i] [beta] Existing systemd units were left unchanged
-    [v] Configured timers for selected plugins
+    [i] [beta] Existing systemd units were left unchanged.
+    [v] Configured timers for the selected targets.
 
-[x] One or more targets were skipped because their configuration is invalid.
-
+[+] Installation result
+    [x] One or more targets were skipped because their configuration is invalid.
+    [i] Fix each reported target configuration, then run ./install.sh again.
 
 Update complete, but one or more targets retained their existing units because their configuration
 is invalid.

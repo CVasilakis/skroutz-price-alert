@@ -1,11 +1,20 @@
 # border: red
 # exit: 1
 
-[+] Python Environment
-    [v] Found existing virtual environment
-    [v] Updated core dependencies
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
 
-[+] Systemd Provisioning
-Error: Failed to enable and start skroutz-scraper.timer.
-Error: Unit replacement failed; restoring previous files and states.
-    [x] Transactional systemd provisioning failed
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [v] Updated core dependencies.
+    [v] Core dependencies are compatible.
+
+[+] Target provisioning
+    [x] Transactional systemd provisioning failed.
+    [i] Rerun ./install.sh --debug, or inspect with ./scripts/run.sh --status.

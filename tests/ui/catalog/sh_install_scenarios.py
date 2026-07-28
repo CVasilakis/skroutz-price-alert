@@ -16,10 +16,35 @@ _CONFIGURED = ShellWorld(config_files=("skroutz.json", "general.json"))
 
 _case(
     "help",
-    "Usage text with one flag row per registered target.",
+    "Usage text with debug documentation and one flag row per registered target.",
     "--help",
     world=replace(ShellWorld(), plugins=("skroutz", "amazon")),
     tags=("help",),
+)
+
+_case(
+    "debug_success",
+    "Debug mode exposes package-command output without changing a successful install.",
+    "--debug",
+    world=replace(
+        _CONFIGURED,
+        pip_stdout="injected pip stdout",
+        pip_stderr="injected pip stderr",
+    ),
+    tags=("system",),
+)
+
+_case(
+    "debug_failure",
+    "Debug mode exposes the same package-command noise on a handled failure.",
+    "--debug",
+    world=replace(
+        _CONFIGURED,
+        pip_fail="upgrade",
+        pip_stdout="injected failing pip stdout",
+        pip_stderr="injected failing pip stderr",
+    ),
+    tags=("system", "error"),
 )
 
 _case(
@@ -205,8 +230,8 @@ _case(
 
 _case(
     "fresh_install_config_notes",
-    "First-ever run: venv created, lingering enabled, config notes.",
-    world=ShellWorld(venv=False, linger="no"),
+    "First-ever run: venv created, lingering enabled, and pasteable config commands.",
+    world=ShellWorld(venv=False, linger="no", config_dir=False),
 )
 
 _case(

@@ -212,8 +212,10 @@ def test_dependency_installers_upgrade_all_requirement_sets_on_rerun():
     install = (ROOT / "install.sh").read_text(encoding="utf-8")
     setup = (ROOT / "scripts/dev/setup.sh").read_text(encoding="utf-8")
 
-    assert '-m pip install -q --upgrade -r "$REQUIREMENTS_FILE"' in install
-    assert '-m pip install -q --upgrade -r "$req_path"' in install
+    assert 'pip_install -r "$REQUIREMENTS_FILE"' in install
+    assert 'pip_install -r "$req_path"' in install
+    assert '-m pip install -q --upgrade "$@"' in install
+    assert '-m pip install --upgrade "$@"' in install
     assert '-m pip install --upgrade -r "$PROJECT_ROOT/requirements.txt"' in setup
     assert '-m pip install --upgrade -r "$requirement"' in setup
 

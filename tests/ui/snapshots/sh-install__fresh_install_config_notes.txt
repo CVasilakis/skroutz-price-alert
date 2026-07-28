@@ -1,19 +1,34 @@
 # border: green
 # exit: 0
 
-[+] Python Environment
-    [v] Created new virtual environment
-    [v] Installed core dependencies
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [i] A new Python environment is required.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
 
-[+] Systemd Provisioning
-    [v] Configured timers for selected plugins
-    [i] Enabled user lingering
+[+] Python environment
+    [v] Created a new Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [v] Installed core dependencies.
+    [v] Core dependencies are compatible.
 
-[!] Configuration Required
-    - Copy <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json to config/skroutz.json
-      and fill it with your desired items.
-    - Copy src/core/general/config.example.json to config/general.json
-      and configure your Apprise notification URLs and preferences.
-    - Read the README.md file for more information.
+[+] Target provisioning
+    [v] Configured timers for the selected targets.
+    [v] Enabled user lingering.
 
-[v] Installation complete!
+[!] Configuration required
+    [!] [skroutz] Its tracked-items configuration is missing.
+    [!] The general configuration is missing.
+    [i] From the project directory, run:
+        mkdir -p config
+        cp src/core/scrapers/plugins/skroutz/config.example.json config/skroutz.json
+        cp src/core/general/config.example.json config/general.json
+    [i] Fill each new target configuration with the items you want to track.
+    [i] Configure notification URLs and preferences in config/general.json.
+    [i] Read README.md for configuration guidance.
+
+[+] Installation result
+    [v] Installation complete.

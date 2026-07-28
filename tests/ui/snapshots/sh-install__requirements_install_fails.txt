@@ -1,6 +1,16 @@
 # border: red
 # exit: 1
 
-[+] Python Environment
-    [v] Found existing virtual environment
-    [x] Failed to install core packages
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
+
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [v] Packaging tools updated.
+    [x] Core dependencies could not be installed.
+    [i] Check requirements.txt and package-index access, then run ./install.sh --debug.
