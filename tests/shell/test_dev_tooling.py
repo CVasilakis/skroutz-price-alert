@@ -255,8 +255,9 @@ def test_shell_help_is_useful_and_framed_by_blank_lines(script):
 def test_plugin_check_help_needs_no_venv():
     result = _run("scripts/dev/plugin-check.sh", "--help")
     assert result.returncode == 0, result.stderr
-    assert "Usage: ./scripts/dev/plugin-check.sh [-h] --<target>" in result.stdout
-    assert "target plugin to verify (for example, --" in result.stdout
+    assert "Usage: ./scripts/dev/plugin-check.sh [-h] [--debug] --<target>" in result.stdout
+    assert "target to verify (for example, --" in result.stdout
+    assert "--debug" in result.stdout
 
 
 def test_dev_setup_help_has_no_install_side_effect():
@@ -703,12 +704,171 @@ def test_versioned_pre_push_hook_runs_the_canonical_gate():
 def test_plugin_check_binds_static_analysis_to_selected_venv():
     contents = (ROOT / "scripts/dev/plugin-check.sh").read_text(encoding="utf-8")
     assert 'plugin_check_venv_parent="$(dirname -- "$plugin_check_venv_dir")"' in contents
-    assert '-m basedpyright --venvpath "$plugin_check_venv_parent"' in contents
+    assert "-m basedpyright" in contents
+    assert '--venvpath "$plugin_check_venv_parent"' in contents
     check = (ROOT / "scripts/dev/check.sh").read_text(encoding="utf-8")
     assert "-m basedpyright src" in check
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'venvPath = "."' in pyproject
     assert 'venv = "venv"' in pyproject
+
+
+def _fake_plugin_check_python(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    python = tmp_path / "isolation" / "venv" / "bin" / "python3"
+    python.parent.mkdir(parents=True)
+    python.write_text(
+        """#!/bin/sh
+set -eu
+case "${1:-}" in
+    -c)
+        case "${2:-}" in
+            *print*) printf '%s\\n' "3.12.0" ;;
+        esac
+        exit 0
+        ;;
+    -m)
+        case "${2:-}" in
+            core.scrapers.tooling.cli) stage=source ;;
+            pytest) stage=tests ;;
+            basedpyright) stage=type ;;
+            ruff)
+                case "${3:-}" in
+                    check) stage=lint ;;
+                    format) stage=format ;;
+                esac
+                ;;
+        esac
+        printf '%s: %s\\n' "injected verification stdout" "$stage"
+        printf '%s: %s\\n' "injected verification stderr" "$stage" >&2
+        if [ "${FAIL_STAGE:-}" = "$stage" ]; then
+            exit "${FAIL_STATUS:-23}"
+        fi
+        ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
+    env = os.environ.copy()
+    env["SCROOGE_PLUGIN_CHECK_PYTHON"] = str(python)
+    return python, env
+
+
+def test_plugin_check_success_uses_required_sections_and_spacing(tmp_path):
+    _, env = _fake_plugin_check_python(tmp_path)
+
+    result = _run("scripts/dev/plugin-check.sh", "--skroutz", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr == ""
+    assert result.stdout == (
+        "\n"
+        "[+] Target verification\n"
+        "    [v] [skroutz] Source and dependency contract passed.\n"
+        "\n"
+        "[+] Target tests\n"
+        "    [v] [skroutz] Tests passed.\n"
+        "\n"
+        "[+] Static analysis\n"
+        "    [v] [skroutz] Type checking passed.\n"
+        "    [v] [skroutz] Ruff lint passed.\n"
+        "    [v] [skroutz] Ruff formatting passed.\n"
+        "\n"
+        "[+] Verification result\n"
+        "    [v] [skroutz] Target verification complete.\n"
+        "\n"
+    )
+    assert "injected verification" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--debug", "--skroutz"),
+        ("--skroutz", "--debug"),
+    ),
+)
+def test_plugin_check_accepts_debug_in_either_order(tmp_path, args):
+    _, env = _fake_plugin_check_python(tmp_path)
+
+    result = _run("scripts/dev/plugin-check.sh", *args, env=env)
+
+    assert result.returncode == 0
+    assert "injected verification stdout: source" in result.stdout
+    assert "injected verification stderr: format" in result.stderr
+    assert_task_status(result.stdout, "v", "[skroutz] Target verification complete.")
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--help", "--debug"),
+        ("--debug", "--help"),
+        ("--debug", "-h"),
+        ("--help", "--help", "--debug"),
+        ("--skroutz", "--help", "invalid"),
+        ("invalid", "--help", "--debug"),
+    ),
+)
+def test_plugin_check_help_has_precedence_in_every_position(args):
+    result = _run("scripts/dev/plugin-check.sh", *args)
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert result.stdout.startswith("\nUsage:")
+    assert result.stdout.endswith("\n\n")
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    (
+        ((), "Select exactly one target."),
+        (("--debug",), "Select exactly one target."),
+        (("skroutz",), "Invalid argument: skroutz"),
+        (("--skroutz", "--insomnia"), "Select exactly one target."),
+        (("--skroutz", "--skroutz"), "Select exactly one target."),
+        (("--debug", "--debug", "--skroutz"), "Specify --debug at most once."),
+        (("--bad-target",), "Invalid target 'bad-target'"),
+    ),
+)
+def test_plugin_check_invalid_and_duplicate_flags_keep_usage_status(args, message):
+    result = _run("scripts/dev/plugin-check.sh", *args)
+
+    assert result.returncode == 2
+    assert result.stderr == ""
+    assert result.stdout.startswith("\n[+] Verification arguments\n")
+    assert message in result.stdout
+    assert result.stdout.endswith("\n\n")
+
+
+def test_plugin_check_normal_hides_tool_noise_and_preserves_failure_status(tmp_path):
+    _, env = _fake_plugin_check_python(tmp_path)
+    env["FAIL_STAGE"] = "lint"
+    env["FAIL_STATUS"] = "23"
+
+    result = _run("scripts/dev/plugin-check.sh", "--skroutz", env=env)
+
+    assert result.returncode == 23
+    assert "injected verification" not in result.stdout
+    assert "injected verification" not in result.stderr
+    assert_task_status(result.stdout, "x", "[skroutz] Ruff lint failed.")
+    assert_task_status(result.stdout, "x", "[skroutz] Target verification failed.")
+    assert result.stdout.startswith("\n")
+    assert result.stdout.endswith("\n\n")
+
+
+def test_plugin_check_debug_exposes_same_tool_noise_and_preserves_failure_status(tmp_path):
+    _, env = _fake_plugin_check_python(tmp_path)
+    env["FAIL_STAGE"] = "tests"
+    env["FAIL_STATUS"] = "23"
+
+    result = _run("scripts/dev/plugin-check.sh", "--debug", "--skroutz", env=env)
+
+    assert result.returncode == 23
+    assert "injected verification stdout: tests" in result.stdout
+    assert "injected verification stderr: tests" in result.stderr
+    assert_task_status(result.stdout, "x", "[skroutz] Tests failed.")
+    assert "Static analysis" not in result.stdout
 
 
 def test_plugin_check_runs_from_external_venv_without_root_venv(tmp_path):
@@ -742,6 +902,12 @@ def test_plugin_check_runs_from_external_venv_without_root_venv(tmp_path):
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert not (project / "venv").exists()
+
+
+def test_plugin_isolation_ci_invokes_plugin_check_in_debug_mode():
+    workflow = (ROOT / ".github/workflows/tests.yml").read_text(encoding="utf-8")
+    isolation = workflow.split("  plugin-isolation:\n", 1)[1]
+    assert './scripts/dev/plugin-check.sh --debug "--$target"' in isolation
 
 
 def test_dev_setup_rejects_invalid_argument_before_installing():
@@ -837,6 +1003,9 @@ def test_development_wrappers_reject_python39(python39, script, args, override):
     output = result.stdout + result.stderr
     if script == "scripts/dev/setup.sh":
         assert "System Python 3.10 or newer is required." in output
+    elif script == "scripts/dev/plugin-check.sh":
+        assert_task_status(result.stdout, "x", "[skroutz] Python 3.10 or newer is unavailable.")
+        assert result.stderr == ""
     else:
         assert "Detected Python 3.9.18" in output
     assert "3.10 or newer" in output

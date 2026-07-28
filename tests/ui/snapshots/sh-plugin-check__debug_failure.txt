@@ -1,0 +1,17 @@
+# border: red
+# exit: 23
+
+[+] Target verification
+3.12.0
+injected verification stdout: source
+injected verification stderr: source
+    [v] [skroutz] Source and dependency contract passed.
+
+[+] Target tests
+injected verification stdout: tests
+injected verification stderr: tests
+    [x] [skroutz] Tests failed.
+    [!] Review the underlying diagnostic above, then retry.
+
+[+] Verification result
+    [x] [skroutz] Target verification failed.

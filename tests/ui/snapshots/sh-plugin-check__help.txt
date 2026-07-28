@@ -1,0 +1,13 @@
+# border: green
+# exit: 0
+
+Usage: ./scripts/dev/plugin-check.sh [-h] [--debug] --<target>
+
+Verify one target against its source, tests, and private dependencies.
+
+Required arguments:
+  --<target>        target to verify (for example, --skroutz)
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --debug           show underlying command output

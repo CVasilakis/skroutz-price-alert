@@ -118,5 +118,5 @@ jobs:
             [ -z "$requirement" ] || "$plugin_python" -m pip install -r "$requirement"
             "$plugin_python" -m pip check
             SCROOGE_PLUGIN_CHECK_PYTHON="$plugin_python" \
-              ./scripts/dev/plugin-check.sh "--$target"
+              ./scripts/dev/plugin-check.sh --debug "--$target"
           done < <(PYTHONPATH=src python -m core.scrapers.tooling.cli requirements)

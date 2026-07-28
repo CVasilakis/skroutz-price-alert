@@ -1,0 +1,16 @@
+# border: green
+# exit: 0
+
+[+] Target verification
+    [v] [skroutz] Source and dependency contract passed.
+
+[+] Target tests
+    [v] [skroutz] Tests passed.
+
+[+] Static analysis
+    [v] [skroutz] Type checking passed.
+    [v] [skroutz] Ruff lint passed.
+    [v] [skroutz] Ruff formatting passed.
+
+[+] Verification result
+    [v] [skroutz] Target verification complete.

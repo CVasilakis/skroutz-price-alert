@@ -1,0 +1,16 @@
+# border: red
+# exit: 23
+
+[+] Target verification
+    [v] [skroutz] Source and dependency contract passed.
+
+[+] Target tests
+    [v] [skroutz] Tests passed.
+
+[+] Static analysis
+    [v] [skroutz] Type checking passed.
+    [x] [skroutz] Ruff lint failed.
+    [!] Run ./scripts/dev/plugin-check.sh --debug --skroutz to inspect the failure.
+
+[+] Verification result
+    [x] [skroutz] Target verification failed.

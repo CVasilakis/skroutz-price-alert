@@ -1,0 +1,9 @@
+# border: red
+# exit: 23
+
+[+] Target verification
+    [x] [skroutz] Source and dependency contract failed.
+    [!] Run ./scripts/dev/plugin-check.sh --debug --skroutz to inspect the failure.
+
+[+] Verification result
+    [x] [skroutz] Target verification failed.

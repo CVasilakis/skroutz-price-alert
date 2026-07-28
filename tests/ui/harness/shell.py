@@ -56,6 +56,7 @@ _SCRIPT_FILES = (
     "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
     "scripts/dev/setup.sh",
+    "scripts/dev/plugin-check.sh",
     "scripts/dev/plugin-create.sh",
     "scripts/dev/install-hooks.sh",
     "scripts/dev/requirements-dev.txt",
@@ -68,6 +69,8 @@ _SCRIPT_FILES = (
 # external) can never leak in.
 _REAL_TOOLS = (
     "dirname",
+    "basename",
+    "env",
     "cut",
     "cat",
     "chmod",
@@ -105,6 +108,10 @@ class ShellWorld:
         pip_fail: None | "upgrade" | "requirements" | "plugin" | "check" - failing pip call.
         pip_stdout / pip_stderr: injected package-command output for quiet/debug assertions.
         requirements_txt: The root requirements.txt exists.
+
+    Target verification:
+        plugin_check_fail: None or the source/tests/type/lint/format stage to fail.
+        plugin_check_stdout / plugin_check_stderr: injected verifier-tool output.
 
     Installed unit state (real files in the sandbox SYSTEMD_USER_DIR):
         installed_timers / installed_services: Plugins with a unit file on disk.
@@ -191,6 +198,9 @@ class ShellWorld:
     scaffold_output: str | None = None
     scaffold_stderr: str = ""
     scaffold_status: int = 0
+    plugin_check_fail: str | None = None
+    plugin_check_stdout: str = ""
+    plugin_check_stderr: str = ""
     hook_state: str = "valid"
 
     tools: str = "full"
@@ -432,6 +442,21 @@ case "${1:-}" in
         esac ;;
     -m)
         shift
+        verification_stage=""
+        case "$*" in
+            "core.scrapers.tooling.cli plugin-check "*) verification_stage="source" ;;
+            "pytest --no-cov "*) verification_stage="tests" ;;
+            "basedpyright --venvpath "*) verification_stage="type" ;;
+            "ruff check "*) verification_stage="lint" ;;
+            "ruff format --check "*) verification_stage="format" ;;
+        esac
+        if [ -n "$verification_stage" ]; then
+            [ -z "${FAKE_PLUGIN_CHECK_STDOUT:-}" ] ||
+                printf '%s: %s\\n' "$FAKE_PLUGIN_CHECK_STDOUT" "$verification_stage"
+            [ -z "${FAKE_PLUGIN_CHECK_STDERR:-}" ] ||
+                printf '%s: %s\\n' "$FAKE_PLUGIN_CHECK_STDERR" "$verification_stage" >&2
+            [ "${FAKE_PLUGIN_CHECK_FAIL:-}" != "$verification_stage" ] || exit 23
+        fi
         case "$*" in
             pip\\ *)
                 [ -z "${FAKE_PIP_STDOUT:-}" ] || printf '%s\\n' "$FAKE_PIP_STDOUT"
@@ -715,6 +740,9 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         ),
         "FAKE_SCAFFOLD_STDERR": world.scaffold_stderr,
         "FAKE_SCAFFOLD_STATUS": str(world.scaffold_status),
+        "FAKE_PLUGIN_CHECK_FAIL": world.plugin_check_fail or "",
+        "FAKE_PLUGIN_CHECK_STDOUT": world.plugin_check_stdout,
+        "FAKE_PLUGIN_CHECK_STDERR": world.plugin_check_stderr,
     }
 
 
