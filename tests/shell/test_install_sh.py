@@ -4,6 +4,8 @@ import pytest
 import ui.catalog  # noqa: F401  # initialize catalog before importing its shell harness
 from ui.harness.shell import ShellWorld, _build_sandbox, _cleanup, _fake_env
 
+from shell.assertions import assert_task_status
+
 
 def _run(world: ShellWorld, *args: str, extra_env: dict[str, str] | None = None):
     checkout = _build_sandbox(world)
@@ -56,7 +58,7 @@ def test_debug_is_accepted_alone_with_targets_and_when_duplicated(args):
     result = _run(CONFIGURED, *args)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "[v] Installation complete." in result.stdout
+    assert_task_status(result.stdout, "v", "Installation complete.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -83,8 +85,8 @@ def test_invalid_arguments_keep_exit_one_and_use_framed_status_output(args):
     result = _run(CONFIGURED, *args)
 
     assert result.returncode == 1
-    assert "[x] The command-line arguments are invalid." in result.stdout
-    assert "[i] Run ./install.sh --help for usage." in result.stdout
+    assert_task_status(result.stdout, "x", "The command-line arguments are invalid.")
+    assert_task_status(result.stdout, "i", "Run ./install.sh --help for usage.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -132,7 +134,7 @@ def test_debug_exposes_failing_subprocess_noise_without_changing_exit_status():
     assert "injected failing pip stderr" not in normal.stdout + normal.stderr
     assert "injected failing pip stdout" in debug.stdout + debug.stderr
     assert "injected failing pip stderr" in debug.stdout + debug.stderr
-    assert "[x] Packaging tools could not be updated." in debug.stdout
+    assert_task_status(debug.stdout, "x", "Packaging tools could not be updated.")
 
 
 def test_deferred_install_inherits_debug_without_adding_outer_completion():

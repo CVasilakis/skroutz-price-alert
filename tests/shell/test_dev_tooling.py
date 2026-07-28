@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from core.scrapers.framework.catalog import PluginCatalog
+from shell.assertions import assert_task_status
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -273,7 +274,7 @@ def test_hook_installer_refuses_missing_hook_before_configuring(tmp_path):
     project, installer = _hook_project(tmp_path, None)
     result = subprocess.run(["sh", str(installer)], text=True, capture_output=True)
     assert result.returncode != 0
-    assert "[x] Cannot enable hooks; .githooks/pre-push is missing." in result.stdout
+    assert_task_status(result.stdout, "x", "Cannot enable hooks; .githooks/pre-push is missing.")
     configured = subprocess.run(
         ["git", "-C", str(project), "config", "--local", "--get", "core.hooksPath"],
         text=True,
@@ -286,7 +287,7 @@ def test_hook_installer_refuses_invalid_hook_before_configuring(tmp_path):
     project, installer = _hook_project(tmp_path, "#!/bin/sh\nif\n")
     result = subprocess.run(["sh", str(installer)], text=True, capture_output=True)
     assert result.returncode != 0
-    assert "[x] .githooks/pre-push has invalid POSIX shell syntax." in result.stdout
+    assert_task_status(result.stdout, "x", ".githooks/pre-push has invalid POSIX shell syntax.")
     configured = subprocess.run(
         ["git", "-C", str(project), "config", "--local", "--get", "core.hooksPath"],
         text=True,
@@ -335,7 +336,7 @@ def test_hook_installer_accepts_debug_and_duplicate_debug(tmp_path, args):
         capture_output=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Repository-local pre-push checks are enabled." in result.stdout
+    assert_task_status(result.stdout, "v", "Repository-local pre-push checks are enabled.")
     assert "true" in result.stderr
     assert ".githooks" in result.stderr
 
@@ -377,7 +378,7 @@ def test_hook_installer_rejects_invalid_arguments_with_framed_ui(tmp_path, argum
     assert result.stderr == ""
     assert result.stdout.startswith("\n[+]")
     assert result.stdout.endswith("\n\n")
-    assert f"[x] Invalid argument: {argument}" in result.stdout
+    assert_task_status(result.stdout, "x", f"Invalid argument: {argument}")
 
 
 def _noisy_git(tmp_path: Path):
@@ -459,8 +460,8 @@ def test_hook_installer_debug_preserves_noisy_command_failure_status(tmp_path):
     assert "injected git" not in normal.stdout + normal.stderr
     assert "injected git stdout" in debug.stdout + debug.stderr
     assert "injected git stderr" in debug.stdout + debug.stderr
-    assert "[x] Could not configure the repository-local hooks path." in normal.stdout
-    assert "[x] Could not configure the repository-local hooks path." in debug.stdout
+    assert_task_status(normal.stdout, "x", "Could not configure the repository-local hooks path.")
+    assert_task_status(debug.stdout, "x", "Could not configure the repository-local hooks path.")
 
 
 def test_hook_installer_no_worktree_is_a_framed_no_op(tmp_path):
@@ -475,7 +476,28 @@ def test_hook_installer_no_worktree_is_a_framed_no_op(tmp_path):
     assert result.returncode == 0
     assert result.stdout.startswith("\n[+]")
     assert result.stdout.endswith("\n\n")
-    assert "[i] Git hooks were not configured" in result.stdout
+    assert_task_status(result.stdout, "i", "Git hooks were not configured (no Git worktree found).")
+
+
+@pytest.mark.parametrize("columns", ("40", "80", "100", "160"))
+def test_hook_task_semantics_are_width_independent_and_rendering_is_responsive(tmp_path, columns):
+    project, installer = _hook_project(tmp_path, "#!/bin/sh\nexit 0\n")
+    argument = "invalid-" + "-".join(("long",) * 18)
+    env = os.environ.copy()
+    env["COLUMNS"] = columns
+
+    result = subprocess.run(
+        ["sh", str(installer), argument],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    assert_task_status(result.stdout, "x", f"Invalid argument: {argument}")
+    continuation_present = any(line.startswith("        ") for line in result.stdout.splitlines())
+    assert continuation_present is (int(columns) < 160)
 
 
 def test_versioned_pre_push_hook_runs_the_canonical_gate():
@@ -508,6 +530,7 @@ def test_plugin_check_runs_from_external_venv_without_root_venv(tmp_path):
         shutil.copy(ROOT / relative, destination)
     shutil.copytree(ROOT / "src", project / "src")
     shutil.copytree(ROOT / "tests/plugins/insomnia", project / "tests/plugins/insomnia")
+    shutil.copy(ROOT / "tests/support.py", project / "tests/support.py")
 
     external_venv = tmp_path / "isolation/venv"
     external_venv.parent.mkdir(parents=True)
@@ -532,7 +555,7 @@ def test_dev_setup_rejects_invalid_argument_before_installing():
     assert result.returncode == 1
     assert result.stderr == ""
     assert result.stdout.startswith("\n[+] Setup arguments\n")
-    assert "    [x] Invalid argument: target" in result.stdout
+    assert_task_status(result.stdout, "x", "Invalid argument: target")
     assert result.stdout.endswith("\n\n")
 
 
@@ -540,14 +563,14 @@ def test_dev_setup_rejects_multiple_targets_before_installing():
     result = _run("scripts/dev/setup.sh", "--skroutz", "--insomnia")
     assert result.returncode == 1
     assert result.stderr == ""
-    assert "    [x] Select at most one target." in result.stdout
+    assert_task_status(result.stdout, "x", "Select at most one target.")
 
 
 def test_dev_setup_rejects_unknown_target_before_pip_work():
     result = _run("scripts/dev/setup.sh", "--does_not_exist")
     assert result.returncode == 1
     assert result.stderr == ""
-    assert "    [x] Unknown target 'does_not_exist'." in result.stdout
+    assert_task_status(result.stdout, "x", "Unknown target 'does_not_exist'.")
     assert "Requirement already satisfied" not in result.stdout
 
 
@@ -573,7 +596,7 @@ def test_dev_setup_rejects_project_venv_symlink_before_python_work(tmp_path):
 
     assert result.returncode != 0
     assert result.stderr == ""
-    assert "    [x] The development venv path is a symlink." in result.stdout
+    assert_task_status(result.stdout, "x", "The development venv path is a symlink.")
     assert (project / "venv").is_symlink()
 
 
@@ -695,7 +718,7 @@ esac
     assert str(alpha) in calls
     assert str(beta) in calls
     assert "[+] Git hook setup" not in result.stdout
-    assert "    [v] Repository-local pre-push checks are enabled." in result.stdout
+    assert_task_status(result.stdout, "v", "Repository-local pre-push checks are enabled.")
 
 
 def test_dev_setup_rejects_existing_python39_venv_with_supported_system_python(tmp_path):

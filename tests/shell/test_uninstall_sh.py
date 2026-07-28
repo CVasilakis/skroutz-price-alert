@@ -7,6 +7,8 @@ import pytest
 import ui.catalog  # noqa: F401  # initialize catalog before importing its shell harness
 from ui.harness.shell import ShellWorld, _build_sandbox, _cleanup, _fake_env
 
+from shell.assertions import assert_task_status
+
 INSTALLED = ShellWorld(
     installed_timers=("skroutz",),
     installed_services=("skroutz",),
@@ -70,7 +72,7 @@ def test_debug_is_accepted_alone_with_targets_and_when_duplicated(args):
     result = _run(INSTALLED, *args)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "[v] [skroutz] Timer and service unit entries removed." in result.stdout
+    assert_task_status(result.stdout, "v", "[skroutz] Timer and service unit entries removed.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -98,8 +100,8 @@ def test_invalid_arguments_keep_exit_one_and_use_framed_status_output(args):
     result = _run(INSTALLED, *args)
 
     assert result.returncode == 1
-    assert "[x] The command-line arguments are invalid." in result.stdout
-    assert "[i] Run ./scripts/uninstall.sh --help for usage." in result.stdout
+    assert_task_status(result.stdout, "x", "The command-line arguments are invalid.")
+    assert_task_status(result.stdout, "i", "Run ./scripts/uninstall.sh --help for usage.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -138,8 +140,8 @@ def test_full_noop_needs_no_systemctl_and_removes_the_venv():
         result = _run_checkout(checkout, world)
 
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "[i] No installed target timer or service units found." in result.stdout
-        assert "[v] Python virtual environment removed." in result.stdout
+        assert_task_status(result.stdout, "i", "No installed target timer or service units found.")
+        assert_task_status(result.stdout, "v", "Python virtual environment removed.")
         assert not (checkout / "venv").exists()
         _assert_standalone_frame(result.stdout)
     finally:
@@ -153,8 +155,10 @@ def test_installed_units_require_systemctl_before_any_removal():
         result = _run_checkout(checkout, world)
 
         assert result.returncode == 1
-        assert "[x] systemctl (systemd) is not installed or not available." in result.stdout
-        assert "[!] Install systemd, then retry this command." in result.stdout
+        assert_task_status(
+            result.stdout, "x", "systemctl (systemd) is not installed or not available."
+        )
+        assert_task_status(result.stdout, "!", "Install systemd, then retry this command.")
         assert (checkout / "venv").is_dir()
         assert len(list((checkout / "xdg/systemd/user").iterdir())) == 2
         _assert_standalone_frame(result.stdout)
@@ -240,7 +244,7 @@ def test_partial_disable_failure_removes_no_units_and_returns_one():
         result = _run_checkout(checkout, world)
 
         assert result.returncode == 1
-        assert "[v] [skroutz] Background timer and service disabled." in result.stdout
+        assert_task_status(result.stdout, "v", "[skroutz] Background timer and service disabled.")
         assert (
             "[x] [amazon] Background timer or service could not be disabled safely."
             in result.stdout
@@ -277,7 +281,7 @@ def test_daemon_reload_failure_keeps_exit_one_after_unit_removal():
         result = _run_checkout(checkout, world, "--skroutz")
 
         assert result.returncode == 1
-        assert "[x] The systemd user manager could not be reloaded." in result.stdout
+        assert_task_status(result.stdout, "x", "The systemd user manager could not be reloaded.")
         assert "Run systemctl --user daemon-reload" in result.stdout
         unit_dir = checkout / "xdg/systemd/user"
         assert list(unit_dir.iterdir()) == []

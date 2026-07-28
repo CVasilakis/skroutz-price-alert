@@ -1,5 +1,9 @@
 """Suite-wide pytest fixtures.
 
+``_isolate_process_environment`` gives tests and their direct subprocesses a stable
+terminal, locale, user configuration, and temporary-file environment. Tests remain free
+to override any value explicitly after the fixture has run.
+
 ``_isolate_logs_dir`` is the single, unconditional guarantee that no test - not even one
 that reaches an error path - writes into the real repository ``logs/`` directory.
 
@@ -18,6 +22,31 @@ unaffected by this in-process redirect.
 """
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolate_process_environment(monkeypatch, tmp_path):
+    """Keep inherited developer and machine state out of test subprocesses."""
+    home = tmp_path / "home"
+    xdg_config_home = tmp_path / "xdg"
+    temp_dir = tmp_path / "tmp"
+    for directory in (home, xdg_config_home, temp_dir):
+        directory.mkdir()
+
+    stable_environment = {
+        "COLUMNS": "100",
+        "NO_COLOR": "1",
+        "LC_ALL": "C",
+        "LANG": "C",
+        "HOME": str(home),
+        "XDG_CONFIG_HOME": str(xdg_config_home),
+        "TMPDIR": str(temp_dir),
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+    for name, value in stable_environment.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("CLICOLOR_FORCE", raising=False)
 
 
 @pytest.fixture(autouse=True)

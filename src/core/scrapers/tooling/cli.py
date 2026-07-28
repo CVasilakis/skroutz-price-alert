@@ -98,7 +98,7 @@ def _diagnose() -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.scrapers.tooling.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("catalog")
@@ -112,21 +112,21 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "catalog":
-        for row in catalog_rows(PluginCatalog.discover()):
+        for row in catalog_rows(catalog or PluginCatalog.discover()):
             print(row)
     elif args.command == "schedules":
-        for row in schedule_rows(PluginCatalog.discover(), args.config_dir):
+        for row in schedule_rows(catalog or PluginCatalog.discover(), args.config_dir):
             print(row)
     elif args.command == "intervals":
         print(", ".join(SUPPORTED_INTERVALS))
     elif args.command == "requirements":
-        for row in requirements(PluginCatalog.discover()):
+        for row in requirements(catalog or PluginCatalog.discover()):
             print(row)
     elif args.command == "diagnose":
         return _diagnose()
     else:
         try:
-            checks = check_plugin(args.target)
+            checks = check_plugin(args.target, catalog)
         except (RuntimeError, ValueError) as exc:
             print(f"Plugin check failed: {exc}", file=sys.stderr)
             return 1

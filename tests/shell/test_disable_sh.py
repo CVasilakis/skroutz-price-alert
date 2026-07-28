@@ -5,6 +5,8 @@ import pytest
 import ui.catalog  # noqa: F401  # initialize catalog before importing its shell harness
 from ui.harness.shell import ShellWorld, _build_sandbox, _cleanup, _fake_env
 
+from shell.assertions import assert_task_status
+
 INSTALLED = ShellWorld(installed_timers=("skroutz",), installed_services=("skroutz",))
 ENABLED = replace(
     INSTALLED,
@@ -60,7 +62,7 @@ def test_debug_is_accepted_alone_with_targets_and_when_duplicated(args):
     result = _run(ENABLED, *args)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "[v] [skroutz] Background execution disabled." in result.stdout
+    assert_task_status(result.stdout, "v", "[skroutz] Background execution disabled.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -87,8 +89,8 @@ def test_invalid_arguments_keep_exit_one_and_use_framed_status_output(args):
     result = _run(INSTALLED, *args)
 
     assert result.returncode == 1
-    assert "[x] The command-line arguments are invalid." in result.stdout
-    assert "[i] Run ./scripts/disable.sh --help for usage." in result.stdout
+    assert_task_status(result.stdout, "x", "The command-line arguments are invalid.")
+    assert_task_status(result.stdout, "i", "Run ./scripts/disable.sh --help for usage.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -134,7 +136,7 @@ def test_debug_exposes_failing_subprocess_noise_without_changing_exit_status():
     assert "injected failing systemctl stderr" not in normal.stdout + normal.stderr
     assert "injected failing systemctl stdout" in debug.stdout + debug.stderr
     assert "injected failing systemctl stderr" in debug.stdout + debug.stderr
-    assert "[x] [skroutz] Background execution was not fully disabled." in debug.stdout
+    assert_task_status(debug.stdout, "x", "[skroutz] Background execution was not fully disabled.")
 
 
 def test_partial_failure_continues_to_other_targets_and_returns_one():
@@ -151,8 +153,8 @@ def test_partial_failure_continues_to_other_targets_and_returns_one():
     result = _run(world)
 
     assert result.returncode == 1
-    assert "[v] [skroutz] Background execution disabled." in result.stdout
-    assert "[x] [amazon] Background execution was not fully disabled." in result.stdout
+    assert_task_status(result.stdout, "v", "[skroutz] Background execution disabled.")
+    assert_task_status(result.stdout, "x", "[amazon] Background execution was not fully disabled.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -160,6 +162,6 @@ def test_total_failure_is_framed_and_preserves_exit_one():
     result = _run(replace(ENABLED, systemctl_fail=("disable",)))
 
     assert result.returncode == 1
-    assert "[x] [skroutz] Background execution was not fully disabled." in result.stdout
+    assert_task_status(result.stdout, "x", "[skroutz] Background execution was not fully disabled.")
     assert "[+] Optional controls" not in result.stdout
     _assert_standalone_frame(result.stdout)

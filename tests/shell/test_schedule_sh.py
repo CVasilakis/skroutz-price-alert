@@ -5,6 +5,8 @@ import pytest
 import ui.catalog  # noqa: F401  # initialize catalog before importing its shell harness
 from ui.harness.shell import ShellWorld, _build_sandbox, _cleanup, _fake_env
 
+from shell.assertions import assert_task_status
+
 INSTALLED = ShellWorld(installed_timers=("skroutz",), installed_services=("skroutz",))
 CHANGED = replace(INSTALLED, schedules={"skroutz": "daily"})
 
@@ -56,7 +58,9 @@ def test_debug_is_accepted_alone_with_targets_and_when_duplicated(args):
     result = _run(CHANGED, *args)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "[v] [skroutz] Timer updated and its previous state preserved." in result.stdout
+    assert_task_status(
+        result.stdout, "v", "[skroutz] Timer updated and its previous state preserved."
+    )
     _assert_standalone_frame(result.stdout)
 
 
@@ -83,8 +87,8 @@ def test_invalid_arguments_keep_exit_one_and_use_framed_status_output(args):
     result = _run(INSTALLED, *args)
 
     assert result.returncode == 1
-    assert "[x] The command-line arguments are invalid." in result.stdout
-    assert "[i] Run ./scripts/schedule.sh --help for usage." in result.stdout
+    assert_task_status(result.stdout, "x", "The command-line arguments are invalid.")
+    assert_task_status(result.stdout, "i", "Run ./scripts/schedule.sh --help for usage.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -131,7 +135,7 @@ def test_debug_exposes_failing_subprocess_noise_without_changing_exit_status():
     assert "injected failing systemctl stderr" not in normal.stdout + normal.stderr
     assert "injected failing systemctl stdout" in debug.stdout + debug.stderr
     assert "injected failing systemctl stderr" in debug.stdout + debug.stderr
-    assert "[x] One or more timer schedules could not be applied." in debug.stdout
+    assert_task_status(debug.stdout, "x", "One or more timer schedules could not be applied.")
 
 
 def test_successful_change_is_framed_and_reports_each_phase():
@@ -139,9 +143,11 @@ def test_successful_change_is_framed_and_reports_each_phase():
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "[+] Execution intervals" in result.stdout
-    assert "[i] [skroutz] Timer schedule change queued." in result.stdout
+    assert_task_status(result.stdout, "i", "[skroutz] Timer schedule change queued.")
     assert "[+] Timer updates" in result.stdout
-    assert "[v] [skroutz] Timer updated and its previous state preserved." in result.stdout
+    assert_task_status(
+        result.stdout, "v", "[skroutz] Timer updated and its previous state preserved."
+    )
     assert "[+] Schedule result" in result.stdout
     _assert_standalone_frame(result.stdout)
 
@@ -150,9 +156,11 @@ def test_no_op_is_framed_and_does_not_render_update_phase():
     result = _run(INSTALLED)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "[i] [skroutz] Timer already matches the configured interval." in result.stdout
+    assert_task_status(
+        result.stdout, "i", "[skroutz] Timer already matches the configured interval."
+    )
     assert "[+] Timer updates" not in result.stdout
-    assert "[v] No eligible timer changes were required." in result.stdout
+    assert_task_status(result.stdout, "v", "No eligible timer changes were required.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -168,10 +176,14 @@ def test_partial_config_failure_updates_healthy_target_and_returns_fifteen():
     result = _run(world)
 
     assert result.returncode == 15
-    assert "[i] [skroutz] Timer schedule change queued." in result.stdout
-    assert "[x] [amazon] Remove unsupported keys from `config/amazon.json`." in result.stdout
-    assert "[v] [skroutz] Timer updated and its previous state preserved." in result.stdout
-    assert "[v] Updated targets: skroutz" in result.stdout
+    assert_task_status(result.stdout, "i", "[skroutz] Timer schedule change queued.")
+    assert_task_status(
+        result.stdout, "x", "[amazon] Remove unsupported keys from `config/amazon.json`."
+    )
+    assert_task_status(
+        result.stdout, "v", "[skroutz] Timer updated and its previous state preserved."
+    )
+    assert_task_status(result.stdout, "v", "Updated targets: skroutz")
     _assert_standalone_frame(result.stdout)
 
 
@@ -179,7 +191,7 @@ def test_total_transaction_failure_is_framed_and_preserves_exit_one():
     result = _run(replace(CHANGED, systemctl_fail=("restart",), active_timers=("skroutz",)))
 
     assert result.returncode == 1
-    assert "[x] One or more timer schedules could not be applied." in result.stdout
-    assert "[i] Previous timer files and states were restored." in result.stdout
+    assert_task_status(result.stdout, "x", "One or more timer schedules could not be applied.")
+    assert_task_status(result.stdout, "i", "Previous timer files and states were restored.")
     assert "[+] Schedule result" not in result.stdout
     _assert_standalone_frame(result.stdout)

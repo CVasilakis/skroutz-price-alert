@@ -34,6 +34,21 @@ and statically checks the plugin package. Run the full suite before submitting:
 ./scripts/dev/check.sh
 ```
 
+Plugin-owned tests should compile only their own descriptor, without discovering
+sibling packages:
+
+```python
+from support import compile_test_plugin
+from core.scrapers.plugins.acme_store.plugin import PLUGIN
+
+plugin = compile_test_plugin(PLUGIN, "acme_store")
+```
+
+The complete gate intentionally includes dynamic all-plugin contracts, but a valid
+new plugin must not change existing framework expectations, shell scenarios, help
+expectations, UI scenarios, or snapshots. An unrelated failure in one of those areas
+after adding a plugin is a framework defect, not additional contributor work.
+
 `./scripts/dev/setup.sh` enables the repository's versioned pre-push hook, which
 runs this same non-mutating gate. Rerunning setup upgrades the core, development,
 and selected plugin dependencies in the shared root venv to their latest compatible

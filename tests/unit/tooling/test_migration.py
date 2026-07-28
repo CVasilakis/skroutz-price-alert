@@ -4,11 +4,13 @@ from pathlib import Path
 
 import pytest
 from filelock import FileLock
+from support import compile_test_plugin
 
 from core.infrastructure import persistence as persistence_module
 from core.schema_migrations.engine import MigrationPhase, MigrationPlan
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.migrations import PluginMigrationDeclarationError
+from core.scrapers.plugins.insomnia.plugin import PLUGIN as INSOMNIA_PLUGIN
 from core.tooling import migration as migration_module
 from core.tooling import migration_cli
 from core.tooling.migration import (
@@ -37,7 +39,8 @@ def _v2_plan():
 
 
 def _one_plugin_catalog(target="insomnia"):
-    plugin = PluginCatalog.discover().get(target)
+    assert target == "insomnia"
+    plugin = compile_test_plugin(INSOMNIA_PLUGIN, target)
     return plugin, PluginCatalog((plugin,))
 
 

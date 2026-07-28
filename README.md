@@ -662,6 +662,8 @@ automatically, so framework,
 CLI, UI, and management-script edits are unnecessary. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the complete input, URL, field, setting, result,
 exception, dependency, and testing contracts.
+Existing help assertions and UI snapshots are also plugin-addition invariant; an
+unrelated change there is a framework defect rather than required plugin work.
 
 Contributions are always welcome! If you have an idea to make this project better, feel free to fork the repository and submit a pull request.
 To add a marketplace, follow [CONTRIBUTING.md](CONTRIBUTING.md): a scraper is one

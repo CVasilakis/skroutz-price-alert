@@ -5,6 +5,7 @@ import json
 import sys
 import types
 from dataclasses import dataclass
+from pathlib import Path
 from unittest import mock
 
 from core.application.contracts import RunReporter
@@ -47,6 +48,31 @@ def fake_plugin(
         reference_url=url,
     )
     return PluginFixture(name, definition, client_class)
+
+
+def compile_test_plugin(
+    definition: ScraperPlugin,
+    target: str,
+    *,
+    source_dir: str | Path | None = None,
+) -> RegisteredPlugin:
+    """Compile one descriptor without discovering or importing sibling plugins."""
+    return compile_plugin(
+        definition,
+        target=target,
+        package=f"core.scrapers.plugins.{target}",
+        source_dir=source_dir,
+    )
+
+
+def synthetic_catalog(*plugins: PluginFixture | RegisteredPlugin) -> PluginCatalog:
+    """Build a catalog from explicit synthetic or already-compiled plugins."""
+    return PluginCatalog(
+        compile_test_plugin(plugin.definition, plugin.target)
+        if isinstance(plugin, PluginFixture)
+        else plugin
+        for plugin in plugins
+    )
 
 
 @contextlib.contextmanager

@@ -5,6 +5,8 @@ import pytest
 import ui.catalog  # noqa: F401  # initialize catalog before importing its shell harness
 from ui.harness.shell import ShellWorld, _build_sandbox, _cleanup, _fake_env
 
+from shell.assertions import assert_task_status
+
 INSTALLED = ShellWorld(installed_services=("skroutz",))
 ACTIVE = replace(INSTALLED, active_services=("skroutz",))
 
@@ -56,7 +58,7 @@ def test_debug_is_accepted_alone_with_targets_and_when_duplicated(args):
     result = _run(ACTIVE, *args)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "[v] [skroutz] Active execution stopped." in result.stdout
+    assert_task_status(result.stdout, "v", "[skroutz] Active execution stopped.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -83,8 +85,8 @@ def test_invalid_arguments_keep_exit_one_and_use_framed_status_output(args):
     result = _run(INSTALLED, *args)
 
     assert result.returncode == 1
-    assert "[x] The command-line arguments are invalid." in result.stdout
-    assert "[i] Run ./scripts/stop.sh --help for usage." in result.stdout
+    assert_task_status(result.stdout, "x", "The command-line arguments are invalid.")
+    assert_task_status(result.stdout, "i", "Run ./scripts/stop.sh --help for usage.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -99,7 +101,7 @@ def test_no_active_execution_is_an_informational_noop():
     result = _run(INSTALLED)
 
     assert result.returncode == 0
-    assert "[i] [skroutz] No active background execution detected." in result.stdout
+    assert_task_status(result.stdout, "i", "[skroutz] No active background execution detected.")
     assert "[v]" not in result.stdout
     _assert_standalone_frame(result.stdout)
 
@@ -109,8 +111,8 @@ def test_missing_systemctl_is_a_framed_preflight_failure():
 
     assert result.returncode == 1
     assert "[+] Stop preflight" in result.stdout
-    assert "[x] systemctl (systemd) is not installed or not available." in result.stdout
-    assert "[!] Install systemd, then retry this command." in result.stdout
+    assert_task_status(result.stdout, "x", "systemctl (systemd) is not installed or not available.")
+    assert_task_status(result.stdout, "!", "Install systemd, then retry this command.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -149,7 +151,7 @@ def test_debug_exposes_failing_subprocess_noise_without_changing_exit_status():
     assert "injected failing systemctl stderr" not in normal.stdout + normal.stderr
     assert "injected failing systemctl stdout" in debug.stdout + debug.stderr
     assert "injected failing systemctl stderr" in debug.stdout + debug.stderr
-    assert "[x] [skroutz] Active execution could not be stopped." in debug.stdout
+    assert_task_status(debug.stdout, "x", "[skroutz] Active execution could not be stopped.")
 
 
 def test_partial_failure_continues_to_other_targets_and_returns_one():
@@ -164,8 +166,8 @@ def test_partial_failure_continues_to_other_targets_and_returns_one():
     result = _run(world)
 
     assert result.returncode == 1
-    assert "[x] [amazon] Active execution could not be stopped." in result.stdout
-    assert "[v] [skroutz] Active execution stopped." in result.stdout
+    assert_task_status(result.stdout, "x", "[amazon] Active execution could not be stopped.")
+    assert_task_status(result.stdout, "v", "[skroutz] Active execution stopped.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -173,6 +175,6 @@ def test_total_failure_is_framed_and_preserves_exit_one():
     result = _run(replace(ACTIVE, systemctl_fail=("stop",)))
 
     assert result.returncode == 1
-    assert "[x] [skroutz] Active execution could not be stopped." in result.stdout
+    assert_task_status(result.stdout, "x", "[skroutz] Active execution could not be stopped.")
     assert "[+] Optional controls" not in result.stdout
     _assert_standalone_frame(result.stdout)

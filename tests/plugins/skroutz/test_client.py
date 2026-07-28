@@ -1,6 +1,7 @@
 from unittest import mock
 
 import pytest
+from support import compile_test_plugin
 
 from core.exceptions import (
     InvalidURLError,
@@ -12,9 +13,8 @@ from core.exceptions import (
     ServerError,
 )
 from core.scrapers.api import TrackedItem
-from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.plugins.skroutz.client import Client
-from core.scrapers.plugins.skroutz.plugin import URL
+from core.scrapers.plugins.skroutz.plugin import PLUGIN, URL
 from core.settings import resolve_settings
 
 
@@ -35,7 +35,7 @@ def _item(url: str) -> TrackedItem:
 
 
 def _client(response=None):
-    plugin = PluginCatalog.discover().get("skroutz")
+    plugin = compile_test_plugin(PLUGIN, "skroutz")
     with mock.patch("core.scrapers.support.http.tls_client.Session"):
         client = Client(resolve_settings(plugin.setting_specs, {}))
     client.get = mock.Mock(return_value=response or Response())
