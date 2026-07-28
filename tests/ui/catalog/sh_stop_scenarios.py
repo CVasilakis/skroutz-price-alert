@@ -20,7 +20,7 @@ _case = shell_case(Surface.SH_STOP, "scripts/stop.sh")
 
 _case(
     "help",
-    "Usage text with one flag row per stoppable target.",
+    "Usage text with debug documentation and one flag row per stoppable target.",
     "--help",
     world=WORLD_INSTALLED,
     tags=("help",),
@@ -60,6 +60,18 @@ _case(
 )
 
 _case(
+    "stop_active_debug",
+    "Debug exposes the underlying systemd protocol and command output.",
+    "--debug",
+    world=replace(
+        WORLD_INSTALLED,
+        activating_services=("skroutz",),
+        systemctl_stdout="injected systemctl stdout",
+        systemctl_stderr="injected systemctl stderr",
+    ),
+)
+
+_case(
     "stop_fails",
     "systemctl rejects a stop request; success is not reported.",
     world=replace(WORLD_INSTALLED, activating_services=("skroutz",), systemctl_fail=("stop",)),
@@ -81,13 +93,14 @@ _case(
 )
 
 _case(
-    "batch_continues_after_failure",
-    "A later independent target is still checked after failure.",
+    "partial_failure",
+    "One target fails to stop while a second target still succeeds.",
     world=ShellWorld(
         plugins=("skroutz", "amazon"),
         installed_services=("skroutz", "amazon"),
-        activating_services=("skroutz",),
+        activating_services=("skroutz", "amazon"),
         systemctl_fail=("stop",),
+        systemctl_fail_target="amazon",
     ),
     tags=("error",),
 )

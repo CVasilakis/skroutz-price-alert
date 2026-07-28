@@ -1,5 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Unknown target 'bogus'.
-Available targets: skroutz
+[+] Stop preflight
+    [x] Unknown target 'bogus'.
+    [i] Available targets: skroutz

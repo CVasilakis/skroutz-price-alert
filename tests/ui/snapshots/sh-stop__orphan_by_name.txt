@@ -1,7 +1,9 @@
 # border: green
 # exit: 0
 
-[ghost] Stopping active background execution...
-[ghost] Active execution stopped successfully.
+[+] Active executions
+    [i] [ghost] Stopping active background execution.
+    [v] [ghost] Active execution stopped.
 
-To disable future executions, run: ./scripts/disable.sh
+[+] Optional controls
+    [i] To disable future executions, run: ./scripts/disable.sh

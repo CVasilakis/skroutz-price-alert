@@ -1,10 +1,11 @@
 # border: green
 # exit: 0
 
-Usage: stop.sh [-h] [--<target> ...]
+Usage: stop.sh [-h] [--debug] [--<target> ...]
 
 Stop currently running installed scraper services.
 
 Optional arguments:
   -h, --help        show this help message and exit
-  --skroutz         Stop only the skroutz scraper
+  --debug           show underlying command output
+  --skroutz         Stop only the skroutz target

@@ -1,6 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Could not query ActiveState for skroutz-scraper.service.
-
-[skroutz] Error: Could not determine service state.
+[+] Active executions
+    [x] [skroutz] Could not determine the service state.
+    [i] [skroutz] Run ./scripts/stop.sh --debug --skroutz for underlying diagnostics.

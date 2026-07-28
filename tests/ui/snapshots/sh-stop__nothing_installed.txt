@@ -1,4 +1,5 @@
 # border: green
 # exit: 0
 
-No installed scraper services found. Nothing to stop.
+[+] Active executions
+    [i] No installed target services found.

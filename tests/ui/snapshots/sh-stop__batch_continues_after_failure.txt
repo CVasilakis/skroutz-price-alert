@@ -1,8 +1,0 @@
-# border: red
-# exit: 1
-
-[amazon] No active background execution detected.
-
-[skroutz] Stopping active background execution...
-Error: Failed to stop skroutz-scraper.service.
-[skroutz] Error: Active execution could not be stopped.

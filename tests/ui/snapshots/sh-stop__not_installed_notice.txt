@@ -1,4 +1,5 @@
 # border: green
 # exit: 0
 
-[amazon] is registered but not installed - nothing to do.
+[+] Active executions
+    [i] [amazon] Target is registered but not installed; nothing to stop.

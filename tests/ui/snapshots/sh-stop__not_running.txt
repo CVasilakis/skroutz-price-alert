@@ -1,6 +1,8 @@
 # border: green
 # exit: 0
 
-[skroutz] No active background execution detected.
+[+] Active executions
+    [i] [skroutz] No active background execution detected.
 
-To disable future executions, run: ./scripts/disable.sh
+[+] Optional controls
+    [i] To disable future executions, run: ./scripts/disable.sh

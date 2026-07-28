@@ -1,6 +1,7 @@
 # border: red
 # exit: 1
 
-[skroutz] Stopping active background execution...
-Error: skroutz-scraper.service is still activating.
-[skroutz] Error: Active execution could not be stopped.
+[+] Active executions
+    [i] [skroutz] Stopping active background execution.
+    [x] [skroutz] Active execution could not be stopped.
+    [i] [skroutz] Run ./scripts/stop.sh --debug --skroutz for underlying diagnostics.
