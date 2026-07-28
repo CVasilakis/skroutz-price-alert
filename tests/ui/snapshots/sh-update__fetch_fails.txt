@@ -1,6 +1,9 @@
 # border: red
 # exit: 1
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Error: Failed to fetch origin/main. Nothing was stopped or changed.
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [x] Failed to fetch origin/main.
+    [i] Nothing was stopped or changed.

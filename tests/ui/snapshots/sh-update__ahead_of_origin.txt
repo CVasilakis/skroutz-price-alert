@@ -1,7 +1,10 @@
 # border: red
 # exit: 1
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Error: Local main has commits that are not contained in origin/main.
-Publish or reconcile those commits before updating.
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [x] The fetched update failed safety validation.
+    [!] Reconcile the checkout or fetched origin/main, then rerun ./update.sh --debug.

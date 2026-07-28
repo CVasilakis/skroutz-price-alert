@@ -1,5 +1,6 @@
 # border: red
 # exit: 1
 
-Error: No installed scraper timer or service units were found.
-Choose targets explicitly with ./install.sh --<target>.
+[+] Update checks
+    [x] No installed target timer or service units were found.
+    [!] Choose targets explicitly with ./install.sh --<target>.

@@ -1,11 +1,29 @@
 # border: red
 # exit: 19
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Quiescing 'skroutz'...
-Migrating JSON documents...
-[state/skroutz.json] Migration failed: invalid legacy state
-Leaving 'skroutz' disabled after migration failure.
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
 
-Update complete, but one or more state migrations failed.
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [v] [skroutz] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward.
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+    [x] [state/skroutz.json] Migration failed: invalid legacy state
+    [!] [skroutz] Leaving it disabled after its migration failure.
+    [i] No migrated target can be reprovisioned.
+
+[+] Timer activation
+    [i] Restoring eligible target timer states.
+
+[!] Update result
+    [!] Update complete, but one or more state migrations failed.
+    [!] Inspect the reported state and recovery data, then rerun ./update.sh.

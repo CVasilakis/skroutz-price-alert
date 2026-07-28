@@ -17,9 +17,33 @@ _BASE = ShellWorld(
 
 _case("help", "The update usage text.", "--help", world=_BASE, tags=("help",))
 _case(
+    "help_with_debug",
+    "Debug remains compatible with help in either position.",
+    "--debug",
+    "--help",
+    world=_BASE,
+    tags=("help",),
+)
+_case(
     "clean_happy_path",
     "Clean main fast-forwards and restores its timer.",
     world=_BASE,
+    tags=("ok",),
+)
+_case(
+    "clean_happy_path_debug",
+    "Debug streams nested Git, migration, package, and systemd output.",
+    "--debug",
+    world=replace(
+        _BASE,
+        git_stdout="debug git stdout",
+        git_stderr="debug git stderr",
+        migration_stderr="debug migration stderr",
+        pip_stdout="debug pip stdout",
+        pip_stderr="debug pip stderr",
+        systemctl_stdout="debug systemctl stdout",
+        systemctl_stderr="debug systemctl stderr",
+    ),
     tags=("ok",),
 )
 _case("invalid_argument", "A non-help argument is rejected.", "foo", world=_BASE, tags=("error",))

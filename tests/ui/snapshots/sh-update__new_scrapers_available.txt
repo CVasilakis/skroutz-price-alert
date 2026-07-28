@@ -1,10 +1,23 @@
 # border: green
 # exit: 0
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Quiescing 'skroutz'...
-Migrating JSON documents...
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [v] [skroutz] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward.
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+    [v] Managed JSON documents are ready for the updated source.
 
 [+] Installation checks
     [v] The project venv path is safe.
@@ -23,7 +36,13 @@ Migrating JSON documents...
 [+] Target provisioning
     [v] Configured timers for the selected targets.
 
-Scrapers available but not installed: amazon
-Install any of them with: ./install.sh --<target>
+[+] Timer activation
+    [i] Restoring eligible target timer states.
+    [v] [skroutz] Restored its prior timer state.
 
-Update complete! You are now running origin/main.
+[!] Additional targets
+    [i] Available but not installed: amazon
+    [i] Install any of them with ./install.sh --<target>.
+
+[+] Update result
+    [v] Update complete. You are now running origin/main.

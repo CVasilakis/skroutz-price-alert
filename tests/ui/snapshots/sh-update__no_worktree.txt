@@ -1,4 +1,6 @@
 # border: red
 # exit: 1
 
-Error: <BASE_DIR> is not a Git worktree.
+[+] Update checks
+    [x] The project directory is not a usable Git worktree.
+    [!] Restore the Git checkout, then retry.

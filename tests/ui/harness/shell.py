@@ -178,6 +178,8 @@ class ShellWorld:
     venv_python_version: str | None = None
     venv_python_supported: bool | None = None
     git_signal: str | None = None
+    git_stdout: str = ""
+    git_stderr: str = ""
 
     config_dir: bool = True
     config_files: tuple[str, ...] = ()
@@ -320,6 +322,12 @@ exit 0
 
 _GIT_SHIM = """#!/bin/sh
 [ "${1:-}" = "-C" ] && shift 2
+case "${1:-}" in
+    fetch|merge)
+        [ -z "${FAKE_GIT_STDOUT:-}" ] || printf '%s\\n' "$FAKE_GIT_STDOUT"
+        [ -z "${FAKE_GIT_STDERR:-}" ] || printf '%s\\n' "$FAKE_GIT_STDERR" >&2
+        ;;
+esac
 case " ${FAKE_GIT_FAIL:-} " in
     *" ${1:-} "*) exit 1 ;;
 esac
@@ -330,11 +338,11 @@ case "${1:-}" in
             *" --is-bare-repository "*) echo false ;;
             *" --verify "*)
                 [ "${FAKE_GIT_ORIGIN_REF:-1}" = "1" ] ||
-                    [ -f "$FAKE_GIT_STATE_DIR/fetched" ] ;;
+                    [ -f "$FAKE_GIT_STATE_DIR/fetched" ] || exit 1 ;;
             *) printf '%s\\n' "${FAKE_GIT_BRANCH:-main}" ;;
         esac ;;
     symbolic-ref) printf '%s\\n' "${FAKE_GIT_BRANCH:-main}" ;;
-    remote) [ "${FAKE_GIT_ORIGIN:-1}" = "1" ] ;;
+    remote) [ "${FAKE_GIT_ORIGIN:-1}" = "1" ] || exit 1 ;;
     merge-base)
         relation="${FAKE_GIT_RELATION:-fast_forward}"
         case "$relation:$3:$4" in
@@ -343,7 +351,7 @@ case "${1:-}" in
             *) exit 1 ;;
         esac ;;
     fetch) : > "$FAKE_GIT_STATE_DIR/fetched" ;;
-    cat-file) [ "${FAKE_FETCHED_PATHS_VALID:-1}" = "1" ] ;;
+    cat-file) [ "${FAKE_FETCHED_PATHS_VALID:-1}" = "1" ] || exit 1 ;;
     status) [ "${FAKE_GIT_DIRTY:-0}" = "1" ] && printf ' M src/core/main.py\\n' ;;
     merge)
         [ "${FAKE_GIT_SIGNAL:-}" = "${1:-}" ] && kill -TERM "$PPID" ;;
@@ -684,6 +692,8 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
             else "0"
         ),
         "FAKE_GIT_SIGNAL": world.git_signal or "",
+        "FAKE_GIT_STDOUT": world.git_stdout,
+        "FAKE_GIT_STDERR": world.git_stderr,
         "FAKE_MIGRATION_REPORT": "\n".join(world.migration_report),
         "FAKE_MIGRATION_STDERR": world.migration_stderr,
         "FAKE_MIGRATION_STATUS": str(world.migration_status),

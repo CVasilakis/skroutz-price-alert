@@ -1,10 +1,16 @@
 # border: red
 # exit: 1
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Quiescing 'skroutz'...
-Error: Could not safely quiesce 'skroutz'.
-Timer-state recovery data was retained at:
-<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
-Update aborted before changing project files.
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [x] [skroutz] Could not be safely quiesced.
+    [!] Timer-state recovery data was retained at
+        <BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>.
+    [x] Update aborted before changing project files.

@@ -1,11 +1,24 @@
 # border: red
 # exit: 15
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Quiescing 'alpha'...
-Quiescing 'beta'...
-Migrating JSON documents...
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [v] [alpha] Safely stopped and disabled its timer.
+    [v] [beta] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward.
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+    [v] Managed JSON documents are ready for the updated source.
 
 [+] Installation checks
     [v] The project venv path is safe.
@@ -30,5 +43,12 @@ Migrating JSON documents...
     [x] One or more targets were skipped because their configuration is invalid.
     [i] Fix each reported target configuration, then run ./install.sh again.
 
-Update complete, but one or more targets retained their existing units because their configuration
-is invalid.
+[+] Timer activation
+    [i] Restoring eligible target timer states.
+    [v] [alpha] Restored its prior timer state.
+    [v] [beta] Restored its prior timer state.
+
+[!] Update result
+    [!] Update complete, but one or more targets retained their existing units because
+        their configuration is invalid.
+    [!] Fix each reported target configuration, then rerun ./update.sh.

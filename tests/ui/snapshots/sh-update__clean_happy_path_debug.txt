@@ -1,0 +1,115 @@
+# border: green
+# exit: 0
+
+[+] Update checks
+true
+false
+main
+skroutz
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+debug git stdout
+debug git stderr
+    [v] Fetched origin/main before stopping any target.
+main
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
+LoadState=loaded
+LoadState=loaded
+UnitFileState=enabled
+ActiveState=active
+    [v] Captured the installed unit files and timer states.
+LoadState=loaded
+LoadState=loaded
+UnitFileState=enabled
+ActiveState=active
+debug systemctl stdout
+debug systemctl stderr
+debug systemctl stdout
+debug systemctl stderr
+ActiveState=inactive
+debug systemctl stdout
+debug systemctl stderr
+LoadState=loaded
+ActiveState=inactive
+UnitFileState=disabled
+LoadState=loaded
+ActiveState=inactive
+    [v] [skroutz] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward.
+debug git stdout
+debug git stderr
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+3.12.0
+debug migration stderr
+    [v] Managed JSON documents are ready for the updated source.
+
+[+] Installation checks
+    [v] The project venv path is safe.
+3.12.0
+    [v] System Python 3.10 or newer is available.
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+skroutz
+3.12.0
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
+
+[+] Python environment
+    [i] Updating the existing Python environment.
+3.12.0
+    [v] The Python environment is ready.
+debug pip stdout
+debug pip stderr
+    [v] Packaging tools updated.
+debug pip stdout
+debug pip stderr
+    [v] Updated core dependencies.
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+skroutz
+debug pip stdout
+debug pip stderr
+    [v] Core dependencies are compatible.
+
+[+] Target provisioning
+skroutz hourly  ok
+skroutz hourly
+skroutz ok
+LoadState=loaded
+LoadState=loaded
+UnitFileState=disabled
+ActiveState=inactive
+debug systemctl stdout
+debug systemctl stderr
+    [v] Configured timers for the selected targets.
+Linger=yes
+skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+
+[+] Timer activation
+    [i] Restoring eligible target timer states.
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+skroutz
+skroutz hourly  ok
+skroutz ok
+debug systemctl stdout
+debug systemctl stderr
+debug systemctl stdout
+debug systemctl stderr
+debug systemctl stdout
+debug systemctl stderr
+debug systemctl stdout
+debug systemctl stderr
+UnitFileState=enabled
+ActiveState=active
+    [v] [skroutz] Restored its prior timer state.
+skroutz
+
+[+] Update result
+    [v] Update complete. You are now running origin/main.

@@ -1,11 +1,23 @@
 # border: red
 # exit: 143
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Quiescing 'skroutz'...
-Update interrupted by TERM.
-Affected timers were left disabled for safety.
-Recovery data was retained at:
-<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
-Rerun ./update.sh or inspect ./scripts/run.sh --status.
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [v] [skroutz] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward.
+
+[+] Update interruption
+    [x] Update interrupted by TERM.
+    [!] Affected timers were left disabled for safety.
+    [!] Recovery data was retained at
+        <BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>.
+    [!] Rerun ./update.sh or inspect ./scripts/run.sh --status.

@@ -1,11 +1,23 @@
 # border: red
 # exit: 16
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Quiescing 'skroutz'...
-Migrating JSON documents...
-[config/general.json] Migration failed: invalid legacy config
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [v] [skroutz] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward.
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+    [x] [config/general.json] Migration failed: invalid legacy config
 
 [+] Installation checks
     [v] The project venv path is safe.
@@ -23,6 +35,12 @@ Migrating JSON documents...
 
 [+] Target provisioning
     [v] Configured timers for the selected targets.
-Leaving 'skroutz' disabled after migration failure.
 
-Update complete, but timers remain disabled because general configuration migration failed.
+[+] Timer activation
+    [i] Restoring eligible target timer states.
+    [!] [skroutz] Left disabled after general configuration migration failed.
+
+[!] Update result
+    [!] Update complete, but timers remain disabled because general configuration
+        migration failed.
+    [!] Fix config/general.json, then rerun ./update.sh.

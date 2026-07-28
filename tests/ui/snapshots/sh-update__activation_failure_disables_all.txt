@@ -1,11 +1,24 @@
 # border: red
 # exit: 1
 
-Updating Scrooge Alert...
-Fetching origin/main before stopping any scraper...
-Quiescing 'alpha'...
-Quiescing 'beta'...
-Migrating JSON documents...
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [v] [alpha] Safely stopped and disabled its timer.
+    [v] [beta] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward.
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+    [v] Managed JSON documents are ready for the updated source.
 
 [+] Installation checks
     [v] The project venv path is safe.
@@ -23,9 +36,13 @@ Migrating JSON documents...
 
 [+] Target provisioning
     [v] Configured timers for the selected targets.
-Error: Could not restore the timer state for 'beta'.
-The update installed successfully, but timer activation was incomplete.
-All selected targets were left disabled for safety.
-Recorded timer states were retained at:
-<BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>
-Inspect with ./scripts/run.sh --status before enabling timers.
+
+[+] Timer activation
+    [i] Restoring eligible target timer states.
+    [v] [alpha] Restored its prior timer state.
+    [x] [beta] Could not restore its prior timer state.
+    [x] The update installed successfully, but timer activation was incomplete.
+    [!] All selected targets were left disabled for safety.
+    [!] Recorded timer states were retained at
+        <BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>.
+    [!] Inspect with ./scripts/run.sh --status before enabling timers.

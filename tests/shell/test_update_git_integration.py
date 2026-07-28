@@ -75,9 +75,9 @@ def push_remote_change(tmp_path: Path, origin: Path):
     git("push", "-q", "origin", "main", cwd=remote_work)
 
 
-def run_update(checkout: Path, env):
+def run_update(checkout: Path, env, *args: str):
     return subprocess.run(
-        ["/bin/sh", str(checkout / "update.sh")],
+        ["/bin/sh", str(checkout / "update.sh"), *args],
         cwd=checkout,
         env=env,
         text=True,
@@ -103,6 +103,27 @@ def test_real_git_fetch_repairs_pruned_origin_main(real_git_update_world):
     git("rev-parse", "--verify", "refs/remotes/origin/main", cwd=checkout)
 
 
+def test_real_git_debug_survives_fast_forward_and_reaches_deferred_install(
+    real_git_update_world, tmp_path
+):
+    checkout, origin, env = real_git_update_world
+    push_remote_change(tmp_path, origin)
+    report = "general_config\tgeneral\tcurrent\tconfig/general.json\t"
+    env.update(
+        {
+            "FAKE_MIGRATION_REPORT": report,
+            "FAKE_MIGRATION_STDERR": "debug migration boundary",
+            "FAKE_PIP_STDERR": "debug deferred install boundary",
+        }
+    )
+    result = run_update(checkout, env, "--debug")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "debug migration boundary" in result.stderr
+    assert "debug deferred install boundary" in result.stderr
+    assert report in result.stderr.splitlines()
+    assert report not in result.stdout
+
+
 def test_real_git_dirty_tree_is_refused_without_prompt(real_git_update_world):
     checkout, _, env = real_git_update_world
     (checkout / "update.sh").write_text(
@@ -111,7 +132,7 @@ def test_real_git_dirty_tree_is_refused_without_prompt(real_git_update_world):
     )
     result = run_update(checkout, env)
     assert result.returncode != 0
-    assert "working tree contains" in result.stderr
+    assert "working tree contains" in result.stdout
     assert "proceed" not in (result.stdout + result.stderr).lower()
 
 
@@ -122,7 +143,7 @@ def test_real_git_ahead_main_is_refused(real_git_update_world):
     git("commit", "-q", "-m", "local", cwd=checkout)
     result = run_update(checkout, env)
     assert result.returncode != 0
-    assert "commits that are not contained" in result.stderr
+    assert "fetched update failed safety validation" in result.stdout
 
 
 def test_real_git_diverged_history_is_refused(real_git_update_world, tmp_path):
@@ -133,7 +154,7 @@ def test_real_git_diverged_history_is_refused(real_git_update_world, tmp_path):
     push_remote_change(tmp_path, origin)
     result = run_update(checkout, env)
     assert result.returncode != 0
-    assert "have diverged" in result.stderr
+    assert "fetched update failed safety validation" in result.stdout
 
 
 def test_real_git_wrong_branch_is_refused_without_switching(real_git_update_world):
@@ -141,8 +162,17 @@ def test_real_git_wrong_branch_is_refused_without_switching(real_git_update_worl
     git("switch", "-q", "-c", "feature", cwd=checkout)
     result = run_update(checkout, env)
     assert result.returncode != 0
-    assert "requires branch 'main'" in result.stderr
+    assert "not on branch 'main'" in result.stdout
     assert git("branch", "--show-current", cwd=checkout).stdout.strip() == "feature"
+
+
+def test_real_git_missing_origin_is_refused_before_fetch(real_git_update_world):
+    checkout, _, env = real_git_update_world
+    git("remote", "remove", "origin", cwd=checkout)
+    result = run_update(checkout, env)
+    assert result.returncode == 1
+    assert "remote 'origin' is missing or unusable" in result.stdout
+    assert "Fetched origin/main" not in result.stdout
 
 
 def test_activation_failure_disables_every_selected_target():
@@ -205,13 +235,106 @@ def test_update_internal_debug_mirrors_migration_tsv_to_stderr_without_corruptin
     )
     checkout = _build_sandbox(world)
     try:
-        env = _fake_env(checkout, world)
-        env["SCROOGE_INTERNAL_DEBUG"] = "1"
-        result = run_update(checkout, env)
+        result = run_update(checkout, _fake_env(checkout, world), "--debug")
         assert result.returncode == 0, result.stdout + result.stderr
         assert report in result.stderr.splitlines()
         assert "injected migration noise" in result.stderr.splitlines()
         assert report not in result.stdout
+    finally:
+        _cleanup(checkout)
+
+
+@pytest.mark.parametrize("args", [("--debug", "--help"), ("--help", "--debug")])
+def test_update_debug_is_compatible_with_help_in_either_position(args):
+    world = ShellWorld()
+    checkout = _build_sandbox(world)
+    try:
+        result = run_update(checkout, _fake_env(checkout, world), *args)
+        assert result.returncode == 0
+        assert result.stderr == ""
+        assert result.stdout.startswith("\nUsage:")
+        assert result.stdout.endswith("\n\n")
+        assert "--debug" in result.stdout
+    finally:
+        _cleanup(checkout)
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (("--debug", "--debug"), "--debug flag may be specified only once"),
+        (("--help", "--help"), "accepts no arguments other than"),
+        (("--debug", "invalid"), "Invalid argument: invalid"),
+        (("--debug", "--help", "extra"), "accepts no arguments other than"),
+    ],
+)
+def test_update_invalid_and_duplicate_flags_keep_exit_one(args, message):
+    world = ShellWorld()
+    checkout = _build_sandbox(world)
+    try:
+        result = run_update(checkout, _fake_env(checkout, world), *args)
+        assert result.returncode == 1
+        assert message in result.stdout
+        assert result.stdout.startswith("\n")
+        assert result.stdout.endswith("\n\n")
+    finally:
+        _cleanup(checkout)
+
+
+def test_update_normal_hides_noise_and_debug_streams_it_without_changing_failure_status():
+    world = ShellWorld(
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+        enabled_timers=("skroutz",),
+        active_timers=("skroutz",),
+        config_files=("skroutz.json", "general.json"),
+        git_stdout="injected git stdout",
+        git_stderr="injected git stderr",
+        pip_fail="upgrade",
+        pip_stdout="injected pip stdout",
+        pip_stderr="injected pip stderr",
+        systemctl_stdout="injected systemctl stdout",
+        systemctl_stderr="injected systemctl stderr",
+    )
+    checkouts = [_build_sandbox(world), _build_sandbox(world)]
+    try:
+        normal = run_update(checkouts[0], _fake_env(checkouts[0], world))
+        debug = run_update(checkouts[1], _fake_env(checkouts[1], world), "--debug")
+        assert normal.returncode == debug.returncode == 1
+        for noise in (
+            "injected git stdout",
+            "injected git stderr",
+            "injected pip stdout",
+            "injected pip stderr",
+            "injected systemctl stdout",
+            "injected systemctl stderr",
+        ):
+            assert noise not in normal.stdout + normal.stderr
+            assert noise in debug.stdout + debug.stderr
+        assert "Provisioning failed after the source update." in normal.stdout
+        assert "Provisioning failed after the source update." in debug.stdout
+    finally:
+        for checkout in checkouts:
+            _cleanup(checkout)
+
+
+def test_update_success_owns_exact_outer_padding_and_section_spacing():
+    world = ShellWorld(
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+        enabled_timers=("skroutz",),
+        active_timers=("skroutz",),
+        config_files=("skroutz.json", "general.json"),
+    )
+    checkout = _build_sandbox(world)
+    try:
+        env = _fake_env(checkout, world)
+        env["NO_COLOR"] = "1"
+        result = run_update(checkout, env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.stdout.startswith("\n[+]")
+        assert result.stdout.endswith("\n\n")
+        assert "\n\n\n" not in result.stdout
     finally:
         _cleanup(checkout)
 

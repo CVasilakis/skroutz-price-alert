@@ -1,4 +1,6 @@
 # border: red
 # exit: 1
 
-Error: Invalid argument: foo
+[+] Update arguments
+    [x] Invalid argument: foo
+    [!] Run ./update.sh --help for usage.
