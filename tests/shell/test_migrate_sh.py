@@ -304,10 +304,9 @@ def test_partial_failure_preserves_detail_recovery_and_family_exit(tmp_path):
     assert result.returncode == 15
     assert "[v] config/general.json migrated: v1 to v2." in result.stdout
     assert (
-        "    [x] config/skroutz.json: invalid JSON. Original preserved; compare the"
+        "    [x] config/skroutz.json: invalid JSON. Original preserved; compare the example."
         in result.stdout
     )
-    assert "        example." in result.stdout
     assert "[!] Recovery copies\n    [!] Retained at " in result.stdout
     assert result.stdout.startswith("\n")
     assert result.stdout.endswith("\n\n")

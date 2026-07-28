@@ -1,0 +1,30 @@
+# border: green
+# exit: 0
+
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+[+] Background execution
+    [i] [skroutz] Stopping and disabling the background timer and service.
+LoadState=loaded
+LoadState=loaded
+UnitFileState=disabled
+ActiveState=inactive
+injected systemctl stdout
+injected systemctl stderr
+ActiveState=inactive
+injected systemctl stdout
+injected systemctl stderr
+LoadState=loaded
+ActiveState=inactive
+UnitFileState=disabled
+LoadState=loaded
+ActiveState=inactive
+    [v] [skroutz] Background timer and service disabled.
+
+[+] Installed units
+    [v] [skroutz] Timer and service unit entries removed.
+injected systemctl stdout
+injected systemctl stderr
+    [v] systemd user manager reloaded.
+
+[+] Remaining installation
+    [i] The Python virtual environment and other targets were left intact.

@@ -1,6 +1,8 @@
 # border: green
 # exit: 0
 
-[amazon] is registered but not installed - nothing to do.
-No selected target had installed units.
-The virtual environment and other targets were left intact.
+[+] Installed units
+    [i] [amazon] Target is registered but not installed; nothing to remove.
+
+[+] Remaining installation
+    [i] The Python virtual environment and other targets were left intact.

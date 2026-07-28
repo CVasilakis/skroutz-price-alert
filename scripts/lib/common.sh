@@ -56,9 +56,9 @@ _print_indented_wrapped() {
     _piw_first="$1"
     _piw_continuation="$2"
     shift 2
-    _piw_width="${COLUMNS:-80}"
+    _piw_width="${COLUMNS:-100}"
     case "$_piw_width" in
-        ''|*[!0-9]*) _piw_width=80 ;;
+        ''|*[!0-9]*) _piw_width=100 ;;
     esac
     [ "$_piw_width" -ge 20 ] || _piw_width=20
     printf '%s\n' "$*" | awk \

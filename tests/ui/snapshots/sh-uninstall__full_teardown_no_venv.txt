@@ -1,10 +1,16 @@
 # border: green
 # exit: 0
 
-Stopping and disabling 'skroutz'...
-Removed 'skroutz' scraper units.
+[+] Background execution
+    [i] [skroutz] Stopping and disabling the background timer and service.
+    [v] [skroutz] Background timer and service disabled.
 
-Removing Python virtual environment...
-Python virtual environment already removed.
+[+] Installed units
+    [v] [skroutz] Timer and service unit entries removed.
+    [v] systemd user manager reloaded.
 
-Uninstallation complete. Configuration and state were preserved.
+[+] Python environment
+    [i] Python virtual environment was already removed.
+
+[+] Uninstallation complete
+    [v] Configuration and state were preserved.

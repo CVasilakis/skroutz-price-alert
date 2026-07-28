@@ -39,7 +39,7 @@ from ui.harness.shell import ShellWorld, drive_shell
         (
             "scripts/uninstall.sh",
             ShellWorld(installed_timers=("skroutz",), installed_services=("skroutz",)),
-            "Removed 'skroutz' scraper units",
+            "Timer and service unit entries removed",
         ),
     ),
 )

@@ -120,6 +120,16 @@ class TestPresentationHelpers(unittest.TestCase):
             ],
         )
 
+    def test_wrapping_defaults_to_snapshot_harness_width(self):
+        message = " ".join(["word"] * 19)
+        for columns in (None, "invalid"):
+            with self.subTest(columns=columns):
+                result = run_sh(
+                    f'guidance "{message}"',
+                    extra_env={"COLUMNS": columns},
+                )
+                self.assertEqual(result.stdout, f"  {message}\n")
+
 
 class TestDebugExecution(unittest.TestCase):
     COMMAND = (

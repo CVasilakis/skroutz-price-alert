@@ -1,12 +1,13 @@
 # border: green
 # exit: 0
 
-Usage: uninstall.sh [-h] [--<target> ...]
+Usage: uninstall.sh [-h] [--debug] [--<target> ...]
 
 With no target, remove all installed units and the project venv.
 With target flags, remove only those targets' unit entries.
 
 Optional arguments:
   -h, --help        show this help message and exit
-  --skroutz         Remove only the skroutz scraper
-  --ghost           Remove only the ghost scraper
+  --debug           show underlying command output
+  --skroutz         Remove only the skroutz target
+  --ghost           Remove only the ghost target

@@ -1,5 +1,5 @@
-# border: green
-# exit: 0
+# border: red
+# exit: 1
 
 [+] Background execution
     [i] [skroutz] Stopping and disabling the background timer and service.
@@ -7,7 +7,5 @@
 
 [+] Installed units
     [v] [skroutz] Timer and service unit entries removed.
-    [v] systemd user manager reloaded.
-
-[+] Remaining installation
-    [i] The Python virtual environment and other targets were left intact.
+    [x] The systemd user manager could not be reloaded.
+    [!] Run systemctl --user daemon-reload after resolving the systemd failure.

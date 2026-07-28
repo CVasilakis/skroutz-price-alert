@@ -1,0 +1,12 @@
+# border: green
+# exit: 0
+
+[+] Installed units
+    [i] No installed target timer or service units found.
+
+[+] Python environment
+    [i] Removing the project Python virtual environment.
+    [v] Python virtual environment removed.
+
+[+] Uninstallation complete
+    [v] Configuration and state were preserved.

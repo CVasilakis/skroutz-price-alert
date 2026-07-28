@@ -1,6 +1,13 @@
 # border: green
 # exit: 0
 
-Stopping and disabling 'ghost'...
-Removed 'ghost' scraper units.
-The virtual environment and other targets were left intact.
+[+] Background execution
+    [i] [ghost] Stopping and disabling the background timer and service.
+    [v] [ghost] Background timer and service disabled.
+
+[+] Installed units
+    [v] [ghost] Timer and service unit entries removed.
+    [v] systemd user manager reloaded.
+
+[+] Remaining installation
+    [i] The Python virtual environment and other targets were left intact.
