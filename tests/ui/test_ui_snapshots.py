@@ -11,6 +11,9 @@ import os
 import unittest
 from unittest import mock
 
+from rich.text import Text
+from shell.assertions import shell_tui_layout_errors
+
 from ui.catalog import ALL_SCENARIOS
 from ui.catalog._base import Surface
 from ui.harness.rendering import capture_text, lines_outside_panels, snapshot_body
@@ -54,6 +57,29 @@ class TestNoTextOutsidePanels(unittest.TestCase):
                     stray,
                     [],
                     f"'{sc.snapshot_key}' printed text outside a panel: {stray}",
+                )
+
+
+class TestShellOperationalLayout(unittest.TestCase):
+    """Non-debug shell transcripts obey the shared section grammar."""
+
+    def test_non_debug_transcripts_have_well_formed_sections(self):
+        shell_scenarios = [
+            scenario
+            for scenario in ALL_SCENARIOS
+            if scenario.surface.value.startswith("sh-") and not scenario.shell_debug
+        ]
+        self.assertTrue(shell_scenarios, "No non-debug shell scenarios registered to guard.")
+
+        for scenario in shell_scenarios:
+            with self.subTest(scenario=scenario.snapshot_key):
+                result = scenario.build()
+                self.assertIsInstance(result.renderable, Text)
+                errors = shell_tui_layout_errors(result.renderable.plain)
+                self.assertEqual(
+                    errors,
+                    (),
+                    f"'{scenario.snapshot_key}' broke the non-debug shell TUI layout",
                 )
 
 

@@ -192,6 +192,8 @@ class Scenario:
             fresh each time (snapshot run and gallery run), so it must be deterministic.
         tags (tuple[str, ...]): Optional filter tags. Every tag must be a
             :data:`TAG_VOCABULARY` key (guarded by ``tests/ui/test_ui_catalog.py``).
+        shell_debug (bool): Whether a shell scenario enabled underlying command
+            diagnostics. False for every non-shell scenario.
         in_gallery (bool): Whether the scenario appears in the human-review surfaces
             (the terminal gallery and the HTML report). ``False`` marks a test-only
             scenario — it still snapshots and still feeds assertion tests (e.g. the
@@ -206,6 +208,7 @@ class Scenario:
     description: str
     build: Callable[[], BuildResult]
     tags: tuple[str, ...] = ()
+    shell_debug: bool = False
     in_gallery: bool = True
 
     @property
@@ -222,6 +225,7 @@ def scenario(
     name: str,
     description: str,
     tags: tuple[str, ...] = (),
+    shell_debug: bool = False,
     in_gallery: bool = True,
 ):
     """Registers the decorated zero-arg ``build`` function as a :class:`Scenario`.
@@ -246,6 +250,7 @@ def scenario(
                 description=description,
                 build=build_fn,
                 tags=tuple(tags),
+                shell_debug=shell_debug,
                 in_gallery=in_gallery,
             )
         )

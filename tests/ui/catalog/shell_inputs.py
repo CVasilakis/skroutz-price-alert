@@ -92,7 +92,7 @@ def shell_case(surface: Surface, script: str):
         stdin: str = "",
         tags: tuple[str, ...] = (),
     ) -> None:
-        @scenario(surface, name, description, tags)
+        @scenario(surface, name, description, tags, shell_debug="--debug" in args)
         @cache
         def _build():
             return drive_shell(script, *args, world=world, stdin=stdin)

@@ -1,6 +1,10 @@
 import pytest
 
-from shell.assertions import assert_task_status, logical_task_lines
+from shell.assertions import (
+    assert_task_status,
+    logical_task_lines,
+    shell_tui_layout_errors,
+)
 
 
 @pytest.mark.parametrize(
@@ -25,3 +29,57 @@ def test_only_eight_space_continuations_of_four_space_tasks_are_folded():
     )
 
     assert logical_task_lines(output) == ("[x] A task failed for a semantic reason.",)
+
+
+def test_valid_sectioned_shell_tui_layout_has_no_errors():
+    output = (
+        "\n"
+        "[+] First section\n"
+        "    [v] A task.\n"
+        "        wrapped continuation.\n"
+        "\n"
+        "[!] Second section\n"
+        "    Guidance text.\n"
+        "\n"
+    )
+
+    assert shell_tui_layout_errors(output) == ()
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    (
+        (
+            "[+] Section\n    [v] Task.\n\n",
+            "sectioned output must start with exactly one blank line",
+        ),
+        (
+            "\n[+] One\n    [v] Task.\n[+] Two\n    [v] Task.\n\n",
+            "sections must be separated by exactly one blank line",
+        ),
+        (
+            "\n[+] Section\n    [v] First.\n\n    [v] Second.\n\n",
+            "blank line inside section",
+        ),
+        (
+            "\n[+] Section\n  [v] Bad indentation.\n\n",
+            "section body must use four- or eight-space indentation",
+        ),
+        (
+            "\n[+] Empty\n\n",
+            "section has no body",
+        ),
+        (
+            "\n[+] Section\n    [v] Task.\n",
+            "sectioned output must end with exactly one blank line",
+        ),
+    ),
+)
+def test_shell_tui_layout_reports_malformed_sections(output, expected):
+    errors = shell_tui_layout_errors(output)
+
+    assert any(expected in error for error in errors), errors
+
+
+def test_help_output_is_outside_the_section_layout_grammar():
+    assert shell_tui_layout_errors("\nUsage: tool.sh [-h]\n\n") == ()
