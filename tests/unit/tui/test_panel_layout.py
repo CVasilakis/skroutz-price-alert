@@ -133,6 +133,61 @@ def test_default_panel_width_is_shared():
     assert InteractiveRunReporter().width == PANEL_WIDTH
 
 
+def _interior_dividers(output: str) -> list[str]:
+    return [line for line in output.splitlines() if line.startswith("│ ─")]
+
+
+def test_interactive_settings_only_omit_divider_and_keep_footnote():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    ref = reporter._build_note_refs("Fix the target config")
+    reporter.settings_rows = [("❗", "Tracked Items", f"Failed{ref}")]
+
+    output = _render(reporter._generate_panel())
+
+    assert _interior_dividers(output) == []
+    assert "Tracked Items" in output
+    assert output.count("[1]") == 2
+    assert "Fix the target config." in output
+
+
+def test_interactive_divider_requires_rows_in_both_sections():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    reporter.settings_rows = [("✅", "Tracked Items", "1 loaded")]
+    reporter.log_result("✅", "Item", "OK")
+
+    output = _render(reporter._generate_panel())
+
+    assert len(_interior_dividers(output)) == 1
+
+
+def test_interactive_dynamic_rows_without_settings_omit_leading_divider():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    reporter.log_result("✅", "Item", "OK")
+
+    output = _render(reporter._generate_panel())
+
+    assert _interior_dividers(output) == []
+    assert "Item" in output
+
+
+def test_status_panel_drops_empty_side_separators_and_keeps_footnote():
+    panel = StatusPanelBuilder("Status")
+    panel.add_separator()
+    ref = panel.add_note_ref("Inspect the config")
+    panel.add_row("❗", "Tracked Items", f"Failed{ref}")
+    panel.add_separator()
+    panel.add_separator()
+
+    output = _render(panel)
+
+    assert _interior_dividers(output) == []
+    assert output.count("[1]") == 2
+    assert "Inspect the config." in output
+
+
 def test_interactive_notes_use_shared_punctuation_normalization():
     reporter = InteractiveRunReporter()
     reporter.log_result("✅", "Item", "OK", ["Done!", "Why?", "Plain"])

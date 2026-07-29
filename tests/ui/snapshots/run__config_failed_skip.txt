@@ -6,7 +6,6 @@
 │   ✅    Log Retention           7 days (default)                        │
 │   ✅    Notify On Errors        true (default)                          │
 │   ✅    Repeat Alerts           false (default)                         │
-│ ─────────────────────────────────────────────────────────────────────── │
 │                                                                         │
 │   [1] Fix JSON in config/skroutz.json at line 12, column 4.             │
 ╰─────────────────────────────────────────────────────────────────────────╯

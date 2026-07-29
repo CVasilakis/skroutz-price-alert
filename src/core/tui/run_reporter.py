@@ -190,13 +190,19 @@ class InteractiveRunReporter(RunReporter):
         for row in display_rows:
             display_table.add_row(*row)
 
-        # The static settings section (set at start_target) renders above a divider,
-        # then the live scraping rows below it.
-        if self.settings_rows:
+        # Separate the static settings from live scraping content only when both
+        # sections contain rows. Footnotes render independently below the body and
+        # must not leave a dangling divider when a target is skipped before scraping.
+        if self.settings_rows and display_rows:
             settings_table = layout.new_table("Name")
             for row in self.settings_rows:
                 settings_table.add_row(*row)
             body = Group(settings_table, Rule(style="dim"), display_table)
+        elif self.settings_rows:
+            settings_table = layout.new_table("Name")
+            for row in self.settings_rows:
+                settings_table.add_row(*row)
+            body = settings_table
         else:
             body = display_table
 
