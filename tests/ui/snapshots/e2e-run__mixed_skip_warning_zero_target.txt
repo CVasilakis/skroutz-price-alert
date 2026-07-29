@@ -1,15 +1,15 @@
 # border: red
 
 ╭────────────────────────── Fake Store Scraping ──────────────────────────╮
-│   ✅    Tracked Items         3 loaded                                  │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
-│   ✅    Repeat Alerts         false (default)                           │
+│   ✅    Tracked Items           3 loaded                                │
+│   ✅    Execution Interval      1h (default)                            │
+│   ✅    Log Retention           7 days (default)                        │
+│   ✅    Notify On Errors        true (default)                          │
+│   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Paused Item           Skipped [1]                               │
-│   ❗    Removed Resource      Skipping (ResourceNotFoundError) [2]      │
-│   🟡    Untargeted Item       55.0 € (Target: 0.0 €)                    │
+│   ✅    Paused Item             Skipped [1]                             │
+│   ❗    Removed Resource        Skipping (ResourceNotFoundError) [2]    │
+│   🟡    Untargeted Item         55.0 € (Target: 0.0 €)                  │
 │                                                                         │
 │   [1] Skipped by the config's skip setting.                             │
 │   [2] Resource not found or removed (HTTP 404).                         │

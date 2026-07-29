@@ -1,6 +1,6 @@
 # border: green
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   ✅    Notification sent    Apprise URL 1:                             │
-│                              slack://***@acme-workspace/very-long-ob…   │
+│   ✅    Notification sent       Apprise URL 1:                          │
+│                                 slack://***@acme-workspace/very-long…   │
 ╰─────────────────────────────────────────────────────────────────────────╯

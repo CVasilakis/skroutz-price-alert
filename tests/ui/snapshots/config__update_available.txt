@@ -1,11 +1,11 @@
 # border: yellow
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   🟡    Software Version    Update available! [1]                       │
-│   ✅    Notifications       2 valid URL(s)                              │
-│   ✅    Reminder            Every 1 month (default)                     │
-│   ✅    Reminder Day        Saturday (default)                          │
-│   ✅    Reminder Time       13:00 (default)                             │
+│   🟡    Software Version        Update available! [1]                   │
+│   ✅    Notifications           2 valid URL(s)                          │
+│   ✅    Reminder                Every 1 month (default)                 │
+│   ✅    Reminder Day            Saturday (default)                      │
+│   ✅    Reminder Time           13:00 (default)                         │
 │                                                                         │
 │   [1] Run ./update.sh to install the latest version.                    │
 ╰─────────────────────────────────────────────────────────────────────────╯

@@ -1,9 +1,9 @@
 # border: red
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version    Up to date                                  │
-│   ❗    Notifications       Not configured [1]                          │
-│   ❗    General Config      Failed [1]                                  │
+│   ✅    Software Version        Up to date                              │
+│   ❗    Notifications           Not configured [1]                      │
+│   ❗    General Config          Failed [1]                              │
 │                                                                         │
 │   [1] Fix JSON in config/general.json at line 7, column 3.              │
 ╰─────────────────────────────────────────────────────────────────────────╯

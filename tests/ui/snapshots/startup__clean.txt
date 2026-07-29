@@ -1,19 +1,19 @@
 # border: green
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version    Up to date                                  │
-│   ✅    Notifications       1 valid URL(s)                              │
-│   ✅    Reminder            Every 1 month (default)                     │
-│   ✅    Reminder Day        Saturday (default)                          │
-│   ✅    Reminder Time       13:00 (default)                             │
+│   ✅    Software Version        Up to date                              │
+│   ✅    Notifications           1 valid URL(s)                          │
+│   ✅    Reminder                Every 1 month (default)                 │
+│   ✅    Reminder Day            Saturday (default)                      │
+│   ✅    Reminder Time           13:00 (default)                         │
 ╰─────────────────────────────────────────────────────────────────────────╯
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Tracked Items         5 loaded                                  │
-│   ✅    Execution Interval    2h                                        │
-│   ✅    Log Retention         14 days                                   │
-│   ✅    Notify On Errors      false                                     │
-│   ✅    Repeat Alerts         true                                      │
+│   ✅    Tracked Items           5 loaded                                │
+│   ✅    Execution Interval      2h                                      │
+│   ✅    Log Retention           14 days                                 │
+│   ✅    Notify On Errors        false                                   │
+│   ✅    Repeat Alerts           true                                    │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🎉    Sony WH-1000XM5       248.0 € (Target: 300.0 €)                 │
+│   🎉    Sony WH-1000XM5         248.0 € (Target: 300.0 €)               │
 ╰─────────────────────────────────────────────────────────────────────────╯

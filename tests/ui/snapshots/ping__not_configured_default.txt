@@ -1,7 +1,7 @@
 # border: red
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   🛑    Not Configured    No URLs [1]                                   │
+│   🛑    Not Configured          No URLs [1]                             │
 │                                                                         │
 │   [1] Add notification URLs to config/general.json, then retry.         │
 ╰─────────────────────────────────────────────────────────────────────────╯

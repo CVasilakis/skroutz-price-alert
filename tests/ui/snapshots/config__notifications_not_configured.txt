@@ -1,11 +1,11 @@
 # border: red
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version    Up to date                                  │
-│   ❗    Notifications       Not configured [1]                          │
-│   ✅    Reminder            Every 1 month (default)                     │
-│   ✅    Reminder Day        Saturday (default)                          │
-│   ✅    Reminder Time       13:00 (default)                             │
+│   ✅    Software Version        Up to date                              │
+│   ❗    Notifications           Not configured [1]                      │
+│   ✅    Reminder                Every 1 month (default)                 │
+│   ✅    Reminder Day            Saturday (default)                      │
+│   ✅    Reminder Time           13:00 (default)                         │
 │                                                                         │
 │   [1] No notification URLs found in config/general.json.                │
 ╰─────────────────────────────────────────────────────────────────────────╯

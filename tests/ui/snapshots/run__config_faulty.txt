@@ -1,13 +1,13 @@
 # border: yellow
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   🟡    Tracked Items         3 loaded, 2 misconfigured [1]             │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
-│   ✅    Repeat Alerts         false (default)                           │
+│   🟡    Tracked Items           3 loaded, 2 misconfigured [1]           │
+│   ✅    Execution Interval      1h (default)                            │
+│   ✅    Log Retention           7 days (default)                        │
+│   ✅    Notify On Errors        true (default)                          │
+│   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Sony WH-1000XM5       320.0 € (Target: 300.0 €)                 │
+│   ✅    Sony WH-1000XM5         320.0 € (Target: 300.0 €)               │
 │                                                                         │
 │   [1] Fix items in config/skroutz.json; details are logged.             │
 ╰─────────────────────────────────────────────────────────────────────────╯

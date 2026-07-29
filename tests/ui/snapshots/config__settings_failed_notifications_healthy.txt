@@ -1,9 +1,9 @@
 # border: red
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version    Up to date                                  │
-│   ✅    Notifications       2 valid URL(s)                              │
-│   ❗    General Config      Failed [1]                                  │
+│   ✅    Software Version        Up to date                              │
+│   ✅    Notifications           2 valid URL(s)                          │
+│   ❗    General Config          Failed [1]                              │
 │                                                                         │
 │   [1] Remove unsupported settings from config/general.json.             │
 ╰─────────────────────────────────────────────────────────────────────────╯

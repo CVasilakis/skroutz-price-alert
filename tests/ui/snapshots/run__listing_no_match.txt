@@ -1,12 +1,11 @@
 # border: green
 
 ╭─────────────────────────── Insomnia Scraping ───────────────────────────╮
-│   ✅    Tracked Items              5 loaded                             │
-│   ✅    Execution Interval         1h (default)                         │
-│   ✅    Log Retention              7 days (default)                     │
-│   ✅    Notify On Errors           true (default)                       │
-│   ✅    Repeat Alerts              false (default)                      │
+│   ✅    Tracked Items            5 loaded                               │
+│   ✅    Execution Interval       1h (default)                           │
+│   ✅    Log Retention            7 days (default)                       │
+│   ✅    Notify On Errors         true (default)                         │
+│   ✅    Repeat Alerts            false (default)                        │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Google Pixel 9 (128 GB)    No matching advert (Target: 200.0    │
-│                                    €)                                   │
+│   ✅    Google Pixel 9 (128 …    No matching advert (Target: 200.0 €)   │
 ╰─────────────────────────────────────────────────────────────────────────╯

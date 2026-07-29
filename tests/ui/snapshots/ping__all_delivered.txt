@@ -1,6 +1,6 @@
 # border: green
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   ✅    Notification sent    Apprise URL 1: tgram://1...n/...           │
-│   ✅    Notification sent    Apprise URL 2: discord://9...d/...         │
+│   ✅    Notification sent       Apprise URL 1: tgram://1...n/...        │
+│   ✅    Notification sent       Apprise URL 2: discord://9...d/...      │
 ╰─────────────────────────────────────────────────────────────────────────╯

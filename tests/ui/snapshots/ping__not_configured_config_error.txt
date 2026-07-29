@@ -1,7 +1,7 @@
 # border: red
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   🛑    Not Configured    No URLs [1]                                   │
+│   🛑    Not Configured          No URLs [1]                             │
 │                                                                         │
 │   [1] Fix JSON in config/general.json at line 7, column 3.              │
 ╰─────────────────────────────────────────────────────────────────────────╯

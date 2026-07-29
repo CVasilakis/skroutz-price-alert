@@ -17,7 +17,7 @@ from core.presentation import SettingView, resolved_setting_views
 from core.settings import ResolvedSettings, SettingStatus
 from core.tui.config_check import ConfigView, config_view
 from core.tui.footnotes import FootnoteRegistry, inline_text
-from core.tui.panel import PANEL_WIDTH, primary_column_max, uniform_column_widths
+from core.tui.panel import PANEL_WIDTH, PanelTableLayout
 
 
 class InteractiveRunReporter(RunReporter):
@@ -105,28 +105,6 @@ class InteractiveRunReporter(RunReporter):
             rows.append((icon, escape(view.label), value))
         return rows
 
-    @staticmethod
-    def _new_display_table(col_widths: dict | None = None) -> Table:
-        """Builds an empty 3-column (icon, name, value) display table.
-
-        Args:
-            col_widths (dict | None): Fixed widths per column index, shared between the
-                settings and scraping tables so their value columns line up across the divider.
-                A ``None`` width leaves the column auto-sized.
-        """
-        col_widths = col_widths or {}
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Icon", justify="center", width=col_widths.get(0))
-        table.add_column(
-            "Name",
-            style="bold",
-            width=col_widths.get(1),
-            no_wrap=True,
-            overflow="ellipsis",
-        )
-        table.add_column("Value")
-        return table
-
     def start_scraping(self, name: str, attempt: int = 1, max_retries: int = 1) -> None:
         """Starts scraping the specified item and updates the live display.
 
@@ -201,22 +179,21 @@ class InteractiveRunReporter(RunReporter):
                 (Spinner("dots", style="cyan"), escape(self.scraping_name), scrape_text)
             )
 
-        # Size the icon/label columns once across both sections so the value column starts at
-        # the same position above and below the divider. The transient sleep/scraping row is
-        # included so the columns don't jump as it appears and disappears.
-        widths = uniform_column_widths(
+        # Allocate all columns once across both sections. The transient sleep/scraping row
+        # participates so the layout responds to everything currently visible.
+        layout = PanelTableLayout.from_rows(
+            self.width,
             self.settings_rows + display_rows,
-            maximums={1: primary_column_max(self.width)},
         )
 
-        display_table = self._new_display_table(widths)
+        display_table = layout.new_table("Name")
         for row in display_rows:
             display_table.add_row(*row)
 
         # The static settings section (set at start_target) renders above a divider,
         # then the live scraping rows below it.
         if self.settings_rows:
-            settings_table = self._new_display_table(widths)
+            settings_table = layout.new_table("Name")
             for row in self.settings_rows:
                 settings_table.add_row(*row)
             body = Group(settings_table, Rule(style="dim"), display_table)

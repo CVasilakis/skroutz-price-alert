@@ -1,13 +1,13 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Tracked Items                     5 loaded                      │
-│   ✅    Execution Interval                1h (default)                  │
-│   ✅    Log Retention                     7 days (default)              │
-│   ✅    Notify On Errors                  true (default)                │
-│   ✅    Repeat Alerts                     false (default)               │
+│   ✅    Tracked Items                       5 loaded                    │
+│   ✅    Execution Interval                  1h (default)                │
+│   ✅    Log Retention                       7 days (default)            │
+│   ✅    Notify On Errors                    true (default)              │
+│   ✅    Repeat Alerts                       false (default)             │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Samsung Odyssey G9 49-inch Cu…    ScraperParseError [1] [2]     │
+│   ❗    Samsung Odyssey G9 49-inch Curv…    ScraperParseError [1] [2]   │
 │                                                                         │
 │   [1] Attempt 1: ScraperParseError.                                     │
 │   [2] The server returned an unexpected page structure and the price    │

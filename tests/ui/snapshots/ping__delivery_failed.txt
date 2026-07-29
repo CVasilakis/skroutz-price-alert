@@ -1,7 +1,7 @@
 # border: red
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   🛑    Delivery Failed    Apprise URL 1: tgram://1...n/... [1]         │
+│   🛑    Delivery Failed         Apprise URL 1: tgram://1...n/... [1]    │
 │                                                                         │
 │   [1] Failed to deliver the test message.                               │
 ╰─────────────────────────────────────────────────────────────────────────╯

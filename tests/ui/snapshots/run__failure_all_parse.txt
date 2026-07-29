@@ -1,13 +1,13 @@
 # border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
-│   ✅    Tracked Items         5 loaded                                  │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
-│   ✅    Repeat Alerts         false (default)                           │
+│   ✅    Tracked Items           5 loaded                                │
+│   ✅    Execution Interval      1h (default)                            │
+│   ✅    Log Retention           7 days (default)                        │
+│   ✅    Notify On Errors        true (default)                          │
+│   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Flaky Item            ScraperParseError [1] [2] [3]             │
+│   ❗    Flaky Item              ScraperParseError [1] [2] [3]           │
 │                                                                         │
 │   [1] Attempt 1: ScraperParseError.                                     │
 │   [2] Attempt 2: ScraperParseError.                                     │

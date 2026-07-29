@@ -1,7 +1,7 @@
 # border: red
 
 ╭────────────────────── Notification Check Results ───────────────────────╮
-│   ❗    Invalid URL    Apprise URL 1: tgram://b...e [1]                 │
+│   ❗    Invalid URL             Apprise URL 1: tgram://b...e [1]        │
 │                                                                         │
 │   [1] Apprise flagged this endpoint as invalid.                         │
 ╰─────────────────────────────────────────────────────────────────────────╯

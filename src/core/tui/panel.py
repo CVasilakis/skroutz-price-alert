@@ -1,4 +1,5 @@
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 from rich.console import Console, Group
 from rich.markup import escape
@@ -10,6 +11,13 @@ from rich.text import Text
 from core.tui.footnotes import FootnoteRegistry
 
 PANEL_WIDTH = 75
+PRIMARY_COLUMN_MIN = 20
+VALUE_COLUMN_MIN = 25
+
+_COLUMN_COUNT = 3
+_COLUMN_HORIZONTAL_PADDING = 2
+_DEFAULT_ICON_WIDTH = 2
+_MIN_RENDERABLE_COLUMN_WIDTH = 1
 
 
 def panel_content_width(panel_width: int) -> int:
@@ -17,42 +25,88 @@ def panel_content_width(panel_width: int) -> int:
     return max(1, panel_width - 4)
 
 
-def primary_column_max(panel_width: int) -> int:
-    """Return the responsive maximum for a panel's primary label/name column."""
-    return min(48, max(12, round(panel_content_width(panel_width) * 3 / 7)))
+def _text_cell_width(value: object) -> int | None:
+    """Return the widest logical line for Rich text, or ``None`` for other renderables."""
+    if isinstance(value, str):
+        text = Text.from_markup(value)
+    elif isinstance(value, Text):
+        text = value
+    else:
+        return None
+    return max((line.cell_len for line in text.split("\n")), default=0)
 
 
-def uniform_column_widths(
-    rows: Iterable[Sequence],
-    columns: tuple[int, ...] = (0, 1),
-    maximums: dict[int, int] | None = None,
-) -> dict[int, int]:
-    """Max rendered cell width per column index across all rows (non-str cells ignored).
+@dataclass(frozen=True)
+class PanelTableLayout:
+    """Content-aware widths and canonical construction for a panel's three-column table."""
 
-    Used to give every section table in a panel identical icon/label column widths so the
-    value column lines up across the sections divided by a rule. The rendered width is measured
-    via ``Text.from_markup(...).cell_len`` so Rich markup and ``escape()``d brackets are resolved
-    to their true display width; non-string cells (e.g. a ``Spinner`` or ``ProgressBar``) are
-    skipped, since the emoji icons dominate the icon column's width.
+    icon: int
+    primary: int
+    value: int
 
-    Args:
-        rows (Iterable[Sequence]): The row tuples to measure (``(icon, label, value)``).
-        columns (tuple[int, ...]): The column indices to size. Defaults to icon and label.
-        maximums (dict[int, int] | None): Optional terminal-cell caps by column.
+    @classmethod
+    def from_rows(
+        cls,
+        panel_width: int,
+        rows: Iterable[Sequence[object]],
+    ) -> "PanelTableLayout":
+        """Allocate shared widths, favoring values while preserving responsive minima."""
+        icon_desired = _DEFAULT_ICON_WIDTH
+        primary_desired = 0
+        value_desired = 0
+        for row in rows:
+            if len(row) > 0 and (width := _text_cell_width(row[0])) is not None:
+                icon_desired = max(icon_desired, width)
+            if len(row) > 1 and (width := _text_cell_width(row[1])) is not None:
+                primary_desired = max(primary_desired, width)
+            if len(row) > 2 and (width := _text_cell_width(row[2])) is not None:
+                value_desired = max(value_desired, width)
 
-    Returns:
-        dict[int, int]: Column index -> fixed width, for columns that had a string cell.
-    """
-    widths: dict[int, int] = {}
-    maximums = maximums or {}
-    for row in rows:
-        for c in columns:
-            if c < len(row) and isinstance(row[c], str):
-                measured = Text.from_markup(row[c]).cell_len
-                if c in maximums:
-                    measured = min(measured, maximums[c])
-                widths[c] = max(widths.get(c, 0), measured)
-    return widths
+        table_padding = _COLUMN_COUNT * _COLUMN_HORIZONTAL_PADDING * 2
+        column_budget = max(
+            _MIN_RENDERABLE_COLUMN_WIDTH * 2,
+            panel_content_width(panel_width) - table_padding - icon_desired,
+        )
+
+        # Below the preferred 63-cell panel geometry, retain the value minimum first and
+        # relax the primary minimum only as much as the requested panel width requires.
+        value_min = min(
+            VALUE_COLUMN_MIN,
+            max(_MIN_RENDERABLE_COLUMN_WIDTH, column_budget - _MIN_RENDERABLE_COLUMN_WIDTH),
+        )
+        primary_min = min(
+            PRIMARY_COLUMN_MIN,
+            max(_MIN_RENDERABLE_COLUMN_WIDTH, column_budget - value_min),
+        )
+
+        reserved_value = min(
+            max(value_desired, value_min),
+            column_budget - primary_min,
+        )
+        primary = min(
+            max(primary_desired, primary_min),
+            column_budget - reserved_value,
+        )
+        value = column_budget - primary
+        return cls(icon_desired, primary, value)
+
+    def new_table(self, primary_header: str = "Label") -> Table:
+        """Build an empty table whose column metrics match this allocation."""
+        table = Table(
+            show_header=False,
+            box=None,
+            padding=(0, _COLUMN_HORIZONTAL_PADDING),
+        )
+        table.add_column("Icon", justify="center", width=self.icon)
+        table.add_column(
+            primary_header,
+            style="bold",
+            width=self.primary,
+            no_wrap=True,
+            overflow="ellipsis",
+        )
+        table.add_column("Value", width=self.value)
+        return table
 
 
 class StatusPanelBuilder:
@@ -95,28 +149,6 @@ class StatusPanelBuilder:
     def notes(self) -> tuple[str, ...]:
         """Return the panel's normalized footnotes."""
         return self._footnotes.notes
-
-    @staticmethod
-    def _new_table(col_widths: dict[int, int] | None = None) -> Table:
-        """Builds an empty 3-column (icon, label, value) section table.
-
-        Args:
-            col_widths (dict[int, int] | None): Fixed widths per column index, shared across
-                a panel's sections so every section's value column starts at the same position.
-                A ``None`` width leaves the column auto-sized.
-        """
-        col_widths = col_widths or {}
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Icon", justify="center", width=col_widths.get(0))
-        table.add_column(
-            "Label",
-            style="bold",
-            width=col_widths.get(1),
-            no_wrap=True,
-            overflow="ellipsis",
-        )
-        table.add_column("Value")
-        return table
 
     def add_row(self, icon: str, label: str, value: str) -> None:
         """Adds a row to the panel and tracks the icon for border color calculation.
@@ -172,15 +204,15 @@ class StatusPanelBuilder:
             list: An ordered list of renderables (section ``Table``s separated by
                 ``Rule``s) suitable for a ``Group``. Always contains at least one table.
         """
-        # Size the icon/label columns once across every section's rows so the value column
-        # starts at the same position above and below each divider.
-        widths = uniform_column_widths(
+        # Allocate all columns once across every section so values receive priority and
+        # retain the same starting position above and below each divider.
+        layout = PanelTableLayout.from_rows(
+            self.width,
             ((e[1], e[2], e[3]) for e in self._rows if e[0] == "row"),
-            maximums={1: primary_column_max(self.width)},
         )
 
         sections: list = []
-        current = self._new_table(widths)
+        current = layout.new_table()
         current_has_rows = False
         pending_sep = False
 
@@ -195,7 +227,7 @@ class StatusPanelBuilder:
             if pending_sep:
                 sections.append(current)
                 sections.append(Rule(style="dim"))
-                current = self._new_table(widths)
+                current = layout.new_table()
                 current_has_rows = False
                 pending_sep = False
 
@@ -235,8 +267,9 @@ class StatusPanelBuilder:
 
 __all__ = [
     "PANEL_WIDTH",
+    "PRIMARY_COLUMN_MIN",
+    "PanelTableLayout",
     "StatusPanelBuilder",
+    "VALUE_COLUMN_MIN",
     "panel_content_width",
-    "primary_column_max",
-    "uniform_column_widths",
 ]

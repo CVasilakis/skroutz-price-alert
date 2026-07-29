@@ -7,17 +7,8 @@
 │   ✅    Notify On Errors        true (default)                          │
 │   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🎉    Sony WH-1000XM5         248.0 € (Target: 300.0 €) [1] [2] [3]   │
-│                                 [4] [5] [6] [7] [8] [9] [10]            │
+│   🎉    Expensive product w…    1630.30 € (Target: 1500.50 €) [1] [2]   │
 │                                                                         │
-│    [1] Attempt 1: ScraperParseError.                                    │
-│    [2] Attempt 2: ServerError.                                          │
-│    [3] Synthetic renderer note one.                                     │
-│    [4] Synthetic renderer note two.                                     │
-│    [5] Synthetic renderer note three.                                   │
-│    [6] Synthetic renderer note four.                                    │
-│    [7] Synthetic renderer note five.                                    │
-│    [8] Synthetic renderer note six.                                     │
-│    [9] Synthetic renderer note seven.                                   │
-│   [10] Synthetic renderer note eight.                                   │
+│   [1] Synthetic note one.                                               │
+│   [2] Synthetic note two.                                               │
 ╰─────────────────────────────────────────────────────────────────────────╯

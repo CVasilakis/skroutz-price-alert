@@ -906,6 +906,26 @@ def _():
 
 @scenario(
     Surface.RUN,
+    "dynamic_value_priority",
+    "A 37-cell value takes priority over a long item name",
+    tags=("layout", "synthetic"),
+)
+def _():
+    def script(s):
+        _start(s)
+        s.log_result(
+            "🎉",
+            "Expensive product with a deliberately long name",
+            "1630.30 € (Target: 1500.50 €)",
+            notes=["Synthetic note one", "Synthetic note two"],
+        )
+        s.complete_target()
+
+    return drive_run(script)
+
+
+@scenario(
+    Surface.RUN,
     "wrap_many_footnotes",
     "Synthetic renderer stress: one row with ten footnotes",
     tags=("layout", "synthetic"),

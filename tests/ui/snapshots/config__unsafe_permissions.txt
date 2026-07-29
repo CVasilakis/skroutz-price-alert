@@ -1,11 +1,11 @@
 # border: yellow
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version    Up to date                                  │
-│   🟡    Notifications       2 valid URL(s) [1]                          │
-│   ✅    Reminder            Every 1 month (default)                     │
-│   ✅    Reminder Day        Saturday (default)                          │
-│   ✅    Reminder Time       13:00 (default)                             │
+│   ✅    Software Version        Up to date                              │
+│   🟡    Notifications           2 valid URL(s) [1]                      │
+│   ✅    Reminder                Every 1 month (default)                 │
+│   ✅    Reminder Day            Saturday (default)                      │
+│   ✅    Reminder Time           13:00 (default)                         │
 │                                                                         │
 │   [1] Protect notification URLs: chmod 600 config/general.json.         │
 ╰─────────────────────────────────────────────────────────────────────────╯

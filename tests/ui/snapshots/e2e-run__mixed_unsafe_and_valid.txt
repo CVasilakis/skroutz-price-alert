@@ -1,13 +1,13 @@
 # border: yellow
 
 ╭────────────────────────── Fake Store Scraping ──────────────────────────╮
-│   🟡    Tracked Items         1 loaded, 1 misconfigured [1]             │
-│   ✅    Execution Interval    1h (default)                              │
-│   ✅    Log Retention         7 days (default)                          │
-│   ✅    Notify On Errors      true (default)                            │
-│   ✅    Repeat Alerts         false (default)                           │
+│   🟡    Tracked Items           1 loaded, 1 misconfigured [1]           │
+│   ✅    Execution Interval      1h (default)                            │
+│   ✅    Log Retention           7 days (default)                        │
+│   ✅    Notify On Errors        true (default)                          │
+│   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ✅    Sony WH-1000XM5       320.0 € (Target: 300.0 €)                 │
+│   ✅    Sony WH-1000XM5         320.0 € (Target: 300.0 €)               │
 │                                                                         │
 │   [1] Fix items in config/fakestore.json; details are logged.           │
 ╰─────────────────────────────────────────────────────────────────────────╯
