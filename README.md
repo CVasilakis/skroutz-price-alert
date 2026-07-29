@@ -210,7 +210,8 @@ ending in `Z`.
 > at version 1. `./update.sh` migrates known documents before reactivating timers; use
 > `./scripts/migrate.sh --check` to validate and report without modifying managed JSON
 > documents. Check mode still takes the cooperative locks, so lock directories and
-> metadata may be created.
+> metadata may be created. Add `--debug` to expose the underlying migration output
+> when diagnosing a failure.
 
 Plugins declare every source input beyond the shared keys above. Most product-page
 plugins require a `url`; other adapters may use several URLs or identifiers such as a
@@ -362,66 +363,71 @@ This will send a test message to each configured Apprise URL(s). It will output 
 
 ### Helper Scripts
 
-The project includes several helper scripts to manage your background scraper services and update the application. User-facing management commands are located directly in the `scripts/` directory, while the install and update scripts are in the root directory. Developer-only setup, validation, and plugin-contributor commands are grouped under `scripts/dev/` and documented in `CONTRIBUTING.md`. The management scripts support a `--help` flag and can be applied to specific targets.
+The project includes several helper scripts to manage your background scraper services and update the application. User-facing management commands are located directly in the `scripts/` directory, while the install and update scripts are in the root directory. Developer-only setup, validation, and plugin-contributor commands are grouped under `scripts/dev/` and documented in `CONTRIBUTING.md`. The management scripts support a `--help` flag and can be applied to specific targets. They suppress underlying system-command output by default so the status interface stays readable; pass `--debug` to expose that output when diagnosing a failure. `scripts/run.sh` is the deliberate exception because its Python entry points own their terminal UI, runtime diagnostics, and logging.
 
 #### Install & Add Scrapers
 Sets up the Python virtual environment and installs the systemd timer(s) and service(s). Run it as many times as you like to add more scrapers later:
 
 ```
-./install.sh [-h] [--<target> ...]
+./install.sh [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
 | `-h`, `--help` | Show the help message and exit. |
+| `--debug` | Show the underlying system and package command output. |
 | `--<target>` | Install and enable only the specified target's scraper (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no target flag is provided, every registered scraper is installed and enabled. |
 
 #### Stop Active Runs
 Stops the currently running scraper service(s), aborting any scrape in progress:
 
 ```
-./scripts/stop.sh [-h] [--<target> ...]
+./scripts/stop.sh [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
 | `-h`, `--help` | Show the help message and exit. |
+| `--debug` | Show the underlying system command output. |
 | `--<target>` | Stop only the specified target's scraper (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no target flag is provided, every running scraper service is stopped. |
 
 #### Pause Background Schedule
 Stops and disables the background schedule (systemd timer) so the scraper(s) no longer run automatically:
 
 ```
-./scripts/disable.sh [-h] [--<target> ...]
+./scripts/disable.sh [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
 | `-h`, `--help` | Show the help message and exit. |
+| `--debug` | Show the underlying system command output. |
 | `--<target>` | Disable only the specified target's scraper. You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is disabled. |
 
 #### Resume Background Schedule
 Re-enables and starts the background schedule (systemd timer) for the installed scraper(s):
 
 ```
-./scripts/enable.sh [-h] [--<target> ...]
+./scripts/enable.sh [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
 | `-h`, `--help` | Show the help message and exit. |
+| `--debug` | Show the underlying system command output. |
 | `--<target>` | Enable only the specified target's scraper. You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is enabled. |
 
 #### Set Execution Interval
 Applies each scraper's configured `execution_interval` (from `config/<target>.json`) to the installed systemd timer. Run it whenever you change an interval:
 
 ```
-./scripts/schedule.sh [-h] [--<target> ...]
+./scripts/schedule.sh [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
 | `-h`, `--help` | Show the help message and exit. |
+| `--debug` | Show the underlying system and schedule-resolution output. |
 | `--<target>` | Apply only the specified target's interval (e.g., `--skroutz`). You can pass one or more target flags simultaneously. If no flag is provided, every installed scraper's timer is updated to match its configured interval. A scraper whose config file is missing, structurally invalid, or has an unsupported `execution_interval` is reported and left unchanged. Other targets continue, and a structural config error makes the command exit `15`. |
 
 Eligible timer changes are staged and applied as one transaction. Successful
@@ -433,12 +439,13 @@ state is restored.
 Performs a full or partial teardown of the background services:
 
 ```
-./scripts/uninstall.sh [-h] [--<target> ...]
+./scripts/uninstall.sh [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
 | `-h`, `--help` | Show the help message and exit. |
+| `--debug` | Show the underlying system command output. |
 | `--<target>` | Removes only the specified scrapers' units, leaving the virtual environment and other targets intact. You can pass one or more target flags simultaneously. With no flag, removes every installed systemd timer/service and deletes the Python virtual environment. |
 
 #### Update to Latest Version
@@ -447,8 +454,11 @@ for exactly the scraper targets that already have timer or service units, and
 transactionally replaces their systemd unit files:
 
 ```
-./update.sh
+./update.sh [-h|--help] [--debug]
 ```
+
+Pass `--debug` to expose the Git, migration, package, and systemd command output
+used by the update.
 
 The checkout must already be on `main`, with no tracked changes, nonignored
 untracked files, unpublished commits, or diverged history. The updater never
@@ -503,6 +513,12 @@ The uninstallation process safely performs the following actions:
 > **User Lingering:** The script purposefully leaves systemd user lingering enabled, as other background services on your system may rely on it. If you are certain that no other services require this functionality, you can manually disable it by running: `loginctl disable-linger $USER`
 
 ## 🔧 Troubleshooting & Debugging
+
+Shell management and developer tools normally suppress underlying command output
+and show only their concise status interface. Rerun a failing command with
+`--debug` to capture its complete subprocess diagnostics. `scripts/run.sh`
+intentionally has no shell-level `--debug` flag: use its Python-owned terminal
+output, `--status`, and the application logs described below.
 
 **1. Failing to Fetch Items:**
 

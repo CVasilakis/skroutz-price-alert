@@ -305,6 +305,11 @@ case "${1:-}" in
             "pytest") stage=tests ;;
             *) stage=unknown ;;
         esac
+        if [ "$stage" = "tests" ] &&
+           [ "${REQUIRE_NEUTRAL_TEST_DEBUG:-0}" = "1" ]; then
+            [ "${DEBUG_MODE:-0}" = "0" ] || exit 91
+            [ "${SCROOGE_INTERNAL_DEBUG:-0}" = "0" ] || exit 92
+        fi
         printf '%s: %s\\n' "injected check stdout" "$stage"
         printf '%s: %s\\n' "injected check stderr" "$stage" >&2
         [ "$stage" != "tests" ] || printf '%s\\n' "813 passed in 1.00s"
@@ -457,6 +462,17 @@ def test_check_debug_exposes_same_noise_and_preserves_command_status(tmp_path):
     assert "injected check" not in result.stdout
     assert_task_status(result.stdout, "x", "Tests failed.")
     assert_task_status(result.stdout, "x", "Requested checks failed.")
+
+
+def test_check_debug_does_not_force_pytest_children_into_debug_mode(tmp_path):
+    env = _fake_check_tools(tmp_path)
+    env["REQUIRE_NEUTRAL_TEST_DEBUG"] = "1"
+
+    result = _run("scripts/dev/check.sh", "--debug", "tests", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "injected check stdout: tests" in result.stderr
+    assert_task_status(result.stdout, "v", "813 tests passed.")
 
 
 def test_command_entrypoints_are_executable_and_libraries_are_not():

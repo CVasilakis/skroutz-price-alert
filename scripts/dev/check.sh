@@ -242,7 +242,10 @@ run_dependencies() {
 # shellcheck disable=SC2329
 run_pytest() {
     cd "$PROJECT_ROOT"
-    "$CHECK_PYTHON" -m pytest
+    # The parent run_captured call still mirrors pytest's complete output in
+    # debug mode. Do not leak that mode into the test process itself: shell tests
+    # must remain able to exercise and assert their normal/default behavior.
+    DEBUG_MODE=0 SCROOGE_INTERNAL_DEBUG=0 "$CHECK_PYTHON" -m pytest
 }
 
 run_tests() {

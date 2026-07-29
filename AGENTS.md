@@ -20,17 +20,24 @@ This project is an automated Python application designed to monitor prices throu
 ## Building and Running
 The application is primarily intended for automated background execution but provides wrapper scripts for easy management and manual testing. All execution goes through the venv (`./venv/bin/python3`); the wrapper scripts handle this for you.
 
-A test suite lives under `tests/` (`tests/unit/`, `tests/integration/`, target-owned `tests/plugins/`, the terminal-UI snapshot suite in `tests/ui/`, and `tests/shell/`). It runs under **pytest**, configured in the repo-root `pyproject.toml`. Coverage is report-only: no coverage percentage may fail a local or CI test run, and `--cov-fail-under`/`fail_under` thresholds must not be introduced. Use `./scripts/dev/setup.sh` to install core, development, and discovered plugin dependencies without systemd side effects, then run `./venv/bin/python3 -m pytest`. CI runs Python 3.10 through 3.14, an isolated dependency check for every plugin, **shellcheck**, and `basedpyright src`. Shared test infrastructure uses injected catalogs rather than mutating discovery globals. **User-facing run wording lives in `core/messages.py`**; UI changes regenerate with `UPDATE_SNAPSHOTS=1`.
+A test suite lives under `tests/` (`tests/unit/`, `tests/integration/`, target-owned `tests/plugins/`, the terminal-UI snapshot suite in `tests/ui/`, and `tests/shell/`). It runs under **pytest**, configured in the repo-root `pyproject.toml`. Coverage is report-only: no coverage percentage may fail a local or CI test run, and `--cov-fail-under`/`fail_under` thresholds must not be introduced. Use `./scripts/dev/setup.sh --debug` to install core, development, and discovered plugin dependencies without systemd side effects, then run `./venv/bin/python3 -m pytest`. CI runs Python 3.10 through 3.14, an isolated dependency check for every plugin, **shellcheck**, and `basedpyright src`. Shared test infrastructure uses injected catalogs rather than mutating discovery globals. **User-facing run wording lives in `core/messages.py`**; UI changes regenerate with `UPDATE_SNAPSHOTS=1`.
 
 Agents must never create commits or push changes. They leave all implementation
 work uncommitted for the user to review and control. Before reporting a code
-change complete, an agent must run `./scripts/dev/check.sh` from the repository root.
+change complete, an agent must run `./scripts/dev/check.sh --debug` from the repository root.
 It is the required non-mutating local CI gate (Ruff lint/format check,
 basedpyright, shellcheck, dependency validation, and the full test suite). Rerun
 it after every subsequent file change. If a check cannot run or fails, report
 that explicitly and do not claim the work is complete or CI-ready. Passing
 pytest alone is not sufficient. The versioned pre-push hook is enabled
 automatically by `./scripts/dev/setup.sh` for user-initiated pushes.
+
+Whenever an agent invokes a project shell entry point that supports `--debug`,
+it must pass that flag so the complete underlying command output is captured.
+This applies to installation, updates, migrations, service-management commands,
+and every script under `scripts/dev/`. `scripts/run.sh` is the deliberate
+exception: it has no shell-level debug mode because its Python entry points own
+their TUI, runtime diagnostics, and logging.
 
 - **Installation:** Execute `./install.sh`. This creates a project-owned venv, installs core dependencies plus each selected plugin's catalog-computed colocated `requirements.txt`, and generates one systemd user timer+service pair per plugin. The effective cadence is the valid `settings.execution_interval` or the plugin definition's canonical `default_interval`. The framework exclusively renders `OnCalendar`, explicit `Unit=<plugin>-scraper.service`, `RandomizedDelaySec=180s`, and `Persistent=true`; plugins cannot inject timer directives. A target with a structurally invalid config is reported and skipped while other selected targets are provisioned, its existing units are left unchanged, and the command exits `15`. A missing private dependency fails that target with actionable `PluginDependencyError` guidance.
 - **Automated Execution:** Handled automatically by the per-plugin systemd timers (`<plugin>-scraper.timer`, e.g. `skroutz-scraper.timer`).

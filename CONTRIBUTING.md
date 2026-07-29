@@ -31,8 +31,14 @@ That command checks the descriptor and example, runs only the target-owned tests
 and statically checks the plugin package. Run the full suite before submitting:
 
 ```sh
-./scripts/dev/check.sh
+./scripts/dev/check.sh --debug
 ```
+
+Developer shell tools keep their normal output concise. Add `--debug` to
+`plugin-create.sh`, `setup.sh`, `plugin-check.sh`, `check.sh`, or
+`install-hooks.sh` when you need the complete underlying command output. The
+recommended full acceptance command above uses debug mode so a captured failure
+contains all diagnostics.
 
 Plugin-owned tests should compile only their own descriptor, without discovering
 sibling packages:
@@ -69,7 +75,7 @@ For a normal URL-based plugin, this is the complete path:
    generated config runnable with at least one tracked item.
 5. Complete the short package README, run
    `./scripts/dev/plugin-check.sh --<target>`, then run
-   `./scripts/dev/check.sh`.
+   `./scripts/dev/check.sh --debug`.
 
 ## Package layout
 
@@ -317,7 +323,7 @@ Run the focused verifier and full acceptance suite:
 
 ```sh
 ./scripts/dev/plugin-check.sh --<target>
-./scripts/dev/check.sh
+./scripts/dev/check.sh --debug
 ```
 
 Coverage is collected to show untested production lines, but its percentage is
@@ -340,6 +346,8 @@ contributors can use `./scripts/migrate.sh --check` to validate and report witho
 modifying managed JSON documents. Check mode still acquires cooperative locks, so it
 may create lock directories and metadata. Migrations are consecutive, retained
 permanently, pure, and applied fully in memory before one atomic replacement.
+Pass `--debug` when a migration check fails and its underlying diagnostics are
+needed.
 
 Migration support begins with this major release's version 1 documents. Unversioned
 documents and documents from earlier major releases are intentionally unsupported,
