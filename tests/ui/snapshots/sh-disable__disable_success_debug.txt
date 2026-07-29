@@ -7,7 +7,6 @@ LoadState=loaded
 LoadState=loaded
 ActiveState=active
 UnitFileState=enabled
-    [i] [skroutz] Stopping and disabling background execution.
 LoadState=loaded
 LoadState=loaded
 UnitFileState=enabled

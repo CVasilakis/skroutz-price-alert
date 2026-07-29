@@ -313,7 +313,8 @@ install_task success "Systemd user services are available."
 VENV_NEWLY_CREATED=false
 install_section "Python environment"
 if [ ! -d "$VENV_DIR" ]; then
-    if ! run_action python3 -m venv "$VENV_DIR"; then
+    if ! run_with_progress "Creating the project Python environment..." \
+        run_action python3 -m venv "$VENV_DIR"; then
         install_fail "The Python environment could not be created." \
             "Fix Python venv support, then run ./install.sh --debug."
     fi
@@ -331,14 +332,15 @@ fi
 install_task success "The Python environment is ready."
 
 # Safely upgrade pip and install matching requirements
-if ! pip_install pip; then
+if ! run_with_progress "Updating Python packaging tools..." pip_install pip; then
     install_fail "Packaging tools could not be updated." \
         "Check package-index access, then run ./install.sh --debug."
 fi
 install_task success "Packaging tools updated."
 
 if [ -f "$REQUIREMENTS_FILE" ]; then
-    if ! pip_install -r "$REQUIREMENTS_FILE"; then
+    if ! run_with_progress "Installing core dependencies..." \
+        pip_install -r "$REQUIREMENTS_FILE"; then
         install_fail "Core dependencies could not be installed." \
             "Check requirements.txt and package-index access, then run ./install.sh --debug."
     fi
@@ -412,7 +414,8 @@ for pair in $PLUGIN_REQS; do
     req_path="${pair#*"$PAIR_TAB"}"
     stream_contains "$req_name" "$PLUGINS" || continue
 
-    if ! pip_install -r "$req_path"; then
+    if ! run_with_progress "[$req_name] Installing private dependencies..." \
+        pip_install -r "$req_path"; then
         IFS="$OLD_IFS"
         install_fail "[$req_name] Its private dependencies could not be installed." \
             "Check that target's requirements, then run ./install.sh --debug --$req_name."
@@ -421,7 +424,8 @@ for pair in $PLUGIN_REQS; do
 done
 IFS="$OLD_IFS"
 
-if ! run_action "$VENV_DIR/bin/python3" -m pip check; then
+if ! run_with_progress "Checking installed dependencies..." \
+    run_action "$VENV_DIR/bin/python3" -m pip check; then
     install_fail "Installed core and target dependencies are incompatible." \
         "Resolve the dependency conflict, then run ./install.sh --debug."
 fi
@@ -498,7 +502,8 @@ if [ -n "$PROVISION_PLUGINS" ]; then
     else
         PROVISION_MODE="normal"
     fi
-    if ! run_action provision_units_transaction \
+    if ! run_with_progress "Configuring selected target timers..." \
+        run_action provision_units_transaction \
         "$PROVISION_PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
         if [ "$IS_UPDATE" -eq 1 ]; then
             install_task failure \

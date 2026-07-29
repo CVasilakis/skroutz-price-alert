@@ -2,7 +2,7 @@
 # exit: 0
 
 [+] Background execution
-    [i] [skroutz] Stopping and disabling the background timer and service.
+    [i] [skroutz] Stopping and disabling the background timer and service...
     [v] [skroutz] Background timer and service disabled.
 
 [+] Installed units

@@ -5,6 +5,7 @@
     [v] The checkout and installed target selection are safe to update.
 
 [+] Source update
+    [i] Fetching origin/main...
     [v] Fetched origin/main before stopping any target.
     [x] The fetched update failed safety validation.
     [!] Reconcile the checkout or fetched origin/main, then rerun ./update.sh --debug.

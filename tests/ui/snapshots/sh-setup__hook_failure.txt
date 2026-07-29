@@ -12,11 +12,15 @@
     [v] The development venv is ready.
 
 [+] Development dependencies
+    [i] Updating Python packaging tools...
     [v] Packaging tools updated.
+    [i] Installing core and development dependencies...
     [v] Core and development dependencies installed.
     [i] No private target dependencies are required.
+    [i] Checking installed dependencies...
     [v] Installed dependencies are consistent.
 
 [+] Repository checks
+    [i] Enabling repository-local pre-push checks...
     [x] Repository-local pre-push checks could not be enabled.
     [i] Run ./scripts/dev/install-hooks.sh --debug for recovery details.

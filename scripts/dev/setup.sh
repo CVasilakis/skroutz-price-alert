@@ -193,7 +193,8 @@ setup_section "Python environment"
 if [ -d "$PROJECT_ROOT/venv" ]; then
     setup_task info "Updating the existing development venv."
 else
-    if run_action python3 -m venv "$PROJECT_ROOT/venv"; then
+    if run_with_progress "Creating the development Python environment..." \
+        run_action python3 -m venv "$PROJECT_ROOT/venv"; then
         setup_task success "Development venv created."
     else
         venv_status=$?
@@ -211,7 +212,8 @@ fi
 setup_task success "The development venv is ready."
 
 setup_section "Development dependencies"
-if run_action "$VENV_PYTHON" -m pip install --upgrade pip; then
+if run_with_progress "Updating Python packaging tools..." \
+    run_action "$VENV_PYTHON" -m pip install --upgrade pip; then
     setup_task success "Packaging tools updated."
 else
     pip_status=$?
@@ -220,7 +222,8 @@ else
         "Check package-index access, then run ./scripts/dev/setup.sh --debug."
     setup_exit "$pip_status"
 fi
-if run_action "$VENV_PYTHON" -m pip install --upgrade -r "$PROJECT_ROOT/requirements.txt" \
+if run_with_progress "Installing core and development dependencies..." \
+    run_action "$VENV_PYTHON" -m pip install --upgrade -r "$PROJECT_ROOT/requirements.txt" \
     -r "$PROJECT_ROOT/scripts/dev/requirements-dev.txt"; then
     setup_task success "Core and development dependencies installed."
 else
@@ -240,7 +243,8 @@ for row in $PLUGIN_REQUIREMENTS; do
     [ -z "$SELECTED" ] || [ "$target" = "$SELECTED" ] || continue
     if [ -n "$requirement" ]; then
         PRIVATE_REQUIREMENTS=$((PRIVATE_REQUIREMENTS + 1))
-        if run_action "$VENV_PYTHON" -m pip install --upgrade -r "$requirement"; then
+        if run_with_progress "Installing private target dependencies..." \
+            run_action "$VENV_PYTHON" -m pip install --upgrade -r "$requirement"; then
             :
         else
             plugin_status=$?
@@ -263,7 +267,8 @@ else
         "Private dependencies installed for $PRIVATE_REQUIREMENTS targets."
 fi
 
-if run_action "$VENV_PYTHON" -m pip check; then
+if run_with_progress "Checking installed dependencies..." \
+    run_action "$VENV_PYTHON" -m pip check; then
     setup_task success "Installed dependencies are consistent."
 else
     check_status=$?
@@ -276,7 +281,8 @@ fi
 setup_section "Repository checks"
 if (
     export SCROOGE_INSTALL_HOOKS_CONTEXT=setup
-    run_action "$PROJECT_ROOT/scripts/dev/install-hooks.sh"
+    run_with_progress "Enabling repository-local pre-push checks..." \
+        run_action "$PROJECT_ROOT/scripts/dev/install-hooks.sh"
 ); then
     setup_task success "Repository-local pre-push checks are enabled."
 else

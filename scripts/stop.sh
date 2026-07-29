@@ -176,8 +176,9 @@ for plugin in $PLUGINS; do
     elif state_is_stopped "$state"; then
         stop_task info "[$plugin] No active background execution detected."
     else
-        stop_task info "[$plugin] Stopping active background execution."
-        if run_action stop_one "$plugin"; then
+        if run_with_progress \
+            "[$plugin] Stopping active background execution..." \
+            run_action stop_one "$plugin"; then
             stop_task success "[$plugin] Active execution stopped."
         else
             stop_task failure "[$plugin] Active execution could not be stopped."

@@ -2,14 +2,19 @@
 # exit: 0
 
 [+] Target verification
+    [i] [skroutz] Checking the source and dependency contract...
     [v] [skroutz] Source and dependency contract passed.
 
 [+] Target tests
+    [i] [skroutz] Running target tests...
     [v] [skroutz] Tests passed.
 
 [+] Static analysis
+    [i] [skroutz] Running type checking...
     [v] [skroutz] Type checking passed.
+    [i] [skroutz] Running Ruff lint...
     [v] [skroutz] Ruff lint passed.
+    [i] [skroutz] Checking Ruff formatting...
     [v] [skroutz] Ruff formatting passed.
 
 [+] Verification result

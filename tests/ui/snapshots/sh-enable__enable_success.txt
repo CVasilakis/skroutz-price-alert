@@ -2,6 +2,7 @@
 # exit: 0
 
 [+] Background schedules
+    [i] [skroutz] Enabling and starting the background schedule...
     [v] [skroutz] Background schedule enabled and started.
 
 [+] Optional controls

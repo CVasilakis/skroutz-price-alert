@@ -11,8 +11,11 @@
 [+] Python environment
     [i] Updating the existing Python environment.
     [v] The Python environment is ready.
+    [i] Updating Python packaging tools...
     [v] Packaging tools updated.
+    [i] Installing core dependencies...
     [v] Updated core dependencies.
+    [i] Checking installed dependencies...
     [v] Core dependencies are compatible.
 
 [+] Target provisioning

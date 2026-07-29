@@ -2,7 +2,7 @@
 # exit: 1
 
 [+] Background execution
-    [i] [skroutz] Stopping and disabling the background timer and service.
+    [i] [skroutz] Stopping and disabling the background timer and service...
     [x] [skroutz] Background timer or service could not be disabled safely.
     [i] [skroutz] Run ./scripts/uninstall.sh --debug --skroutz for underlying
         diagnostics.

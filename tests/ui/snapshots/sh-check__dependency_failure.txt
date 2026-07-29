@@ -2,15 +2,20 @@
 # exit: 23
 
 [+] Static analysis
+    [i] Running Ruff lint...
     [v] Ruff lint passed.
+    [i] Checking Ruff formatting...
     [v] Ruff formatting passed.
+    [i] Running basedpyright...
     [v] basedpyright passed.
 
 [+] Shell validation
+    [i] Running ShellCheck and POSIX syntax checks...
     [v] ShellCheck passed.
     [v] POSIX syntax checks passed.
 
 [+] Dependencies
+    [i] Checking installed dependencies...
     [x] Installed dependencies are inconsistent.
     [!] Run ./scripts/dev/check.sh --debug full to inspect the failure.
 

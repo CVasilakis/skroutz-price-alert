@@ -41,7 +41,6 @@ ActiveState=inactive
     [v] [skroutz] Safely stopped and disabled its timer.
 
 [+] Source advancement
-    [i] Advancing the checkout with a verified fast-forward.
 debug git stdout
 debug git stderr
     [v] Fast-forwarded the project files to origin/main.

@@ -2,7 +2,7 @@
 # exit: 0
 
 [+] Background execution
-    [i] [skroutz] Stopping and disabling the background timer and service.
+    [i] [skroutz] Stopping and disabling the background timer and service...
     [v] [skroutz] Background timer and service disabled.
 
 [+] Installed units
@@ -10,7 +10,7 @@
     [v] systemd user manager reloaded.
 
 [+] Python environment
-    [i] Removing the project Python virtual environment.
+    [i] Removing the project Python virtual environment...
     [v] Python virtual environment removed.
 
 [+] Uninstallation complete

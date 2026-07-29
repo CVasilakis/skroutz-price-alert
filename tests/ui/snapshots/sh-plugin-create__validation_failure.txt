@@ -2,5 +2,6 @@
 # exit: 1
 
 [+] Target scaffold
+    [i] Creating the target scaffold...
     [x] Target scaffold could not be created.
     [i] Target scaffold failed: target must be a non-reserved snake_case name

@@ -2,6 +2,7 @@
 # exit: 1
 
 [+] Target scaffold
+    [i] Creating the target scaffold...
     [x] Target scaffold could not be created.
     [i] Target scaffold failed: refusing to overwrite existing path(s):
         <BASE_DIR>/src/core/scrapers/plugins/acme

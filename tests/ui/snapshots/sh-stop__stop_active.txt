@@ -2,7 +2,7 @@
 # exit: 0
 
 [+] Active executions
-    [i] [skroutz] Stopping active background execution.
+    [i] [skroutz] Stopping active background execution...
     [v] [skroutz] Active execution stopped.
 
 [+] Optional controls

@@ -119,14 +119,16 @@ require_check_python() {
 run_static() {
     section_heading success "Static analysis"
     require_check_python
-    if run_action "$CHECK_PYTHON" -m ruff check \
+    if run_with_progress "Running Ruff lint..." \
+        run_action "$CHECK_PYTHON" -m ruff check \
         "$PROJECT_ROOT/src" "$PROJECT_ROOT/tests"; then
         task_status success "Ruff lint passed."
     else
         check_status=$?
         check_failure "$check_status" "Ruff lint failed."
     fi
-    if run_action "$CHECK_PYTHON" -m ruff format --check \
+    if run_with_progress "Checking Ruff formatting..." \
+        run_action "$CHECK_PYTHON" -m ruff format --check \
         "$PROJECT_ROOT/src" "$PROJECT_ROOT/tests"; then
         task_status success "Ruff formatting passed."
     else
@@ -135,7 +137,8 @@ run_static() {
     fi
     if (
         cd "$PROJECT_ROOT"
-        run_action "$CHECK_PYTHON" -m basedpyright src
+        run_with_progress "Running basedpyright..." \
+            run_action "$CHECK_PYTHON" -m basedpyright src
     ); then
         task_status success "basedpyright passed."
     else
@@ -219,7 +222,8 @@ run_shell() {
     else
         check_failure 1 "Could not enumerate shell files from Git."
     fi
-    if run_action validate_shell_paths; then
+    if run_with_progress "Running ShellCheck and POSIX syntax checks..." \
+        run_action validate_shell_paths; then
         task_status success "ShellCheck passed."
         task_status success "POSIX syntax checks passed."
     else
@@ -235,7 +239,8 @@ run_shell() {
 
 run_dependencies() {
     section_heading success "Dependencies"
-    if run_action "$CHECK_PYTHON" -m pip check; then
+    if run_with_progress "Checking installed dependencies..." \
+        run_action "$CHECK_PYTHON" -m pip check; then
         task_status success "Installed dependencies are consistent."
     else
         check_status=$?
@@ -300,7 +305,8 @@ report_pytest_summary() {
 run_tests() {
     section_heading success "Tests"
     require_check_python
-    if run_captured run_pytest; then
+    if run_with_progress "Running the full test suite..." \
+        run_captured run_pytest; then
         report_pytest_summary
         if [ -z "$pytest_passed_count" ]; then
             task_status success "Tests passed."

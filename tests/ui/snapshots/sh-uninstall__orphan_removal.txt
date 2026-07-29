@@ -2,7 +2,7 @@
 # exit: 0
 
 [+] Background execution
-    [i] [ghost] Stopping and disabling the background timer and service.
+    [i] [ghost] Stopping and disabling the background timer and service...
     [v] [ghost] Background timer and service disabled.
 
 [+] Installed units

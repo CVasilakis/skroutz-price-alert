@@ -2,12 +2,15 @@
 # exit: 23
 
 [+] Target verification
+    [i] [skroutz] Checking the source and dependency contract...
     [v] [skroutz] Source and dependency contract passed.
 
 [+] Target tests
+    [i] [skroutz] Running target tests...
     [v] [skroutz] Tests passed.
 
 [+] Static analysis
+    [i] [skroutz] Running type checking...
     [x] [skroutz] Type checking failed.
     [!] Run ./scripts/dev/plugin-check.sh --debug --skroutz to inspect the failure.
 

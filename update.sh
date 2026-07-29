@@ -92,6 +92,25 @@ main() {
         fi
     }
 
+    # shellcheck disable=SC2329  # invoked indirectly through run_with_progress
+    fetch_update_source() {
+        if [ "$DEBUG_MODE" -eq 1 ]; then
+            git -C "$BASE_DIR" fetch origin main
+        else
+            git -C "$BASE_DIR" fetch --quiet origin main >/dev/null 2>&1
+        fi
+    }
+
+    # shellcheck disable=SC2329  # invoked indirectly through run_with_progress
+    advance_update_source() {
+        if [ "$DEBUG_MODE" -eq 1 ]; then
+            git -C "$BASE_DIR" merge --ff-only origin/main
+        else
+            git -C "$BASE_DIR" merge --ff-only --quiet origin/main \
+                >/dev/null 2>&1
+        fi
+    }
+
     # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
     update_require_git_worktree() {
         [ "$DEBUG_MODE" -eq 1 ] || {
@@ -385,13 +404,7 @@ main() {
 
     update_section success "Source update"
     UPDATE_PHASE="fetching"
-    if [ "$DEBUG_MODE" -eq 1 ]; then
-        if git -C "$BASE_DIR" fetch origin main; then
-            FETCH_STATUS=0
-        else
-            FETCH_STATUS=$?
-        fi
-    elif git -C "$BASE_DIR" fetch --quiet origin main >/dev/null 2>&1; then
+    if run_with_progress "Fetching origin/main..." fetch_update_source; then
         FETCH_STATUS=0
     else
         FETCH_STATUS=$?
@@ -456,7 +469,8 @@ main() {
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
-        if run_update_helper disable_one "$target"; then
+        if run_with_progress "[$target] Stopping and disabling its timer..." \
+            run_update_helper disable_one "$target"; then
             update_task success "[$target] Safely stopped and disabled its timer."
         else
             update_task failure "[$target] Could not be safely quiesced."
@@ -478,15 +492,8 @@ main() {
 
     UPDATE_PHASE="advancing"
     update_section success "Source advancement"
-    update_task info "Advancing the checkout with a verified fast-forward."
-    if [ "$DEBUG_MODE" -eq 1 ]; then
-        if git -C "$BASE_DIR" merge --ff-only origin/main; then
-            ADVANCE_STATUS=0
-        else
-            ADVANCE_STATUS=$?
-        fi
-    elif git -C "$BASE_DIR" merge --ff-only --quiet origin/main \
-        >/dev/null 2>&1; then
+    if run_with_progress "Advancing the checkout with a verified fast-forward..." \
+        advance_update_source; then
         ADVANCE_STATUS=0
     else
         ADVANCE_STATUS=$?
@@ -514,7 +521,8 @@ main() {
 
     UPDATE_PHASE="migrating"
     update_section success "JSON migration"
-    if run_captured "$SCRIPT_DIR/scripts/migrate.sh" --machine; then
+    if run_with_progress "Migrating managed JSON documents..." \
+        run_captured "$SCRIPT_DIR/scripts/migrate.sh" --machine; then
         MIGRATION_STATUS=0
     else
         MIGRATION_STATUS=$?
@@ -681,14 +689,16 @@ main() {
         if [ "$CAPTURED_TIMER_LOAD" = "not-found" ] &&
            [ "$CAPTURED_SERVICE_LOAD" = "loaded" ] &&
            [ "$target_schedule_status" != "error" ]; then
-            if run_update_helper enable_one "$target"; then
+            if run_with_progress "[$target] Enabling its reconstructed timer..." \
+                run_update_helper enable_one "$target"; then
                 update_task success "[$target] Enabled its reconstructed timer."
             else
                 update_task failure \
                     "[$target] Could not enable its reconstructed timer."
                 ACTIVATE_FAILED=1
             fi
-        elif run_update_helper restore_timer_state \
+        elif run_with_progress "[$target] Restoring its prior timer state..." \
+            run_update_helper restore_timer_state \
             "$target" "$CAPTURED_TIMER_LOAD" \
             "$CAPTURED_TIMER_ENABLED" "$CAPTURED_TIMER_ACTIVE"; then
             update_task success "[$target] Restored its prior timer state."

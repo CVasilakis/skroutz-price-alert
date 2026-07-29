@@ -5,14 +5,16 @@
     [v] The checkout and installed target selection are safe to update.
 
 [+] Source update
+    [i] Fetching origin/main...
     [v] Fetched origin/main before stopping any target.
     [v] Verified origin/main can safely fast-forward this checkout.
 
 [+] Target quiescence
     [v] Captured the installed unit files and timer states.
+    [i] [skroutz] Stopping and disabling its timer...
     [v] [skroutz] Safely stopped and disabled its timer.
 
 [+] Source advancement
-    [i] Advancing the checkout with a verified fast-forward.
+    [i] Advancing the checkout with a verified fast-forward...
     [x] Failed to update project files.
     [v] The prior timer states were restored.

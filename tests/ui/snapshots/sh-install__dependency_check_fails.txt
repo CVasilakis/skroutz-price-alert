@@ -11,7 +11,10 @@
 [+] Python environment
     [i] Updating the existing Python environment.
     [v] The Python environment is ready.
+    [i] Updating Python packaging tools...
     [v] Packaging tools updated.
+    [i] Installing core dependencies...
     [v] Updated core dependencies.
+    [i] Checking installed dependencies...
     [x] Installed core and target dependencies are incompatible.
     [i] Resolve the dependency conflict, then run ./install.sh --debug.

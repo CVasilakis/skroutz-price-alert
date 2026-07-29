@@ -5,6 +5,7 @@
     [i] [skroutz] Timer schedule change queued.
 
 [+] Timer updates
+    [i] Applying queued timer schedule changes...
     [x] One or more timer schedules could not be applied.
     [i] Previous timer files and states were restored.
     [i] Run ./scripts/schedule.sh --debug for underlying diagnostics.

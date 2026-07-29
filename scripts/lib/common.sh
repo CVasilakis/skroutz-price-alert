@@ -54,6 +54,228 @@ task_status() {
     _print_indented_wrapped "$_ts_prefix" '        ' "$@"
 }
 
+# Deliberately isolated so shell tests can synchronize the delayed presentation
+# without depending on wall-clock timing.
+progress_delay() {
+    sleep 1
+}
+
+PROGRESS_MAX_ATTEMPTS=20
+
+_progress_capabilities() {
+    _pc_message="$1"
+    PROGRESS_CURSOR_UP=''
+    PROGRESS_CARRIAGE_RETURN=''
+    PROGRESS_ERASE_LINE=''
+    PROGRESS_COLUMNS=''
+
+    [ "$DEBUG_MODE" -eq 0 ] || return 1
+    [ -t 1 ] || return 1
+    [ -z "${CI:-}" ] || return 1
+    case "${TERM:-}" in
+        ''|dumb) return 1 ;;
+    esac
+    command -v tput >/dev/null 2>&1 || return 1
+
+    PROGRESS_CURSOR_UP="$(tput cuu1 2>/dev/null)" || return 1
+    PROGRESS_CARRIAGE_RETURN="$(tput cr 2>/dev/null)" || return 1
+    PROGRESS_ERASE_LINE="$(tput el 2>/dev/null)" || return 1
+    PROGRESS_COLUMNS="$(tput cols 2>/dev/null)" || return 1
+    case "$PROGRESS_COLUMNS" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ -n "$PROGRESS_CURSOR_UP" ] || return 1
+    [ -n "$PROGRESS_CARRIAGE_RETURN" ] || return 1
+    [ -n "$PROGRESS_ERASE_LINE" ] || return 1
+
+    _pc_line="    [i] $_pc_message"
+    [ "${#_pc_line}" -lt "$PROGRESS_COLUMNS" ]
+}
+
+_progress_lock() {
+    _pl_workspace="$1"
+    _pl_attempt=0
+    while [ "$_pl_attempt" -lt "$PROGRESS_MAX_ATTEMPTS" ]; do
+        [ -d "$_pl_workspace" ] || return 1
+        if mkdir "$_pl_workspace/lock" 2>/dev/null; then
+            return 0
+        fi
+        [ -d "$_pl_workspace/lock" ] || return 1
+        _pl_attempt=$((_pl_attempt + 1))
+        [ "$_pl_attempt" -lt "$PROGRESS_MAX_ATTEMPTS" ] || break
+        sleep 0 || return 1
+    done
+    return 1
+}
+
+_progress_stop_process() {
+    _psp_pid="$1"
+    case "$_psp_pid" in
+        ''|*[!0-9]*) return 0 ;;
+    esac
+
+    kill "$_psp_pid" 2>/dev/null || true
+    _psp_attempt=0
+    while kill -0 "$_psp_pid" 2>/dev/null; do
+        _psp_attempt=$((_psp_attempt + 1))
+        if [ "$_psp_attempt" -ge "$PROGRESS_MAX_ATTEMPTS" ]; then
+            kill -KILL "$_psp_pid" 2>/dev/null || true
+            return 1
+        fi
+        sleep 0 || return 1
+    done
+    wait "$_psp_pid" 2>/dev/null || true
+    return 0
+}
+
+_progress_present_after_delay() {
+    _ppad_parent="$1"
+    _ppad_workspace="$2"
+    _ppad_columns="$3"
+    _ppad_message="$4"
+
+    _ppad_delay=''
+    _ppad_lock_owned=0
+    trap '
+        [ -z "$_ppad_delay" ] ||
+            kill "$_ppad_delay" 2>/dev/null || true
+        [ "$_ppad_lock_owned" -eq 0 ] ||
+            rmdir "$_ppad_workspace/lock" 2>/dev/null || true
+        exit 0
+    ' HUP INT TERM
+
+    _progress_lock "$_ppad_workspace" || return 0
+    _ppad_lock_owned=1
+    if [ ! -f "$_ppad_workspace/active" ]; then
+        rmdir "$_ppad_workspace/lock" 2>/dev/null || true
+        _ppad_lock_owned=0
+        return 0
+    fi
+    progress_delay &
+    _ppad_delay=$!
+    if ! (
+        printf '%s\n' "$_ppad_delay" > "$_ppad_workspace/delay-pid" 2>/dev/null
+    ); then
+        kill "$_ppad_delay" 2>/dev/null || true
+        rmdir "$_ppad_workspace/lock" 2>/dev/null || true
+        _ppad_lock_owned=0
+        return 0
+    fi
+    if ! rmdir "$_ppad_workspace/lock" 2>/dev/null; then
+        kill "$_ppad_delay" 2>/dev/null || true
+        return 0
+    fi
+    _ppad_lock_owned=0
+    wait "$_ppad_delay" || return 0
+    _ppad_delay=''
+    kill -0 "$_ppad_parent" 2>/dev/null || return 0
+    _progress_lock "$_ppad_workspace" || return 0
+    _ppad_lock_owned=1
+    if [ -f "$_ppad_workspace/active" ] &&
+       kill -0 "$_ppad_parent" 2>/dev/null; then
+        COLUMNS="$_ppad_columns"
+        if task_status info "$_ppad_message"; then
+            (: > "$_ppad_workspace/shown") 2>/dev/null || true
+        fi
+    fi
+    rmdir "$_ppad_workspace/lock" 2>/dev/null || true
+    _ppad_lock_owned=0
+    trap - HUP INT TERM
+}
+
+# run_with_progress <message> <command> [arguments...]
+# The real command remains in the foreground and is run exactly once. On a
+# verified capable terminal, a one-second delayed task line is erased before
+# the caller renders its result. Redirected, CI, dumb, narrow, and otherwise
+# unsupported output uses an ordinary permanent task line instead.
+run_with_progress() {
+    _rwp_message="$1"
+    shift
+
+    if ! _progress_capabilities "$_rwp_message"; then
+        [ "$DEBUG_MODE" -eq 1 ] || task_status info "$_rwp_message"
+        "$@"
+        return $?
+    fi
+
+    command -v mktemp >/dev/null 2>&1 || {
+        task_status info "$_rwp_message"
+        "$@"
+        return $?
+    }
+    _rwp_parent=$$
+    _rwp_tmp_parent="${TMPDIR:-/tmp}"
+    if ! _rwp_workspace="$(
+        umask 077
+        mktemp -d "$_rwp_tmp_parent/scrooge-progress.XXXXXX"
+    )"; then
+        task_status info "$_rwp_message"
+        "$@"
+        return $?
+    fi
+    if ! (: > "$_rwp_workspace/active") 2>/dev/null; then
+        rm -rf "$_rwp_workspace"
+        task_status info "$_rwp_message"
+        "$@"
+        return $?
+    fi
+
+    _progress_present_after_delay \
+        "$_rwp_parent" "$_rwp_workspace" "$PROGRESS_COLUMNS" \
+        "$_rwp_message" &
+    _rwp_presenter=$!
+
+    if "$@"; then
+        _rwp_status=0
+    else
+        _rwp_status=$?
+    fi
+
+    _rwp_delay=''
+    _rwp_can_erase=0
+    if _progress_lock "$_rwp_workspace"; then
+        if rm -f "$_rwp_workspace/active"; then
+            _rwp_active_removed=1
+        else
+            _rwp_active_removed=0
+        fi
+        if [ -f "$_rwp_workspace/delay-pid" ]; then
+            IFS= read -r _rwp_delay < "$_rwp_workspace/delay-pid" ||
+                _rwp_delay=''
+        fi
+        if rmdir "$_rwp_workspace/lock" 2>/dev/null &&
+           [ "$_rwp_active_removed" -eq 1 ]; then
+            _rwp_can_erase=1
+        fi
+    else
+        rm -f "$_rwp_workspace/active" 2>/dev/null || true
+        if [ -f "$_rwp_workspace/delay-pid" ]; then
+            IFS= read -r _rwp_delay < "$_rwp_workspace/delay-pid" ||
+                _rwp_delay=''
+        fi
+    fi
+    case "$_rwp_delay" in
+        ''|*[!0-9]*) ;;
+        *) kill "$_rwp_delay" 2>/dev/null || true ;;
+    esac
+    if _progress_stop_process "$_rwp_presenter"; then
+        _rwp_presenter_stopped=1
+    else
+        _rwp_presenter_stopped=0
+    fi
+    if [ "$_rwp_presenter_stopped" -eq 1 ] &&
+       [ "$_rwp_can_erase" -eq 1 ] &&
+       [ -f "$_rwp_workspace/shown" ]; then
+        printf '%s%s%s' \
+            "$PROGRESS_CURSOR_UP" "$PROGRESS_CARRIAGE_RETURN" \
+            "$PROGRESS_ERASE_LINE"
+    fi
+    if [ "$_rwp_presenter_stopped" -eq 1 ]; then
+        rm -rf "$_rwp_workspace"
+    fi
+    return "$_rwp_status"
+}
+
 _print_indented_wrapped() {
     _piw_first="$1"
     _piw_continuation="$2"

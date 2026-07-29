@@ -2,7 +2,7 @@
 # exit: 0
 
 [+] Background execution
-    [i] [ghost] Stopping and disabling background execution.
+    [i] [ghost] Stopping and disabling background execution...
     [v] [ghost] Background execution disabled.
 
 [+] Optional controls

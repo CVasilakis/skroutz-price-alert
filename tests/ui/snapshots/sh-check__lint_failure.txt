@@ -2,6 +2,7 @@
 # exit: 23
 
 [+] Static analysis
+    [i] Running Ruff lint...
     [x] Ruff lint failed.
     [!] Run ./scripts/dev/check.sh --debug static to inspect the failure.
 

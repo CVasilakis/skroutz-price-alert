@@ -309,7 +309,8 @@ IFS="$OLD_IFS"
 if [ -n "$CHANGED" ]; then
     printf '\n'
     section_heading success "Timer updates"
-    if run_action schedule_units_transaction "$CHANGED" "$CHANGED_SCHEDULES"; then
+    if run_with_progress "Applying queued timer schedule changes..." \
+        run_action schedule_units_transaction "$CHANGED" "$CHANGED_SCHEDULES"; then
         IFS='
 '
         # shellcheck disable=SC2086

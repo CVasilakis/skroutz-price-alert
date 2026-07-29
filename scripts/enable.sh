@@ -203,7 +203,8 @@ for plugin in $PLUGINS; do
         enable_task info "[$plugin] Timer is already enabled and active."
         continue
     fi
-    if run_action enable_one "$plugin"; then
+    if run_with_progress "[$plugin] Enabling and starting the background schedule..." \
+        run_action enable_one "$plugin"; then
         enable_task success "[$plugin] Background schedule enabled and started."
     else
         enable_task failure "[$plugin] Failed to enable and start the timer."

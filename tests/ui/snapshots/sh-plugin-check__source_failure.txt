@@ -2,6 +2,7 @@
 # exit: 23
 
 [+] Target verification
+    [i] [skroutz] Checking the source and dependency contract...
     [x] [skroutz] Source and dependency contract failed.
     [!] Run ./scripts/dev/plugin-check.sh --debug --skroutz to inspect the failure.
 

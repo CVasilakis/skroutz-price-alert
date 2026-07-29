@@ -11,5 +11,6 @@
 [+] Python environment
     [i] Updating the existing Python environment.
     [v] The Python environment is ready.
+    [i] Updating Python packaging tools...
     [x] Packaging tools could not be updated.
     [i] Check package-index access, then run ./install.sh --debug.

@@ -2,5 +2,6 @@
 # exit: 1
 
 [+] Target scaffold
+    [i] Creating the target scaffold...
     [x] Target scaffold returned an invalid result.
     [i] Run ./scripts/dev/plugin-create.sh --debug to inspect the failure.

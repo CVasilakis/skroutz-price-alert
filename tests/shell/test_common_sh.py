@@ -212,6 +212,174 @@ class TestDebugExecution(unittest.TestCase):
         self.assertEqual(list(temp_dir.iterdir()), [])
 
 
+class TestProgressExecution(unittest.TestCase):
+    def test_lock_contention_is_bounded_and_filesystem_errors_fail_immediately(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        stale_workspace = temp_dir / "stale"
+        stale_workspace.mkdir()
+        (stale_workspace / "lock").mkdir()
+        failed_workspace = temp_dir / "failed"
+        failed_workspace.mkdir()
+
+        stale = run_sh(
+            "attempts=0\n"
+            "mkdir() { attempts=$((attempts + 1)); return 1; }\n"
+            f'if _progress_lock "{stale_workspace}"; then status=0; else status=$?; fi\n'
+            'printf "attempts=%s status=%s\\n" "$attempts" "$status"'
+        )
+        failed = run_sh(
+            "attempts=0\n"
+            "mkdir() { attempts=$((attempts + 1)); return 1; }\n"
+            f'if _progress_lock "{failed_workspace}"; then status=0; else status=$?; fi\n'
+            'printf "attempts=%s status=%s\\n" "$attempts" "$status"'
+        )
+
+        self.assertEqual(stale.stdout, "attempts=20 status=1\n")
+        self.assertEqual(failed.stdout, "attempts=1 status=1\n")
+
+    def test_redirected_output_uses_permanent_line_and_preserves_status(self):
+        result = run_sh(
+            "probe() {\n"
+            "  PROBE_SIDE_EFFECT=preserved\n"
+            "  return 23\n"
+            "}\n"
+            "PROBE_SIDE_EFFECT=missing\n"
+            'if run_with_progress "Running probe..." probe; then\n'
+            "  status=0\n"
+            "else\n"
+            "  status=$?\n"
+            "fi\n"
+            'printf "side-effect=%s status=%s\\n" "$PROBE_SIDE_EFFECT" "$status"'
+        )
+        self.assertEqual(
+            result.stdout,
+            "    [i] Running probe...\nside-effect=preserved status=23\n",
+        )
+        self.assertEqual(result.stderr, "")
+
+    def test_debug_mode_leaves_the_command_in_charge_of_output(self):
+        result = run_sh(
+            "DEBUG_MODE=1\n"
+            "probe() { printf '%s\\n' command-output; }\n"
+            'run_with_progress "Running probe..." probe'
+        )
+        self.assertEqual(result.stdout, "command-output\n")
+        self.assertEqual(result.stderr, "")
+
+    def test_progress_setup_failure_falls_back_without_changing_command(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        workspace = temp_dir / "prepared"
+        workspace.mkdir()
+        (workspace / "active").mkdir()
+        result = run_sh(
+            "_progress_capabilities() {\n"
+            "  PROGRESS_CURSOR_UP='<UP>'\n"
+            "  PROGRESS_CARRIAGE_RETURN='<CR>'\n"
+            "  PROGRESS_ERASE_LINE='<EL>'\n"
+            "  PROGRESS_COLUMNS=100\n"
+            "  return 0\n"
+            "}\n"
+            f'mktemp() {{ printf "%s\\n" "{workspace}"; }}\n'
+            "probe() { PROBE_SIDE_EFFECT=preserved; return 29; }\n"
+            "PROBE_SIDE_EFFECT=missing\n"
+            'if run_with_progress "Running probe..." probe; then\n'
+            "  status=0\n"
+            "else\n"
+            "  status=$?\n"
+            "fi\n"
+            'printf "side-effect=%s status=%s\\n" "$PROBE_SIDE_EFFECT" "$status"',
+            extra_env={"TMPDIR": str(temp_dir)},
+        )
+        self.assertEqual(
+            result.stdout,
+            "    [i] Running probe...\nside-effect=preserved status=29\n",
+        )
+        self.assertEqual(result.stderr, "")
+        self.assertFalse(workspace.exists())
+
+    def test_process_cleanup_stops_waiting_after_the_fixed_attempt_limit(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        ready = temp_dir / "ready"
+        child_pid = temp_dir / "child-pid"
+        result = run_sh(
+            "(\n"
+            "  trap '' TERM\n"
+            "  sleep 30 &\n"
+            "  stubborn_child=$!\n"
+            f'  printf "%s\\n" "$stubborn_child" > "{child_pid}"\n'
+            f'  : > "{ready}"\n'
+            '  wait "$stubborn_child"\n'
+            ") >/dev/null 2>&1 &\n"
+            "stubborn_pid=$!\n"
+            f'while [ ! -f "{ready}" ]; do sleep 0; done\n'
+            'if _progress_stop_process "$stubborn_pid"; then\n'
+            "  status=0\n"
+            "else\n"
+            "  status=$?\n"
+            "fi\n"
+            f'IFS= read -r stubborn_child < "{child_pid}"\n'
+            'kill -KILL "$stubborn_pid" "$stubborn_child" 2>/dev/null || true\n'
+            'wait "$stubborn_pid" 2>/dev/null || true\n'
+            'printf "status=%s\\n" "$status"'
+        )
+        self.assertEqual(result.stdout, "status=1\n")
+        self.assertEqual(result.stderr, "")
+
+    def test_capable_fast_command_finishes_without_showing_progress(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        result = run_sh(
+            "_progress_capabilities() {\n"
+            "  PROGRESS_CURSOR_UP='<UP>'\n"
+            "  PROGRESS_CARRIAGE_RETURN='<CR>'\n"
+            "  PROGRESS_ERASE_LINE='<EL>'\n"
+            "  PROGRESS_COLUMNS=100\n"
+            "  return 0\n"
+            "}\n"
+            "progress_delay() { while :; do :; done; }\n"
+            'run_with_progress "Running probe..." :\n'
+            'task_status success "Probe passed."',
+            extra_env={"TMPDIR": str(temp_dir)},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "    [v] Probe passed.\n")
+        self.assertEqual(list(temp_dir.iterdir()), [])
+
+    def test_capable_slow_command_replaces_exactly_one_progress_line(self):
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        shown = temp_dir / "shown"
+        result = run_sh(
+            "_progress_capabilities() {\n"
+            "  PROGRESS_CURSOR_UP='<UP>'\n"
+            "  PROGRESS_CARRIAGE_RETURN='<CR>'\n"
+            "  PROGRESS_ERASE_LINE='<EL>'\n"
+            "  PROGRESS_COLUMNS=100\n"
+            "  return 0\n"
+            "}\n"
+            "progress_delay() { :; }\n"
+            "task_status() {\n"
+            '  printf "    [%s] %s\\n" "$1" "$2"\n'
+            f'  [ "$1" != info ] || : > "{shown}"\n'
+            "}\n"
+            "probe() {\n"
+            f'  while [ ! -f "{shown}" ]; do sleep 1; done\n'
+            "}\n"
+            'run_with_progress "Running probe..." probe\n'
+            'task_status success "Probe passed."',
+            extra_env={"TMPDIR": str(temp_dir)},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            "    [info] Running probe...\n<UP><CR><EL>    [success] Probe passed.\n",
+        )
+        self.assertEqual(list(temp_dir.iterdir()), [shown])
+
+
 class TestTargetFlagParsing(unittest.TestCase):
     def test_debug_is_recognized_anywhere_and_targets_stay_deduplicated(self):
         result = run_sh(

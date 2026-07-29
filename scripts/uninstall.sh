@@ -170,9 +170,9 @@ if [ -n "$REMOVE_TARGETS" ]; then
 '
     # shellcheck disable=SC2086
     for target in $REMOVE_TARGETS; do
-        uninstall_task info \
-            "[$target] Stopping and disabling the background timer and service."
-        if run_action disable_one "$target"; then
+        if run_with_progress \
+            "[$target] Stopping and disabling the background timer and service..." \
+            run_action disable_one "$target"; then
             uninstall_task success \
                 "[$target] Background timer and service disabled."
         else
@@ -237,8 +237,8 @@ fi
 printf '\n'
 section_heading success "Python environment"
 if [ -d "$BASE_DIR/venv" ]; then
-    uninstall_task info "Removing the project Python virtual environment."
-    if run_action rm -rf "${BASE_DIR:?}/venv"; then
+    if run_with_progress "Removing the project Python virtual environment..." \
+        run_action rm -rf "${BASE_DIR:?}/venv"; then
         uninstall_task success "Python virtual environment removed."
     else
         uninstall_task failure "Python virtual environment could not be removed."

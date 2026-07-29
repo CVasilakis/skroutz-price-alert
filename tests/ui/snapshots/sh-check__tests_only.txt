@@ -2,6 +2,7 @@
 # exit: 0
 
 [+] Tests
+    [i] Running the full test suite...
     [v] 813 tests passed.
 
 [+] Check result

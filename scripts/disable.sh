@@ -178,8 +178,9 @@ for plugin in $PLUGINS; do
         FAILED=1
         continue
     fi
-    disable_task info "[$plugin] Stopping and disabling background execution."
-    if run_action disable_one "$plugin"; then
+    if run_with_progress \
+        "[$plugin] Stopping and disabling background execution..." \
+        run_action disable_one "$plugin"; then
         disable_task success "[$plugin] Background execution disabled."
     else
         disable_task failure \

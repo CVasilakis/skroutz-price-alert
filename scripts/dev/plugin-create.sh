@@ -88,7 +88,8 @@ if ! run_action require_python_310 python3 "./scripts/dev/setup.sh"; then
 fi
 
 if PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
-    run_captured python3 -m core.scrapers.tooling.scaffold --shell-output "$@"; then
+    run_with_progress "Creating the target scaffold..." \
+        run_captured python3 -m core.scrapers.tooling.scaffold --shell-output "$@"; then
     scaffold_status=0
 else
     scaffold_status=$?

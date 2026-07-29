@@ -9,13 +9,18 @@
     [v] Systemd user services are available.
 
 [+] Python environment
+    [i] Creating the project Python environment...
     [v] Created a new Python environment.
     [v] The Python environment is ready.
+    [i] Updating Python packaging tools...
     [v] Packaging tools updated.
+    [i] Installing core dependencies...
     [v] Installed core dependencies.
+    [i] Checking installed dependencies...
     [v] Core dependencies are compatible.
 
 [+] Target provisioning
+    [i] Configuring selected target timers...
     [v] Configured timers for the selected targets.
     [v] Enabled user lingering.
 

@@ -5,18 +5,21 @@
     [v] The checkout and installed target selection are safe to update.
 
 [+] Source update
+    [i] Fetching origin/main...
     [v] Fetched origin/main before stopping any target.
     [v] Verified origin/main can safely fast-forward this checkout.
 
 [+] Target quiescence
     [v] Captured the installed unit files and timer states.
+    [i] [skroutz] Stopping and disabling its timer...
     [v] [skroutz] Safely stopped and disabled its timer.
 
 [+] Source advancement
-    [i] Advancing the checkout with a verified fast-forward.
+    [i] Advancing the checkout with a verified fast-forward...
     [v] Fast-forwarded the project files to origin/main.
 
 [+] JSON migration
+    [i] Migrating managed JSON documents...
     [v] Managed JSON documents are ready for the updated source.
 
 [+] Installation checks
@@ -29,6 +32,7 @@
 [+] Python environment
     [i] Updating the existing Python environment.
     [v] The Python environment is ready.
+    [i] Updating Python packaging tools...
     [x] Packaging tools could not be updated.
     [i] Check package-index access, then run ./install.sh --debug.
 

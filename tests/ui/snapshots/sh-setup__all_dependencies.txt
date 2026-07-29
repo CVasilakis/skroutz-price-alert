@@ -12,12 +12,17 @@
     [v] The development venv is ready.
 
 [+] Development dependencies
+    [i] Updating Python packaging tools...
     [v] Packaging tools updated.
+    [i] Installing core and development dependencies...
     [v] Core and development dependencies installed.
+    [i] Installing private target dependencies...
     [v] Private dependencies installed for 1 target.
+    [i] Checking installed dependencies...
     [v] Installed dependencies are consistent.
 
 [+] Repository checks
+    [i] Enabling repository-local pre-push checks...
     [v] Repository-local pre-push checks are enabled.
 
 [+] Setup complete

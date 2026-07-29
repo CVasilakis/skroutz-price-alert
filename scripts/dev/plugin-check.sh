@@ -110,7 +110,8 @@ plugin_check_venv_dir="$(dirname -- "$(dirname -- "$plugin_check_python")")"
 }
 plugin_check_venv_parent="$(dirname -- "$plugin_check_venv_dir")"
 
-if run_action env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
+if run_with_progress "[$target] Checking the source and dependency contract..." \
+    run_action env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
     -m core.scrapers.tooling.cli plugin-check "$target"; then
     task_status success "[$target] Source and dependency contract passed."
 else
@@ -120,7 +121,8 @@ fi
 
 printf '\n'
 section_heading success "Target tests"
-if run_action "$plugin_check_python" -m pytest --no-cov \
+if run_with_progress "[$target] Running target tests..." \
+    run_action "$plugin_check_python" -m pytest --no-cov \
     "$BASE_DIR/tests/plugins/$target"; then
     task_status success "[$target] Tests passed."
 else
@@ -130,7 +132,8 @@ fi
 
 printf '\n'
 section_heading success "Static analysis"
-if run_action "$plugin_check_python" -m basedpyright \
+if run_with_progress "[$target] Running type checking..." \
+    run_action "$plugin_check_python" -m basedpyright \
     --venvpath "$plugin_check_venv_parent" \
     "$BASE_DIR/src/core/scrapers/plugins/$target"; then
     task_status success "[$target] Type checking passed."
@@ -138,14 +141,16 @@ else
     verification_status=$?
     verification_failure "$verification_status" "Type checking failed."
 fi
-if run_action "$plugin_check_python" -m ruff check \
+if run_with_progress "[$target] Running Ruff lint..." \
+    run_action "$plugin_check_python" -m ruff check \
     "$BASE_DIR/src/core/scrapers/plugins/$target" "$BASE_DIR/tests/plugins/$target"; then
     task_status success "[$target] Ruff lint passed."
 else
     verification_status=$?
     verification_failure "$verification_status" "Ruff lint failed."
 fi
-if run_action "$plugin_check_python" -m ruff format --check \
+if run_with_progress "[$target] Checking Ruff formatting..." \
+    run_action "$plugin_check_python" -m ruff format --check \
     "$BASE_DIR/src/core/scrapers/plugins/$target" "$BASE_DIR/tests/plugins/$target"; then
     task_status success "[$target] Ruff formatting passed."
 else

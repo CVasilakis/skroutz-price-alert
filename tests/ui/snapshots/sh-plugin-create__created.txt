@@ -2,6 +2,7 @@
 # exit: 0
 
 [+] Target scaffold
+    [i] Creating the target scaffold...
     [v] [acme] Created the target source package.
     [v] [acme] Created the target test package.
 

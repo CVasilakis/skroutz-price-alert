@@ -4,7 +4,6 @@
 skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
 [+] Active executions
 ActiveState=activating
-    [i] [skroutz] Stopping active background execution.
 LoadState=loaded
 injected systemctl stdout
 injected systemctl stderr
