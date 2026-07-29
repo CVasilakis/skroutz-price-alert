@@ -12,11 +12,10 @@ BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # Shared helpers (colors, plugin enumeration)
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
-# shellcheck source=scripts/lib/preflight.sh
-. "$SCRIPT_DIR/lib/preflight.sh"
 
 VENV_PYTHON="$BASE_DIR/venv/bin/python3"
 PLUGINS=""
+CATALOG_AVAILABLE=0
 
 # ==============================================================================
 # HELPER FUNCTIONS
@@ -55,6 +54,50 @@ print_missing_venv_help() {
     printf '\n'
 }
 
+run_failure() {
+    _rf_section="$1"
+    _rf_message="$2"
+    _rf_detail="${3:-}"
+    _rf_recovery="${4:-}"
+
+    begin_operational_output
+    section_heading success "$_rf_section"
+    task_status failure "$_rf_message"
+    if [ -n "$_rf_detail" ]; then
+        task_status info "$_rf_detail"
+    fi
+    if [ -n "$_rf_recovery" ]; then
+        task_status warning "$_rf_recovery"
+    fi
+    end_operational_output
+    exit 1
+}
+
+argument_failure() {
+    run_failure \
+        "Run arguments" \
+        "$1" \
+        "" \
+        "Run ./scripts/run.sh --help to view supported options."
+}
+
+catalog_failure() {
+    if _cf_output="$(catalog_cli diagnose 2>&1)"; then
+        _cf_recovery="The target catalog is readable now; retry the command."
+    else
+        _cf_recovery="Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry."
+    fi
+    _cf_detail="$(
+        printf '%s\n' "$_cf_output" |
+            awk 'NF { sub(/^[[:space:]]+/, ""); print; exit }'
+    )"
+    run_failure \
+        "Run preflight" \
+        "The target catalog could not be loaded." \
+        "$_cf_detail" \
+        "$_cf_recovery"
+}
+
 # Help remains useful before installation and is recognized in any position.
 HELP_REQUESTED=0
 for raw_arg in "$@"; do
@@ -65,11 +108,45 @@ if [ "$HELP_REQUESTED" -eq 1 ] && [ ! -x "$VENV_PYTHON" ]; then
     exit 0
 fi
 
-reject_project_venv_symlink || exit 1
-require_python_310 "$VENV_PYTHON" "./install.sh" || exit 1
+if [ -L "$BASE_DIR/venv" ]; then
+    run_failure \
+        "Run preflight" \
+        "The project venv path must be a project-owned directory, not a symlink." \
+        "" \
+        "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or ./install.sh."
+fi
+if [ ! -x "$VENV_PYTHON" ]; then
+    run_failure \
+        "Run preflight" \
+        "The project Python environment is missing or unusable." \
+        "" \
+        "Run ./install.sh, then retry."
+fi
+if ! RUN_PYTHON_VERSION="$(
+    "$VENV_PYTHON" -c \
+        'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null
+)"; then
+    run_failure \
+        "Run preflight" \
+        "The project Python environment could not be executed." \
+        "" \
+        "Run ./install.sh, then retry."
+fi
+if ! "$VENV_PYTHON" -c \
+    'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
+    >/dev/null 2>&1; then
+    [ -n "$RUN_PYTHON_VERSION" ] || RUN_PYTHON_VERSION="unknown"
+    run_failure \
+        "Run preflight" \
+        "Python $RUN_PYTHON_VERSION is unsupported; Python 3.10 or newer is required." \
+        "" \
+        "Install a supported Python, run ./install.sh, then retry."
+fi
 
 # Registered plugins (one --<plugin> flag is accepted per registered scraper).
-load_plugin_catalog || true
+if load_plugin_catalog; then
+    CATALOG_AVAILABLE=1
+fi
 PLUGINS="$(list_plugins || true)"
 if [ "$HELP_REQUESTED" -eq 1 ]; then
     print_help
@@ -128,33 +205,28 @@ while [ "$#" -gt 0 ]; do
             ;;
         --)
             # A bare '--' would otherwise parse as an empty target name.
-            printf "%bError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
-            print_help
-            exit 1
+            argument_failure "Invalid argument: $1."
             ;;
         --*)
             # Any registered plugin (e.g. --skroutz) selects that scraper and is
             # forwarded to main.py, which builds a matching flag per plugin.
             name="${1#--}"
-            require_valid_target "$name" || exit 1
+            if ! is_valid_target "$name"; then
+                argument_failure \
+                    "Invalid target flag: $1 (expected --<snake_case target>)."
+            fi
             if stream_contains "$name" "$PLUGINS"; then
                 FLAG_PLUGIN=$((FLAG_PLUGIN + 1))
                 append_forward_arg "$1"
             else
-                # An empty plugin list means the flag was rejected because the
-                # catalog itself is unavailable, not because of a typo - say so.
-                if [ -z "$PLUGINS" ]; then
-                    catalog_diagnose || exit 1
+                if [ "$CATALOG_AVAILABLE" -eq 0 ]; then
+                    catalog_failure
                 fi
-                printf "%bError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
-                print_help
-                exit 1
+                argument_failure "Unknown target flag: $1."
             fi
             ;;
         *)
-            printf "%bError: Invalid flag provided: %s%b\n" "$RED" "$1" "$NC"
-            print_help
-            exit 1
+            argument_failure "Invalid argument: $1."
             ;;
     esac
     shift
@@ -170,18 +242,14 @@ TOTAL_FLAGS=$((FLAG_PING + FLAG_STATUS + FLAG_QUIET + FLAG_PLUGIN))
 # still land in this validation)
 if [ "$FLAG_PING" -gt 0 ]; then
     if [ "$TOTAL_FLAGS" -gt 1 ]; then
-        printf "%b\n" "${RED}\nError: The --ping flag must be used alone.${NC}"
-        print_help
-        exit 1
+        argument_failure "The --ping flag must be used alone."
     fi
 fi
 
 # Check --status rules
 if [ "$FLAG_STATUS" -gt 0 ]; then
     if [ "$TOTAL_FLAGS" -gt 1 ]; then
-        printf "%b\n" "${RED}\nError: The --status flag must be used alone.${NC}"
-        print_help
-        exit 1
+        argument_failure "The --status flag must be used alone."
     fi
 fi
 

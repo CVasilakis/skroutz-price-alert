@@ -7,11 +7,17 @@ lock which entry point and arguments each flag combination dispatches to.
 """
 
 from ui.catalog._base import Surface
-from ui.catalog.shell_inputs import WORLD_NO_VENV, ShellWorld, shell_case
+from ui.catalog.shell_inputs import (
+    WORLD_BROKEN_CATALOG,
+    WORLD_NO_VENV,
+    ShellWorld,
+    shell_case,
+)
 
 _case = shell_case(Surface.SH_RUN, "scripts/run.sh")
 
 _TWO = ShellWorld(plugins=("skroutz", "amazon"))
+_EMPTY = ShellWorld(plugins=())
 
 _case(
     "help",
@@ -31,7 +37,7 @@ _case(
 
 _case(
     "invalid_positional",
-    "A positional argument is rejected (with the help text).",
+    "A positional argument is rejected with a concise help hint.",
     "foo",
     tags=("error",),
 )
@@ -45,10 +51,32 @@ _case(
 
 _case(
     "catalog_unavailable",
-    "An unknown flag while the catalog is unavailable - diagnose only.",
+    "An unknown flag while plugin discovery raises.",
     "--ghost",
-    world=WORLD_NO_VENV,
+    world=WORLD_BROKEN_CATALOG,
     tags=("error", "catalog"),
+)
+
+_case(
+    "empty_catalog_unknown_flag",
+    "An unknown flag with a healthy empty catalog is an argument error.",
+    "--ghost",
+    world=_EMPTY,
+    tags=("error",),
+)
+
+_case(
+    "invalid_target_syntax",
+    "A target flag that is not snake_case is rejected.",
+    "--bad-target",
+    tags=("error",),
+)
+
+_case(
+    "debug_not_supported",
+    "The wrapper does not expose a shell-level --debug mode.",
+    "--debug",
+    tags=("error",),
 )
 
 _case(
@@ -78,6 +106,20 @@ _case(
     "no_venv_dispatch",
     "No flags with the venv missing: the repair hint, not a raw exec failure.",
     world=WORLD_NO_VENV,
+    tags=("error",),
+)
+
+_case(
+    "venv_symlink_rejected",
+    "A project venv symlink is rejected before dispatch.",
+    world=ShellWorld(venv_symlink=True),
+    tags=("error",),
+)
+
+_case(
+    "venv_unusable",
+    "An installed but unusable venv interpreter is rejected before dispatch.",
+    world=ShellWorld(venv_python_usable=False),
     tags=("error",),
 )
 

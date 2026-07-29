@@ -2,5 +2,5 @@
 # exit: 1
 
 [+] Run arguments
-    [x] Unknown target flag: --ghost.
+    [x] Unknown target flag: --debug.
     [!] Run ./scripts/run.sh --help to view supported options.

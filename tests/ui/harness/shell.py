@@ -105,6 +105,8 @@ class ShellWorld:
 
     Venv state and failure injection:
         venv: Pre-create venv/bin/python3 (the responder) in the sandbox.
+        venv_symlink: Make venv/ a symlink to a sandbox-owned external environment.
+        venv_python_usable: Whether invoking venv/bin/python3 succeeds.
         ensurepip_missing: python3 -c "import ensurepip" fails (install.sh prereq).
         venv_create_fails: python3 -m venv fails.
         pip_fail: None | "upgrade" | "requirements" | "plugin" | "check" - failing pip call.
@@ -150,6 +152,8 @@ class ShellWorld:
     discovery_error: str | None = None
 
     venv: bool = True
+    venv_symlink: bool = False
+    venv_python_usable: bool = True
     ensurepip_missing: bool = False
     venv_create_fails: bool = False
     pip_fail: str | None = None
@@ -449,6 +453,7 @@ exit 0
 _VENV_PYTHON_SHIM = """#!/bin/sh
 # venv python responder: canned catalog answers, pip failure injection, and a
 # dispatch marker for run.sh's final exec.
+[ "${FAKE_VENV_PYTHON_USABLE:-1}" = "1" ] || exit 1
 case "${1:-}" in
     -c)
         case "${2:-}" in
@@ -628,10 +633,13 @@ def _build_sandbox(world: ShellWorld) -> Path:
     _write_shims(bin_dir, world)
 
     if world.venv:
-        venv_bin = sandbox / "venv" / "bin"
+        venv_root = sandbox / ("external-venv" if world.venv_symlink else "venv")
+        venv_bin = venv_root / "bin"
         venv_bin.mkdir(parents=True)
         shutil.copy(bin_dir / "venv-python-template", venv_bin / "python3")
         (venv_bin / "python3").chmod(0o755)
+        if world.venv_symlink:
+            (sandbox / "venv").symlink_to(venv_root, target_is_directory=True)
 
     unit_dir = sandbox / "xdg" / "systemd" / "user"
     unit_dir.mkdir(parents=True)
@@ -751,6 +759,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_PYTHON_VERSION": world.python_version,
         "FAKE_PYTHON_SUPPORTED": "1" if world.python_supported else "0",
         "FAKE_VENV_PYTHON_VERSION": world.venv_python_version or world.python_version,
+        "FAKE_VENV_PYTHON_USABLE": "1" if world.venv_python_usable else "0",
         "FAKE_VENV_PYTHON_SUPPORTED": (
             "1"
             if (

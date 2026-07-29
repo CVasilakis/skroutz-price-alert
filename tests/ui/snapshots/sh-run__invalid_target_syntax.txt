@@ -2,5 +2,5 @@
 # exit: 1
 
 [+] Run arguments
-    [x] Unknown target flag: --ghost.
+    [x] Invalid target flag: --bad-target (expected --<snake_case target>).
     [!] Run ./scripts/run.sh --help to view supported options.
