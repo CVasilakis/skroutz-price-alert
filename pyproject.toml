@@ -12,6 +12,12 @@ testpaths = ["tests"]
 # --cov-fail-under (or coverage.py's fail_under): low coverage must never make
 # an otherwise successful test run fail.
 addopts = "--cov=src/core --cov-report=term-missing:skip-covered"
+# Apprise currently imports Python's deprecated imghdr module from this exact
+# module. Suppress only that dependency-owned warning; every other warning
+# category, message, and source module remains visible.
+filterwarnings = [
+    "ignore:^'imghdr' is deprecated and slated for removal in Python 3\\.13$:DeprecationWarning:apprise\\.utils\\.pgp$",
+]
 
 [tool.coverage.run]
 # The underscore-prefixed package is a copyable contributor template, deliberately

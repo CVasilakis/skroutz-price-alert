@@ -14,7 +14,10 @@
     [v] Installed dependencies are consistent.
 
 [+] Tests
-    [x] Tests failed.
+    [v] 810 tests passed.
+    [!] 3 test warnings.
+    [x] 2 tests failed.
+    [x] 1 test error.
     [!] Run ./scripts/dev/check.sh --debug full to inspect the failure.
 
 [+] Check result

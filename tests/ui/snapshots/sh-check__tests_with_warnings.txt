@@ -1,0 +1,9 @@
+# border: green
+# exit: 0
+
+[+] Tests
+    [v] 813 tests passed.
+    [!] 2 test warnings.
+
+[+] Check result
+    [v] All requested checks passed.

@@ -6,6 +6,7 @@
 injected check stdout: tests
 813 passed in 1.00s
 injected check stderr: tests
+    [v] 813 tests passed.
     [x] Tests failed.
     [!] Review the underlying diagnostic above, then retry.
 

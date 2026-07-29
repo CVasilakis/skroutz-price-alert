@@ -211,6 +211,9 @@ class ShellWorld:
     check_stdout: str = ""
     check_stderr: str = ""
     check_test_count: int = 813
+    check_test_warning_count: int = 0
+    check_test_failure_count: int = 0
+    check_test_error_count: int = 0
     hook_state: str = "valid"
 
     tools: str = "full"
@@ -490,8 +493,16 @@ case "${1:-}" in
                 printf '%s: %s\\n' "$FAKE_CHECK_STDOUT" "$check_stage"
             [ -z "${FAKE_CHECK_STDERR:-}" ] ||
                 printf '%s: %s\\n' "$FAKE_CHECK_STDERR" "$check_stage" >&2
-            [ "$check_stage" != "tests" ] ||
-                printf '%s passed in 1.00s\\n' "${FAKE_CHECK_TEST_COUNT:-813}"
+            if [ "$check_stage" = "tests" ]; then
+                printf '%s' "${FAKE_CHECK_TEST_COUNT:-813} passed"
+                [ "${FAKE_CHECK_TEST_FAILURE_COUNT:-0}" -eq 0 ] ||
+                    printf ', %s failed' "$FAKE_CHECK_TEST_FAILURE_COUNT"
+                [ "${FAKE_CHECK_TEST_WARNING_COUNT:-0}" -eq 0 ] ||
+                    printf ', %s warnings' "$FAKE_CHECK_TEST_WARNING_COUNT"
+                [ "${FAKE_CHECK_TEST_ERROR_COUNT:-0}" -eq 0 ] ||
+                    printf ', %s errors' "$FAKE_CHECK_TEST_ERROR_COUNT"
+                printf '%s\\n' " in 1.00s"
+            fi
             [ "${FAKE_CHECK_FAIL:-}" != "$check_stage" ] || exit 23
         fi
         case "$*" in
@@ -789,6 +800,9 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_CHECK_STDOUT": world.check_stdout,
         "FAKE_CHECK_STDERR": world.check_stderr,
         "FAKE_CHECK_TEST_COUNT": str(world.check_test_count),
+        "FAKE_CHECK_TEST_WARNING_COUNT": str(world.check_test_warning_count),
+        "FAKE_CHECK_TEST_FAILURE_COUNT": str(world.check_test_failure_count),
+        "FAKE_CHECK_TEST_ERROR_COUNT": str(world.check_test_error_count),
     }
 
 

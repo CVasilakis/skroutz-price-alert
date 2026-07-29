@@ -312,7 +312,16 @@ case "${1:-}" in
         fi
         printf '%s: %s\\n' "injected check stdout" "$stage"
         printf '%s: %s\\n' "injected check stderr" "$stage" >&2
-        [ "$stage" != "tests" ] || printf '%s\\n' "813 passed in 1.00s"
+        if [ "$stage" = "tests" ]; then
+            printf '%s' "${TEST_PASSED:-813} passed"
+            [ "${TEST_FAILED:-0}" -eq 0 ] ||
+                printf ', %s failed' "$TEST_FAILED"
+            [ "${TEST_WARNINGS:-0}" -eq 0 ] ||
+                printf ', %s warnings' "$TEST_WARNINGS"
+            [ "${TEST_ERRORS:-0}" -eq 0 ] ||
+                printf ', %s errors' "$TEST_ERRORS"
+            printf '%s\\n' " in 1.00s"
+        fi
         if [ "${FAIL_STAGE:-}" = "$stage" ]; then
             exit "${FAIL_STATUS:-23}"
         fi
@@ -473,6 +482,39 @@ def test_check_debug_does_not_force_pytest_children_into_debug_mode(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "injected check stdout: tests" in result.stderr
     assert_task_status(result.stdout, "v", "813 tests passed.")
+
+
+def test_check_reports_nonzero_pytest_warning_count(tmp_path):
+    env = _fake_check_tools(tmp_path)
+    env["TEST_WARNINGS"] = "2"
+
+    result = _run("scripts/dev/check.sh", "tests", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert_task_status(result.stdout, "v", "813 tests passed.")
+    assert_task_status(result.stdout, "!", "2 test warnings.")
+
+
+def test_check_reports_pytest_failure_and_error_counts(tmp_path):
+    env = _fake_check_tools(tmp_path)
+    env.update(
+        {
+            "FAIL_STAGE": "tests",
+            "TEST_PASSED": "810",
+            "TEST_FAILED": "2",
+            "TEST_WARNINGS": "3",
+            "TEST_ERRORS": "1",
+        }
+    )
+
+    result = _run("scripts/dev/check.sh", "tests", env=env)
+
+    assert result.returncode == 23
+    assert_task_status(result.stdout, "v", "810 tests passed.")
+    assert_task_status(result.stdout, "!", "3 test warnings.")
+    assert_task_status(result.stdout, "x", "2 tests failed.")
+    assert_task_status(result.stdout, "x", "1 test error.")
+    assert "    [x] Tests failed.\n" not in result.stdout
 
 
 def test_command_entrypoints_are_executable_and_libraries_are_not():

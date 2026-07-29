@@ -62,10 +62,8 @@ finish_checks() {
     exit "$1"
 }
 
-check_failure() {
-    _cf_status="$1"
-    shift
-    task_status failure "$*"
+finish_check_failure() {
+    _fcf_status="$1"
     if [ "$DEBUG_MODE" -eq 1 ]; then
         task_status warning "Review the underlying diagnostic above, then retry."
     else
@@ -75,7 +73,14 @@ check_failure() {
     printf '\n'
     section_heading success "Check result"
     task_status failure "Requested checks failed."
-    finish_checks "$_cf_status"
+    finish_checks "$_fcf_status"
+}
+
+check_failure() {
+    _cf_status="$1"
+    shift
+    task_status failure "$*"
+    finish_check_failure "$_cf_status"
 }
 
 begin_operational_output
@@ -248,33 +253,65 @@ run_pytest() {
     DEBUG_MODE=0 SCROOGE_INTERNAL_DEBUG=0 "$CHECK_PYTHON" -m pytest
 }
 
+pytest_summary_count() {
+    _psc_pattern="$1"
+    printf '%s\n%s\n' "$CAPTURED_COMMAND_OUTPUT" "$CAPTURED_COMMAND_STDERR" |
+        awk -v pattern="$_psc_pattern" '
+            match($0, "[0-9]+ " pattern) {
+                summary = substr($0, RSTART, RLENGTH)
+                split(summary, fields, " ")
+                count = fields[1]
+            }
+            END {
+                if (count != "") {
+                    print count
+                }
+            }
+        '
+}
+
+report_pytest_count() {
+    _rpc_status="$1"
+    _rpc_count="$2"
+    _rpc_singular="$3"
+    _rpc_plural="$4"
+    [ -n "$_rpc_count" ] || return 0
+    if [ "$_rpc_count" -eq 1 ]; then
+        task_status "$_rpc_status" "1 $_rpc_singular."
+    else
+        task_status "$_rpc_status" "$_rpc_count $_rpc_plural."
+    fi
+}
+
+report_pytest_summary() {
+    pytest_passed_count="$(pytest_summary_count 'passed')"
+    pytest_warning_count="$(pytest_summary_count 'warnings?')"
+    pytest_failed_count="$(pytest_summary_count 'failed')"
+    pytest_error_count="$(pytest_summary_count 'errors?')"
+
+    report_pytest_count success "$pytest_passed_count" "test passed" "tests passed"
+    report_pytest_count warning "$pytest_warning_count" \
+        "test warning" "test warnings"
+    report_pytest_count failure "$pytest_failed_count" \
+        "test failed" "tests failed"
+    report_pytest_count failure "$pytest_error_count" "test error" "test errors"
+}
+
 run_tests() {
     section_heading success "Tests"
     require_check_python
     if run_captured run_pytest; then
-        test_count="$(
-            printf '%s\n' "$CAPTURED_COMMAND_OUTPUT" |
-                awk '
-                    match($0, /[0-9]+ passed/) {
-                        summary = substr($0, RSTART, RLENGTH)
-                        split(summary, fields, " ")
-                        count = fields[1]
-                    }
-                    END {
-                        if (count != "") {
-                            print count
-                        }
-                    }
-                '
-        )"
-        if [ -n "$test_count" ]; then
-            task_status success "$test_count tests passed."
-        else
+        report_pytest_summary
+        if [ -z "$pytest_passed_count" ]; then
             task_status success "Tests passed."
         fi
     else
         check_status=$?
-        check_failure "$check_status" "Tests failed."
+        report_pytest_summary
+        if [ -z "$pytest_failed_count" ] && [ -z "$pytest_error_count" ]; then
+            task_status failure "Tests failed."
+        fi
+        finish_check_failure "$check_status"
     fi
 }
 

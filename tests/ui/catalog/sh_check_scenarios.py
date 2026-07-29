@@ -26,6 +26,14 @@ _case(
 )
 
 _case(
+    "tests_with_warnings",
+    "A successful test run reports its nonzero warning count.",
+    "tests",
+    world=ShellWorld(check_test_warning_count=2),
+    tags=("ok",),
+)
+
+_case(
     "lint_failure",
     "An immediate Ruff lint failure stops the gate without later tasks.",
     "static",
@@ -50,8 +58,14 @@ _case(
 
 _case(
     "tests_failure",
-    "A test failure occurs after all earlier full-gate phases pass.",
-    world=ShellWorld(check_fail="tests"),
+    "A failed test run reports its passed, warning, failure, and error counts.",
+    world=ShellWorld(
+        check_fail="tests",
+        check_test_count=810,
+        check_test_warning_count=3,
+        check_test_failure_count=2,
+        check_test_error_count=1,
+    ),
     tags=("error",),
 )
 
