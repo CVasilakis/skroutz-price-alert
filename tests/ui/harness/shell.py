@@ -56,6 +56,7 @@ _SCRIPT_FILES = (
     "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
     "scripts/dev/setup.sh",
+    "scripts/dev/check.sh",
     "scripts/dev/plugin-check.sh",
     "scripts/dev/plugin-create.sh",
     "scripts/dev/install-hooks.sh",
@@ -84,6 +85,7 @@ _REAL_TOOLS = (
     "readlink",
     "mktemp",
     "sh",
+    "xargs",
 )
 
 
@@ -201,6 +203,10 @@ class ShellWorld:
     plugin_check_fail: str | None = None
     plugin_check_stdout: str = ""
     plugin_check_stderr: str = ""
+    check_fail: str | None = None
+    check_stdout: str = ""
+    check_stderr: str = ""
+    check_test_count: int = 813
     hook_state: str = "valid"
 
     tools: str = "full"
@@ -429,6 +435,15 @@ esac
 exit 0
 """
 
+_SHELLCHECK_SHIM = """#!/bin/sh
+[ -z "${FAKE_CHECK_STDOUT:-}" ] ||
+    printf '%s: %s\\n' "$FAKE_CHECK_STDOUT" "shellcheck"
+[ -z "${FAKE_CHECK_STDERR:-}" ] ||
+    printf '%s: %s\\n' "$FAKE_CHECK_STDERR" "shellcheck" >&2
+[ "${FAKE_CHECK_FAIL:-}" != "shellcheck" ] || exit 23
+exit 0
+"""
+
 # The venv responder implements the small machine-readable scraper CLI used by
 # common.sh, plus pip failure injection and run.sh's final dispatch marker.
 _VENV_PYTHON_SHIM = """#!/bin/sh
@@ -443,6 +458,7 @@ case "${1:-}" in
     -m)
         shift
         verification_stage=""
+        check_stage=""
         case "$*" in
             "core.scrapers.tooling.cli plugin-check "*) verification_stage="source" ;;
             "pytest --no-cov "*) verification_stage="tests" ;;
@@ -450,12 +466,28 @@ case "${1:-}" in
             "ruff check "*) verification_stage="lint" ;;
             "ruff format --check "*) verification_stage="format" ;;
         esac
+        case "$*" in
+            "ruff check "*) check_stage="lint" ;;
+            "ruff format --check "*) check_stage="format" ;;
+            "basedpyright src") check_stage="type" ;;
+            "pip check") check_stage="dependencies" ;;
+            "pytest") check_stage="tests" ;;
+        esac
         if [ -n "$verification_stage" ]; then
             [ -z "${FAKE_PLUGIN_CHECK_STDOUT:-}" ] ||
                 printf '%s: %s\\n' "$FAKE_PLUGIN_CHECK_STDOUT" "$verification_stage"
             [ -z "${FAKE_PLUGIN_CHECK_STDERR:-}" ] ||
                 printf '%s: %s\\n' "$FAKE_PLUGIN_CHECK_STDERR" "$verification_stage" >&2
             [ "${FAKE_PLUGIN_CHECK_FAIL:-}" != "$verification_stage" ] || exit 23
+        fi
+        if [ -n "$check_stage" ]; then
+            [ -z "${FAKE_CHECK_STDOUT:-}" ] ||
+                printf '%s: %s\\n' "$FAKE_CHECK_STDOUT" "$check_stage"
+            [ -z "${FAKE_CHECK_STDERR:-}" ] ||
+                printf '%s: %s\\n' "$FAKE_CHECK_STDERR" "$check_stage" >&2
+            [ "$check_stage" != "tests" ] ||
+                printf '%s passed in 1.00s\\n' "${FAKE_CHECK_TEST_COUNT:-813}"
+            [ "${FAKE_CHECK_FAIL:-}" != "$check_stage" ] || exit 23
         fi
         case "$*" in
             pip\\ *)
@@ -539,6 +571,7 @@ def _write_shims(bin_dir: Path, world: ShellWorld) -> None:
         "loginctl": _LOGINCTL_SHIM,
         "git": _GIT_SHIM,
         "python3": _PYTHON3_SHIM,
+        "shellcheck": _SHELLCHECK_SHIM,
     }
     # The "missing tool" modes drop the shim AND /usr/bin from PATH (see _fake_env),
     # so the host's real binary can never satisfy `command -v` by accident.
@@ -743,6 +776,10 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_PLUGIN_CHECK_FAIL": world.plugin_check_fail or "",
         "FAKE_PLUGIN_CHECK_STDOUT": world.plugin_check_stdout,
         "FAKE_PLUGIN_CHECK_STDERR": world.plugin_check_stderr,
+        "FAKE_CHECK_FAIL": world.check_fail or "",
+        "FAKE_CHECK_STDOUT": world.check_stdout,
+        "FAKE_CHECK_STDERR": world.check_stderr,
+        "FAKE_CHECK_TEST_COUNT": str(world.check_test_count),
     }
 
 

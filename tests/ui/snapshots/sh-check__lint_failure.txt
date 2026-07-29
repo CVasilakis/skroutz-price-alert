@@ -1,0 +1,9 @@
+# border: red
+# exit: 23
+
+[+] Static analysis
+    [x] Ruff lint failed.
+    [!] Run ./scripts/dev/check.sh --debug static to inspect the failure.
+
+[+] Check result
+    [x] Requested checks failed.

@@ -1,0 +1,20 @@
+# border: green
+# exit: 0
+
+[+] Static analysis
+    [v] Ruff lint passed.
+    [v] Ruff formatting passed.
+    [v] basedpyright passed.
+
+[+] Shell validation
+    [v] ShellCheck passed.
+    [v] POSIX syntax checks passed.
+
+[+] Dependencies
+    [v] Installed dependencies are consistent.
+
+[+] Tests
+    [v] 813 tests passed.
+
+[+] Check result
+    [v] All requested checks passed.

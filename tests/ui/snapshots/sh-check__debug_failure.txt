@@ -1,0 +1,13 @@
+# border: red
+# exit: 23
+
+[+] Tests
+3.12.0
+injected check stdout: tests
+813 passed in 1.00s
+injected check stderr: tests
+    [x] Tests failed.
+    [!] Review the underlying diagnostic above, then retry.
+
+[+] Check result
+    [x] Requested checks failed.

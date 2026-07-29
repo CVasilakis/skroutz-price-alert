@@ -39,6 +39,7 @@ class Surface(Enum):
     SH_SETUP = "sh-setup"  # scripts/dev/setup.sh
     SH_PLUGIN_CREATE = "sh-plugin-create"  # scripts/dev/plugin-create.sh
     SH_PLUGIN_CHECK = "sh-plugin-check"  # scripts/dev/plugin-check.sh
+    SH_CHECK = "sh-check"  # scripts/dev/check.sh
     SH_INSTALL_HOOKS = "sh-install-hooks"  # scripts/dev/install-hooks.sh
     SH_RUN = "sh-run"  # scripts/run.sh
     SH_MIGRATE = "sh-migrate"  # scripts/migrate.sh
@@ -103,6 +104,9 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     ),
     Surface.SH_PLUGIN_CHECK: SurfaceInfo(
         "plugin-check.sh", "Verifying one target's contract, tests, and static analysis."
+    ),
+    Surface.SH_CHECK: SurfaceInfo(
+        "check.sh", "Running the repository-wide static, shell, dependency, and test gates."
     ),
     Surface.SH_INSTALL_HOOKS: SurfaceInfo(
         "install-hooks.sh", "Enabling the repository-local versioned pre-push checks."

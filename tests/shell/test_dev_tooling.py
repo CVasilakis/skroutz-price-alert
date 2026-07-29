@@ -276,13 +276,187 @@ def test_dev_setup_help_has_no_install_side_effect():
 def test_check_help_needs_no_venv_and_describes_full_gate():
     result = _run("scripts/dev/check.sh", "--help")
     assert result.returncode == 0, result.stderr
-    assert "With no argument, run the complete local pre-push gate." in result.stdout
+    assert "With no check mode, run the complete local pre-push gate." in result.stdout
+    assert "Usage: ./scripts/dev/check.sh [-h] [--debug] [full|static|shell|tests]" in (
+        result.stdout
+    )
+    assert "--debug" in result.stdout
 
 
-def test_check_rejects_unknown_mode_before_running_tools():
-    result = _run("scripts/dev/check.sh", "unknown")
+def _fake_check_tools(tmp_path: Path) -> dict[str, str]:
+    fake_python = tmp_path / "python3"
+    fake_python.write_text(
+        """#!/bin/sh
+set -eu
+case "${1:-}" in
+    -c)
+        case "${2:-}" in
+            *print*) printf '%s\\n' "3.12.0" ;;
+        esac
+        exit 0
+        ;;
+    -m)
+        shift
+        case "$*" in
+            "ruff check "*) stage=lint ;;
+            "ruff format --check "*) stage=format ;;
+            "basedpyright src") stage=type ;;
+            "pip check") stage=dependencies ;;
+            "pytest") stage=tests ;;
+            *) stage=unknown ;;
+        esac
+        printf '%s: %s\\n' "injected check stdout" "$stage"
+        printf '%s: %s\\n' "injected check stderr" "$stage" >&2
+        [ "$stage" != "tests" ] || printf '%s\\n' "813 passed in 1.00s"
+        if [ "${FAIL_STAGE:-}" = "$stage" ]; then
+            exit "${FAIL_STATUS:-23}"
+        fi
+        ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    fake_shellcheck = tmp_path / "shellcheck"
+    fake_shellcheck.write_text(
+        """#!/bin/sh
+printf '%s\\n' "injected shellcheck stdout"
+printf '%s\\n' "injected shellcheck stderr" >&2
+[ "${FAIL_STAGE:-}" != "shellcheck" ] || exit "${FAIL_STATUS:-23}"
+""",
+        encoding="utf-8",
+    )
+    fake_shellcheck.chmod(0o755)
+    env = os.environ.copy()
+    env["SCROOGE_CHECK_PYTHON"] = str(fake_python)
+    env["SCROOGE_SHELLCHECK"] = str(fake_shellcheck)
+    return env
+
+
+def test_check_full_success_uses_required_sections_and_spacing(tmp_path):
+    result = _run("scripts/dev/check.sh", env=_fake_check_tools(tmp_path))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr == ""
+    assert result.stdout == (
+        "\n"
+        "[+] Static analysis\n"
+        "    [v] Ruff lint passed.\n"
+        "    [v] Ruff formatting passed.\n"
+        "    [v] basedpyright passed.\n"
+        "\n"
+        "[+] Shell validation\n"
+        "    [v] ShellCheck passed.\n"
+        "    [v] POSIX syntax checks passed.\n"
+        "\n"
+        "[+] Dependencies\n"
+        "    [v] Installed dependencies are consistent.\n"
+        "\n"
+        "[+] Tests\n"
+        "    [v] 813 tests passed.\n"
+        "\n"
+        "[+] Check result\n"
+        "    [v] All requested checks passed.\n"
+        "\n"
+    )
+    assert "injected" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--debug",),
+        ("--debug", "full"),
+        ("full", "--debug"),
+        ("--debug", "static"),
+        ("static", "--debug"),
+        ("--debug", "shell"),
+        ("shell", "--debug"),
+        ("--debug", "tests"),
+        ("tests", "--debug"),
+    ),
+)
+def test_check_accepts_debug_alone_and_with_every_mode(tmp_path, args):
+    result = _run("scripts/dev/check.sh", *args, env=_fake_check_tools(tmp_path))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    combined = result.stdout + result.stderr
+    assert "injected check stdout" in combined or "injected shellcheck stdout" in combined
+    assert "injected check stderr" in result.stderr or "injected shellcheck stderr" in (
+        result.stderr
+    )
+    assert_task_status(result.stdout, "v", "All requested checks passed.")
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("--help", "--debug"),
+        ("--debug", "--help"),
+        ("unknown", "--help"),
+        ("static", "tests", "--help"),
+        ("--debug", "--debug", "--help"),
+    ),
+)
+def test_check_help_has_precedence_in_every_position(args):
+    result = _run("scripts/dev/check.sh", *args)
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert result.stdout.startswith("\nUsage:")
+    assert result.stdout.endswith("\n\n")
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    (
+        (("unknown",), "Invalid argument: unknown"),
+        (("static", "tests"), "Select at most one check mode."),
+        (("static", "static"), "Select at most one check mode."),
+        (("--debug", "--debug"), "Specify --debug at most once."),
+        (("--",), "Invalid argument: --"),
+    ),
+)
+def test_check_invalid_and_duplicate_flags_keep_usage_status(args, message):
+    result = _run("scripts/dev/check.sh", *args)
+
     assert result.returncode == 2
-    assert "Invalid argument" in result.stderr
+    assert result.stderr == ""
+    assert result.stdout.startswith("\n[+] Check arguments\n")
+    assert message in result.stdout
+    assert result.stdout.endswith("\n\n")
+
+
+def test_check_normal_hides_tool_noise_and_preserves_failure_status(tmp_path):
+    env = _fake_check_tools(tmp_path)
+    env["FAIL_STAGE"] = "format"
+    env["FAIL_STATUS"] = "23"
+
+    result = _run("scripts/dev/check.sh", "static", env=env)
+
+    assert result.returncode == 23
+    assert "injected check" not in result.stdout
+    assert "injected check" not in result.stderr
+    assert_task_status(result.stdout, "v", "Ruff lint passed.")
+    assert_task_status(result.stdout, "x", "Ruff formatting failed.")
+    assert_task_status(result.stdout, "x", "Requested checks failed.")
+    assert result.stdout.startswith("\n")
+    assert result.stdout.endswith("\n\n")
+
+
+def test_check_debug_exposes_same_noise_and_preserves_command_status(tmp_path):
+    env = _fake_check_tools(tmp_path)
+    env["FAIL_STAGE"] = "tests"
+    env["FAIL_STATUS"] = "23"
+
+    result = _run("scripts/dev/check.sh", "tests", "--debug", env=env)
+
+    assert result.returncode == 23
+    assert "injected check stdout: tests" in result.stderr
+    assert "injected check stderr: tests" in result.stderr
+    assert "injected check" not in result.stdout
+    assert_task_status(result.stdout, "x", "Tests failed.")
+    assert_task_status(result.stdout, "x", "Requested checks failed.")
 
 
 def test_command_entrypoints_are_executable_and_libraries_are_not():
@@ -319,6 +493,11 @@ def test_shellcheck_ci_job_provisions_and_selects_supported_python():
     assert "pip install -r scripts/dev/requirements-shell.txt" in shellcheck_job
     assert "SCROOGE_CHECK_PYTHON=python" in shellcheck_job
     assert 'SCROOGE_SHELLCHECK="$(command -v shellcheck)"' in shellcheck_job
+    check_invocations = [
+        line.strip() for line in workflow.splitlines() if "./scripts/dev/check.sh" in line
+    ]
+    assert len(check_invocations) == 3
+    assert all("./scripts/dev/check.sh --debug" in line for line in check_invocations)
 
 
 def test_indirect_signal_handler_has_cross_version_shellcheck_suppression():
@@ -1007,7 +1186,12 @@ def test_development_wrappers_reject_python39(python39, script, args, override):
         assert_task_status(result.stdout, "x", "[skroutz] Python 3.10 or newer is unavailable.")
         assert result.stderr == ""
     else:
-        assert "Detected Python 3.9.18" in output
+        assert_task_status(
+            result.stdout,
+            "x",
+            "Python 3.10 or newer is unavailable. Run ./scripts/dev/setup.sh first.",
+        )
+        assert result.stderr == ""
     assert "3.10 or newer" in output
 
 

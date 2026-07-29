@@ -42,7 +42,7 @@ jobs:
       - name: Run tests
         # Coverage is report-only: never add a percentage failure threshold here
         # or in pyproject.toml. Test outcomes, not coverage totals, gate CI.
-        run: SCROOGE_CHECK_PYTHON=python ./scripts/dev/check.sh tests
+        run: SCROOGE_CHECK_PYTHON=python ./scripts/dev/check.sh --debug tests
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -65,7 +65,7 @@ jobs:
         run: |
           SCROOGE_CHECK_PYTHON=python \
             SCROOGE_SHELLCHECK="$(command -v shellcheck)" \
-            ./scripts/dev/check.sh shell
+            ./scripts/dev/check.sh --debug shell
 
   typecheck:
     runs-on: ubuntu-latest
@@ -89,7 +89,7 @@ jobs:
             [ -f "$f" ] && venv/bin/python -m pip install -r "$f"
           done
       - name: Run static checks
-        run: ./scripts/dev/check.sh static
+        run: ./scripts/dev/check.sh --debug static
 
   plugin-isolation:
     runs-on: ubuntu-latest

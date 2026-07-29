@@ -1,0 +1,17 @@
+# border: green
+# exit: 0
+
+Usage: ./scripts/dev/check.sh [-h] [--debug] [full|static|shell|tests]
+
+Run the project's non-mutating local/CI acceptance checks.
+With no check mode, run the complete local pre-push gate.
+
+Check modes:
+  full              run the complete local pre-push gate
+  static            run Ruff and basedpyright
+  shell             run ShellCheck and POSIX shell syntax checks
+  tests             run the full pytest suite
+
+Optional arguments:
+  -h, --help        show this help message and exit
+  --debug           show underlying command output

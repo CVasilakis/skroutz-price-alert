@@ -14,6 +14,7 @@ from ui.catalog import (
     e2e_run_scenarios,  # noqa: F401
     ping_scenarios,  # noqa: F401
     run_scenarios,  # noqa: F401
+    sh_check_scenarios,  # noqa: F401
     sh_disable_scenarios,  # noqa: F401
     sh_enable_scenarios,  # noqa: F401
     sh_install_hooks_scenarios,  # noqa: F401
