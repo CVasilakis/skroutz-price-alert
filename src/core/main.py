@@ -32,8 +32,8 @@ from core.tui.config_check import render_config_panel
 from core.tui.run_reporter import InteractiveRunReporter
 
 
-def main() -> None:
-    """Main entry point for the Scrooge Alert application.
+def _run_main() -> None:
+    """Run the parsed Scrooge Alert application workflow.
 
     This function initializes the environment, parses arguments, sets up logging,
     checks for updates, loads targets, and starts the scraping application workflow.
@@ -56,8 +56,6 @@ def main() -> None:
     # every scraper. run.sh validates its own flags, so nothing it forwards is
     # unknown here; this guards direct invocation.
     args = parser.parse_args()
-
-    setup_global_logging(args.quiet)
 
     targets_to_run = [s for s in registered_scrapers if getattr(args, s, False)]
 
@@ -139,8 +137,21 @@ def main() -> None:
     except Exception:
         if "reporter" in locals():
             reporter.complete_target()
-        save_traceback(logging.root)
+        save_traceback(logging.root, log_to_console=not args.quiet)
         notifier.notify_crash()
+        sys.exit(EXIT_CODE_ERROR)
+
+
+def main() -> None:
+    """Run the CLI while preserving quiet startup-failure diagnostics on disk."""
+    quiet_requested = "--quiet" in sys.argv[1:]
+    setup_global_logging(quiet_requested)
+    try:
+        _run_main()
+    except SystemExit:
+        raise
+    except Exception:
+        save_traceback(logging.root, log_to_console=not quiet_requested)
         sys.exit(EXIT_CODE_ERROR)
 
 

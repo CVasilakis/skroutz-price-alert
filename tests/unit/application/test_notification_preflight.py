@@ -18,15 +18,11 @@ def _general(notifications, *, permission_warning=None):
 def test_quiet_preflight_requires_one_valid_notification_url():
     general = _general(NotificationConfig(error="Notifications must be an object"))
     logger = mock.Mock()
-    with (
-        mock.patch("core.application.preflight.get_target_logger", return_value=logger),
-        mock.patch("core.application.preflight.logging.critical") as critical,
-    ):
+    with mock.patch("core.application.preflight.get_target_logger", return_value=logger):
         result = validate_notification_preflight(["alpha"], general)
 
     assert result == EXIT_CODE_NOTIFICATION_CONFIG_ERROR
     logger.error.assert_called_once()
-    critical.assert_called_once()
 
 
 def test_quiet_preflight_allows_mixed_urls_and_logs_only_invalid_count():

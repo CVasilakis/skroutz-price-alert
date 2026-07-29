@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -109,7 +108,6 @@ def validate_notification_preflight(
             get_target_logger(target, True, retention).error(
                 f"❗ Notification configuration failed: {detail}"
             )
-        logging.critical(f"Notification configuration failed: {detail}")
         return EXIT_CODE_NOTIFICATION_CONFIG_ERROR
 
     if notifications.invalid_urls:

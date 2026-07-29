@@ -14,13 +14,21 @@ from core.exceptions import (
     ScraperError,
     ServerError,
 )
-from core.scrapers.api import PriceResult, ScraperClient, TrackedItem, UrlField
+from core.scrapers.api import (
+    ListingResult,
+    Offer,
+    PriceResult,
+    ScraperClient,
+    ScrapeResult,
+    TrackedItem,
+    UrlField,
+)
 
 URL = UrlField("url", domains=("127.0.0.1",), accepts_url=lambda _url: True)
 
 
 class FakeStoreClient(ScraperClient):
-    def scrape(self, item: TrackedItem) -> PriceResult:
+    def scrape(self, item: TrackedItem) -> ScrapeResult:
         try:
             with urllib.request.urlopen(item[URL], timeout=5) as response:
                 status, body = response.status, response.read()
@@ -28,6 +36,11 @@ class FakeStoreClient(ScraperClient):
             status, body = exc.code, b""
         self._raise_for_status(status)
         data = json.loads(body)
+        if "offers" in data:
+            return ListingResult(
+                data.get("currency", "EUR"),
+                (Offer(offer["title"], offer["price"], offer["url"]) for offer in data["offers"]),
+            )
         return PriceResult(data["price"], data.get("currency", "EUR"))
 
     @staticmethod
@@ -51,7 +64,9 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         status, payload = script.pop(0) if len(script) > 1 else script[0]
-        body = json.dumps(payload).encode() if payload is not None else b""
+        body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+        if payload is None:
+            body = b""
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
