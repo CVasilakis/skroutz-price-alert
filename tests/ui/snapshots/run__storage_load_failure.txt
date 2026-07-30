@@ -1,4 +1,4 @@
-# border: green
+# border: red
 
 ╭─────────────────────────── Skroutz Scraping ────────────────────────────╮
 │   ✅    Tracked Items           5 loaded                                │
@@ -7,9 +7,5 @@
 │   ✅    Notify On Errors        true (default)                          │
 │   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   🎉    Sony WH-1000XM5         248.0 € (Target: 300.0 €) [1]           │
-│ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    Cannot save state/skroutz.json; check its permissions.          │
-│                                                                         │
-│   [1] Notification delivered to all valid apprise URL(s).               │
+│   ❗    Cannot read state/skroutz.json; check its permissions.          │
 ╰─────────────────────────────────────────────────────────────────────────╯

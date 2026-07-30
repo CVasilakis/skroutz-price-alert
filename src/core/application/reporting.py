@@ -125,6 +125,10 @@ class SilentRunReporter(RunReporter):
         """Log a target-start system failure with the established file-log wording."""
         self.log_error("System", error_str)
 
+    def log_storage_error(self, summary: str, details: Notes = None) -> None:
+        """Log a state-storage failure with the established file-log wording."""
+        self.log_error("Storage", summary, details)
+
     def log_attempt(self, name: str, attempt: int, max_retries: int, detail: str) -> None:
         if self.target_logger:
             self.target_logger.warning(

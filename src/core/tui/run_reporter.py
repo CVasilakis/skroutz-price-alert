@@ -41,6 +41,7 @@ class _SpanningRow:
 
     icon: RenderableType
     value: RenderableType
+    starts_section: bool = False
 
 
 _DisplayRow: TypeAlias = _LabeledRow | _SpanningRow
@@ -226,6 +227,8 @@ class InteractiveRunReporter(RunReporter):
             if labeled_table is not None:
                 display_blocks.append(labeled_table)
                 labeled_table = None
+            if row.starts_section and display_blocks:
+                display_blocks.append(Rule(style="dim"))
             spanning_table = layout.new_spanning_table()
             spanning_table.add_row(row.icon, row.value)
             display_blocks.append(spanning_table)
@@ -362,6 +365,20 @@ class InteractiveRunReporter(RunReporter):
     def log_system_error(self, error_str: str) -> None:
         """Render a target-start system failure across the panel's message width."""
         self.rows.append(_SpanningRow("❗", inline_text(error_str)))
+        if self.live:
+            self.live.update(self._generate_panel())
+
+    def log_storage_error(self, summary: str, details: Notes = None) -> None:
+        """Render a state-storage failure as a separate, spanning panel message."""
+        detail_list = [detail for detail in self._note_list(details) if detail.strip()]
+        message = Text()
+        for index, detail in enumerate(detail_list):
+            if index:
+                message.append(" ")
+            message.append_text(inline_text(detail))
+        if not detail_list:
+            message = inline_text(summary)
+        self.rows.append(_SpanningRow("❗", message, starts_section=True))
         if self.live:
             self.live.update(self._generate_panel())
 

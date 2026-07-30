@@ -1,6 +1,7 @@
 import io
 
 from rich.console import Console
+from rich.text import Text
 
 from core.application.contracts import PriceOutcome
 from core.presentation import SettingView
@@ -98,6 +99,36 @@ def test_interactive_system_error_text_is_literal_and_inline_code_is_styled():
     command = next(segment for segment in segments if "./install.sh" in segment.text)
     assert str(command.style) == "dim cyan"
     assert "System" not in rendered
+
+
+def test_interactive_storage_details_are_inline_literal_and_complete():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    reporter.log_storage_error(
+        "Latest scrape state was not saved.",
+        [
+            "Cannot save `[red]state/store.json[/red]`; check its permissions.",
+            "Technical [yellow]details[/yellow] could not be logged.",
+        ],
+    )
+    panel = reporter._generate_panel()
+    console = Console(width=PANEL_WIDTH + 25, color_system="truecolor")
+    segments = list(console.render(panel, console.options))
+    rendered = "".join(segment.text for segment in segments)
+
+    assert "[red]state/store.json[/red]" in rendered
+    assert "Technical [yellow]details[/yellow]" in rendered
+    assert "Latest scrape state was not saved." not in rendered
+    assert "Storage" not in rendered
+    assert reporter.notes == ()
+    value = reporter.rows[0].value
+    assert isinstance(value, Text)
+    assert value.plain == (
+        "Cannot save [red]state/store.json[/red]; check its permissions. "
+        "Technical [yellow]details[/yellow] could not be logged."
+    )
+    path = next(segment for segment in segments if "state/store.json" in segment.text)
+    assert str(path.style) == "dim cyan"
 
 
 def test_status_setting_callbacks_and_title_are_plain_text():

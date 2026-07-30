@@ -112,8 +112,7 @@ class TargetRunner:
                     load_notes: str | list[str] = str(exc)
                     if diagnostic_saved is False:
                         load_notes = [str(exc), messages.DIAGNOSTIC_WRITE_FAILED]
-                    self.reporter.log_error(
-                        "Storage",
+                    self.reporter.log_storage_error(
                         messages.state_load_failed(plugin.target),
                         load_notes,
                     )
@@ -165,8 +164,7 @@ class TargetRunner:
                             notes: str | list[str] = str(exc)
                             if diagnostic_saved is False:
                                 notes = [str(exc), messages.DIAGNOSTIC_WRITE_FAILED]
-                            self.reporter.log_error(
-                                "Storage",
+                            self.reporter.log_storage_error(
                                 messages.state_save_failed(plugin.target),
                                 notes,
                             )

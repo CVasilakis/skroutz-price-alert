@@ -39,6 +39,7 @@ def test_silent_reporter_covers_config_settings_and_result_levels():
     reporter.log_warning("Item", "warning", "detail")
     reporter.log_error("Item", "error", ["detail"])
     reporter.log_system_error("system error")
+    reporter.log_storage_error("storage error", ["detail", "diagnostic failed"])
     reporter.log_attempt("Item", 2, 3, "ServerError")
     reporter.log_failure("Item", "RuntimeError", extra_notes=["trace saved"])
     reporter.start_sleep(1, 2, 3)
@@ -60,6 +61,7 @@ def test_silent_reporter_ignores_rows_without_target_logger():
     reporter.log_warning("Item", "warning")
     reporter.log_error("Item", "error")
     reporter.log_system_error("system error")
+    reporter.log_storage_error("storage error", "detail")
     reporter.log_attempt("Item", 1, 3, "detail")
     reporter.log_failure("Item", "error")
 
@@ -74,4 +76,25 @@ def test_silent_system_error_preserves_existing_log_wording():
 
     logger.error.assert_called_once_with(
         "❗ System: Another instance is currently running. Aborting..."
+    )
+
+
+def test_silent_storage_error_preserves_existing_log_wording():
+    logger = mock.create_autospec(logging.Logger, instance=True)
+    reporter = SilentRunReporter()
+    reporter.start_target("Store", logger, ResolvedSettings(()), ConfigOutcome(1))
+    logger.reset_mock()
+
+    reporter.log_storage_error(
+        "Latest scrape state was not saved.",
+        [
+            "Cannot save `state/store.json`; check its permissions.",
+            "Technical details could not be written to the error log.",
+        ],
+    )
+
+    logger.error.assert_called_once_with(
+        "❗ Storage: Latest scrape state was not saved. "
+        "(Cannot save `state/store.json`; check its permissions.) "
+        "(Technical details could not be written to the error log.)"
     )

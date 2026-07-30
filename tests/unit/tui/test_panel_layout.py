@@ -259,6 +259,69 @@ def test_interactive_system_error_spans_labeled_columns_responsively(width):
     assert str(reporter._generate_panel().border_style) == "red"
 
 
+@pytest.mark.parametrize(
+    ("has_settings", "has_item", "expected_dividers"),
+    [
+        (True, False, 1),
+        (True, True, 2),
+        (False, True, 1),
+        (False, False, 0),
+    ],
+)
+def test_interactive_storage_error_starts_a_normalized_section(
+    has_settings, has_item, expected_dividers
+):
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    if has_settings:
+        reporter.settings_rows = [("✅", "Tracked Items", "1 loaded")]
+    if has_item:
+        reporter.log_result("✅", "Item", "OK")
+
+    reporter.log_storage_error(
+        "Latest scrape state was not saved.",
+        "Cannot save `state/store.json`; check its permissions.",
+    )
+
+    output = _render(reporter._generate_panel())
+
+    assert len(_interior_dividers(output)) == expected_dividers
+    assert "Storage" not in output
+    assert "[1]" not in output
+    assert "Cannot save state/store.json; check its permissions." in output
+
+
+def test_interactive_storage_error_uses_one_default_width_line_and_keeps_item_notes():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    reporter.settings_rows = [("✅", "Tracked Items", "1 loaded")]
+    reporter.log_result("🎉", "Item", "5 EUR", "Notification delivered.")
+    reporter.log_storage_error(
+        "Latest scrape state was not saved.",
+        "Cannot save `state/store.json`; check its permissions.",
+    )
+
+    output = _render(reporter._generate_panel())
+    storage_lines = [line for line in output.splitlines() if "Cannot save" in line]
+
+    assert len(storage_lines) == 1
+    assert "Cannot save state/store.json; check its permissions." in storage_lines[0]
+    assert output.count("[1]") == 2
+    assert len(_interior_dividers(output)) == 2
+
+
+def test_interactive_storage_error_falls_back_to_summary_without_details():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+
+    reporter.log_storage_error("Scrape state could not be loaded.")
+
+    output = _render(reporter._generate_panel())
+
+    assert "Scrape state could not be loaded." in output
+    assert "Storage" not in output
+
+
 def test_interactive_spanning_and_labeled_rows_keep_event_order_and_layouts():
     reporter = InteractiveRunReporter()
     reporter.target_name = "Store"

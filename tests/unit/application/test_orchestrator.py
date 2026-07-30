@@ -95,7 +95,11 @@ def test_config_and_state_failures_keep_distinct_exit_status_and_reporting(monke
     )
     assert state_run.run() == EXIT_CODE_STORAGE_ERROR
     assert state_reporter.start_target.call_args.args[3].error is None
-    state_reporter.log_error.assert_called_once()
+    state_reporter.log_storage_error.assert_called_once_with(
+        "Scrape state could not be loaded.",
+        "bad state",
+    )
+    state_reporter.log_error.assert_not_called()
     loader.load.assert_not_called()
 
 
@@ -277,7 +281,11 @@ def test_one_state_commit_failure_is_storage_error(monkeypatch):
     assert run.run() == EXIT_CODE_STORAGE_ERROR
     state.save.assert_called_once()
     assert executor_type.call_args.kwargs["suppress_repeated_price_alerts"] is True
-    assert reporter.log_error.call_args.args[1] == "Latest scrape state was not saved."
+    reporter.log_storage_error.assert_called_once_with(
+        "Latest scrape state was not saved.",
+        "Cannot save `state/store.json`; check the error log.",
+    )
+    reporter.log_error.assert_not_called()
 
 
 def test_success_commits_once_closes_client_and_aggregates_notification_failures(monkeypatch):

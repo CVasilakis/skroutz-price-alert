@@ -743,6 +743,21 @@ def _():
 
 
 @scenario(
+    Surface.RUN, "storage_load_failure", "The state file could not be loaded", tags=("system",)
+)
+def _():
+    def script(s):
+        _start(s)
+        s.log_storage_error(
+            messages.state_load_failed("skroutz"),
+            "Cannot read `state/skroutz.json`; check its permissions.",
+        )
+        s.complete_target()
+
+    return drive_run(script)
+
+
+@scenario(
     Surface.RUN, "storage_save_failure", "The state file could not be persisted", tags=("system",)
 )
 def _():
@@ -753,8 +768,7 @@ def _():
         s.log_price_result(
             "Sony WH-1000XM5", 248.0, CURRENCY, 300.0, PriceOutcome.DROP, notes=[NOTIFIED_OK]
         )
-        s.log_error(
-            "Storage",
+        s.log_storage_error(
             messages.state_save_failed("skroutz"),
             "Cannot save `state/skroutz.json`; check its permissions.",
         )
