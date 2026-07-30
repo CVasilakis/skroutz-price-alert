@@ -121,6 +121,10 @@ class SilentRunReporter(RunReporter):
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
             self.target_logger.error(f"❗ {name}: {error_str}{suffix}")
 
+    def log_system_error(self, error_str: str) -> None:
+        """Log a target-start system failure with the established file-log wording."""
+        self.log_error("System", error_str)
+
     def log_attempt(self, name: str, attempt: int, max_retries: int, detail: str) -> None:
         if self.target_logger:
             self.target_logger.warning(

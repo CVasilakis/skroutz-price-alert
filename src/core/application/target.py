@@ -218,10 +218,10 @@ class TargetRunner:
                             "Notifications", messages.WARN_ERROR_NOTIFICATION_FAILED
                         )
         except LockAcquisitionError:
-            self.reporter.log_error("System", messages.ERR_LOCK_HELD)
+            self.reporter.log_system_error(messages.ERR_LOCK_HELD)
             result.skipped = True
         except PluginDependencyError as exc:
-            self.reporter.log_error("System", str(exc))
+            self.reporter.log_system_error(str(exc))
             result.dependency_error = True
         except Exception as exc:
             try:

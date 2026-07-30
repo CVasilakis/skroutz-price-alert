@@ -124,7 +124,10 @@ def test_lock_failure_prevents_state_and_client_access(monkeypatch):
     assert run.run() == EXIT_CODE_SKIPPED
     factory.assert_not_called()
     loader.load.assert_not_called()
-    reporter.log_error.assert_called_once()
+    reporter.log_system_error.assert_called_once_with(
+        "Another instance is currently running. Aborting..."
+    )
+    reporter.log_error.assert_not_called()
 
 
 def test_dependency_failure_happens_after_locked_state_load(monkeypatch):
@@ -137,7 +140,8 @@ def test_dependency_failure_happens_after_locked_state_load(monkeypatch):
 
     assert run.run() == EXIT_CODE_PLUGIN_DEPENDENCY_ERROR
     state.load.assert_called_once()
-    reporter.log_error.assert_called_once()
+    reporter.log_system_error.assert_called_once_with("install it")
+    reporter.log_error.assert_not_called()
 
 
 def test_zero_items_still_loads_state_and_malformed_state_is_storage_error(monkeypatch):

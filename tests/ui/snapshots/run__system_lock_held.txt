@@ -7,6 +7,5 @@
 │   ✅    Notify On Errors        true (default)                          │
 │   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    System                  Another instance is currently           │
-│                                 running. Aborting...                    │
+│   ❗    Another instance is currently running. Aborting...              │
 ╰─────────────────────────────────────────────────────────────────────────╯

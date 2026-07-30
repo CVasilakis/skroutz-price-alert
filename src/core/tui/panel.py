@@ -108,6 +108,17 @@ class PanelTableLayout:
         table.add_column("Value", width=self.value)
         return table
 
+    def new_spanning_table(self) -> Table:
+        """Build an icon-and-message table spanning the labeled columns."""
+        table = Table(
+            show_header=False,
+            box=None,
+            padding=(0, _COLUMN_HORIZONTAL_PADDING),
+        )
+        table.add_column("Icon", justify="center", width=self.icon)
+        table.add_column("Message")
+        return table
+
 
 class StatusPanelBuilder:
     """Reusable builder for Rich status panels with icon-based rows, footnotes, and automatic border coloring.

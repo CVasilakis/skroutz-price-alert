@@ -721,7 +721,7 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_error("System", messages.ERR_LOCK_HELD)
+        s.log_system_error(messages.ERR_LOCK_HELD)
         s.complete_target()
 
     return drive_run(script)
@@ -736,7 +736,7 @@ def _():
 def _():
     def script(s):
         _start(s)
-        s.log_error("System", messages.plugin_dependency_detail("skroutz", "tls_client"))
+        s.log_system_error(messages.plugin_dependency_detail("skroutz", "tls_client"))
         s.complete_target()
 
     return drive_run(script)

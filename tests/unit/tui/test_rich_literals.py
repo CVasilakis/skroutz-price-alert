@@ -81,6 +81,25 @@ def test_interactive_error_row_backticks_are_dim_cyan_without_parsing_markup():
     assert "`" not in "".join(segment.text for segment in segments)
 
 
+def test_interactive_system_error_text_is_literal_and_inline_code_is_styled():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    reporter.log_system_error(
+        "Missing [red]dependency[/red]; run `./install.sh --[blue]store[/blue]`."
+    )
+    panel = reporter._generate_panel()
+    console = Console(width=PANEL_WIDTH + 25, color_system="truecolor")
+    segments = list(console.render(panel, console.options))
+    rendered = "".join(segment.text for segment in segments)
+
+    assert "[red]dependency[/red]" in rendered
+    assert "./install.sh" in rendered
+    assert "--[blue]store[/blue]" in rendered
+    command = next(segment for segment in segments if "./install.sh" in segment.text)
+    assert str(command.style) == "dim cyan"
+    assert "System" not in rendered
+
+
 def test_status_setting_callbacks_and_title_are_plain_text():
     panel = StatusPanelBuilder("[red]Store[/red]")
     add_setting_row(

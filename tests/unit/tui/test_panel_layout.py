@@ -203,7 +203,7 @@ def test_interactive_layout_preserves_full_unicode_name_and_scales_progress(widt
     assert reporter.scraping_name == name
     reporter.complete_scraping()
     reporter.log_result("✅", name, "OK", "word " * 40)
-    assert Text.from_markup(reporter.rows[0][1]).plain == name
+    assert Text.from_markup(reporter.rows[0].label).plain == name
     reporter.start_sleep(20)
     reporter.update_sleep(10)
 
@@ -236,6 +236,47 @@ def test_interactive_layout_shrinks_primary_when_long_value_appears():
     assert "Suppress Repeated P…" in after
     assert "Expensive product w…" in after
     assert "1630.30 € (Target: 1500.50 €) [1] [2]" in after
+
+
+@pytest.mark.parametrize("width", [55, PANEL_WIDTH, 95])
+def test_interactive_system_error_spans_labeled_columns_responsively(width):
+    reporter = InteractiveRunReporter(width=width)
+    reporter.target_name = "Store"
+    reporter.settings_rows = [("✅", "Tracked Items", "5 loaded")]
+    reporter.log_system_error(
+        "Scraper 'store' requires missing dependencies (missing module: tls_client). "
+        "Install with ./install.sh --store."
+    )
+
+    output = _render(reporter._generate_panel())
+    lines = output.splitlines()
+    error_lines = [line for line in lines if "❗" in line]
+
+    assert all(Text.from_ansi(line).cell_len == width for line in lines)
+    assert len(_interior_dividers(output)) == 1
+    assert len(error_lines) == 1
+    assert "System" not in output
+    assert str(reporter._generate_panel().border_style) == "red"
+
+
+def test_interactive_spanning_and_labeled_rows_keep_event_order_and_layouts():
+    reporter = InteractiveRunReporter()
+    reporter.target_name = "Store"
+    reporter.log_error("Storage", "State could not be loaded.")
+    reporter.log_system_error("Another instance is currently running. Aborting...")
+    reporter.log_warning("Notifications", "Delivery failed.")
+
+    output = _render(reporter._generate_panel())
+
+    assert (
+        output.index("Storage") < output.index("Another instance") < output.index("Notifications")
+    )
+    assert "Storage                 State could not be loaded." in output
+    assert "Notifications           Delivery failed." in output
+    storage_line = next(line for line in output.splitlines() if "Storage" in line)
+    system_line = next(line for line in output.splitlines() if "Another instance" in line)
+    assert system_line.index("❗") == storage_line.index("❗")
+    assert "Another instance is currently running. Aborting..." in system_line
 
 
 def test_status_and_interactive_consumers_share_footnote_layout_and_code_style():

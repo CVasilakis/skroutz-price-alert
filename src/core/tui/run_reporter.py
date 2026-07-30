@@ -1,7 +1,9 @@
 import logging
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import TypeAlias
 
-from rich.console import Console, Group
+from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.markup import escape
 from rich.panel import Panel
@@ -20,6 +22,30 @@ from core.tui.footnotes import FootnoteRegistry, inline_text
 from core.tui.panel import PANEL_WIDTH, PanelTableLayout
 
 
+@dataclass(frozen=True)
+class _LabeledRow:
+    """A conventional icon, label, and value row in the scraping panel."""
+
+    icon: RenderableType
+    label: RenderableType
+    value: RenderableType
+
+    @property
+    def cells(self) -> tuple[RenderableType, RenderableType, RenderableType]:
+        return (self.icon, self.label, self.value)
+
+
+@dataclass(frozen=True)
+class _SpanningRow:
+    """An icon and message row whose message replaces the label and value columns."""
+
+    icon: RenderableType
+    value: RenderableType
+
+
+_DisplayRow: TypeAlias = _LabeledRow | _SpanningRow
+
+
 class InteractiveRunReporter(RunReporter):
     """Rich live reporter for an interactive scraping run."""
 
@@ -28,7 +54,7 @@ class InteractiveRunReporter(RunReporter):
         self.width = width
         self.console = Console()
         self.live = None
-        self.rows = []
+        self.rows: list[_DisplayRow] = []
         self.settings_rows = []
         self._footnotes = FootnoteRegistry()
         self.target_name = ""
@@ -154,7 +180,7 @@ class InteractiveRunReporter(RunReporter):
         """Generates the rich panel to be rendered on the live display."""
         # Assemble the live scraping rows (results, then the transient sleep/scraping row)
         # before building the table, so their labels feed the shared column sizing below.
-        display_rows: list[tuple] = list(self.rows)
+        display_rows: list[_DisplayRow] = list(self.rows)
         if self.is_sleeping:
             grid = Table.grid(padding=(0, 1))
             grid.add_row(
@@ -167,7 +193,7 @@ class InteractiveRunReporter(RunReporter):
                 ),
                 f"[cyan]{self.sleep_remaining:.1f}s[/cyan]",
             )
-            display_rows.append(("⏳", self.sleep_label, grid))
+            display_rows.append(_LabeledRow("⏳", self.sleep_label, grid))
         elif self.scraping_name:
             if self.scraping_attempt > 1:
                 scrape_text = (
@@ -176,36 +202,58 @@ class InteractiveRunReporter(RunReporter):
             else:
                 scrape_text = "[cyan]Scraping...[/cyan]"
             display_rows.append(
-                (Spinner("dots", style="cyan"), escape(self.scraping_name), scrape_text)
+                _LabeledRow(Spinner("dots", style="cyan"), escape(self.scraping_name), scrape_text)
             )
 
         # Allocate all columns once across both sections. The transient sleep/scraping row
         # participates so the layout responds to everything currently visible.
         layout = PanelTableLayout.from_rows(
             self.width,
-            self.settings_rows + display_rows,
+            [
+                *self.settings_rows,
+                *(row.cells for row in display_rows if isinstance(row, _LabeledRow)),
+            ],
         )
 
-        display_table = layout.new_table("Name")
+        display_blocks: list[RenderableType] = []
+        labeled_table: Table | None = None
         for row in display_rows:
-            display_table.add_row(*row)
+            if isinstance(row, _LabeledRow):
+                if labeled_table is None:
+                    labeled_table = layout.new_table("Name")
+                labeled_table.add_row(*row.cells)
+                continue
+            if labeled_table is not None:
+                display_blocks.append(labeled_table)
+                labeled_table = None
+            spanning_table = layout.new_spanning_table()
+            spanning_table.add_row(row.icon, row.value)
+            display_blocks.append(spanning_table)
+        if labeled_table is not None:
+            display_blocks.append(labeled_table)
 
         # Separate the static settings from live scraping content only when both
         # sections contain rows. Footnotes render independently below the body and
         # must not leave a dangling divider when a target is skipped before scraping.
+        body: RenderableType
         if self.settings_rows and display_rows:
             settings_table = layout.new_table("Name")
             for row in self.settings_rows:
                 settings_table.add_row(*row)
-            body = Group(settings_table, Rule(style="dim"), display_table)
+            body = Group(settings_table, Rule(style="dim"), *display_blocks)
         elif self.settings_rows:
             settings_table = layout.new_table("Name")
             for row in self.settings_rows:
                 settings_table.add_row(*row)
             body = settings_table
+        elif len(display_blocks) == 1:
+            body = display_blocks[0]
+        elif display_blocks:
+            body = Group(*display_blocks)
         else:
-            body = display_table
+            body = layout.new_table("Name")
 
+        renderable: RenderableType
         if self._footnotes.notes:
             renderable = Group(body, self._footnotes.render())
         else:
@@ -217,8 +265,7 @@ class InteractiveRunReporter(RunReporter):
 
         # Settings rows count toward the border color too, so an invalid setting tints
         # the panel yellow.
-        for row in self.settings_rows + self.rows:
-            icon = row[0]
+        for icon in [*(row[0] for row in self.settings_rows), *(row.icon for row in self.rows)]:
             if icon == "🎉":
                 has_green = True
             elif icon in ("❗", "🛑"):
@@ -250,7 +297,7 @@ class InteractiveRunReporter(RunReporter):
     ) -> None:
         """Logs a standard result directly into the rich table."""
         refs = self._build_note_refs(self._note_list(attempt_notes) + self._note_list(notes))
-        self.rows.append((icon, escape(name), f"{value}{refs}"))
+        self.rows.append(_LabeledRow(icon, escape(name), f"{value}{refs}"))
         if self.live:
             self.live.update(self._generate_panel())
 
@@ -297,13 +344,7 @@ class InteractiveRunReporter(RunReporter):
         refs = self._build_note_refs(self._note_list(attempt_notes) + self._note_list(notes))
         value = inline_text(warning_str, style="yellow")
         value.append_text(Text.from_markup(refs))
-        self.rows.append(
-            (
-                "🟡",
-                escape(name),
-                value,
-            )
-        )
+        self.rows.append(_LabeledRow("🟡", escape(name), value))
         if self.live:
             self.live.update(self._generate_panel())
 
@@ -314,7 +355,13 @@ class InteractiveRunReporter(RunReporter):
         refs = self._build_note_refs(self._note_list(attempt_notes) + self._note_list(notes))
         value = inline_text(error_str)
         value.append_text(Text.from_markup(refs))
-        self.rows.append(("❗", escape(name), value))
+        self.rows.append(_LabeledRow("❗", escape(name), value))
+        if self.live:
+            self.live.update(self._generate_panel())
+
+    def log_system_error(self, error_str: str) -> None:
+        """Render a target-start system failure across the panel's message width."""
+        self.rows.append(_SpanningRow("❗", inline_text(error_str)))
         if self.live:
             self.live.update(self._generate_panel())
 
@@ -374,7 +421,7 @@ class InteractiveRunReporter(RunReporter):
         if self.live:
             self.is_sleeping = False
             self.scraping_name = ""
-            self.rows.append(("🛑", "Interrupted", escape(message)))
+            self.rows.append(_LabeledRow("🛑", "Interrupted", escape(message)))
             self.live.update(self._generate_panel())
         else:
             logging.info(f"🛑 {message}", extra={"pad_top": 1, "pad_bottom": 1})

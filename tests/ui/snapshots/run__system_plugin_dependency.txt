@@ -7,8 +7,6 @@
 │   ✅    Notify On Errors        true (default)                          │
 │   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
-│   ❗    System                  Scraper 'skroutz' requires missing      │
-│                                 dependencies (missing module:           │
-│                                 tls_client). Install with               │
-│                                 ./install.sh --skroutz.                 │
+│   ❗    Scraper 'skroutz' requires missing dependencies (missing        │
+│         module: tls_client). Install with ./install.sh --skroutz.       │
 ╰─────────────────────────────────────────────────────────────────────────╯
