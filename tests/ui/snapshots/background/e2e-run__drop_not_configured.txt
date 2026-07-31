@@ -1,0 +1,8 @@
+# logs/fakestore/output.log
+
+[2026-07-04 12:00:00 UTC] 🗄️  Tracked Items: 1 loaded
+[2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 1h (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 7 days (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: true (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Repeat Alerts: false (default)
+[2026-07-04 12:00:00 UTC] 🎉 Sony WH-1000XM5: 248.0 € (Target: 300.0 €) (No notification sent (notifications not configured).)

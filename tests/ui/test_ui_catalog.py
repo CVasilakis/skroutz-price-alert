@@ -57,12 +57,12 @@ class TestSurfaceInfo(unittest.TestCase):
 
 
 class TestGalleryVisibility(unittest.TestCase):
-    """Test-only scenarios (in_gallery=False) stay out of review output by default.
+    """Test-only interactive artifacts stay out of terminal review by default.
 
     The STARTUP transcripts exist for the outside-panels assertion and their golden
     snapshots; every panel they stack is already reviewed on its own surface, so the
-    gallery and the HTML report hide them unless an explicit --surface or --tag
-    filter matches them.
+    terminal gallery hides them unless an explicit --surface or --tag filter matches.
+    The HTML report may still include their unique background log artifacts.
     """
 
     def test_hidden_scenarios_are_excluded_by_default(self):
@@ -72,6 +72,18 @@ class TestGalleryVisibility(unittest.TestCase):
         self.assertTrue(all(sc.in_gallery for sc in shown))
         # And something actually is hidden, so this test can't pass vacuously.
         self.assertLess(len(shown), len(ALL_SCENARIOS))
+
+    def test_html_includes_hidden_scenarios_that_own_background_logs(self):
+        from ui.gallery import _filtered
+
+        shown = _filtered(None, None, include_background=True)
+        hidden_background = [
+            scenario
+            for scenario in ALL_SCENARIOS
+            if not scenario.in_gallery and scenario.surface is Surface.STARTUP
+        ]
+        self.assertTrue(hidden_background)
+        self.assertTrue(all(scenario in shown for scenario in hidden_background))
 
     def test_hidden_scenarios_render_when_their_surface_is_explicit(self):
         from ui.gallery import _filtered

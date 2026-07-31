@@ -1,0 +1,11 @@
+# logs/skroutz/output.log
+
+[2026-07-04 12:00:00 UTC] 🗄️  Tracked Items: 5 loaded
+[2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 1h (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 7 days (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: true (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Repeat Alerts: false (default)
+[2026-07-04 12:00:00 UTC] ❗ Blocked Item: Attempt 1/3 FAILED (ScraperParseError: No price element found)
+[2026-07-04 12:00:00 UTC] ❗ Blocked Item: Attempt 2/3 FAILED (ServerError: Server error (HTTP 503), retrying...)
+[2026-07-04 12:00:00 UTC] ❗ Blocked Item: Attempt 3/3 FAILED (RateLimitError: Blocked or rate limited (HTTP 429))
+[2026-07-04 12:00:00 UTC] ❗ Blocked Item: All attempts failed (RateLimitError) (Rate limit reached; scraping aborted.) (See `logs/skroutz/errors.txt` for details.)

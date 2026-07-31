@@ -31,9 +31,9 @@ STATE_BAD_JSON = "Fix JSON in `state/skroutz.json` at line 8, column 2."
 NOTIFICATIONS_NONE = "No notification URLs found in `config/general.json`."
 
 
-def stub_logger() -> logging.Logger:
-    """A no-op logger for ``start_target`` (the interactive reporter never writes to it)."""
-    lg = logging.getLogger("ui_test.stub")
+def stub_logger(target: str = "stub") -> logging.Logger:
+    """A target-identifying no-op logger for scripted reporter scenarios."""
+    lg = logging.getLogger(f"scraper.{target}")
     lg.handlers = [logging.NullHandler()]
     lg.propagate = False
     return lg

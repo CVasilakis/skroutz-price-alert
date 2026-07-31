@@ -3,9 +3,8 @@
 Each driver exercises the *real* production panel-building code with controlled inputs, so
 the captured snapshot reflects exactly what the application renders:
 
-* ``drive_run`` replays a script of public ``InteractiveRunReporter`` calls (with
-  ``rich.live.Live`` stubbed) and captures the resulting panel — the same panel the
-  application workflow drives at runtime.
+* ``drive_run`` replays one script through both production reporters and captures the
+  interactive panel plus the background target log.
 * ``drive_service`` / ``drive_not_installed`` / ``drive_orphan`` call the pure builders
   in ``core.tui.status``.
 * ``drive_ping`` calls the pure builder in ``core.tui.ping``.
@@ -27,6 +26,8 @@ from rich.console import Console
 from rich.text import Text
 
 from core.application import orchestrator as orchestrator_module
+from core.application.contracts import ConfigOutcome, RunReporter
+from core.application.reporting import SilentRunReporter
 from core.general import ReminderService
 from core.general.configuration import GeneralConfigLoad
 from core.general.reminder_state import ReminderStateRepository
@@ -42,6 +43,7 @@ from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
 from core.tui import config_check, ping, run_reporter, status
 from ui.catalog._base import BuildResult
+from ui.harness.output_logs import OutputLogCapture
 
 # NB: ``ui.harness.rendering`` is imported lazily inside drive_startup, not here:
 # rendering imports ui.catalog._base, whose package __init__ imports the scenario modules,
@@ -73,7 +75,34 @@ class _FakeLive:
         pass
 
 
-def drive_run(script: Callable[[run_reporter.InteractiveRunReporter], None]) -> BuildResult:
+class _CapturedSilentReporter(SilentRunReporter):
+    """Replace a scripted scenario's no-op logger with its real target file logger."""
+
+    def __init__(self, capture: OutputLogCapture) -> None:
+        super().__init__()
+        self._capture = capture
+
+    def start_target(
+        self,
+        target_name: str,
+        target_logger: logging.Logger,
+        settings: ResolvedSettings,
+        config: ConfigOutcome,
+    ) -> None:
+        prefix = "scraper."
+        if not target_logger.name.startswith(prefix):
+            raise AssertionError(
+                f"Scripted target logger must identify itself as {prefix}<target>: "
+                f"{target_logger.name}"
+            )
+        target = target_logger.name.removeprefix(prefix)
+        super().start_target(target_name, self._capture.logger_for(target), settings, config)
+
+
+def _drive_run(
+    script: Callable[[RunReporter], None],
+    capture: OutputLogCapture,
+) -> BuildResult:
     """Runs ``script`` against a real reporter and captures its final panel.
 
     The script calls the reporter's public methods (``start_target``, ``log_price_result``,
@@ -92,7 +121,15 @@ def drive_run(script: Callable[[run_reporter.InteractiveRunReporter], None]) -> 
         reporter.console = Console(file=io.StringIO())
         script(reporter)
         panel = reporter._generate_panel()
-    return BuildResult(panel, str(panel.border_style))
+
+    script(_CapturedSilentReporter(capture))
+    return BuildResult(panel, str(panel.border_style), output_logs=capture.artifacts())
+
+
+def drive_run(script: Callable[[RunReporter], None]) -> BuildResult:
+    """Run one script through both production reporters in isolated environments."""
+    with OutputLogCapture() as capture:
+        return _drive_run(script, capture)
 
 
 # --- E2E_RUN: the same panel, driven by the real application workflow ----------------
@@ -106,14 +143,14 @@ def drive_orchestrated_run(
     delivery_ok: bool = True,
 ) -> BuildResult:
     """Runs the *real* ``ScrapingOrchestrator`` over a scripted store and captures the
-    finished interactive panel.
+    finished interactive panel and quiet file log.
 
     Where :func:`drive_run` replays a hand-written script of reporter calls (and so can
     depict any rendering state), this driver closes the loop the other way: the notes,
     warnings, and footnotes on the captured panel are whatever the production
     application workflow actually emits (via ``core.messages``) for the given scrape outcomes —
     nothing is hand-fed to the UI. Only the pacing sleep, the signal-handler install,
-    and the per-target file logger are patched.
+    and signal-handler installation are patched.
 
     Args:
         items: The config rows written to the temp ``fakestore.json``.
@@ -133,23 +170,24 @@ def drive_orchestrated_run(
     from core.scrapers.api import ScraperClient, UrlField
     from core.scrapers.framework.clients import ClientLoader
 
-    scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
     url_field = UrlField("url", domains=("fake-store.example",), accepts_url=lambda _url: True)
-
-    class _ScriptedClient(ScraperClient):
-        def scrape(self, item):
-            script = scripts[item[url_field]]
-            outcome = script.pop(0) if len(script) > 1 else script[0]
-            if isinstance(outcome, Exception):
-                raise outcome
-            return outcome
 
     stub = logging.getLogger("ui.catalog.e2e-stub")
     stub.handlers[:] = [logging.NullHandler()]
     stub.propagate = False
 
-    cfg_dir = tempfile.mkdtemp()
-    try:
+    def execute(*, quiet: bool, reporter, get_logger) -> object | None:
+        scripts = {url: list(outcomes) for url, outcomes in results_by_url.items()}
+
+        class _ScriptedClient(ScraperClient):
+            def scrape(self, item):
+                script = scripts[item[url_field]]
+                outcome = script.pop(0) if len(script) > 1 else script[0]
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+        cfg_dir = tempfile.mkdtemp()
         canonical_items = []
         for index, item in enumerate(items, 1):
             canonical_items.append(
@@ -166,36 +204,51 @@ def drive_orchestrated_run(
                 f,
             )
 
-        plugin = fake_plugin(
-            name="fakestore",
-            domains=("fake-store.example",),
-            client_class=_ScriptedClient,
-            url_field=url_field,
-        )
-        with catalog_sandbox(plugin) as catalog, mock.patch.object(run_reporter, "Live", _FakeLive):
-            reporter = run_reporter.InteractiveRunReporter()
-            reporter.console = Console(file=io.StringIO())
-
-            loader = ClientLoader()
-            loads = load_target_configs([catalog.get("fakestore")], cfg_dir)
-            orch = ScrapingOrchestrator(
-                target_loads=loads,
-                client_loader=loader,
-                notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
-                quiet=False,
-                reporter=reporter,
-                state_dir=os.path.join(cfg_dir, "state"),
+        try:
+            plugin = fake_plugin(
+                name="fakestore",
+                domains=("fake-store.example",),
+                client_class=_ScriptedClient,
+                url_field=url_field,
             )
             with (
-                mock.patch("core.application.pacing.Pacer.sleep"),
-                mock.patch.object(orchestrator_module.signal, "signal"),
-                mock.patch.object(orchestrator_module, "get_target_logger", lambda *a, **k: stub),
+                catalog_sandbox(plugin) as catalog,
+                mock.patch.object(run_reporter, "Live", _FakeLive),
+                mock.patch.object(orchestrator_module, "get_target_logger", get_logger),
             ):
-                orch.run()
-            panel = reporter._generate_panel()
-        return BuildResult(panel, str(panel.border_style))
-    finally:
-        shutil.rmtree(cfg_dir, ignore_errors=True)
+                loader = ClientLoader()
+                loads = load_target_configs([catalog.get("fakestore")], cfg_dir)
+                orch = ScrapingOrchestrator(
+                    target_loads=loads,
+                    client_loader=loader,
+                    notifier=mock_notifier(has_services=has_services, delivery_ok=delivery_ok),
+                    quiet=quiet,
+                    reporter=reporter,
+                    state_dir=os.path.join(cfg_dir, "state"),
+                )
+                with (
+                    mock.patch("core.application.pacing.Pacer.sleep"),
+                    mock.patch.object(orchestrator_module.signal, "signal"),
+                ):
+                    orch.run()
+                if isinstance(reporter, run_reporter.InteractiveRunReporter):
+                    return reporter._generate_panel()
+                return None
+        finally:
+            shutil.rmtree(cfg_dir, ignore_errors=True)
+
+    with OutputLogCapture() as capture:
+        interactive = run_reporter.InteractiveRunReporter()
+        interactive.console = Console(file=io.StringIO())
+        panel = execute(quiet=False, reporter=interactive, get_logger=lambda *a, **k: stub)
+        execute(quiet=True, reporter=SilentRunReporter(), get_logger=capture.logger_for)
+        if panel is None:
+            raise AssertionError("Interactive orchestrated run did not produce a panel")
+        return BuildResult(
+            panel,
+            str(panel.border_style),
+            output_logs=capture.artifacts(),
+        )
 
 
 # --- STATUS: service / not-installed / orphan panels --------------------------------
@@ -321,7 +374,7 @@ def drive_config(
 # --- STARTUP: full interactive pre-scrape console transcript -------------------------
 
 
-def _emit_reminder(console: Console, reminder_raw: object) -> None:
+def _emit_reminder(console: Console, reminder_raw: object, capture: OutputLogCapture) -> None:
     """Runs the *real* ``ReminderService.run_once()`` with root logging wired to ``console``.
 
     Mirrors an interactive run's logging setup (``setup_global_logging(quiet=False)`` points
@@ -349,7 +402,10 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
     try:
         # Drop any cached handler so a fresh one is created under the redirected LOGS_DIR.
         reminder_logger.handlers[:] = []
-        with mock.patch.object(core_logger, "console", console):
+        with (
+            mock.patch.object(core_logger, "console", console),
+            mock.patch("core.general.reminder.get_target_logger", side_effect=capture.logger_for),
+        ):
             setup_global_logging(quiet=False)  # interactive: root Rich handler -> console
             ReminderService(
                 settings,
@@ -359,12 +415,15 @@ def _emit_reminder(console: Console, reminder_raw: object) -> None:
                 update_check_fn=lambda: False,
             ).run_once()
     finally:
+        for handler in reminder_logger.handlers:
+            if handler not in saved[2]:
+                handler.close()
         logging.root.handlers[:], logging.root.level, reminder_logger.handlers[:] = saved
         shutil.rmtree(temp_root, ignore_errors=True)
 
 
 def drive_startup(
-    run_script: Callable[[run_reporter.InteractiveRunReporter], None],
+    run_script: Callable[[RunReporter], None],
     *,
     reminder_raw: object = None,
     version_state: str = "uptodate",
@@ -392,22 +451,28 @@ def drive_startup(
     # Lazy import to avoid a module-load cycle (see the note at the top of this file).
     from ui.harness.rendering import make_recording_console, paint
 
-    config_result = drive_config(
-        version_state,
-        valid_count=valid_count,
-        invalid_count=invalid_count,
-        config_error=config_error,
-        reminder_raw=reminder_raw,
-    )
-    run_result = drive_run(run_script)
+    with OutputLogCapture() as capture:
+        config_result = drive_config(
+            version_state,
+            valid_count=valid_count,
+            invalid_count=invalid_count,
+            config_error=config_error,
+            reminder_raw=reminder_raw,
+        )
+        run_result = _drive_run(run_script, capture)
 
-    console = make_recording_console()
-    console.print()  # main() prints a leading blank line
-    paint(console, config_result)
-    console.print()  # blank between preflight and the run
-    _emit_reminder(console, reminder_raw)  # logs to file only; a leak would land here
-    paint(console, run_result)
+        console = make_recording_console()
+        console.print()  # main() prints a leading blank line
+        paint(console, config_result)
+        console.print()  # blank between preflight and the run
+        _emit_reminder(console, reminder_raw, capture)  # logs to file only; a leak would land here
+        paint(console, run_result)
+        output_logs = capture.artifacts()
 
     text = console.export_text(styles=False)
     transcript = "\n".join(line.rstrip() for line in text.splitlines()).strip("\n")
-    return BuildResult(renderable=Text(transcript), border_color=run_result.border_color)
+    return BuildResult(
+        renderable=Text(transcript),
+        border_color=run_result.border_color,
+        output_logs=output_logs,
+    )

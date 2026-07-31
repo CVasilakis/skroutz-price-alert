@@ -1,0 +1,11 @@
+# logs/skroutz/output.log
+
+[2026-07-04 12:00:00 UTC] 🗄️  Tracked Items: 5 loaded
+[2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 1h (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 7 days (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: true (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Repeat Alerts: false (default)
+[2026-07-04 12:00:00 UTC] ❗ Samsung Odyssey G9 49-inch Curved Gaming Monitor: Attempt 1/3 FAILED (ScraperParseError)
+[2026-07-04 12:00:00 UTC] ❗ Samsung Odyssey G9 49-inch Curved Gaming Monitor: Attempt 2/3 FAILED (ScraperParseError)
+[2026-07-04 12:00:00 UTC] ❗ Samsung Odyssey G9 49-inch Curved Gaming Monitor: Attempt 3/3 FAILED (ScraperParseError)
+[2026-07-04 12:00:00 UTC] ❗ Samsung Odyssey G9 49-inch Curved Gaming Monitor: All attempts failed (ScraperParseError) (The server returned an unexpected page structure and the price element could not be located after exhausting every configured selector fallback; inspect the saved response for details.)

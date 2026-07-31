@@ -21,7 +21,7 @@ from ui.catalog._base import Surface, scenario
 from ui.catalog.inputs import CURRENCY, stub_logger, views_all_ok
 from ui.harness.drivers import drive_startup
 
-LOGGER = stub_logger()
+LOGGER = stub_logger("skroutz")
 
 
 def _run_script(s):

@@ -1,0 +1,8 @@
+# logs/skroutz/output.log
+
+[2026-07-04 12:00:00 UTC] 🗄️  Tracked Items: 5 loaded
+[2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 2h
+[2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 14 days
+[2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: false
+[2026-07-04 12:00:00 UTC] ⚙️  Repeat Alerts: true
+[2026-07-04 12:00:00 UTC] ✅ Sony WH-1000XM5: 320.0 € (Target: 300.0 €)

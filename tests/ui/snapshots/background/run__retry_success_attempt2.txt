@@ -1,0 +1,9 @@
+# logs/skroutz/output.log
+
+[2026-07-04 12:00:00 UTC] 🗄️  Tracked Items: 5 loaded
+[2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 1h (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 7 days (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: true (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Repeat Alerts: false (default)
+[2026-07-04 12:00:00 UTC] ❗ Sony WH-1000XM5: Attempt 1/3 FAILED (ScraperParseError: No price element found)
+[2026-07-04 12:00:00 UTC] 🎉 Sony WH-1000XM5: 248.0 € (Target: 300.0 €) (Succeeded on attempt 2/3.) (Notification delivered to all valid apprise URL(s).)

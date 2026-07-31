@@ -1,0 +1,8 @@
+# logs/insomnia/output.log
+
+[2026-07-04 12:00:00 UTC] 🗄️  Tracked Items: 5 loaded
+[2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 1h (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 7 days (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: true (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Repeat Alerts: false (default)
+[2026-07-04 12:00:00 UTC] 🟡 Google Pixel 9 (128 GB): 185.0 € (Target: 200.0 €) (3 advert(s) matched the filters; 2 below target.) (Notification delivery failed for 1 of 2 advert(s).)

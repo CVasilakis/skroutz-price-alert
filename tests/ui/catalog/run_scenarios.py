@@ -33,8 +33,6 @@ STATUS_OK = SettingStatus.OK
 STATUS_DEFAULT = SettingStatus.DEFAULT
 STATUS_INVALID = SettingStatus.INVALID
 
-LOGGER = stub_logger()
-
 # The healthy 'Config' row every real Scraping panel leads with (overridden per scenario).
 _CONFIG_OK = ConfigOutcome(5)
 
@@ -57,7 +55,7 @@ def _start(s, settings=None, target="Skroutz", config=_CONFIG_OK):
     """Opens a target with a realistic 'Config' row + settings section (defaults unless overridden)."""
     s.start_target(
         target,
-        LOGGER,
+        stub_logger(target.casefold()),
         ResolvedSettings(views_all_default() if settings is None else settings),
         config,
     )

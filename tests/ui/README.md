@@ -47,9 +47,9 @@ Three things make this tractable:
 2. **Scenarios drive the *real* production rendering code** with synthetic inputs — no
    network, no `systemctl`, no real config. So what you snapshot is exactly what ships,
    not a look-alike reimplementation.
-3. **The same catalog feeds two consumers:**
-   - a **snapshot gate** (machine check — did the output change?),
-   - a **gallery** (human check — does it *look* right?).
+3. **The same catalog feeds two consumers and both execution modes:**
+   - a **snapshot gate** for the interactive rendering and background `output.log` files,
+   - a **gallery** that shows the interactive rendering and background logs together.
 
 ```
                     ┌─────────────────────────┐
@@ -57,7 +57,7 @@ Three things make this tractable:
                     │  run / status / ping /   │
                     │  config / sh-* (shell)   │
                     └────────────┬────────────┘
-                                 │ each scenario.build() → BuildResult(renderable, color)
+                                 │ each scenario.build() → BuildResult(UI + output logs)
                                  ▼
                     ┌─────────────────────────┐
                     │  harness/  (drivers +    │   ← runs the real production builders
@@ -65,9 +65,9 @@ Three things make this tractable:
                     └───────┬─────────────┬────┘
                             ▼             ▼
                  ┌────────────────┐  ┌────────────────┐
-                 │ snapshot gate  │  │    gallery     │
-                 │ (plain-text    │  │ (full color,   │
-                 │  golden files) │  │  for eyeballs) │
+                 │ snapshot gate  │  │ HTML gallery   │
+                 │ (UI + quiet    │  │ (interactive + │
+                 │  log goldens)  │  │  output.log)   │
                  └────────────────┘  └────────────────┘
 ```
 
@@ -114,16 +114,19 @@ tests/ui/
     drivers.py             #    drive_run / drive_service / drive_ping / drive_config, ...
     shell.py               #    drive_shell: sandboxed shell-script execution + shims
     rendering.py           #    the deterministic recording console + capture helpers
-  snapshots/               # ── the approved output: golden files <surface>__<name>.txt
+  snapshots/               # ── the approved output
+    terminal/              #    terminal golden files <surface>__<name>.txt
+    background/            #    matching output.log goldens for run surfaces
   test_ui_catalog.py       #    catalog metadata, visibility, and ordering guards
   test_ui_snapshots.py     #    the gate: compare each scenario to its golden file
   test_ui_colors.py        #    border-color assertions
+  test_html_report.py      #    interactive/background artifact-switching behavior
   gallery.py               #    render everything in color for human review
   README.md                #    you are here
 ```
 
 A useful way to hold it in your head: **`catalog/` says *what*, `harness/` says *how*,
-`snapshots/` is the *approved result*, and the three `test_*.py` files plus `gallery.py` are
+`snapshots/` is the *approved result*, and the `test_*.py` files plus `gallery.py` are
 the *consumers*.**
 
 ---
@@ -183,8 +186,9 @@ comparing. Use it when you add a scenario, or after an intended UI change.
 
 ### Eyeball the panels (the gallery)
 
-The gallery renders scenarios in **full color** to your terminal — the "does it look
-right?" check that snapshots (plain text) can't give you.
+The terminal gallery renders interactive scenarios in **full color**. The HTML report
+also includes the production-formatted background logs captured from the same scenario
+inputs.
 
 ```sh
 ./venv/bin/python3 tests/ui/gallery.py                 # every scenario, grouped by surface
@@ -199,14 +203,13 @@ right?" check that snapshots (plain text) can't give you.
 | *(none)*      | Prints every scenario to the terminal with real ANSI color, grouped by surface. |
 | `--surface S` | Limits to one surface: `run`, `e2e-run`, `status`, `ping`, `config`, `startup`, or a shell surface (`sh-install`, `sh-update`, `sh-schedule`, `sh-enable`, `sh-disable`, `sh-stop`, `sh-run`, `sh-uninstall`). |
 | `--tag T`     | Limits to scenarios tagged `T` (e.g. `retry`, `interrupt`, `layout`, `settings`). `T` must be one of the curated tags in `TAG_VOCABULARY` (`catalog/_base.py`); the flag rejects anything else. |
-| `--html PATH` | Renders the same output into one self-contained HTML file (colors preserved) for sharing or archiving, instead of printing. |
+| `--html PATH` | Writes one self-contained report with interactive renderings and switchable `output.log` artifacts for sharing or archiving. |
 | `--list`      | Prints each (optionally filtered) scenario's key and one-line description, then a count, and exits without rendering. Great for discovering what exists. |
 
-Test-only scenarios (`in_gallery=False`, currently the `startup` layout guards) are
-hidden from the unfiltered gallery and HTML report — their panels are already
-reviewed on their own surfaces — but still snapshot and still feed the
-outside-panels assertion. Any explicit filter that matches them reveals them:
-`--surface startup`, or a `--tag` they carry (e.g. `--tag layout`).
+Test-only scenarios (`in_gallery=False`, currently the `startup` layout guards) keep
+their duplicated interactive transcripts hidden from unfiltered output. Their unique
+target and reminder logs do appear in the default HTML report. An explicit filter such
+as `--surface startup` or `--tag layout` reveals the interactive transcript too.
 
 Section headers (terminal rules and the HTML report's sections) show each surface's
 human-readable label from `SURFACE_INFO` (`catalog/_base.py`) — e.g. `sh-install`
@@ -242,7 +245,7 @@ vocabulary entry no scenario uses, so the filter chips in the HTML report stay
 small and meaningful. To introduce a tag, add it there with its meaning.
 
 You never construct one by hand — the `@scenario(...)` decorator registers the function it
-wraps. `build()` returns a `BuildResult(renderable, border_color, exit_code)`:
+wraps. `build()` returns a `BuildResult(renderable, border_color, exit_code, output_logs)`:
 
 - `renderable` is the actual Rich object to draw (a `Panel`, a `StatusPanelBuilder`, or —
   for the shell surfaces — a `Text` transcript parsed from the script's ANSI output),
@@ -252,6 +255,9 @@ wraps. `build()` returns a `BuildResult(renderable, border_color, exit_code)`:
   it from the exit code: 0 → green, anything else → red.
 - `exit_code` is the script's exit status for shell scenarios (`None` for the panel
   surfaces), recorded as a second header line (`# exit: 1`).
+- `output_logs` is an immutable collection of relative path + content artifacts. It is
+  populated automatically for `RUN`, `E2E_RUN`, and `STARTUP` scenarios and empty for
+  surfaces without a background-scraper equivalent.
 
 The `snapshot_key` is `"<surface>__<name>"` — that's the golden filename stem and the id
 you see in test output and `--list`.
@@ -268,7 +274,7 @@ real production builder:
 | `STATUS` | Health check (--status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
 | `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, config_error_msg)`   | `ping.build_ping_panel`                              |
 | `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check.build_config_panel`                    |
-| `STARTUP`| Full startup transcript (test-only; hidden from gallery/report) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript on one console: Configuration Check + the real `ReminderService.run_once()` + the Scraping panel (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
+| `STARTUP`| Full startup transcript (interactive artifact test-only) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript plus target/reminder background logs (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
 | `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
 
 The per-scraper **target-configuration health** (the `Config` row) is no longer a `CONFIG`-surface
@@ -279,8 +285,9 @@ concern: it leads each `STATUS` Service Status panel (`drive_service`'s `config`
 **RUN is special.** The scraping panel is *live* — it evolves as items are checked. So a
 RUN scenario is a **script**: a sequence of the exact method calls the application workflow
 makes on the reporter, in order, ending at the moment you want to capture. The driver runs
-the script against a real reporter (with the live-refresh loop stubbed out so nothing animates)
-and captures the resulting panel:
+the same script against the real `InteractiveRunReporter` and `SilentRunReporter`. It
+captures the resulting panel and the real file logger's production-formatted
+`logs/<target>/output.log` without duplicating the scenario:
 
 ```python
 @scenario(Surface.RUN, "retry_then_drop", "Attempt 1 failed, attempt 2 dropped below target", tags=("retry", "price_drop"))
@@ -310,7 +317,7 @@ The **capture point is wherever the script ends**:
 Because a RUN script mirrors the application workflow's real call sequence, it doubles as
 executable documentation of the application→reporter contract. If the workflow ever
 changes *which* calls it emits for a situation, update the matching scenario and
-regenerate. The note strings a script feeds the reporter are imported from the
+regenerate both goldens with the usual `UPDATE_SNAPSHOTS=1` command. The note strings a script feeds the reporter are imported from the
 production message catalog (`core.messages`), so their wording can never drift from what
 the application emits.
 
@@ -323,6 +330,10 @@ A change to the application's UI payloads (wording, ordering, which notes appear
 all) flips these goldens even if the hand-scripted catalog were forgotten. Keep this
 surface to the main note-producing flows; states the workflow can't finish
 deterministically (spinners, sleeps, interrupts, stale timestamps) belong in RUN.
+The driver executes those inputs in both interactive and quiet modes with fresh temporary
+configuration/state, so its background golden comes from the real orchestrator and file
+logger. `STARTUP` similarly captures every generated `output.log`, including the separate
+`logs/reminder/output.log` produced by `ReminderService`.
 
 The other three panel surfaces are *static*, so their scenarios just hand the driver the
 inputs and return its result directly — no script:
@@ -410,7 +421,8 @@ didn't expect — investigate before approving.
 
 ### Remove
 
-Delete the function **and** its `snapshots/<surface>__<name>.txt`. The
+Delete the function, its `snapshots/terminal/<surface>__<name>.txt`, and—when applicable—its
+`snapshots/background/<surface>__<name>.txt`. The
 `test_no_orphan_snapshots` check fails on a golden file with no owning scenario, so you
 can't leave one behind by accident.
 
@@ -418,7 +430,7 @@ can't leave one behind by accident.
 
 ## The golden files
 
-Each `snapshots/<surface>__<name>.txt` looks like:
+Each `snapshots/terminal/<surface>__<name>.txt` looks like:
 
 ```
 # border: green
@@ -453,8 +465,8 @@ Try running ./install.sh to fix the issue.
 **These files are committed on purpose.** They are the approved reference the gate compares
 against — without them, a fresh clone or CI run has nothing to check against and every test
 errors with "missing snapshot." (They're `.txt`, which this repo's `.gitignore` blanket-
-ignores, so there's an explicit `!tests/ui/snapshots/*.txt` un-ignore rule keeping them
-tracked. Don't remove it.)
+ignores, so `.gitignore` explicitly un-ignores both snapshot directories. Don't remove
+those rules.)
 
 ---
 
@@ -514,17 +526,19 @@ enforces that:
 
 ---
 
-## The three test files (what actually asserts)
+## The test files (what actually asserts)
 
 - **`test_ui_catalog.py`** — guards tag vocabulary, surface metadata, hidden-scenario
   visibility, and section ordering.
-- **`test_ui_snapshots.py`** — for every scenario: render it, compare to its golden file
-  (or write it under `UPDATE_SNAPSHOTS=1`). Also checks that scenario keys are unique and
-  that no orphan golden files exist.
+- **`test_ui_snapshots.py`** — for every scenario: compare its interactive and applicable
+  background artifacts to their golden files (or write them under
+  `UPDATE_SNAPSHOTS=1`). Also checks scenario keys and rejects orphan goldens.
 - **`test_ui_colors.py`** — asserts every scenario resolves to a *valid* border color, and
   pins a curated, representative set to a *specific* expected color (one per color-decision
   branch, per surface). This guards the color logic directly, independent of the snapshot
   header.
+- **`test_html_report.py`** — asserts artifact tabs, escaping, and the visibility rules
+  for test-only interactive startup transcripts.
 
 ---
 

@@ -51,6 +51,10 @@ class Surface(Enum):
     SH_UNINSTALL = "sh-uninstall"  # scripts/uninstall.sh
 
 
+#: Surfaces whose scenario inputs can also be exercised as a quiet/background run.
+BACKGROUND_SURFACES = frozenset({Surface.RUN, Surface.E2E_RUN, Surface.STARTUP})
+
+
 @dataclass(frozen=True)
 class SurfaceInfo:
     """The human-readable presentation of one surface (gallery/report only).
@@ -160,6 +164,14 @@ TAG_VOCABULARY: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class OutputLog:
+    """One background ``output.log`` artifact captured for a scenario."""
+
+    path: str
+    content: str
+
+
+@dataclass(frozen=True)
 class BuildResult:
     """The output of a scenario's ``build``: what to render and its border color.
 
@@ -172,11 +184,14 @@ class BuildResult:
             Shell scenarios derive it from the exit code (0 -> green, else red).
         exit_code (int | None): The script's exit status for shell scenarios, recorded
             as a ``# exit:`` snapshot-header line. ``None`` for the Rich-panel surfaces.
+        output_logs: Background file-log artifacts produced by the same scenario input.
+            Empty for surfaces without a quiet/background execution equivalent.
     """
 
     renderable: Any
     border_color: str
     exit_code: int | None = None
+    output_logs: tuple[OutputLog, ...] = ()
 
 
 @dataclass(frozen=True)

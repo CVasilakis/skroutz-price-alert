@@ -32,9 +32,11 @@ from ui.catalog import (
     status_scenarios,  # noqa: F401
 )
 from ui.catalog._base import (
+    BACKGROUND_SURFACES,
     SURFACE_INFO,
     TAG_VOCABULARY,
     BuildResult,
+    OutputLog,
     Scenario,
     Surface,
     SurfaceInfo,
@@ -50,6 +52,7 @@ ALL_SCENARIOS = sorted(all_scenarios(), key=lambda sc: _SURFACE_ORDER[sc.surface
 
 __all__ = [
     "ALL_SCENARIOS",
+    "BACKGROUND_SURFACES",
     "Scenario",
     "Surface",
     "SurfaceInfo",
@@ -57,4 +60,5 @@ __all__ = [
     "TAG_VOCABULARY",
     "scenario",
     "BuildResult",
+    "OutputLog",
 ]

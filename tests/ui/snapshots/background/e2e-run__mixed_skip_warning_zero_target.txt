@@ -1,0 +1,10 @@
+# logs/fakestore/output.log
+
+[2026-07-04 12:00:00 UTC] 🗄️  Tracked Items: 3 loaded
+[2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 1h (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 7 days (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: true (default)
+[2026-07-04 12:00:00 UTC] ⚙️  Repeat Alerts: false (default)
+[2026-07-04 12:00:00 UTC] ✅ Paused Item: Skipped (Skipped by the config's `skip` setting.)
+[2026-07-04 12:00:00 UTC] ❗ Removed Resource: Skipping (ResourceNotFoundError) (Resource not found or removed (HTTP 404).)
+[2026-07-04 12:00:00 UTC] 🟡 Untargeted Item: 55.0 € (Target: 0.0 €)

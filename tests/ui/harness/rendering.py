@@ -103,3 +103,11 @@ def snapshot_body(result: BuildResult) -> str:
     if result.exit_code is not None:
         header += f"# exit: {result.exit_code}\n"
     return f"{header}\n{capture_text(result)}\n"
+
+
+def background_snapshot_body(result: BuildResult) -> str:
+    """Serialize every captured ``output.log`` into one stable scenario golden."""
+    sections: list[str] = []
+    for artifact in result.output_logs:
+        sections.append(f"# {artifact.path}\n\n{artifact.content.rstrip()}")
+    return "\n\n".join(sections) + "\n"

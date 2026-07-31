@@ -1,8 +1,8 @@
 """Render the full UI scenario gallery for human review.
 
-Drives the *same* catalog as the snapshot tests, but renders with full color so you can
-eyeball every panel after a change — replacing the old ritual of running the app and
-inducing failure states by hand.
+Drives the *same* catalog as the snapshot tests. Terminal output renders the interactive
+artifacts with full color; HTML adds the background ``output.log`` files produced from the
+same scenario inputs.
 
 Usage (standalone; no env vars needed):
 
@@ -17,9 +17,9 @@ The shell surfaces (sh-install, sh-update, sh-schedule, sh-enable, sh-disable,
 sh-stop, sh-run, sh-uninstall) render the management scripts' terminal transcripts,
 captured from sandboxed runs of the real scripts (see harness/shell.py).
 
-Test-only scenarios (``in_gallery=False``, currently the STARTUP layout guards) are
-hidden from the default (unfiltered) output and HTML report; an explicit filter that
-matches them (``--surface startup``, or a ``--tag`` they carry) renders them anyway.
+Test-only interactive artifacts (``in_gallery=False``, currently the STARTUP layout
+guards) are hidden from default output. Their background logs remain present in the
+default HTML report; an explicit filter renders the interactive transcript too.
 """
 
 import argparse
@@ -38,18 +38,29 @@ from rich.console import Console  # noqa: E402
 from rich.rule import Rule  # noqa: E402
 from rich.text import Text  # noqa: E402
 
-from ui.catalog import ALL_SCENARIOS, SURFACE_INFO, TAG_VOCABULARY, Surface  # noqa: E402
+from ui.catalog import (  # noqa: E402
+    ALL_SCENARIOS,
+    BACKGROUND_SURFACES,
+    SURFACE_INFO,
+    TAG_VOCABULARY,
+    Surface,
+)
 from ui.harness.html_report import write_report  # noqa: E402
 from ui.harness.rendering import paint  # noqa: E402
 
 
-def _filtered(surface, tag):
+def _filtered(surface, tag, *, include_background=False):
     out = []
     for sc in ALL_SCENARIOS:
         # Test-only scenarios (in_gallery=False, e.g. the STARTUP layout guards) are
         # hidden only from the unfiltered everything-view; an explicit --surface or
         # --tag that matches them (checked below) still reveals them.
-        if not sc.in_gallery and not surface and not tag:
+        if (
+            not sc.in_gallery
+            and not surface
+            and not tag
+            and not (include_background and sc.surface in BACKGROUND_SURFACES)
+        ):
             continue
         if surface and sc.surface.value != surface:
             continue
@@ -93,7 +104,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    scenarios = _filtered(args.surface, args.tag)
+    scenarios = _filtered(
+        args.surface,
+        args.tag,
+        include_background=bool(args.html and not args.list),
+    )
 
     if args.list:
         for sc in scenarios:
@@ -106,7 +121,11 @@ def main() -> None:
         return
 
     if args.html:
-        write_report(scenarios, args.html)
+        write_report(
+            scenarios,
+            args.html,
+            show_hidden_interactive=bool(args.surface or args.tag),
+        )
         print(f"Wrote {len(scenarios)} scenario(s) to {args.html}")
     else:
         _render_all(Console(), scenarios)

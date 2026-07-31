@@ -1,4 +1,4 @@
-"""Assemble the UI scenario gallery into a polished, navigable HTML report.
+"""Assemble interactive and background scenario artifacts into a navigable HTML report.
 
 Rich's ``console.save_html`` dumps every scenario into one flat blob with the muddy 16-color
 ANSI palette. This module instead renders each scenario panel to its *own* monospace fragment
@@ -6,11 +6,11 @@ and wraps the lot in a styled page whose look is borrowed from the project's arc
 docs: a dark navy shell, a sticky left sidebar of surfaces, collapsible per-surface sections,
 a live text filter, and a light/dark theme toggle.
 
-Each panel is rendered twice — once through a light terminal palette (Catppuccin Latte) and
+Each interactive panel is rendered twice — once through a light terminal palette and
 once through a dark one tuned to the doc theme — and the inactive copy is hidden via CSS. That
 keeps every panel's colors terminal-accurate *and* readable whichever theme the reader picks,
-rather than forcing one palette to work on both backgrounds. The panels stay inside a ``<pre>``
-so they render exactly like the terminal print, dodging any HTML reflow of the box art.
+rather than forcing one palette to work on both backgrounds. Panels and file logs stay
+inside ``<pre>`` elements so terminal layout and log whitespace remain exact.
 """
 
 import html as _html
@@ -203,6 +203,22 @@ h1 { font-size: 29px; margin: 0 0 6px; line-height: 1.2; }
 .scn pre.panel { border-top-left-radius: 0; border-top-right-radius: 0; border-top: none; margin-top: 0; }
 .scn:not(.expanded) pre.panel { display: none !important; }
 
+.artifact-tabs {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 12px;
+  background: var(--panel-2); border: 1px solid var(--border); border-top: none;
+}
+.artifact-tab {
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px;
+  background: var(--panel); color: var(--text); cursor: pointer;
+  font: 600 11px/1.3 var(--mono);
+}
+.artifact-tab:hover { border-color: var(--accent); color: var(--accent); }
+.artifact-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.artifact-pane { display: none; }
+.artifact-pane.active { display: block; }
+.log-panel { background: var(--panel); color: var(--text); }
+.scn:not(.expanded) .artifact-tabs, .scn:not(.expanded) .artifact-pane { display: none !important; }
+
 /* Pin terminal double-width glyphs (emoji) to two character cells so the box-drawing
    borders stay on the terminal's fixed column grid instead of drifting per row. */
 .panel .w2 { display: inline-block; width: 2ch; text-align: center; }
@@ -287,6 +303,20 @@ _SCRIPT = """\
   document.querySelectorAll(".scn-head").forEach(function(h) {
     h.addEventListener("click", function(e) {
       h.closest(".scn").classList.toggle("expanded");
+    });
+  });
+
+  // Switch between the interactive rendering and captured output.log files.
+  document.querySelectorAll(".artifact-tab").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var scn = btn.closest(".scn");
+      var selected = btn.getAttribute("data-artifact");
+      scn.querySelectorAll(".artifact-tab").forEach(function(item) {
+        item.classList.toggle("active", item === btn);
+      });
+      scn.querySelectorAll(".artifact-pane").forEach(function(pane) {
+        pane.classList.toggle("active", pane.getAttribute("data-artifact") === selected);
+      });
     });
   });
 
@@ -409,19 +439,52 @@ def _search_text(sc: Scenario) -> str:
     ).lower()
 
 
-def _scenario(sc: Scenario, result: BuildResult) -> str:
+def _scenario(sc: Scenario, result: BuildResult, *, show_interactive: bool) -> str:
     key = sc.snapshot_key
     text = _search_text(sc)
     tags = "".join(f'<span class="pill">{_html.escape(t)}</span>' for t in sc.tags)
     if result.exit_code is not None:
         tags += f'<span class="pill">exit {result.exit_code}</span>'
+    artifacts: list[tuple[str, str]] = []
+    if show_interactive:
+        interactive = (
+            f'<pre class="panel panel--light">{_fragment(result, LIGHT_THEME)}</pre>'
+            f'<pre class="panel panel--dark">{_fragment(result, DARK_THEME)}</pre>'
+        )
+        artifacts.append(("Interactive", interactive))
+    artifacts.extend(
+        (
+            artifact.path,
+            f'<pre class="panel log-panel">{_html.escape(artifact.content.rstrip())}</pre>',
+        )
+        for artifact in result.output_logs
+    )
+    if not artifacts:
+        raise ValueError(f"Scenario {key!r} has no visible report artifact")
+
+    tabs = ""
+    if len(artifacts) > 1 or not show_interactive:
+        tabs = (
+            '<div class="artifact-tabs">'
+            + "".join(
+                f'<button class="artifact-tab{" active" if index == 0 else ""}" '
+                f'type="button" data-artifact="{index}">{_html.escape(label)}</button>'
+                for index, (label, _content) in enumerate(artifacts)
+            )
+            + "</div>"
+        )
+    panes = "".join(
+        f'<div class="artifact-pane{" active" if index == 0 else ""}" '
+        f'data-artifact="{index}">{content}</div>'
+        for index, (_label, content) in enumerate(artifacts)
+    )
+
     return (
         f'<article class="scn" id="{key}" data-text="{_html.escape(text, quote=True)}" data-tags=" {" ".join(sc.tags)} ">'
         f'<div class="scn-head">{_dot(result.border_color)}'
         f'<span class="scn-name">{_html.escape(sc.name)}</span>'
         f'<span class="scn-desc">{_html.escape(sc.description)}</span>{tags}</div>'
-        f'<pre class="panel panel--light">{_fragment(result, LIGHT_THEME)}</pre>'
-        f'<pre class="panel panel--dark">{_fragment(result, DARK_THEME)}</pre>'
+        f"{tabs}{panes}"
         f"</article>"
     )
 
@@ -434,7 +497,7 @@ def _group(scenarios: list[Scenario]) -> dict[Surface, list[Scenario]]:
     return groups
 
 
-def render_report(scenarios: list[Scenario]) -> str:
+def render_report(scenarios: list[Scenario], *, show_hidden_interactive: bool = False) -> str:
     """Return the complete self-contained HTML page for ``scenarios``."""
     groups = _group(scenarios)
 
@@ -486,19 +549,25 @@ def render_report(scenarios: list[Scenario]) -> str:
                 f'<a class="nav-item" href="#{sc.snapshot_key}" data-text="{_html.escape(data, quote=True)}" data-tags=" {tags_str} ">'
                 f"{_dot(result.border_color)}<span>{_html.escape(sc.name)}</span></a>"
             )
-            main.append(_scenario(sc, result))
+            main.append(
+                _scenario(
+                    sc,
+                    result,
+                    show_interactive=sc.in_gallery or show_hidden_interactive,
+                )
+            )
         main.append("</div></section>")
 
     total = len(scenarios)
     return (
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        "<title>Scrooge Alert — UI Gallery</title>\n"
+        "<title>Scrooge Alert — Execution Gallery</title>\n"
         f'<style>\n{_STYLE}</style>\n</head>\n<body class="theme-dark">\n'
         '<div class="sidebar-backdrop" id="sidebar-backdrop"></div>\n'
         '<div class="layout">\n'
         '<nav class="sidebar">'
-        '<div class="brand-title">UI Gallery</div>'
+        '<div class="brand-title">Execution Gallery</div>'
         f'<div class="brand-sub">Scrooge Alert &middot; {total} scenarios</div>'
         '<div class="controls">'
         '<input id="filter" type="search" placeholder="Filter scenarios…" autocomplete="off">'
@@ -510,8 +579,8 @@ def render_report(scenarios: list[Scenario]) -> str:
         '<div class="main-header">'
         '<button id="sidebar-toggle" class="icon-btn" title="Toggle Sidebar">&#9776;</button>'
         "<div>"
-        "<h1>UI Scenario Gallery</h1>"
-        '<div class="sub">Every catalogued terminal panel, rendered with full color for review.</div>'
+        "<h1>Execution Scenario Gallery</h1>"
+        '<div class="sub">Interactive terminal output and background logs from the same catalogued scenarios.</div>'
         "</div></div>"
         f"{''.join(main)}"
         '<div class="empty" id="empty">No scenarios match your filter.</div>'
@@ -520,7 +589,9 @@ def render_report(scenarios: list[Scenario]) -> str:
     )
 
 
-def write_report(scenarios: list[Scenario], path: str) -> None:
+def write_report(
+    scenarios: list[Scenario], path: str, *, show_hidden_interactive: bool = False
+) -> None:
     """Render ``scenarios`` to a styled, navigable HTML report at ``path``."""
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write(render_report(scenarios))
+        fh.write(render_report(scenarios, show_hidden_interactive=show_hidden_interactive))
