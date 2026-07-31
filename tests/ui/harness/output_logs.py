@@ -10,7 +10,6 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-from core.infrastructure import locking as core_locking
 from core.infrastructure import logging as core_logging
 from ui.catalog._base import OutputLog
 
@@ -32,11 +31,7 @@ class OutputLogCapture:
     def __init__(self) -> None:
         self._temp_root = tempfile.mkdtemp(prefix="scrooge-ui-logs-")
         self.logs_dir = Path(self._temp_root) / "logs"
-        self.locks_dir = Path(self._temp_root) / "state" / "locks"
-        self._patches = (
-            mock.patch.object(core_logging, "LOGS_DIR", str(self.logs_dir)),
-            mock.patch.object(core_locking, "LOCKS_DIR", str(self.locks_dir)),
-        )
+        self._patches = (mock.patch.object(core_logging, "LOGS_DIR", str(self.logs_dir)),)
 
     def __enter__(self) -> OutputLogCapture:
         for patcher in self._patches:

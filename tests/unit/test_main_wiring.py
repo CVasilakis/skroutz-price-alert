@@ -37,6 +37,7 @@ class TestMainWiring(unittest.TestCase):
             ),
             mock.patch("core.main.AppriseNotifier", autospec=True) as notifier_type,
             mock.patch("core.main.ReminderStateRepository", autospec=True) as StateRepository,
+            mock.patch("core.main.StateLockManager", autospec=True) as LockManager,
             mock.patch("core.main.ReminderService", autospec=True) as ReminderService,
             mock.patch("core.main.ScrapingOrchestrator", autospec=True) as Orchestrator,
         ):
@@ -58,6 +59,11 @@ class TestMainWiring(unittest.TestCase):
         load_general.assert_called_once_with(core.main.CONFIG_DIR)
         self.assertEqual(ReminderService.call_args.args[2], notifier_type.return_value)
         self.assertEqual(ReminderService.call_args.args[1], StateRepository.return_value)
+        LockManager.assert_called_once_with(core.main.STATE_DIR)
+        self.assertIs(
+            ReminderService.call_args.kwargs["acquire_lock_fn"],
+            LockManager.return_value.acquire,
+        )
         notifier_type.assert_called_once_with(("json://localhost",))
 
     def test_reminder_not_run_when_preflight_aborts(self):

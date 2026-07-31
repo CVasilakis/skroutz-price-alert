@@ -42,6 +42,8 @@ State:
 import datetime
 import logging
 from collections.abc import Callable
+from contextlib import AbstractContextManager
+from typing import Any
 
 from core.exceptions import LockAcquisitionError
 from core.general.reminder_schedule import most_recent_slot, next_due_slot
@@ -59,7 +61,6 @@ from core.general.settings import (
     SPEC_REMINDER_TIME,
 )
 from core.general.vocab import display_reminder, time_parts, weekday_index, weeks_for
-from core.infrastructure.locking import acquire_lock
 from core.infrastructure.logging import get_target_logger, save_traceback
 from core.infrastructure.updates import check_for_updates
 from core.notifications.contracts import NotificationService
@@ -94,6 +95,8 @@ class ReminderService:
         settings: ResolvedSettings | None,
         state: ReminderStateRepository,
         notifier: NotificationService,
+        *,
+        acquire_lock_fn: Callable[[str], AbstractContextManager[Any]],
         settings_error: str | None = None,
         now_fn: Callable[[], datetime.datetime] = datetime.datetime.now,
         update_check_fn: Callable[[], bool] = check_for_updates,
@@ -104,6 +107,7 @@ class ReminderService:
             settings (ResolvedSettings | None): The already-resolved general settings.
             state (ReminderStateRepository): Machine-owned reminder persistence.
             notifier (NotificationService): The service used to send the reminder.
+            acquire_lock_fn (Callable): Acquires a named lock from this state root.
             settings_error (str | None): A redacted settings-load failure that disables
                 only the reminder.
             now_fn (Callable): Returns the current time as a naive *local* datetime (the
@@ -116,6 +120,7 @@ class ReminderService:
         self.settings_error = settings_error
         self.state = state
         self.notifier = notifier
+        self.acquire_lock_fn = acquire_lock_fn
         self._now_fn = now_fn
         self._update_check_fn = update_check_fn
         self._logger: logging.Logger | None = None
@@ -190,7 +195,7 @@ class ReminderService:
             return
 
         try:
-            with acquire_lock(REMINDER_TARGET):
+            with self.acquire_lock_fn(REMINDER_TARGET):
                 self._check_and_send(weeks, canonical, weekday, hour, minute)
         except LockAcquisitionError:
             self._log.info("Reminder check skipped: another instance is handling it.")

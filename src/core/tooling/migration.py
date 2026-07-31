@@ -14,12 +14,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from filelock import FileLock, Timeout
-
+from core.exceptions import LockAcquisitionError
 from core.general.configuration import validate_general_migration_document
 from core.general.migrations import GENERAL_CONFIG_MIGRATIONS, REMINDER_STATE_MIGRATIONS
 from core.general.reminder_state import validate_reminder_state_document
-from core.infrastructure.locking import managed_lock_path
+from core.infrastructure.locking import StateLockManager
 from core.infrastructure.persistence import (
     AtomicReplacementError,
     commit_atomic_replacement,
@@ -126,12 +125,12 @@ def _replace_atomically(path: Path, data: bytes, mode: int) -> None:
 
 
 @contextmanager
-def _held_lock(locks_dir: Path, lock_name: str):
-    path = managed_lock_path(locks_dir, lock_name)
+def _held_lock(manager: StateLockManager, lock_name: str):
+    path = manager.lock_path(lock_name)
     try:
-        with FileLock(path, timeout=0):
+        with manager.acquire(lock_name):
             yield
-    except Timeout as exc:
+    except LockAcquisitionError as exc:
         raise MigrationError(f"another process holds lock {path}") from exc
 
 
@@ -143,7 +142,7 @@ class MigrationRunner:
         self.catalog = catalog
         self.config_dir = self.root / "config"
         self.state_dir = self.root / "state"
-        self.locks_dir = self.state_dir / "locks"
+        self.lock_manager = StateLockManager(self.state_dir)
         self._recovery: Path | None = None
 
     @property
@@ -393,7 +392,7 @@ class MigrationRunner:
 
     def run(self, *, check: bool = False) -> tuple[MigrationOutcome, ...]:
         outcomes: list[MigrationOutcome] = []
-        with _held_lock(self.locks_dir, "migration"):
+        with _held_lock(self.lock_manager, "migration"):
             outcomes.append(
                 self._run_one(
                     "general_config",
@@ -406,7 +405,7 @@ class MigrationRunner:
             )
             for plugin in self.catalog.plugins:
                 try:
-                    with _held_lock(self.locks_dir, plugin.target):
+                    with _held_lock(self.lock_manager, plugin.target):
                         self._run_target_locked(plugin, outcomes, check=check)
                 except Exception as exc:
                     outcomes.extend(
@@ -426,7 +425,7 @@ class MigrationRunner:
                         )
                     )
             try:
-                with _held_lock(self.locks_dir, "reminder"):
+                with _held_lock(self.lock_manager, "reminder"):
                     outcomes.append(
                         self._run_one(
                             "reminder_state",

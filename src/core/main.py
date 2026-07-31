@@ -21,6 +21,7 @@ from core.constants import CONFIG_DIR, EXIT_CODE_ERROR, STATE_DIR
 from core.exceptions import UpdateCheckError
 from core.general import ReminderService, load_general_config
 from core.general.reminder_state import ReminderStateRepository, general_state_path
+from core.infrastructure.locking import StateLockManager
 from core.infrastructure.logging import save_traceback, setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
 from core.infrastructure.updates import check_for_updates
@@ -113,10 +114,12 @@ def _run_main() -> None:
     # the orchestrator so an aborted scrape cannot suppress the heartbeat. It logs only to
     # its own file (logs/reminder/), never the console, so it can't break the panel layout
     # of an interactive run.
+    reminder_state_path = general_state_path(CONFIG_DIR)
     ReminderService(
         general.settings,
-        ReminderStateRepository(general_state_path(CONFIG_DIR)),
+        ReminderStateRepository(reminder_state_path),
         notifier,
+        acquire_lock_fn=StateLockManager(os.path.dirname(reminder_state_path)).acquire,
         settings_error=general.settings_error,
     ).run_once()
 

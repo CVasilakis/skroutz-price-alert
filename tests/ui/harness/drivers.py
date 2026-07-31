@@ -38,6 +38,7 @@ from core.general.settings import (
     KEY_REMINDER_TIME,
 )
 from core.infrastructure import logging as core_logger
+from core.infrastructure.locking import StateLockManager
 from core.infrastructure.logging import setup_global_logging
 from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
@@ -411,6 +412,7 @@ def _emit_reminder(console: Console, reminder_raw: object, capture: OutputLogCap
                 settings,
                 ReminderStateRepository(os.path.join(temp_root, "state", "general.json")),
                 notifier=mock.Mock(),
+                acquire_lock_fn=StateLockManager(os.path.join(temp_root, "state")).acquire,
                 now_fn=lambda: now,
                 update_check_fn=lambda: False,
             ).run_once()

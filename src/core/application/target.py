@@ -21,7 +21,6 @@ from core.exceptions import (
     StateFileError,
     StorageFileError,
 )
-from core.infrastructure.locking import acquire_lock
 from core.infrastructure.logging import save_traceback, try_save_diagnostic
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
@@ -55,7 +54,7 @@ class TargetRunner:
         state_dir: str,
         state_repository_factory: Callable[..., JsonStateRepository] = JsonStateRepository,
         executor_type: type[ItemExecutor] | None = None,
-        acquire_lock_fn: Callable[[str], AbstractContextManager[Any]] = acquire_lock,
+        acquire_lock_fn: Callable[[str], AbstractContextManager[Any]],
         save_traceback_fn: Callable[..., None] = save_traceback,
     ) -> None:
         self.client_loader = client_loader

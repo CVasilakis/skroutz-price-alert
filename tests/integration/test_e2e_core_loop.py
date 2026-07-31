@@ -19,7 +19,7 @@ from core.constants import (
     EXIT_CODE_STORAGE_ERROR,
     EXIT_CODE_SUCCESS,
 )
-from core.infrastructure.locking import acquire_lock
+from core.infrastructure.locking import StateLockManager
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
 from core.scrapers.framework.clients import ClientLoader
 from integration.fake_store import URL, FakeStoreClient, fake_store_server
@@ -380,8 +380,9 @@ def test_real_lock_contention_skips_before_client_or_state_access(tmp_path):
         config_dir, state_dir = tmp_path / "config", tmp_path / "state"
         config_dir.mkdir()
         _write_config(config_dir, "http://127.0.0.1:1/widget")
-        with acquire_lock("fakestore"):
+        with StateLockManager(state_dir).acquire("fakestore"):
             code = _run(catalog, config_dir, state_dir, mock_notifier(True), mock_ui())
 
     assert code == EXIT_CODE_SKIPPED
+    assert (state_dir / "locks" / "fakestore.lock").exists()
     assert not (state_dir / "fakestore.json").exists()

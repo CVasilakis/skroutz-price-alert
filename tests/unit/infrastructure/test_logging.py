@@ -1,6 +1,6 @@
 """Unit tests for the target logger factory and the traceback writer.
 
-``LOGS_DIR`` is redirected per-test by the autouse ``_isolate_runtime_paths``
+``LOGS_DIR`` is redirected per-test by the autouse ``_isolate_logs_dir``
 fixture, so everything here writes to a temp dir. Logger objects are
 process-global by name, so each test uses a unique target name (and closes the
 handlers it created) to stay independent of test order.

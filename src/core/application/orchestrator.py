@@ -6,6 +6,7 @@ import datetime
 import logging
 import signal
 from collections.abc import Callable
+from pathlib import Path
 from types import FrameType
 
 from core.application.contracts import ConfigOutcome, RunOutcome, RunReporter
@@ -13,7 +14,7 @@ from core.application.diagnostics import record_target_load_diagnostic
 from core.application.preflight import TargetConfigLoad
 from core.application.reporting import SilentRunReporter
 from core.application.target import TargetRunner
-from core.infrastructure.locking import acquire_lock
+from core.infrastructure.locking import StateLockManager
 from core.infrastructure.logging import get_target_logger, save_traceback
 from core.infrastructure.signals import describe_signal
 from core.notifications.contracts import NotificationService
@@ -39,6 +40,7 @@ class ScrapingOrchestrator:
         now_fn: Callable[[], datetime.datetime] = _utc_now,
         state_dir: str = "state",
         state_repository_factory: Callable[..., JsonStateRepository] = JsonStateRepository,
+        lock_manager_factory: Callable[[str | Path], StateLockManager] = StateLockManager,
     ) -> None:
         self.target_loads = tuple(target_loads)
         self.client_loader = client_loader
@@ -48,6 +50,7 @@ class ScrapingOrchestrator:
         self.now_fn = now_fn
         self.state_dir = state_dir
         self.state_repository_factory = state_repository_factory
+        self.lock_manager = lock_manager_factory(state_dir)
         self.interrupted = False
         self._interrupt_message = ""
         self._current_target = ""
@@ -104,7 +107,7 @@ class ScrapingOrchestrator:
                 now_fn=self.now_fn,
                 state_dir=self.state_dir,
                 state_repository_factory=self.state_repository_factory,
-                acquire_lock_fn=acquire_lock,
+                acquire_lock_fn=self.lock_manager.acquire,
                 save_traceback_fn=save_traceback,
             )
             target_outcome = target_runner.run(load, self._current_logger, lambda: self.interrupted)

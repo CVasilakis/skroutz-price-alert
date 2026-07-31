@@ -25,6 +25,7 @@ from core.general.settings import (
     GeneralSettingsConfigError,
     resolve_general_settings,
 )
+from core.infrastructure.locking import StateLockManager
 from core.notifications.configuration import NotificationConfig
 from core.settings import SettingStatus, SettingsValidationProblem
 
@@ -49,10 +50,12 @@ def _notifier(delivered=True):
 def _service(root, notifier, **kwargs):
     config_dir = str(root / "config")
     loaded = load_general_config(config_dir)
+    acquire_lock_fn = kwargs.pop("acquire_lock_fn", StateLockManager(root / "state").acquire)
     return ReminderService(
         loaded.settings,
         ReminderStateRepository(general_state_path(config_dir)),
         notifier,
+        acquire_lock_fn=acquire_lock_fn,
         settings_error=loaded.settings_error,
         **kwargs,
     )
@@ -279,9 +282,16 @@ def test_reminder_initializes_separate_state_then_delivers_when_due(tmp_path):
     _config(tmp_path, {"reminder": "1 week", "reminder_day": "Saturday", "reminder_time": "13:00"})
     now = datetime(2026, 7, 18, 14, 0)
     notifier = _notifier()
-    service = _service(tmp_path, notifier, now_fn=lambda: now, update_check_fn=lambda: False)
-    with mock.patch("core.general.reminder.acquire_lock", return_value=mock.MagicMock()):
-        service.run_once()
+    acquire_lock = mock.Mock(return_value=mock.MagicMock())
+    service = _service(
+        tmp_path,
+        notifier,
+        now_fn=lambda: now,
+        update_check_fn=lambda: False,
+        acquire_lock_fn=acquire_lock,
+    )
+    service.run_once()
+    acquire_lock.assert_called_once_with("reminder")
     state_path = tmp_path / "state" / "general.json"
     assert state_path.exists()
     notifier.notify_reminder.assert_not_called()
@@ -289,8 +299,8 @@ def test_reminder_initializes_separate_state_then_delivers_when_due(tmp_path):
     assert snapshot.problem is None and snapshot.last_slot == most_recent_slot(now)
 
     service._now_fn = lambda: now + timedelta(days=7, minutes=1)
-    with mock.patch("core.general.reminder.acquire_lock", return_value=mock.MagicMock()):
-        service.run_once()
+    service.run_once()
+    assert acquire_lock.call_args_list == [mock.call("reminder"), mock.call("reminder")]
     notifier.notify_reminder.assert_called_once()
     advanced = service.state.load()
     assert advanced.last_slot == next_due_slot(snapshot.last_slot, 1)
