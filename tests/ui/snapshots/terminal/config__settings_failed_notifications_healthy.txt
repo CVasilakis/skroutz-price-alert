@@ -1,7 +1,7 @@
 # border: red
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version        Up to date                              │
+│   ✅    Software Version        1.7.0 (Up to date)                      │
 │   ✅    Notifications           2 valid URL(s)                          │
 │   ❗    General Config          Failed [1]                              │
 │                                                                         │

@@ -1,9 +1,11 @@
-# border: green
+# border: yellow
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version        1.7.0 (Up to date)                      │
+│   🟡    Software Version        1.7.0 (Minor fixes available) [1]       │
 │   ✅    Notifications           2 valid URL(s)                          │
-│   ✅    Reminder                Every 1 week                            │
+│   ✅    Reminder                Every 1 month (default)                 │
 │   ✅    Reminder Day            Saturday (default)                      │
 │   ✅    Reminder Time           13:00 (default)                         │
+│                                                                         │
+│   [1] Run ./update.sh to install the latest version.                    │
 ╰─────────────────────────────────────────────────────────────────────────╯

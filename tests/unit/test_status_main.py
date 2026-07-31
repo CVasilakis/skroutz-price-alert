@@ -2,10 +2,12 @@ from types import SimpleNamespace
 from unittest import mock
 
 import core.status
+from core.infrastructure.updates import SoftwareVersionStatus
 from core.settings import SettingStatus
 
 
 def test_status_main_renders_installed_missing_and_orphan_panels():
+    version_status = SoftwareVersionStatus("1.7.0", False)
     console = mock.MagicMock()
     catalog = mock.MagicMock()
     interval_spec = object()
@@ -59,7 +61,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
             "core.status.record_target_load_diagnostic",
             return_value=True,
         ),
-        mock.patch("core.status._check_for_updates", return_value=False),
+        mock.patch("core.status._check_for_updates", return_value=version_status),
         mock.patch("core.status.render_config_panel") as render_config,
         mock.patch("core.status.signal.signal"),
         mock.patch("core.status.get_systemd_properties", side_effect=systemd_properties),
@@ -81,7 +83,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
     oncalendar.assert_called_once_with("1h")
     state_repository.return_value.load.assert_called_once()
     load_general.assert_called_once_with(core.status.CONFIG_DIR)
-    render_config.assert_called_once_with(console, load_general.return_value, False)
+    render_config.assert_called_once_with(console, load_general.return_value, version_status)
     build_service.assert_called_once()
     service_panel.render.assert_called_once_with(console)
     build_missing.assert_called_once_with("beta", "Beta")

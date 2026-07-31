@@ -1,7 +1,7 @@
 # border: green
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   ✅    Software Version        Up to date                              │
+│   ✅    Software Version        1.7.0 (Up to date)                      │
 │   ✅    Notifications           1 valid URL(s)                          │
 │   🟡    Reminder                Every 1 month [1]                       │
 │   ✅    Reminder Day            Saturday (default)                      │

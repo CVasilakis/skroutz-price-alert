@@ -14,6 +14,7 @@ import unittest
 from unittest import mock
 
 import core.main
+from core.infrastructure.updates import SoftwareVersionStatus
 
 
 class TestMainWiring(unittest.TestCase):
@@ -108,6 +109,7 @@ class TestMainWiring(unittest.TestCase):
         Orchestrator.assert_not_called()
 
     def test_interactive_mode_installs_handler_and_uses_interactive_strategy(self):
+        version_status = SoftwareVersionStatus("1.7.0", False)
         with (
             mock.patch.object(sys, "argv", ["main", "--skroutz"]),
             mock.patch("core.main.setup_global_logging"),
@@ -120,7 +122,7 @@ class TestMainWiring(unittest.TestCase):
                 side_effect=lambda general: general,
             ),
             mock.patch("core.main.install_interrupt_handler") as install_handler,
-            mock.patch("core.main.check_for_updates", return_value=False),
+            mock.patch("core.main.inspect_software_version", return_value=version_status),
             mock.patch("core.main.render_config_panel") as render_config,
             mock.patch("core.main.Console") as Console,
             mock.patch("core.main.signal.signal"),
@@ -142,7 +144,7 @@ class TestMainWiring(unittest.TestCase):
         self.assertEqual(caught.exception.code, 0)
         load_target_configs.assert_called_once_with([plugin], core.main.CONFIG_DIR)
         render_config.assert_called_once_with(
-            Console.return_value, load_general.return_value, False
+            Console.return_value, load_general.return_value, version_status
         )
         install_handler.assert_called_once()
         Orchestrator.assert_called_once_with(

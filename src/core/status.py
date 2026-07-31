@@ -14,7 +14,7 @@ from core.application.diagnostics import (
 )
 from core.application.preflight import load_target_configs
 from core.constants import CONFIG_DIR, STATE_DIR
-from core.exceptions import StateFileError, UpdateCheckError
+from core.exceptions import StateFileError
 from core.general import load_general_config
 from core.infrastructure.logging import setup_global_logging, try_save_diagnostic
 from core.infrastructure.signals import install_interrupt_handler
@@ -24,7 +24,7 @@ from core.infrastructure.systemd import (
     read_timer_oncalendar,
     scraper_unit_name,
 )
-from core.infrastructure.updates import check_for_updates
+from core.infrastructure.updates import SoftwareVersionStatus, inspect_software_version
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.intervals import oncalendar_for
 from core.scrapers.framework.settings import KEY_INTERVAL
@@ -34,11 +34,8 @@ from core.tui.config_check import config_view, render_config_panel
 from core.tui.status import build_not_installed_panel, build_orphan_panel, build_service_panel
 
 
-def _check_for_updates() -> bool | None:
-    try:
-        return check_for_updates()
-    except UpdateCheckError:
-        return None
+def _check_for_updates() -> SoftwareVersionStatus:
+    return inspect_software_version()
 
 
 def main() -> None:
@@ -54,8 +51,8 @@ def main() -> None:
     loads_by_target = {load.target: load for load in load_results}
     general = record_general_diagnostic(load_general_config(CONFIG_DIR))
     with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
-        update_available = _check_for_updates()
-    render_config_panel(console, general, update_available)
+        version_status = _check_for_updates()
+    render_config_panel(console, general, version_status)
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     signal.signal(signal.SIGTERM, signal.SIG_DFL)

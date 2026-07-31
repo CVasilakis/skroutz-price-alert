@@ -18,14 +18,13 @@ from core.application.orchestrator import ScrapingOrchestrator
 from core.application.preflight import load_target_configs, validate_notification_preflight
 from core.application.reporting import SilentRunReporter
 from core.constants import CONFIG_DIR, STATE_DIR
-from core.exceptions import UpdateCheckError
 from core.exit_status import ExitStatus
 from core.general import ReminderService, load_general_config
 from core.general.reminder_state import ReminderStateRepository, general_state_path
 from core.infrastructure.locking import StateLockManager
 from core.infrastructure.logging import save_traceback, setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
-from core.infrastructure.updates import check_for_updates
+from core.infrastructure.updates import inspect_software_version
 from core.notifications.apprise import AppriseNotifier
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
@@ -78,11 +77,8 @@ def _run_main() -> None:
         console.print()
 
         with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
-            try:
-                update_available: bool | None = check_for_updates()
-            except UpdateCheckError:
-                update_available = None
-        render_config_panel(console, general, update_available)
+            version_status = inspect_software_version()
+        render_config_panel(console, general, version_status)
         init_fatal_error = None
 
         # Restore default handlers immediately after the spinner vanishes

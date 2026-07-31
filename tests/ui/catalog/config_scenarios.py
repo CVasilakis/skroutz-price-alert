@@ -20,6 +20,11 @@ def _():
     return drive_config("available", valid_count=2)
 
 
+@scenario(Surface.CONFIG, "minor_fixes_available", "Untagged fixes are available")
+def _():
+    return drive_config("fixes", valid_count=2)
+
+
 @scenario(
     Surface.CONFIG,
     "update_check_error",

@@ -6,6 +6,7 @@ from rich.markup import escape
 
 from core import messages
 from core.general.configuration import GeneralConfigLoad
+from core.infrastructure.updates import SoftwareVersionStatus
 from core.presentation import SettingView, resolved_setting_views
 from core.settings import SettingStatus
 from core.tui.panel import StatusPanelBuilder
@@ -106,16 +107,23 @@ def add_setting_row(panel: StatusPanelBuilder, view: SettingView) -> None:
     panel.add_row(icon, escape(view.label), value)
 
 
-def _append_version_row(panel: StatusPanelBuilder, update_available: bool | None) -> None:
+def _append_version_row(panel: StatusPanelBuilder, status: SoftwareVersionStatus) -> None:
     """Append the already-collected software update result."""
-    if update_available is None:
+    current = escape(status.current_version or "Unknown")
+    if status.update_available is None:
         ref = panel.add_note_ref("Check your internet connection and retry shortly.")
-        panel.add_row("🟡", "Software Version", f"Could not check for updates{ref}")
-    elif update_available:
+        value = f"{current} (Could not check for updates){ref}"
+        panel.add_row("🟡", "Software Version", value)
+    elif status.update_available:
         ref = panel.add_note_ref("Run `./update.sh` to install the latest version.")
-        panel.add_row("🟡", "Software Version", f"Update available!{ref}")
+        update = (
+            f"{escape(status.available_version)} available"
+            if status.available_version is not None
+            else "Minor fixes available"
+        )
+        panel.add_row("🟡", "Software Version", f"{current} ({update}){ref}")
     else:
-        panel.add_row("✅", "Software Version", "Up to date")
+        panel.add_row("✅", "Software Version", f"{current} (Up to date)")
 
 
 def _append_general_rows(panel: StatusPanelBuilder, general: GeneralConfigLoad) -> None:
@@ -179,18 +187,18 @@ def _append_notifications_row(panel: StatusPanelBuilder, general: GeneralConfigL
 
 
 def build_config_panel(
-    general: GeneralConfigLoad, update_available: bool | None
+    general: GeneralConfigLoad, version_status: SoftwareVersionStatus
 ) -> StatusPanelBuilder:
     """Build the global configuration panel from already-collected inputs."""
     panel = StatusPanelBuilder("Configuration Check")
-    _append_version_row(panel, update_available)
+    _append_version_row(panel, version_status)
     _append_notifications_row(panel, general)
     _append_general_rows(panel, general)
     return panel
 
 
 def render_config_panel(
-    console: Console, general: GeneralConfigLoad, update_available: bool | None
+    console: Console, general: GeneralConfigLoad, version_status: SoftwareVersionStatus
 ) -> None:
     """Builds and renders the shared 'Configuration Check' panel (global checks only).
 
@@ -203,7 +211,7 @@ def render_config_panel(
     Args:
         console (Console): The Rich console to render to.
     """
-    build_config_panel(general, update_available).render(console)
+    build_config_panel(general, version_status).render(console)
 
 
 __all__ = [

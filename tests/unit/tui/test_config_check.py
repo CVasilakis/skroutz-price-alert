@@ -2,6 +2,7 @@
 
 from core import messages
 from core.general.configuration import GeneralConfigLoad
+from core.infrastructure.updates import SoftwareVersionStatus
 from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
 from core.tui.config_check import build_config_panel, config_view
@@ -13,7 +14,10 @@ def test_build_config_panel_uses_collected_update_and_general_config_results():
         settings=ResolvedSettings(()),
     )
 
-    panel = build_config_panel(general, update_available=None)
+    panel = build_config_panel(
+        general,
+        SoftwareVersionStatus(current_version="1.7.0", update_available=None),
+    )
 
     assert panel.icons == ["🟡", "✅"]
     assert panel.notes == ("Check your internet connection and retry shortly.",)

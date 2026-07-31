@@ -333,8 +333,8 @@ def drive_config(
     the version row, notification row, and general settings rows in production order.
 
     Args:
-        version_state (str): ``"uptodate"`` / ``"available"`` / ``"error"`` — controls the
-            patched ``check_for_updates`` (return False / return True / raise).
+        version_state (str): ``"uptodate"`` / ``"available"`` / ``"fixes"`` / ``"error"``
+            selects a deterministic, already-collected software-version result.
         valid_count (int): number of valid notification URLs.
         invalid_count (int): number of invalid notification URLs.
         config_error (str): notification-section failure shown when no URLs are usable.
@@ -366,8 +366,15 @@ def drive_config(
         permission_warning=permission_warning or None,
     )
 
-    update_available = {"uptodate": False, "available": True, "error": None}[version_state]
-    panel = config_check.build_config_panel(general, update_available)
+    from core.infrastructure.updates import SoftwareVersionStatus
+
+    version_status = {
+        "uptodate": SoftwareVersionStatus("1.7.0", False),
+        "available": SoftwareVersionStatus("1.7.0", True, "1.8.0"),
+        "fixes": SoftwareVersionStatus("1.7.0", True),
+        "error": SoftwareVersionStatus("1.7.0", None),
+    }[version_state]
+    panel = config_check.build_config_panel(general, version_status)
 
     return BuildResult(panel, panel.get_panel_color())
 
