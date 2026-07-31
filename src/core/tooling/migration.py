@@ -19,6 +19,7 @@ from filelock import FileLock, Timeout
 from core.general.configuration import validate_general_migration_document
 from core.general.migrations import GENERAL_CONFIG_MIGRATIONS, REMINDER_STATE_MIGRATIONS
 from core.general.reminder_state import validate_reminder_state_document
+from core.infrastructure.locking import managed_lock_path
 from core.infrastructure.persistence import (
     AtomicReplacementError,
     commit_atomic_replacement,
@@ -125,8 +126,8 @@ def _replace_atomically(path: Path, data: bytes, mode: int) -> None:
 
 
 @contextmanager
-def _held_lock(path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _held_lock(locks_dir: Path, lock_name: str):
+    path = managed_lock_path(locks_dir, lock_name)
     try:
         with FileLock(path, timeout=0):
             yield
@@ -142,7 +143,7 @@ class MigrationRunner:
         self.catalog = catalog
         self.config_dir = self.root / "config"
         self.state_dir = self.root / "state"
-        self.logs_dir = self.root / "logs"
+        self.locks_dir = self.state_dir / "locks"
         self._recovery: Path | None = None
 
     @property
@@ -392,8 +393,7 @@ class MigrationRunner:
 
     def run(self, *, check: bool = False) -> tuple[MigrationOutcome, ...]:
         outcomes: list[MigrationOutcome] = []
-        migration_lock = self.state_dir / ".migration.lock"
-        with _held_lock(migration_lock):
+        with _held_lock(self.locks_dir, "migration"):
             outcomes.append(
                 self._run_one(
                     "general_config",
@@ -405,11 +405,8 @@ class MigrationRunner:
                 )
             )
             for plugin in self.catalog.plugins:
-                target_lock = (
-                    self.logs_dir / plugin.target / f"{plugin.target}_scraper_running.lock"
-                )
                 try:
-                    with _held_lock(target_lock):
+                    with _held_lock(self.locks_dir, plugin.target):
                         self._run_target_locked(plugin, outcomes, check=check)
                 except Exception as exc:
                     outcomes.extend(
@@ -428,9 +425,8 @@ class MigrationRunner:
                             ),
                         )
                     )
-            reminder_lock = self.logs_dir / "reminder" / "reminder_check.lock"
             try:
-                with _held_lock(reminder_lock):
+                with _held_lock(self.locks_dir, "reminder"):
                     outcomes.append(
                         self._run_one(
                             "reminder_state",

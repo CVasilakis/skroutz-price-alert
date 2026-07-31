@@ -4,17 +4,14 @@
 terminal, locale, user configuration, and temporary-file environment. Tests remain free
 to override any value explicitly after the fixture has run.
 
-``_isolate_logs_dir`` is the single, unconditional guarantee that no test - not even one
-that reaches an error path - writes into the real repository ``logs/`` directory.
+``_isolate_runtime_paths`` is the single, unconditional guarantee that no test - not even
+one that reaches an error path - writes into the real repository ``logs/`` or
+``state/locks/`` directories.
 
-Every in-process write the app makes to ``logs/`` flows through two modules:
-``core.infrastructure.logging`` (``setup_global_logging`` / ``get_target_logger`` / ``save_traceback``)
-and ``core.infrastructure.locking`` (``acquire_lock``). Both build their paths from the ``LOGS_DIR`` name
-bound in their own namespace by ``from core.constants import LOGS_DIR``, and both read it
-at call time, so redirecting those two names to a per-test temp dir covers all of them -
-regardless of whether an individual test remembers to mock the logger or the traceback
-helper. ``core.constants.LOGS_DIR`` is deliberately left pointing at the real path so a
-regression test can assert the redirect is actually in effect.
+Logging builds paths from its module-bound ``LOGS_DIR`` and locking uses its module-bound
+``LOCKS_DIR``. Both read those values at call time, so redirecting them to per-test temp
+directories covers every in-process write regardless of whether an individual test mocks
+the logger or lock helper. The constants module deliberately retains the production paths.
 
 Subprocess-based suites (the shell / UI harness) run the app inside their own copied
 sandbox with their own ``BASE_DIR``, so they never touch the repo ``logs/`` and are
@@ -50,9 +47,9 @@ def _isolate_process_environment(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
-def _isolate_logs_dir(monkeypatch, tmp_path):
-    """Points the app's ``LOGS_DIR`` at a fresh per-test temp dir, for every test."""
+def _isolate_runtime_paths(monkeypatch, tmp_path):
+    """Point runtime logs and locks at fresh per-test directories for every test."""
     logs_dir = tmp_path / "logs"
     logs_dir.mkdir()
     monkeypatch.setattr("core.infrastructure.logging.LOGS_DIR", str(logs_dir))
-    monkeypatch.setattr("core.infrastructure.locking.LOGS_DIR", str(logs_dir))
+    monkeypatch.setattr("core.infrastructure.locking.LOCKS_DIR", str(tmp_path / "state/locks"))

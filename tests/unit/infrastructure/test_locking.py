@@ -2,13 +2,13 @@
 
 Every other suite patches ``acquire_lock`` to a no-op, so this is the one place the
 actual mutual exclusion and lock-file placement are verified - the guarantee the reminder
-and ``TargetRunner`` both rely on to stop concurrent runs from racing. ``LOGS_DIR`` is
-redirected to a temp dir by the autouse ``_isolate_logs_dir`` fixture, so the lock files
-land there and never in the repository's ``logs/``.
+and ``TargetRunner`` both rely on to stop concurrent runs from racing. ``LOCKS_DIR`` is
+redirected to a temporary ``state/locks/`` by the autouse fixture.
 """
 
 import os
 import unittest
+from pathlib import Path
 
 import core.infrastructure.locking
 from core.exceptions import LockAcquisitionError
@@ -33,24 +33,52 @@ class TestAcquireLock(unittest.TestCase):
 
     def test_default_lock_filename_and_dir(self):
         with acquire_lock("skroutz"):
-            expected = os.path.join(
-                core.infrastructure.locking.LOGS_DIR, "skroutz", "skroutz_scraper_running.lock"
-            )
+            expected = os.path.join(core.infrastructure.locking.LOCKS_DIR, "skroutz.lock")
             self.assertTrue(os.path.exists(expected), expected)
 
-    def test_custom_lock_filename(self):
-        # The reminder pseudo-target overrides the filename (it guards a liveness check).
-        with acquire_lock("reminder", "reminder_check.lock"):
-            expected = os.path.join(
-                core.infrastructure.locking.LOGS_DIR, "reminder", "reminder_check.lock"
-            )
+    def test_framework_lock_uses_the_same_flat_namespace(self):
+        with acquire_lock("reminder"):
+            expected = os.path.join(core.infrastructure.locking.LOCKS_DIR, "reminder.lock")
             self.assertTrue(os.path.exists(expected), expected)
 
     def test_different_targets_do_not_contend(self):
-        # Each target owns its own directory/lock, so distinct targets never block.
+        # Distinct names resolve to distinct lock files, so they never block each other.
         with acquire_lock("skroutz"):
-            with acquire_lock("reminder", "reminder_check.lock"):
+            with acquire_lock("reminder"):
                 pass
+
+    def test_symlinked_locks_directory_is_rejected_without_following_it(self):
+        locks_dir = Path(core.infrastructure.locking.LOCKS_DIR)
+        outside = locks_dir.parent.parent / "outside"
+        outside.mkdir()
+        locks_dir.parent.mkdir()
+        locks_dir.symlink_to(outside, target_is_directory=True)
+
+        with self.assertRaises(OSError):
+            with acquire_lock("skroutz"):
+                self.fail("symlinked lock directory should not be used")
+
+        self.assertFalse((outside / "skroutz.lock").exists())
+
+    def test_symlinked_lock_file_is_rejected_without_following_it(self):
+        locks_dir = Path(core.infrastructure.locking.LOCKS_DIR)
+        locks_dir.mkdir(parents=True)
+        outside = locks_dir.parent / "outside.lock"
+        outside.touch()
+        (locks_dir / "skroutz.lock").symlink_to(outside)
+
+        with self.assertRaises(OSError):
+            with acquire_lock("skroutz"):
+                self.fail("symlinked lock file should not be used")
+
+    def test_special_lock_file_destination_is_rejected(self):
+        locks_dir = Path(core.infrastructure.locking.LOCKS_DIR)
+        locks_dir.mkdir(parents=True)
+        (locks_dir / "skroutz.lock").mkdir()
+
+        with self.assertRaises(OSError):
+            with acquire_lock("skroutz"):
+                self.fail("special lock-file destination should not be used")
 
 
 if __name__ == "__main__":

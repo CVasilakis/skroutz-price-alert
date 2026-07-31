@@ -20,6 +20,7 @@ EXIT_CODE_SKIPPED: int = 42  # Skipped execution (another instance running)
 BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONFIG_DIR: str = os.path.join(BASE_DIR, "config")
 STATE_DIR: str = os.path.join(BASE_DIR, "state")
+LOCKS_DIR: str = os.path.join(STATE_DIR, "locks")
 LOGS_DIR: str = os.path.join(BASE_DIR, "logs")
 
 # --- Notification Configuration ---

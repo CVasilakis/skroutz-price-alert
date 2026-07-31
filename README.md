@@ -203,14 +203,16 @@ stable `id`; separate IDs may intentionally use the same source input.
 | `skip` | Boolean | **User-defined** | Optional. Set to `true` to skip monitoring this item. Defaults to `false`. |
 Runtime price, check, and successful price-alert history is written to
 `state/<target>.json`, not to user configuration. Timestamps are RFC 3339 UTC strings
-ending in `Z`.
+ending in `Z`. Cooperative runtime and migration locks are machine-managed under
+`state/locks/`: each scraper uses `<target>.lock`, alongside the framework-owned
+`reminder.lock` and `migration.lock`.
 
 > [!IMPORTANT]
 > Scraper state and target configuration have independent schema sequences. Both begin
 > at version 1. `./update.sh` migrates known documents before reactivating timers; use
 > `./scripts/migrate.sh --check` to validate and report without modifying managed JSON
-> documents. Check mode still takes the cooperative locks, so lock directories and
-> metadata may be created. Add `--debug` to expose the underlying migration output
+> documents. Check mode still takes the cooperative locks, so `state/locks/` and its
+> lock metadata may be created. Add `--debug` to expose the underlying migration output
 > when diagnosing a failure.
 
 Plugins declare every source input beyond the shared keys above. Most product-page
@@ -316,7 +318,7 @@ These flags allow you to isolate execution to specific platforms. If no target f
 | `--<target>` | Activates only the specified target's scraper (e.g., `--skroutz`). You can pass one or more target flags simultaneously. |
 
 > [!NOTE]
-> Only one instance of a specific scraper target is allowed to run at a time to avoid triggering anti-bot protections. If a background execution for a target (e.g., Skroutz) is currently in progress, your manual run for that target will be blocked and skipped. If you need to forcefully stop all active background executions to run the scraper manually, you can safely use the [stop script](#stop-active-runs): `./scripts/stop.sh`. This stops all the current background runs but will not break any future scheduled executions.
+> Only one instance of a specific scraper target is allowed to run at a time to avoid triggering anti-bot protections. These machine-managed locks live at `state/locks/<target>.lock`. If a background execution for a target (e.g., Skroutz) is currently in progress, your manual run for that target will be blocked and skipped. If you need to forcefully stop all active background executions to run the scraper manually, you can safely use the [stop script](#stop-active-runs): `./scripts/stop.sh`. This stops all the current background runs but will not break any future scheduled executions.
 
 #### Status Check:
 

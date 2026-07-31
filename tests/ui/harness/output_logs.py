@@ -32,9 +32,10 @@ class OutputLogCapture:
     def __init__(self) -> None:
         self._temp_root = tempfile.mkdtemp(prefix="scrooge-ui-logs-")
         self.logs_dir = Path(self._temp_root) / "logs"
+        self.locks_dir = Path(self._temp_root) / "state" / "locks"
         self._patches = (
             mock.patch.object(core_logging, "LOGS_DIR", str(self.logs_dir)),
-            mock.patch.object(core_locking, "LOGS_DIR", str(self.logs_dir)),
+            mock.patch.object(core_locking, "LOCKS_DIR", str(self.locks_dir)),
         )
 
     def __enter__(self) -> OutputLogCapture:

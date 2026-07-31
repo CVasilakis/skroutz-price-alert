@@ -62,6 +62,8 @@ def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
     [
         ScaffoldRequest("Bad", "Acme", "store.example", "/products/"),
         ScaffoldRequest("help", "Acme", "store.example", "/products/"),
+        ScaffoldRequest("migration", "Acme", "store.example", "/products/"),
+        ScaffoldRequest("reminder", "Acme", "store.example", "/products/"),
         ScaffoldRequest("acme", " ", "store.example", "/products/"),
         ScaffoldRequest("acme", "Acme", "https://store.example", "/products/"),
         ScaffoldRequest("acme", "Acme", "store.example", "products/"),

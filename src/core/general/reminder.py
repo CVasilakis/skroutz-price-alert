@@ -65,13 +65,8 @@ from core.infrastructure.updates import check_for_updates
 from core.notifications.contracts import NotificationService
 from core.settings import ResolvedSettings, SettingStatus
 
-# Pseudo-target for the reminder's lock and logs (logs/reminder/), mirroring how each
-# scraper target owns logs/<target>/.
+# Pseudo-target for the reminder's state/locks/reminder.lock and logs/reminder/ output.
 REMINDER_TARGET = "reminder"
-
-# The reminder's lock file within logs/reminder/. Named for what it guards - a liveness
-# check, not a scrape - rather than the per-scraper "<target>_scraper_running.lock".
-REMINDER_LOCK_FILENAME = "reminder_check.lock"
 
 # Human-readable local timestamp used in reminder logs and notification bodies.
 REMINDER_DISPLAY_FORMAT = "%d-%m-%Y %H:%M:%S"
@@ -87,8 +82,8 @@ class ReminderService:
     The authoritative read-check-send-persist sequence runs under the ``reminder`` file
     lock: concurrent plugin timers each invoke ``main.py``, and the lock makes "send,
     then record the slot" one serialized decision. A cheap unlocked pre-check skips the lock
-    (and creating ``logs/reminder/``) on the common "not due yet" path. Contenders never
-    block (the lock fails immediately) - they skip and let the holder finish.
+    on the common "not due yet" path. Contenders never block (the lock fails immediately) -
+    they skip and let the holder finish.
 
     The collaborators a test needs to control are injected: the clock (``now_fn``), the
     update check (``update_check_fn``) and the notifier.
@@ -189,13 +184,13 @@ class ReminderService:
         hour, minute = time_parts(resolved[SPEC_REMINDER_TIME])
 
         # Cheap unlocked pre-check: the overwhelmingly common outcome is "not due yet".
-        # Only pay for the lock (and creating logs/reminder/) when a send is plausible;
+        # Only pay for the lock when a send is plausible;
         # the authoritative check re-reads and re-decides under the lock.
         if not self._maybe_due(weeks):
             return
 
         try:
-            with acquire_lock(REMINDER_TARGET, REMINDER_LOCK_FILENAME):
+            with acquire_lock(REMINDER_TARGET):
                 self._check_and_send(weeks, canonical, weekday, hour, minute)
         except LockAcquisitionError:
             self._log.info("Reminder check skipped: another instance is handling it.")

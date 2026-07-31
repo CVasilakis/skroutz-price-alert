@@ -1,6 +1,6 @@
-"""Drift guard: RESERVED_PLUGIN_NAMES must equal the scripts' built-in '--<flag>' set.
+"""Drift guards for shell-shadowed and internal reserved plugin names.
 
-``RESERVED_PLUGIN_NAMES`` exists because target-selecting management scripts match
+``SHELL_RESERVED_PLUGIN_NAMES`` exists because target-selecting management scripts match
 their built-in flags (``--help``, ``--quiet``, ``--ping``, and ``--status``)
 *before* the per-plugin ``--*`` branch, so a plugin named after one of them would
 register fine yet never be dispatchable from the command line. The authoritative set is
@@ -8,14 +8,19 @@ the ``case`` ladders in those shell scripts; this test parses their literal flag
 branches and asserts set-equality, so adding a new built-in target-selection flag
 without reserving the name (or vice versa) fails loudly instead of drifting. Flags
 owned only by non-target interfaces such as migrate.sh's ``--check`` and hidden
-``--machine`` protocol do not shadow target names and are deliberately excluded.
+``--machine`` protocol do not shadow target names and are deliberately excluded. Framework
+pseudo-targets are reserved separately and combined into ``RESERVED_PLUGIN_NAMES``.
 """
 
 import re
 import unittest
 from pathlib import Path
 
-from core.scrapers.framework.naming import RESERVED_PLUGIN_NAMES
+from core.scrapers.framework.naming import (
+    INTERNAL_RESERVED_PLUGIN_NAMES,
+    RESERVED_PLUGIN_NAMES,
+    SHELL_RESERVED_PLUGIN_NAMES,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -50,15 +55,23 @@ class TestReservedFlagNames(unittest.TestCase):
         self.assertGreaterEqual(len(SCRIPTS), 8, SCRIPTS)
         self.assertGreaterEqual(len(TARGET_SELECTING_SCRIPTS), 6, TARGET_SELECTING_SCRIPTS)
 
-    def test_reserved_names_match_the_scripts_builtin_flags(self):
+    def test_shell_reserved_names_match_the_scripts_builtin_flags(self):
         claimed: set[str] = set()
         for script in (*TARGET_SELECTING_SCRIPTS, *SHARED_PARSERS):
             claimed |= builtin_flags_of(script)
         self.assertEqual(
-            claimed | {"general"},
-            set(RESERVED_PLUGIN_NAMES),
-            "RESERVED_PLUGIN_NAMES (framework/naming.py) and the scripts' built-in '--<flag>' "
+            claimed,
+            set(SHELL_RESERVED_PLUGIN_NAMES),
+            "SHELL_RESERVED_PLUGIN_NAMES (framework/naming.py) and the scripts' built-in "
+            "'--<flag>' "
             "case branches have drifted apart. Add the new name to whichever side is "
             "missing it - an unreserved built-in flag silently shadows any plugin "
             "registered under that name.",
         )
+
+    def test_all_reserved_names_are_the_shell_and_internal_sets(self):
+        self.assertEqual(
+            SHELL_RESERVED_PLUGIN_NAMES | INTERNAL_RESERVED_PLUGIN_NAMES,
+            RESERVED_PLUGIN_NAMES,
+        )
+        self.assertEqual({"general", "migration", "reminder"}, INTERNAL_RESERVED_PLUGIN_NAMES)

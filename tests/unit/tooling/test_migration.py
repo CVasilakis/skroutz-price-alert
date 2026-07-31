@@ -216,7 +216,8 @@ def test_complete_success_discards_recovery_and_check_mode_only_preserves_manage
     assert _outcome(checked, "general_config").status == STATUS_MIGRATED
     assert general.read_bytes() == original
     assert check_runner.recovery_path is None
-    assert (tmp_path / "state" / ".migration.lock").exists()
+    assert (tmp_path / "state" / "locks" / "migration.lock").exists()
+    assert (tmp_path / "state" / "locks" / "reminder.lock").exists()
     assert not list((tmp_path / "config").glob(".*.migration.*"))
     assert not list((tmp_path / "state").glob(".general.json.migration.*"))
     assert not list((tmp_path / "state").glob(".migration-recovery.*"))
@@ -339,7 +340,7 @@ def test_target_migration_uses_the_pure_decoder(tmp_path, monkeypatch):
 
 def test_target_lock_contention_marks_both_target_documents_failed(tmp_path):
     plugin, catalog = _one_plugin_catalog()
-    lock_path = tmp_path / "logs" / plugin.target / f"{plugin.target}_scraper_running.lock"
+    lock_path = tmp_path / "state" / "locks" / f"{plugin.target}.lock"
     lock_path.parent.mkdir(parents=True)
     with FileLock(lock_path):
         outcomes = MigrationRunner(tmp_path, catalog).run()
@@ -347,6 +348,37 @@ def test_target_lock_contention_marks_both_target_documents_failed(tmp_path):
     assert _outcome(outcomes, "target_config").status == STATUS_FAILED
     assert _outcome(outcomes, "scraper_state").status == STATUS_FAILED
     assert "another process holds lock" in _outcome(outcomes, "target_config").detail
+
+
+def test_global_migration_lock_contention_prevents_migration_start(tmp_path):
+    lock_path = tmp_path / "state" / "locks" / "migration.lock"
+    lock_path.parent.mkdir(parents=True)
+    with FileLock(lock_path):
+        with pytest.raises(migration_module.MigrationError, match="another process holds lock"):
+            MigrationRunner(tmp_path, PluginCatalog(())).run()
+
+
+def test_reminder_lock_contention_isolated_to_reminder_state(tmp_path):
+    lock_path = tmp_path / "state" / "locks" / "reminder.lock"
+    lock_path.parent.mkdir(parents=True)
+    with FileLock(lock_path):
+        outcomes = MigrationRunner(tmp_path, PluginCatalog(())).run()
+
+    assert _outcome(outcomes, "reminder_state").status == STATUS_FAILED
+    assert "another process holds lock" in _outcome(outcomes, "reminder_state").detail
+
+
+def test_symlinked_lock_directory_fails_without_following_target(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "locks").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(OSError, match="must not be a symlink"):
+        MigrationRunner(tmp_path, PluginCatalog(())).run()
+
+    assert not (outside / "migration.lock").exists()
 
 
 def test_state_failure_recovery_guidance_is_family_specific():

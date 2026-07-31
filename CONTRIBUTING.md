@@ -344,7 +344,9 @@ framework sequence and each plugin's private sequence advance independently.
 Runtime loaders never migrate files. `./update.sh` invokes `./scripts/migrate.sh`, and
 contributors can use `./scripts/migrate.sh --check` to validate and report without
 modifying managed JSON documents. Check mode still acquires cooperative locks, so it
-may create lock directories and metadata. Migrations are consecutive, retained
+may create `state/locks/` and its metadata. Target locks use
+`state/locks/<target>.lock`; the framework also owns `reminder.lock` and
+`migration.lock` there. Migrations are consecutive, retained
 permanently, pure, and applied fully in memory before one atomic replacement.
 Pass `--debug` when a migration check fails and its underlying diagnostics are
 needed.
