@@ -77,6 +77,12 @@ class StateFileError(StorageFileError):
     pass
 
 
+class LockStorageError(StorageFileError):
+    """Raised when machine-owned cooperative lock storage cannot be used."""
+
+    pass
+
+
 class UpdateCheckError(Exception):
     """Raised when there is an issue checking for script updates."""
 

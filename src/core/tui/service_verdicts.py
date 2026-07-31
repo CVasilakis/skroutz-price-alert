@@ -1,17 +1,6 @@
 from dataclasses import dataclass, replace
 
-from core.constants import (
-    EXIT_CODE_INTERRUPT,
-    EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
-    EXIT_CODE_NOTIFICATION_ERROR,
-    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_RATE_LIMIT_ERROR,
-    EXIT_CODE_SCRAPE_ERROR,
-    EXIT_CODE_SKIPPED,
-    EXIT_CODE_STORAGE_ERROR,
-    EXIT_CODE_SUCCESS,
-    EXIT_CODE_TARGET_CONFIG_ERROR,
-)
+from core.exit_status import ExitStatus
 
 
 @dataclass(frozen=True)
@@ -36,48 +25,55 @@ class ServiceVerdict:
 # truth for exit-code presentation, so a new exit code is one entry here instead of
 # another branch in status.py. A ``{detail}`` placeholder in a note is filled in by
 # classify_service_state (e.g. with the offending config filename).
-_VERDICTS: dict[int, ServiceVerdict] = {
-    EXIT_CODE_SUCCESS: ServiceVerdict("✅", "OK", "green"),
-    EXIT_CODE_SKIPPED: ServiceVerdict(
+_VERDICTS: dict[ExitStatus, ServiceVerdict] = {
+    ExitStatus.SUCCESS: ServiceVerdict("✅", "OK", "green"),
+    ExitStatus.APPLICATION_ERROR: ServiceVerdict(
+        "❗",
+        "Application Failed",
+        "red",
+        "Unexpected application failure; check `logs/errors.txt`.",
+    ),
+    ExitStatus.ALREADY_RUNNING: ServiceVerdict(
         "🟡", "Skipped", "yellow", "Another instance of the scraper was running."
     ),
-    EXIT_CODE_TARGET_CONFIG_ERROR: ServiceVerdict(
+    ExitStatus.TARGET_CONFIG_ERROR: ServiceVerdict(
         "❗", "Failed", "red", "Issue with the `config/{detail}` file."
     ),
-    EXIT_CODE_NOTIFICATION_CONFIG_ERROR: ServiceVerdict(
+    ExitStatus.NOTIFICATION_CONFIG_ERROR: ServiceVerdict(
         "❗",
         "Failed",
         "red",
         "Issue with notification configuration in `config/general.json`.",
     ),
-    EXIT_CODE_RATE_LIMIT_ERROR: ServiceVerdict(
+    ExitStatus.RATE_LIMIT_ERROR: ServiceVerdict(
         "❗", "Failed", "red", "Blocked by server due to rate limits."
     ),
-    EXIT_CODE_SCRAPE_ERROR: ServiceVerdict(
+    ExitStatus.SCRAPE_ERROR: ServiceVerdict(
         "❗",
         "Scraping Failed",
         "red",
         "Retries exhausted; check `logs/{target}/output.log`.",
     ),
-    EXIT_CODE_STORAGE_ERROR: ServiceVerdict(
+    ExitStatus.STORAGE_ERROR: ServiceVerdict(
         "❗",
         "Storage Failed",
         "red",
-        "Scrape state could not be loaded or saved in `state/{target}.json`.",
+        "Machine state or its lock could not be used in `state/{target}.json` or "
+        "`state/locks/{target}.lock`.",
     ),
-    EXIT_CODE_NOTIFICATION_ERROR: ServiceVerdict(
+    ExitStatus.NOTIFICATION_ERROR: ServiceVerdict(
         "🟡",
         "Notification Warning",
         "yellow",
         "A configured notification failed. Run `./scripts/run.sh --ping`.",
     ),
-    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR: ServiceVerdict(
+    ExitStatus.PLUGIN_DEPENDENCY_ERROR: ServiceVerdict(
         "❗",
         "Dependencies Missing",
         "red",
         "Install this scraper's dependencies with `./install.sh --{target}`.",
     ),
-    EXIT_CODE_INTERRUPT: ServiceVerdict(
+    ExitStatus.INTERRUPTED: ServiceVerdict(
         "🟡", "Interrupted", "yellow", "Process was terminated by the user or system."
     ),
 }
@@ -106,15 +102,17 @@ def classify_service_state(
     Returns:
         ServiceVerdict: The icon/label/color and a fully-resolved note (or None).
     """
-    if result == "success" and exec_status == str(EXIT_CODE_SUCCESS):
-        return _VERDICTS[EXIT_CODE_SUCCESS]
+    if result == "success" and exec_status == str(ExitStatus.SUCCESS):
+        return _VERDICTS[ExitStatus.SUCCESS]
 
     try:
-        code = int(exec_status)
+        status = ExitStatus(int(exec_status))
     except (TypeError, ValueError):
-        code = None
+        status = None
 
-    verdict = _VERDICTS.get(code) if code is not None and code != EXIT_CODE_SUCCESS else None
+    verdict = (
+        _VERDICTS.get(status) if status is not None and status is not ExitStatus.SUCCESS else None
+    )
     if verdict is None:
         detail = f"Reason: {result or 'Unknown'}, Exit Code: {exec_status or 'Unknown'}"
         return replace(_UNKNOWN_VERDICT, note=detail)

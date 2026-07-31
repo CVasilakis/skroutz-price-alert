@@ -6,8 +6,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from core import messages
-from core.constants import EXIT_CODE_NOTIFICATION_CONFIG_ERROR
 from core.exceptions import ConfigFileError
+from core.exit_status import ExitStatus
 from core.general.configuration import GeneralConfigLoad
 from core.infrastructure.logging import get_target_logger
 from core.scrapers.api import TrackedItem
@@ -96,7 +96,7 @@ def validate_notification_preflight(
     targets_to_run: Sequence[str],
     general: GeneralConfigLoad,
     retention_by_target: Mapping[str, int] | None = None,
-) -> int | None:
+) -> ExitStatus | None:
     """Validate notification configuration for a quiet/background run."""
     notifications = general.notifications
     if not notifications.usable:
@@ -108,7 +108,7 @@ def validate_notification_preflight(
             get_target_logger(target, True, retention).error(
                 f"❗ Notification configuration failed: {detail}"
             )
-        return EXIT_CODE_NOTIFICATION_CONFIG_ERROR
+        return ExitStatus.NOTIFICATION_CONFIG_ERROR
 
     if notifications.invalid_urls:
         for target in targets_to_run:

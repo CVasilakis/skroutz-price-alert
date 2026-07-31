@@ -175,6 +175,16 @@ def state_save_failed(target: str) -> str:
     return "Latest scrape state was not saved."
 
 
+def lock_storage_failed() -> str:
+    """Describe failure to prepare, acquire, or release a machine-state lock."""
+    return "Machine-state lock could not be used."
+
+
+def lock_storage_unavailable(lock_name: str) -> str:
+    """Provide an actionable, presentation-safe lock-storage detail."""
+    return f"Cannot use `state/locks/{lock_name}.lock`; check its permissions."
+
+
 # --- Configuration and persistence failures ------------------------------------------
 
 

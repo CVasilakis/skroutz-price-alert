@@ -6,39 +6,28 @@ import datetime
 import logging
 from collections.abc import Callable
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from core import messages
-from core.application.contracts import RunReporter
+from core.application.contracts import RunOutcome, RunReporter
 from core.application.items import ItemExecutor
 from core.application.preflight import TargetConfigLoad
 from core.constants import STALE_ITEM_HOURS
 from core.exceptions import (
     LockAcquisitionError,
+    LockStorageError,
     PluginDependencyError,
     StateFileError,
     StorageFileError,
 )
+from core.exit_status import ExitStatus
 from core.infrastructure.logging import save_traceback, try_save_diagnostic
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.settings import KEY_NOTIFY, KEY_SUPPRESS_REPEATED_PRICE_ALERTS
 from core.scrapers.framework.state import JsonStateRepository
-
-
-@dataclass
-class TargetRunOutcome:
-    """Target-local facts merged into the run-wide exit decision."""
-
-    storage_error: bool = False
-    dependency_error: bool = False
-    scrape_error: bool = False
-    rate_limited: bool = False
-    notification_error: bool = False
-    skipped: bool = False
 
 
 class TargetRunner:
@@ -83,14 +72,32 @@ class TargetRunner:
                 pass
             return False
 
+    def _report_storage_error(
+        self,
+        summary: str,
+        exc: StorageFileError,
+        *,
+        target: str,
+    ) -> None:
+        diagnostic_saved = None
+        if exc.diagnostic_detail:
+            diagnostic_saved = try_save_diagnostic(
+                exc.diagnostic_detail,
+                target_name=target,
+            )
+        notes: str | list[str] = str(exc)
+        if diagnostic_saved is False:
+            notes = [str(exc), messages.DIAGNOSTIC_WRITE_FAILED]
+        self.reporter.log_storage_error(summary, notes)
+
     def run(
         self,
         load: TargetConfigLoad,
         logger: logging.Logger,
         interrupted: Callable[[], bool],
-    ) -> TargetRunOutcome:
+    ) -> RunOutcome:
         plugin = load.plugin
-        result = TargetRunOutcome()
+        result = RunOutcome()
         failed_items: list[tuple[TrackedItem, Exception]] = []
         executor: ItemExecutor | None = None
         try:
@@ -102,20 +109,12 @@ class TargetRunner:
                 try:
                     state.load()
                 except StateFileError as exc:
-                    diagnostic_saved = None
-                    if exc.diagnostic_detail:
-                        diagnostic_saved = try_save_diagnostic(
-                            exc.diagnostic_detail,
-                            target_name=plugin.target,
-                        )
-                    load_notes: str | list[str] = str(exc)
-                    if diagnostic_saved is False:
-                        load_notes = [str(exc), messages.DIAGNOSTIC_WRITE_FAILED]
-                    self.reporter.log_storage_error(
+                    self._report_storage_error(
                         messages.state_load_failed(plugin.target),
-                        load_notes,
+                        exc,
+                        target=plugin.target,
                     )
-                    result.storage_error = True
+                    result.statuses.add(ExitStatus.STORAGE_ERROR)
                     return result
                 client = None
                 primary_error: Exception | None = None
@@ -147,27 +146,17 @@ class TargetRunner:
                         if item_outcome.reported_error:
                             failed_items.append((item, item_outcome.reported_error))
                         abort_target |= item_outcome.abort_target
-                        result.rate_limited |= item_outcome.rate_limited
-                        result.scrape_error |= item_outcome.affects_scrape_status
-                        result.notification_error |= item_outcome.notification_failed
+                        result.statuses.update(item_outcome.statuses)
                     if state.has_pending:
                         try:
                             state.save()
                         except StorageFileError as exc:
-                            diagnostic_saved = None
-                            if exc.diagnostic_detail:
-                                diagnostic_saved = try_save_diagnostic(
-                                    exc.diagnostic_detail,
-                                    target_name=plugin.target,
-                                )
-                            notes: str | list[str] = str(exc)
-                            if diagnostic_saved is False:
-                                notes = [str(exc), messages.DIAGNOSTIC_WRITE_FAILED]
-                            self.reporter.log_storage_error(
+                            self._report_storage_error(
                                 messages.state_save_failed(plugin.target),
-                                notes,
+                                exc,
+                                target=plugin.target,
                             )
-                            result.storage_error = True
+                            result.statuses.add(ExitStatus.STORAGE_ERROR)
                 except Exception as exc:
                     primary_error = exc
                 finally:
@@ -197,7 +186,7 @@ class TargetRunner:
                     target=plugin.target,
                 )
                 if not delivered:
-                    result.notification_error = True
+                    result.statuses.add(ExitStatus.NOTIFICATION_ERROR)
                     self.reporter.log_warning(
                         "Notifications", messages.WARN_STALE_NOTIFICATION_FAILED
                     )
@@ -210,16 +199,23 @@ class TargetRunner:
                         target=plugin.target,
                     )
                     if not delivered:
-                        result.notification_error = True
+                        result.statuses.add(ExitStatus.NOTIFICATION_ERROR)
                         self.reporter.log_warning(
                             "Notifications", messages.WARN_ERROR_NOTIFICATION_FAILED
                         )
         except LockAcquisitionError:
             self.reporter.log_system_error(messages.ERR_LOCK_HELD)
-            result.skipped = True
+            result.skipped_count = 1
+        except LockStorageError as exc:
+            self._report_storage_error(
+                messages.lock_storage_failed(),
+                exc,
+                target=plugin.target,
+            )
+            result.statuses.add(ExitStatus.STORAGE_ERROR)
         except PluginDependencyError as exc:
             self.reporter.log_system_error(str(exc))
-            result.dependency_error = True
+            result.statuses.add(ExitStatus.PLUGIN_DEPENDENCY_ERROR)
         except Exception as exc:
             try:
                 self.save_traceback_fn(logger, target_name=plugin.target, log_to_console=False)
@@ -230,8 +226,8 @@ class TargetRunner:
                 messages.plugin_lifecycle_failed(type(exc).__name__),
                 messages.errors_log_pointer(plugin.target),
             )
-            result.scrape_error = True
+            result.statuses.add(ExitStatus.SCRAPE_ERROR)
         return result
 
 
-__all__ = ["TargetRunner", "TargetRunOutcome"]
+__all__ = ["TargetRunner"]

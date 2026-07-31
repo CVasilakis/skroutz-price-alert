@@ -12,7 +12,8 @@ from core.application.pacing import Pacer
 from core.application.results import ResultHandler
 from core.application.retry import ERRORS_LOG_TOKEN, SKIP_ERRORS, policy_for
 from core.constants import MAX_RETRIES, MIN_DELAY_SECONDS
-from core.exceptions import InvalidURLError, RateLimitError
+from core.exceptions import InvalidURLError
+from core.exit_status import ExitStatus
 from core.infrastructure.logging import save_traceback
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import ScraperClient, TrackedItem, validate_scrape_result
@@ -92,7 +93,12 @@ class ItemExecutor:
                 if self.interrupted():
                     break
                 notification_failed = self.results.handle(item, result, attempt, attempt_notes)
-                return ItemRunOutcome(item, notification_failed=notification_failed)
+                statuses = (
+                    frozenset({ExitStatus.NOTIFICATION_ERROR})
+                    if notification_failed
+                    else frozenset()
+                )
+                return ItemRunOutcome(item, statuses=statuses)
             except SKIP_ERRORS as exc:
                 self.reporter.log_error(
                     item.name,
@@ -135,9 +141,12 @@ class ItemExecutor:
                     return ItemRunOutcome(
                         item,
                         reported_error=exc if policy.counts_as_failure else None,
-                        affects_scrape_status=policy.affects_exit_status,
+                        statuses=(
+                            frozenset({policy.exit_status})
+                            if policy.exit_status is not None
+                            else frozenset()
+                        ),
                         abort_target=policy.abort,
-                        rate_limited=isinstance(exc, RateLimitError),
                     )
                 if policy.prepare_before_retry:
                     self.client.prepare_retry()

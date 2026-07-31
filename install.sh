@@ -638,7 +638,7 @@ if [ "$CONFIG_FAILED" -ne 0 ]; then
         "One or more targets were skipped because their configuration is invalid."
     install_task info \
         "Fix each reported target configuration, then run ./install.sh again."
-    install_exit 15
+    install_exit "$EXIT_STATUS_TARGET_CONFIG_ERROR"
 fi
 
 install_finish

@@ -10,12 +10,7 @@ import pytest
 from support import catalog_sandbox, fake_plugin, mock_notifier
 
 import core.main
-from core.constants import (
-    EXIT_CODE_ERROR,
-    EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
-    EXIT_CODE_SUCCESS,
-    EXIT_CODE_TARGET_CONFIG_ERROR,
-)
+from core.exit_status import ExitStatus
 from core.scrapers.framework.catalog import PluginCatalog
 from integration.fake_store import URL, FakeStoreClient, fake_store_server
 
@@ -129,7 +124,7 @@ def test_quiet_selected_target_is_silent_and_writes_state_and_output_log(
                 "--fakestore",
             )
 
-    assert code == EXIT_CODE_SUCCESS
+    assert code == ExitStatus.SUCCESS
     assert capfd.readouterr() == ("", "")
     assert config_path.read_bytes() == original
     state = json.loads((state_dir / "fakestore.json").read_text())
@@ -177,7 +172,7 @@ def test_quiet_default_run_isolates_bad_config_and_continues_healthy_target(
                 "--quiet",
             )
 
-    assert code == EXIT_CODE_TARGET_CONFIG_ERROR
+    assert code == ExitStatus.TARGET_CONFIG_ERROR
     assert capfd.readouterr() == ("", "")
     assert server.request_count == 1
     assert (state_dir / "healthystore.json").exists()
@@ -209,7 +204,7 @@ def test_quiet_notification_preflight_is_silent_and_never_scrapes(tmp_path, monk
             "--fakestore",
         )
 
-    assert code == EXIT_CODE_NOTIFICATION_CONFIG_ERROR
+    assert code == ExitStatus.NOTIFICATION_CONFIG_ERROR
     assert capfd.readouterr() == ("", "")
     assert not state_dir.exists()
     assert (
@@ -229,7 +224,7 @@ def test_quiet_startup_crash_is_silent_and_saved_to_root_log(tmp_path, monkeypat
     with pytest.raises(SystemExit) as caught:
         core.main.main()
 
-    assert caught.value.code == EXIT_CODE_ERROR
+    assert caught.value.code == ExitStatus.APPLICATION_ERROR
     assert capfd.readouterr() == ("", "")
     assert "catalog exploded" in (tmp_path / "logs" / "errors.txt").read_text()
 
@@ -263,7 +258,7 @@ def test_quiet_runtime_crash_is_silent_saved_and_notified(tmp_path, monkeypatch,
             "--fakestore",
         )
 
-    assert code == EXIT_CODE_ERROR
+    assert code == ExitStatus.APPLICATION_ERROR
     assert capfd.readouterr() == ("", "")
     assert "orchestrator exploded" in (tmp_path / "logs" / "errors.txt").read_text()
     notifier.notify_crash.assert_called_once()

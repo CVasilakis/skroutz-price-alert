@@ -18,6 +18,12 @@ fi
 
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
+# Cross-command statuses consumed by the POSIX-shell management layer. The Python
+# producer uses core.exit_status.ExitStatus; tests pin this small protocol boundary.
+EXIT_STATUS_TARGET_CONFIG_ERROR=15
+EXIT_STATUS_NOTIFICATION_CONFIG_ERROR=16
+EXIT_STATUS_STORAGE_ERROR=19
+
 # DEBUG_MODE is process-local public state. SCROOGE_INTERNAL_DEBUG is only for
 # propagating that state between project scripts; invalid inherited values fail
 # closed to normal (quiet) execution.

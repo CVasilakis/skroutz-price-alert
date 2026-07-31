@@ -3,21 +3,11 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol
 
-from core.constants import (
-    EXIT_CODE_INTERRUPT,
-    EXIT_CODE_NOTIFICATION_ERROR,
-    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_RATE_LIMIT_ERROR,
-    EXIT_CODE_SCRAPE_ERROR,
-    EXIT_CODE_SKIPPED,
-    EXIT_CODE_STORAGE_ERROR,
-    EXIT_CODE_SUCCESS,
-    EXIT_CODE_TARGET_CONFIG_ERROR,
-)
+from core.exit_status import ExitStatus
 from core.scrapers.api import TrackedItem
 from core.settings import ResolvedSettings
 
@@ -44,40 +34,39 @@ class ConfigOutcome:
 class ItemRunOutcome:
     item: TrackedItem
     reported_error: Exception | None = None
-    affects_scrape_status: bool = False
-    notification_failed: bool = False
+    statuses: frozenset[ExitStatus] = frozenset()
     abort_target: bool = False
-    rate_limited: bool = False
 
 
 @dataclass
 class RunOutcome:
-    target_config_error: bool = False
-    storage_error: bool = False
-    dependency_error: bool = False
-    scrape_error: bool = False
-    rate_limited: bool = False
-    notification_error: bool = False
+    """Mergeable run conditions and the policy for selecting one process status."""
+
+    statuses: set[ExitStatus] = field(default_factory=set)
     skipped_count: int = 0
 
-    def exit_code(self, *, interrupted: bool, target_count: int) -> int:
+    def merge(self, other: RunOutcome) -> None:
+        self.statuses.update(other.statuses)
+        self.skipped_count += other.skipped_count
+
+    def exit_status(self, *, interrupted: bool, target_count: int) -> ExitStatus:
         if interrupted:
-            return EXIT_CODE_INTERRUPT
-        if self.target_config_error:
-            return EXIT_CODE_TARGET_CONFIG_ERROR
-        if self.storage_error:
-            return EXIT_CODE_STORAGE_ERROR
-        if self.dependency_error:
-            return EXIT_CODE_PLUGIN_DEPENDENCY_ERROR
-        if self.scrape_error:
-            return EXIT_CODE_SCRAPE_ERROR
-        if self.rate_limited:
-            return EXIT_CODE_RATE_LIMIT_ERROR
-        if self.notification_error:
-            return EXIT_CODE_NOTIFICATION_ERROR
+            return ExitStatus.INTERRUPTED
+        for status in (
+            ExitStatus.APPLICATION_ERROR,
+            ExitStatus.TARGET_CONFIG_ERROR,
+            ExitStatus.NOTIFICATION_CONFIG_ERROR,
+            ExitStatus.STORAGE_ERROR,
+            ExitStatus.PLUGIN_DEPENDENCY_ERROR,
+            ExitStatus.SCRAPE_ERROR,
+            ExitStatus.RATE_LIMIT_ERROR,
+            ExitStatus.NOTIFICATION_ERROR,
+        ):
+            if status in self.statuses:
+                return status
         if self.skipped_count > 0 and self.skipped_count == target_count:
-            return EXIT_CODE_SKIPPED
-        return EXIT_CODE_SUCCESS
+            return ExitStatus.ALREADY_RUNNING
+        return ExitStatus.SUCCESS
 
 
 class RunReporter(Protocol):

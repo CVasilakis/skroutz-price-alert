@@ -6,7 +6,7 @@ import os
 import signal
 import sys
 
-from core.constants import EXIT_CODE_INTERRUPT
+from core.exit_status import ExitStatus
 
 
 def describe_signal(signum: int) -> str:
@@ -26,7 +26,7 @@ def install_interrupt_handler() -> None:
     def _handler(signum: int, _frame: object) -> None:
         os.write(1, b"\033[2K\r")
         Console().print(f"🛑 Interrupted! Received signal {describe_signal(signum)}.\n")
-        sys.exit(EXIT_CODE_INTERRUPT)
+        sys.exit(ExitStatus.INTERRUPTED)
 
     signal.signal(signal.SIGINT, _handler)
     signal.signal(signal.SIGTERM, _handler)

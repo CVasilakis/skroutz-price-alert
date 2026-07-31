@@ -5,6 +5,7 @@ from core.application.contracts import RunReporter
 from core.application.items import ItemExecutor
 from core.application.pacing import Pacer
 from core.exceptions import RateLimitError, ScraperParseError, ServerError
+from core.exit_status import ExitStatus
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem, UrlField
 from core.scrapers.framework.state import JsonStateRepository, StateEntry
 
@@ -80,7 +81,7 @@ def test_unexpected_fault_exhausts_retries_and_affects_exit_status(monkeypatch):
     monkeypatch.setattr("core.application.items.save_traceback", traceback)
     outcome = executor.process(_item())
     assert isinstance(outcome.reported_error, RuntimeError)
-    assert outcome.affects_scrape_status
+    assert outcome.statuses == frozenset({ExitStatus.SCRAPE_ERROR})
     assert executor.client.scrape.call_count == 3
     assert executor.client.prepare_retry.call_count == 2
     reporter.log_failure.assert_called_once()
@@ -92,7 +93,7 @@ def test_server_error_exhaustion_is_modeled_success_without_retry_preparation():
     executor.client.scrape.side_effect = ServerError("remote failure")
     outcome = executor.process(_item())
     assert outcome.reported_error is None
-    assert not outcome.affects_scrape_status
+    assert not outcome.statuses
     assert not outcome.abort_target
     executor.client.prepare_retry.assert_not_called()
     reporter.log_failure.assert_called_once()
@@ -105,8 +106,7 @@ def test_rate_limit_exhaustion_aborts_target_and_sets_rate_status(monkeypatch):
     outcome = executor.process(_item())
     assert isinstance(outcome.reported_error, RateLimitError)
     assert outcome.abort_target
-    assert outcome.rate_limited
-    assert not outcome.affects_scrape_status
+    assert outcome.statuses == frozenset({ExitStatus.RATE_LIMIT_ERROR})
 
 
 def test_interruption_after_pacing_does_not_start_scrape():

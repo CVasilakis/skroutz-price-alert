@@ -8,18 +8,7 @@ blindly regenerated snapshot.
 
 import unittest
 
-from core.constants import (
-    EXIT_CODE_INTERRUPT,
-    EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
-    EXIT_CODE_NOTIFICATION_ERROR,
-    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_RATE_LIMIT_ERROR,
-    EXIT_CODE_SCRAPE_ERROR,
-    EXIT_CODE_SKIPPED,
-    EXIT_CODE_STORAGE_ERROR,
-    EXIT_CODE_SUCCESS,
-    EXIT_CODE_TARGET_CONFIG_ERROR,
-)
+from core.exit_status import ExitStatus
 from core.tui.service_verdicts import classify_service_state
 
 
@@ -30,7 +19,7 @@ class TestClassifyServiceState(unittest.TestCase):
         return classify_service_state(result, exec_status, target, config)
 
     def test_success_requires_result_and_zero_exit(self):
-        verdict = self._classify(result="success", exec_status=str(EXIT_CODE_SUCCESS))
+        verdict = self._classify(result="success", exec_status=str(ExitStatus.SUCCESS))
         self.assertEqual(
             (verdict.icon, verdict.label, verdict.color, verdict.note), ("✅", "OK", "green", None)
         )
@@ -44,36 +33,45 @@ class TestClassifyServiceState(unittest.TestCase):
 
     def test_target_config_error_fills_in_the_config_filename(self):
         verdict = self._classify(
-            exec_status=str(EXIT_CODE_TARGET_CONFIG_ERROR), config="custom-name.json"
+            exec_status=str(ExitStatus.TARGET_CONFIG_ERROR), config="custom-name.json"
         )
         self.assertEqual((verdict.icon, verdict.label, verdict.color), ("❗", "Failed", "red"))
         self.assertEqual(verdict.note, "Issue with the `config/custom-name.json` file.")
 
     def test_known_codes_map_to_their_verdicts(self):
         for code, icon, label in [
-            (EXIT_CODE_NOTIFICATION_CONFIG_ERROR, "❗", "Failed"),
-            (EXIT_CODE_RATE_LIMIT_ERROR, "❗", "Failed"),
-            (EXIT_CODE_SCRAPE_ERROR, "❗", "Scraping Failed"),
-            (EXIT_CODE_STORAGE_ERROR, "❗", "Storage Failed"),
-            (EXIT_CODE_NOTIFICATION_ERROR, "🟡", "Notification Warning"),
-            (EXIT_CODE_PLUGIN_DEPENDENCY_ERROR, "❗", "Dependencies Missing"),
-            (EXIT_CODE_SKIPPED, "🟡", "Skipped"),
-            (EXIT_CODE_INTERRUPT, "🟡", "Interrupted"),
+            (ExitStatus.APPLICATION_ERROR, "❗", "Application Failed"),
+            (ExitStatus.NOTIFICATION_CONFIG_ERROR, "❗", "Failed"),
+            (ExitStatus.RATE_LIMIT_ERROR, "❗", "Failed"),
+            (ExitStatus.SCRAPE_ERROR, "❗", "Scraping Failed"),
+            (ExitStatus.STORAGE_ERROR, "❗", "Storage Failed"),
+            (ExitStatus.NOTIFICATION_ERROR, "🟡", "Notification Warning"),
+            (ExitStatus.PLUGIN_DEPENDENCY_ERROR, "❗", "Dependencies Missing"),
+            (ExitStatus.ALREADY_RUNNING, "🟡", "Skipped"),
+            (ExitStatus.INTERRUPTED, "🟡", "Interrupted"),
         ]:
             with self.subTest(code=code):
                 verdict = self._classify(exec_status=str(code))
                 self.assertEqual((verdict.icon, verdict.label), (icon, label))
                 self.assertIsNotNone(verdict.note)
 
+    def test_every_declared_exit_status_has_a_specific_verdict(self):
+        for status in ExitStatus:
+            with self.subTest(status=status):
+                result = "success" if status is ExitStatus.SUCCESS else "exit-code"
+                verdict = self._classify(result=result, exec_status=str(status))
+                self.assertNotIn("Reason:", verdict.note or "")
+
     def test_new_codes_interpolate_target_and_config(self):
-        scrape = self._classify(exec_status=str(EXIT_CODE_SCRAPE_ERROR), target="insomnia")
+        scrape = self._classify(exec_status=str(ExitStatus.SCRAPE_ERROR), target="insomnia")
         self.assertIn("logs/insomnia/output.log", scrape.note)
 
-        storage = self._classify(exec_status=str(EXIT_CODE_STORAGE_ERROR), target="insomnia")
+        storage = self._classify(exec_status=str(ExitStatus.STORAGE_ERROR), target="insomnia")
         self.assertIn("state/insomnia.json", storage.note)
+        self.assertIn("state/locks/insomnia.lock", storage.note)
 
         dependency = self._classify(
-            exec_status=str(EXIT_CODE_PLUGIN_DEPENDENCY_ERROR),
+            exec_status=str(ExitStatus.PLUGIN_DEPENDENCY_ERROR),
             target="insomnia",
         )
         self.assertIn("./install.sh --insomnia", dependency.note)

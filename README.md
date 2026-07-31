@@ -339,15 +339,20 @@ Background runs expose precise exit statuses through **Last Execution Status**:
 
 | Code | Meaning |
 | :--- | :--- |
+| `1` | An unexpected application failure occurred; inspect `logs/errors.txt`. |
 | `15` | At least one target configuration could not be loaded. That target is skipped while other selected targets continue; management commands preserve its existing units. |
 | `16` | Notification configuration in `config/general.json` is unusable. |
 | `17` | The store blocked or rate-limited the scraper. |
 | `18` | A parser or unexpected scraper fault exhausted all retries. |
-| `19` | Scraper state could not be loaded or persisted atomically. |
+| `19` | Machine state or its cooperative lock could not be loaded, persisted, or used safely. |
 | `20` | At least one configured notification failed; shown as a yellow warning. |
 | `21` | The selected scraper's private dependencies are missing. |
 | `42` | Every selected scraper was already running. |
 | `130` | The run was interrupted. |
+
+When a manual multi-target run observes more than one condition, interruption and
+hard application/configuration/storage failures take precedence over scraper and
+rate-limit failures, notification warnings, and the all-targets-already-running status.
 
 #### Test Notifications:
 

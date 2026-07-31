@@ -69,6 +69,8 @@ class TestMessageCatalog(unittest.TestCase):
             "plugin_lifecycle_failed": ("RuntimeError",),
             "state_load_failed": ("skroutz",),
             "state_save_failed": ("skroutz",),
+            "lock_storage_failed": (),
+            "lock_storage_unavailable": ("skroutz",),
             "missing_config": ("config/skroutz.json",),
             "malformed_json": ("config/skroutz.json", 2, 4),
             "invalid_utf8": ("config/skroutz.json",),

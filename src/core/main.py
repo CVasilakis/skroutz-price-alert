@@ -17,8 +17,9 @@ from core.application.diagnostics import (
 from core.application.orchestrator import ScrapingOrchestrator
 from core.application.preflight import load_target_configs, validate_notification_preflight
 from core.application.reporting import SilentRunReporter
-from core.constants import CONFIG_DIR, EXIT_CODE_ERROR, STATE_DIR
+from core.constants import CONFIG_DIR, STATE_DIR
 from core.exceptions import UpdateCheckError
+from core.exit_status import ExitStatus
 from core.general import ReminderService, load_general_config
 from core.general.reminder_state import ReminderStateRepository, general_state_path
 from core.infrastructure.locking import StateLockManager
@@ -142,7 +143,7 @@ def _run_main() -> None:
             reporter.complete_target()
         save_traceback(logging.root, log_to_console=not args.quiet)
         notifier.notify_crash()
-        sys.exit(EXIT_CODE_ERROR)
+        sys.exit(ExitStatus.APPLICATION_ERROR)
 
 
 def main() -> None:
@@ -155,7 +156,7 @@ def main() -> None:
         raise
     except Exception:
         save_traceback(logging.root, log_to_console=not quiet_requested)
-        sys.exit(EXIT_CODE_ERROR)
+        sys.exit(ExitStatus.APPLICATION_ERROR)
 
 
 if __name__ == "__main__":

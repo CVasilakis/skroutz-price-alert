@@ -5,8 +5,10 @@ from pathlib import Path
 
 from filelock import FileLock, Timeout
 
+from core import messages
 from core.constants import LOCK_TIMEOUT
-from core.exceptions import LockAcquisitionError
+from core.exceptions import LockAcquisitionError, LockStorageError
+from core.infrastructure.persistence import storage_diagnostic
 
 
 def _validate_lock_name(lock_name: str) -> None:
@@ -51,15 +53,27 @@ class StateLockManager:
     @contextmanager
     def acquire(self, lock_name: str):
         """Acquire one exclusive project lock without waiting."""
-        lock = FileLock(self._prepare_lock_path(lock_name), timeout=LOCK_TIMEOUT)
+        path = self.lock_path(lock_name)
         try:
+            lock = FileLock(self._prepare_lock_path(lock_name), timeout=LOCK_TIMEOUT)
             lock.acquire()
         except Timeout:
-            raise LockAcquisitionError
+            raise LockAcquisitionError from None
+        except OSError as exc:
+            raise LockStorageError(
+                messages.lock_storage_unavailable(lock_name),
+                storage_diagnostic(path, exc, operation="acquire machine-state lock"),
+            ) from exc
         try:
             yield
         finally:
-            lock.release()
+            try:
+                lock.release()
+            except OSError as exc:
+                raise LockStorageError(
+                    messages.lock_storage_unavailable(lock_name),
+                    storage_diagnostic(path, exc, operation="release machine-state lock"),
+                ) from exc
 
 
 __all__ = ["StateLockManager"]

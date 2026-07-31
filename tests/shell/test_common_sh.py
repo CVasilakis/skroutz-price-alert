@@ -17,6 +17,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from core.exit_status import ExitStatus
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_SH = REPO_ROOT / "scripts" / "lib" / "common.sh"
 SYSTEMD_SH = REPO_ROOT / "scripts" / "lib" / "systemd.sh"
@@ -25,6 +27,20 @@ SYSTEMD_SH = REPO_ROOT / "scripts" / "lib" / "systemd.sh"
 def test_install_does_not_invoke_configuration_migration():
     install = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
     assert "catalog_cli migration" not in install
+
+
+def test_shared_shell_statuses_match_the_python_protocol():
+    result = run_sh(
+        'printf "%s %s %s" "$EXIT_STATUS_TARGET_CONFIG_ERROR" '
+        '"$EXIT_STATUS_NOTIFICATION_CONFIG_ERROR" "$EXIT_STATUS_STORAGE_ERROR"'
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == (
+        f"{int(ExitStatus.TARGET_CONFIG_ERROR)} "
+        f"{int(ExitStatus.NOTIFICATION_CONFIG_ERROR)} "
+        f"{int(ExitStatus.STORAGE_ERROR)}"
+    )
 
 
 def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None):

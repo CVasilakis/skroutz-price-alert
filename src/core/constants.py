@@ -1,21 +1,5 @@
 import os
 
-# --- Exit Codes ---
-# Used to indicate failure states when running as a background service.
-EXIT_CODE_SUCCESS: int = 0
-EXIT_CODE_ERROR: int = 1
-EXIT_CODE_INTERRUPT: int = 130  # Script was interrupted (user or system termination)
-EXIT_CODE_TARGET_CONFIG_ERROR: int = (
-    15  # Issue with a target's tracked-items config file (e.g. config/skroutz.json)
-)
-EXIT_CODE_NOTIFICATION_CONFIG_ERROR: int = 16  # Unusable notification configuration
-EXIT_CODE_RATE_LIMIT_ERROR: int = 17  # Blocked by server due to rate limits
-EXIT_CODE_SCRAPE_ERROR: int = 18  # Parser failure or unexpected scraper fault
-EXIT_CODE_STORAGE_ERROR: int = 19  # Scraper state could not be loaded or persisted
-EXIT_CODE_NOTIFICATION_ERROR: int = 20  # A configured notification failed to deliver
-EXIT_CODE_PLUGIN_DEPENDENCY_ERROR: int = 21  # A selected scraper's dependencies are missing
-EXIT_CODE_SKIPPED: int = 42  # Skipped execution (another instance running)
-
 # --- Base Directory Paths ---
 BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONFIG_DIR: str = os.path.join(BASE_DIR, "config")

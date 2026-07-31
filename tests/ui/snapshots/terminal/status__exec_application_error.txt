@@ -9,9 +9,8 @@
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ✅    Systemd Timer Active        Yes                                 │
 │   ✅    Last Execution Time         Sun 2026-06-28 13:00:00 UTC         │
-│   ❗    Last Execution Status       Storage Failed [1]                  │
+│   ❗    Last Execution Status       Application Failed [1]              │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
-│   [1] Machine state or its lock could not be used in state/skroutz.json │
-│       or state/locks/skroutz.lock.                                      │
+│   [1] Unexpected application failure; check logs/errors.txt.            │
 ╰─────────────────────────────────────────────────────────────────────────╯

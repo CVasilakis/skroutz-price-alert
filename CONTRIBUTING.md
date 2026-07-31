@@ -194,6 +194,8 @@ Raise modeled exceptions from `core.scrapers.api`: `ResourceNotFoundError`,
 `PriceUnavailableError`, `InvalidURLError`, `RateLimitError`, `ServerError`,
 `ScraperParseError`, or the base `ScraperError`. Their retry preparation,
 abort, traceback, notification, and exit-status policies are application-owned.
+Plugins never import, return, register, or select process exit statuses. Adding a
+store therefore requires no exit-status or status-UI changes.
 
 ## Basic plugin complete
 

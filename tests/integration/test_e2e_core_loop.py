@@ -10,15 +10,7 @@ from support import catalog_sandbox, fake_plugin, mock_notifier, mock_ui
 from core.application.contracts import PriceOutcome
 from core.application.orchestrator import ScrapingOrchestrator
 from core.application.preflight import load_target_configs
-from core.constants import (
-    EXIT_CODE_NOTIFICATION_ERROR,
-    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_RATE_LIMIT_ERROR,
-    EXIT_CODE_SCRAPE_ERROR,
-    EXIT_CODE_SKIPPED,
-    EXIT_CODE_STORAGE_ERROR,
-    EXIT_CODE_SUCCESS,
-)
+from core.exit_status import ExitStatus
 from core.infrastructure.locking import StateLockManager
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem
 from core.scrapers.framework.clients import ClientLoader
@@ -89,7 +81,7 @@ def test_real_http_scrape_keeps_config_read_only_and_writes_state(tmp_path):
             notifier, ui = mock_notifier(True), mock_ui()
             code = _run(catalog, config_dir, state_dir, notifier, ui)
 
-    assert code == EXIT_CODE_SUCCESS
+    assert code == ExitStatus.SUCCESS
     assert config_path.read_bytes() == original_config
     state = json.loads((state_dir / "fakestore.json").read_text())
     assert state == {
@@ -119,7 +111,7 @@ def test_malformed_row_never_reaches_the_network_or_creates_state(tmp_path):
             config_dir.mkdir()
             _write_config(config_dir, f"http://{netloc}/widget", extra={"unknown": True})
             notifier, ui = mock_notifier(True), mock_ui()
-            assert _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_SUCCESS
+            assert _run(catalog, config_dir, state_dir, notifier, ui) == ExitStatus.SUCCESS
 
     assert server.request_count == 0
     assert not (state_dir / "fakestore.json").exists()
@@ -147,8 +139,8 @@ def test_successful_alert_history_suppresses_the_next_run(tmp_path):
             )
             notifier, ui = mock_notifier(True), mock_ui()
 
-            assert _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_SUCCESS
-            assert _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_SUCCESS
+            assert _run(catalog, config_dir, state_dir, notifier, ui) == ExitStatus.SUCCESS
+            assert _run(catalog, config_dir, state_dir, notifier, ui) == ExitStatus.SUCCESS
 
     assert server.request_count == 2
     notifier.notify_low_price.assert_called_once()
@@ -173,7 +165,7 @@ def test_transient_server_error_retries_then_persists_success(tmp_path):
             notifier, ui = mock_notifier(True), mock_ui()
             code = _run(catalog, config_dir, state_dir, notifier, ui)
 
-    assert code == EXIT_CODE_SUCCESS
+    assert code == ExitStatus.SUCCESS
     assert server.request_count == 2
     assert (
         json.loads((state_dir / "fakestore.json").read_text())["items"]["widget"]["last_price"]
@@ -217,7 +209,7 @@ def test_rate_limit_exhaustion_aborts_remaining_items(tmp_path):
             )
             code = _run(catalog, config_dir, state_dir, mock_notifier(True), mock_ui())
 
-    assert code == EXIT_CODE_RATE_LIMIT_ERROR
+    assert code == ExitStatus.RATE_LIMIT_ERROR
     assert server.request_count == 3
     assert not (state_dir / "fakestore.json").exists()
     assert (tmp_path / "logs" / "fakestore" / "errors.txt").exists()
@@ -237,7 +229,7 @@ def test_exhausted_parser_fault_writes_diagnostic_and_no_state(tmp_path):
             _write_config(config_dir, f"http://{netloc}/widget")
             code = _run(catalog, config_dir, state_dir, mock_notifier(True), mock_ui())
 
-    assert code == EXIT_CODE_SCRAPE_ERROR
+    assert code == ExitStatus.SCRAPE_ERROR
     assert server.request_count == 3
     assert not (state_dir / "fakestore.json").exists()
     assert "JSONDecodeError" in (tmp_path / "logs" / "fakestore" / "errors.txt").read_text()
@@ -261,7 +253,7 @@ def test_malformed_existing_state_is_preserved_without_network_access(tmp_path):
             state_path.write_bytes(malformed)
             code = _run(catalog, config_dir, state_dir, mock_notifier(True), mock_ui())
 
-    assert code == EXIT_CODE_STORAGE_ERROR
+    assert code == ExitStatus.STORAGE_ERROR
     assert server.request_count == 0
     assert state_path.read_bytes() == malformed
 
@@ -287,13 +279,13 @@ def test_failed_price_alert_is_retried_until_successful_history_is_persisted(tmp
             )
             notifier, ui = mock_notifier(True, delivery_ok=False), mock_ui()
             assert (
-                _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_NOTIFICATION_ERROR
+                _run(catalog, config_dir, state_dir, notifier, ui) == ExitStatus.NOTIFICATION_ERROR
             )
             first = json.loads((state_dir / "fakestore.json").read_text())
             assert "price_alert_delivered" not in first["items"]["widget"]
 
             notifier.notify_low_price.return_value = True
-            assert _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_SUCCESS
+            assert _run(catalog, config_dir, state_dir, notifier, ui) == ExitStatus.SUCCESS
 
     assert notifier.notify_low_price.call_count == 2
     final = json.loads((state_dir / "fakestore.json").read_text())
@@ -327,14 +319,14 @@ def test_listing_history_retries_only_failed_offer_urls(tmp_path):
             notifier, ui = mock_notifier(True), mock_ui()
             notifier.notify_low_price.side_effect = [True, False]
             assert (
-                _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_NOTIFICATION_ERROR
+                _run(catalog, config_dir, state_dir, notifier, ui) == ExitStatus.NOTIFICATION_ERROR
             )
             first = json.loads((state_dir / "fakestore.json").read_text())
             assert first["items"]["widget"]["notified_offer_urls"] == ["https://offers.example/a"]
 
             notifier.notify_low_price.side_effect = None
             notifier.notify_low_price.return_value = True
-            assert _run(catalog, config_dir, state_dir, notifier, ui) == EXIT_CODE_SUCCESS
+            assert _run(catalog, config_dir, state_dir, notifier, ui) == ExitStatus.SUCCESS
 
     assert notifier.notify_low_price.call_count == 3
     final = json.loads((state_dir / "fakestore.json").read_text())
@@ -365,7 +357,7 @@ def test_missing_private_dependency_has_runtime_exit_without_state_mutation(tmp_
         _write_config(config_dir, "http://127.0.0.1:1/widget")
         code = _run(catalog, config_dir, state_dir, mock_notifier(True), mock_ui())
 
-    assert code == EXIT_CODE_PLUGIN_DEPENDENCY_ERROR
+    assert code == ExitStatus.PLUGIN_DEPENDENCY_ERROR
     assert not (state_dir / "fakestore.json").exists()
 
 
@@ -383,6 +375,29 @@ def test_real_lock_contention_skips_before_client_or_state_access(tmp_path):
         with StateLockManager(state_dir).acquire("fakestore"):
             code = _run(catalog, config_dir, state_dir, mock_notifier(True), mock_ui())
 
-    assert code == EXIT_CODE_SKIPPED
+    assert code == ExitStatus.ALREADY_RUNNING
     assert (state_dir / "locks" / "fakestore.lock").exists()
+    assert not (state_dir / "fakestore.json").exists()
+
+
+def test_unsafe_lock_storage_returns_storage_status_without_following_symlink(tmp_path):
+    plugin = fake_plugin(
+        name="fakestore",
+        domains=("127.0.0.1",),
+        client_class=FakeStoreClient,
+        url_field=URL,
+    )
+    with catalog_sandbox(plugin) as catalog:
+        config_dir, state_dir = tmp_path / "config", tmp_path / "state"
+        config_dir.mkdir()
+        state_dir.mkdir()
+        _write_config(config_dir, "http://127.0.0.1:1/widget")
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (state_dir / "locks").symlink_to(outside, target_is_directory=True)
+
+        code = _run(catalog, config_dir, state_dir, mock_notifier(True), mock_ui())
+
+    assert code == ExitStatus.STORAGE_ERROR
+    assert not (outside / "fakestore.lock").exists()
     assert not (state_dir / "fakestore.json").exists()

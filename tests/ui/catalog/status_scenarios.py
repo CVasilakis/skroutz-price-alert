@@ -219,6 +219,24 @@ def _():
 
 @scenario(
     Surface.STATUS,
+    "exec_application_error",
+    "Last run had an unexpected application failure (exit 1)",
+    tags=("last_run",),
+)
+def _():
+    return drive_service(
+        TARGET,
+        timer_props(True, NEXT_AT),
+        _svc("exit-code", "1"),
+        resolved_settings(),
+        CFG,
+        "hourly",
+        "hourly",
+    )
+
+
+@scenario(
+    Surface.STATUS,
     "exec_skipped",
     "Last run skipped (another instance was running)",
     tags=("last_run",),
@@ -307,7 +325,7 @@ def _():
 @scenario(
     Surface.STATUS,
     "exec_storage_error",
-    "Last run could not load or persist scrape state (exit 19)",
+    "Last run could not use machine state or its lock (exit 19)",
     tags=("last_run",),
 )
 def _():

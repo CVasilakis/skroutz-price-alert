@@ -529,7 +529,7 @@ main() {
     fi
     MIGRATION_REPORT="$CAPTURED_COMMAND_OUTPUT"
     case "$MIGRATION_STATUS" in
-        0|15|16|19) ;;
+        0|"$EXIT_STATUS_TARGET_CONFIG_ERROR"|"$EXIT_STATUS_NOTIFICATION_CONFIG_ERROR"|"$EXIT_STATUS_STORAGE_ERROR") ;;
         *)
             update_task failure "JSON migration infrastructure failed."
             update_task warning "Affected timers remain disabled for safety."
@@ -620,7 +620,8 @@ main() {
         fi
         UPDATE_SECTION_STARTED=1
     fi
-    if [ "$INSTALL_STATUS" -ne 0 ] && [ "$INSTALL_STATUS" -ne 15 ]; then
+    if [ "$INSTALL_STATUS" -ne 0 ] && \
+        [ "$INSTALL_STATUS" -ne "$EXIT_STATUS_TARGET_CONFIG_ERROR" ]; then
         update_section success "Update recovery"
         update_task failure "Provisioning failed after the source update."
         update_task warning "Affected timers remain disabled for safety."
@@ -631,7 +632,7 @@ main() {
         update_exit 1
     fi
     PARTIAL_CONFIG=0
-    [ "$INSTALL_STATUS" -ne 15 ] || PARTIAL_CONFIG=1
+    [ "$INSTALL_STATUS" -ne "$EXIT_STATUS_TARGET_CONFIG_ERROR" ] || PARTIAL_CONFIG=1
 
     # The new install deliberately left all selected timers quiesced. Restore
     # original enabled/active state, except a service-only damaged installation:
@@ -763,14 +764,14 @@ main() {
             "Update complete, but one or more targets retained their existing units because their configuration is invalid."
         update_task warning \
             "Fix each reported target configuration, then rerun ./update.sh."
-        update_exit 15
+        update_exit "$EXIT_STATUS_TARGET_CONFIG_ERROR"
     fi
     if [ "$MIGRATION_GENERAL_FAILED" -ne 0 ]; then
         update_section warning "Update result"
         update_task warning \
             "Update complete, but timers remain disabled because general configuration migration failed."
         update_task warning "Fix config/general.json, then rerun ./update.sh."
-        update_exit 16
+        update_exit "$EXIT_STATUS_NOTIFICATION_CONFIG_ERROR"
     fi
     if [ "$MIGRATION_STATE_FAILED" -ne 0 ]; then
         update_section warning "Update result"
@@ -778,7 +779,7 @@ main() {
             "Update complete, but one or more state migrations failed."
         update_task warning \
             "Inspect the reported state and recovery data, then rerun ./update.sh."
-        update_exit 19
+        update_exit "$EXIT_STATUS_STORAGE_ERROR"
     fi
 
     update_section success "Update result"

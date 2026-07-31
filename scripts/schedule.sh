@@ -349,5 +349,5 @@ else
     schedule_task warning \
         "Invalid target configuration left the affected timer unchanged."
 fi
-[ "$CONFIG_FAILED" -eq 0 ] || schedule_finish 15
+[ "$CONFIG_FAILED" -eq 0 ] || schedule_finish "$EXIT_STATUS_TARGET_CONFIG_ERROR"
 schedule_finish 0

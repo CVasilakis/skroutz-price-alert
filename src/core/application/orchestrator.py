@@ -14,6 +14,7 @@ from core.application.diagnostics import record_target_load_diagnostic
 from core.application.preflight import TargetConfigLoad
 from core.application.reporting import SilentRunReporter
 from core.application.target import TargetRunner
+from core.exit_status import ExitStatus
 from core.infrastructure.locking import StateLockManager
 from core.infrastructure.logging import get_target_logger, save_traceback
 from core.infrastructure.signals import describe_signal
@@ -96,7 +97,7 @@ class ScrapingOrchestrator:
             self._current_logger = self._start_target(load)
 
             if load.failure is not None:
-                outcome.target_config_error = True
+                outcome.statuses.add(ExitStatus.TARGET_CONFIG_ERROR)
                 self.reporter.complete_target()
                 continue
 
@@ -111,20 +112,17 @@ class ScrapingOrchestrator:
                 save_traceback_fn=save_traceback,
             )
             target_outcome = target_runner.run(load, self._current_logger, lambda: self.interrupted)
-            outcome.storage_error |= target_outcome.storage_error
-            outcome.dependency_error |= target_outcome.dependency_error
-            outcome.scrape_error |= target_outcome.scrape_error
-            outcome.rate_limited |= target_outcome.rate_limited
-            outcome.notification_error |= target_outcome.notification_error
-            outcome.skipped_count += int(target_outcome.skipped)
+            outcome.merge(target_outcome)
 
             if self.interrupted:
                 self.reporter.log_interrupt(self._interrupt_message)
             self.reporter.complete_target()
 
-        return outcome.exit_code(
-            interrupted=self.interrupted,
-            target_count=len(self.target_loads),
+        return int(
+            outcome.exit_status(
+                interrupted=self.interrupted,
+                target_count=len(self.target_loads),
+            )
         )
 
 

@@ -6,12 +6,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from core.constants import (
-    BASE_DIR,
-    EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
-    EXIT_CODE_STORAGE_ERROR,
-    EXIT_CODE_TARGET_CONFIG_ERROR,
-)
+from core.constants import BASE_DIR
+from core.exceptions import LockStorageError
+from core.exit_status import ExitStatus
 from core.scrapers.framework.catalog import PluginCatalog
 from core.tooling.migration import (
     STATUS_FAILED,
@@ -25,11 +22,11 @@ from core.tooling.migration import (
 def _exit_code(outcomes: tuple[MigrationOutcome, ...], *, check: bool) -> int:
     failed = {outcome.family for outcome in outcomes if outcome.status == STATUS_FAILED}
     if "target_config" in failed:
-        return EXIT_CODE_TARGET_CONFIG_ERROR
+        return ExitStatus.TARGET_CONFIG_ERROR
     if "general_config" in failed:
-        return EXIT_CODE_NOTIFICATION_CONFIG_ERROR
+        return ExitStatus.NOTIFICATION_CONFIG_ERROR
     if failed & {"scraper_state", "reminder_state"}:
-        return EXIT_CODE_STORAGE_ERROR
+        return ExitStatus.STORAGE_ERROR
     if check and any(outcome.status == STATUS_MIGRATED for outcome in outcomes):
         return 1
     return 0
@@ -72,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         runner = MigrationRunner(args.root, PluginCatalog.discover())
         outcomes = runner.run(check=args.check)
+    except LockStorageError as exc:
+        print(f"Migration lock storage failed: {exc}", file=sys.stderr)
+        return ExitStatus.STORAGE_ERROR
     except Exception as exc:
         print(f"Migration could not start: {exc}", file=sys.stderr)
         return 1

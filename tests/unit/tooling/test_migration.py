@@ -6,6 +6,7 @@ import pytest
 from filelock import FileLock
 from support import compile_test_plugin
 
+from core.exceptions import LockStorageError
 from core.infrastructure import persistence as persistence_module
 from core.schema_migrations.engine import MigrationPhase, MigrationPlan
 from core.scrapers.framework.catalog import PluginCatalog
@@ -375,7 +376,7 @@ def test_symlinked_lock_directory_fails_without_following_target(tmp_path):
     state.mkdir()
     (state / "locks").symlink_to(outside, target_is_directory=True)
 
-    with pytest.raises(OSError, match="must not be a symlink"):
+    with pytest.raises(LockStorageError, match="Cannot use"):
         MigrationRunner(tmp_path, PluginCatalog(())).run()
 
     assert not (outside / "migration.lock").exists()

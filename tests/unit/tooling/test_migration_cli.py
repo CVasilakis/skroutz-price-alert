@@ -2,11 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from core.constants import (
-    EXIT_CODE_NOTIFICATION_CONFIG_ERROR,
-    EXIT_CODE_STORAGE_ERROR,
-    EXIT_CODE_TARGET_CONFIG_ERROR,
-)
+from core.exceptions import LockStorageError
+from core.exit_status import ExitStatus
 from core.tooling import migration_cli
 from core.tooling.migration import (
     STATUS_CURRENT,
@@ -25,10 +22,10 @@ def _outcome(family, status, detail=""):
 @pytest.mark.parametrize(
     "family,expected",
     [
-        ("target_config", EXIT_CODE_TARGET_CONFIG_ERROR),
-        ("general_config", EXIT_CODE_NOTIFICATION_CONFIG_ERROR),
-        ("scraper_state", EXIT_CODE_STORAGE_ERROR),
-        ("reminder_state", EXIT_CODE_STORAGE_ERROR),
+        ("target_config", ExitStatus.TARGET_CONFIG_ERROR),
+        ("general_config", ExitStatus.NOTIFICATION_CONFIG_ERROR),
+        ("scraper_state", ExitStatus.STORAGE_ERROR),
+        ("reminder_state", ExitStatus.STORAGE_ERROR),
     ],
 )
 def test_exit_codes_preserve_document_family_classes(family, expected):
@@ -41,7 +38,7 @@ def test_target_config_failure_has_precedence_over_other_document_failures():
         _outcome("scraper_state", STATUS_FAILED),
         _outcome("target_config", STATUS_FAILED),
     )
-    assert migration_cli._exit_code(outcomes, check=False) == EXIT_CODE_TARGET_CONFIG_ERROR
+    assert migration_cli._exit_code(outcomes, check=False) == ExitStatus.TARGET_CONFIG_ERROR
 
 
 def test_check_mode_returns_one_for_pending_migration_only():
@@ -90,6 +87,23 @@ def test_startup_failure_is_concise_without_traceback(monkeypatch, capsys):
     assert captured.out == ""
     assert captured.err == "Migration could not start: catalog unavailable\n"
     assert "Traceback" not in captured.err
+
+
+def test_lock_storage_startup_failure_returns_storage_status(monkeypatch, capsys):
+    class Runner:
+        recovery_path = None
+
+        def __init__(self, _root, _catalog):
+            pass
+
+        def run(self, *, check=False):
+            raise LockStorageError("cannot use migration lock")
+
+    monkeypatch.setattr(migration_cli.PluginCatalog, "discover", lambda: "catalog")
+    monkeypatch.setattr(migration_cli, "MigrationRunner", Runner)
+
+    assert migration_cli.main(["--root", "/tmp/unused"]) == ExitStatus.STORAGE_ERROR
+    assert capsys.readouterr().err == "Migration lock storage failed: cannot use migration lock\n"
 
 
 def test_main_passes_check_and_machine_contract_through(monkeypatch, capsys):

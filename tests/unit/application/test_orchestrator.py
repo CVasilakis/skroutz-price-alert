@@ -10,16 +10,13 @@ import core.infrastructure.logging
 from core.application.contracts import ItemRunOutcome, RunReporter
 from core.application.orchestrator import ScrapingOrchestrator
 from core.application.preflight import TargetConfigFailure, TargetConfigLoad
-from core.constants import (
-    EXIT_CODE_INTERRUPT,
-    EXIT_CODE_NOTIFICATION_ERROR,
-    EXIT_CODE_PLUGIN_DEPENDENCY_ERROR,
-    EXIT_CODE_SCRAPE_ERROR,
-    EXIT_CODE_SKIPPED,
-    EXIT_CODE_STORAGE_ERROR,
-    EXIT_CODE_TARGET_CONFIG_ERROR,
+from core.exceptions import (
+    LockAcquisitionError,
+    LockStorageError,
+    PluginDependencyError,
+    StateFileError,
 )
-from core.exceptions import LockAcquisitionError, PluginDependencyError, StateFileError
+from core.exit_status import ExitStatus
 from core.infrastructure.locking import StateLockManager
 from core.scrapers.api import ScraperPlugin, TrackedItem, UrlField
 from core.scrapers.framework.clients import ClientLoader
@@ -92,14 +89,14 @@ def _runtime_seams(monkeypatch):
 
 def test_config_and_state_failures_keep_distinct_exit_status_and_reporting(monkeypatch):
     config_run, _, _, config_reporter, factory, _ = _orchestrator(_load(error="bad config"))
-    assert config_run.run() == EXIT_CODE_TARGET_CONFIG_ERROR
+    assert config_run.run() == ExitStatus.TARGET_CONFIG_ERROR
     assert config_reporter.start_target.call_args.args[3].error == "bad config"
     factory.assert_not_called()
 
     state = _state_mock()
     state.load.side_effect = StateFileError("bad state", "technical state detail")
     state_run, loader, _, state_reporter, _, _ = _orchestrator(_load(), state=state)
-    assert state_run.run() == EXIT_CODE_STORAGE_ERROR
+    assert state_run.run() == ExitStatus.STORAGE_ERROR
     assert state_reporter.start_target.call_args.args[3].error is None
     state_reporter.log_storage_error.assert_called_once_with(
         "Scrape state could not be loaded.",
@@ -117,7 +114,7 @@ def test_load_diagnostic_is_logged_before_the_target_is_reported():
         )
     )
 
-    assert run.run() == EXIT_CODE_TARGET_CONFIG_ERROR
+    assert run.run() == ExitStatus.TARGET_CONFIG_ERROR
     content = (Path(core.infrastructure.logging.LOGS_DIR) / "store" / "errors.txt").read_text()
     assert "Path: /absolute/config/store.json" in content
     assert "Errno: 13" in content
@@ -129,11 +126,29 @@ def test_lock_failure_prevents_state_and_client_access(monkeypatch):
     run, loader, _, reporter, factory, _ = _orchestrator(_load(items=[item]))
     run.lock_manager.acquire.side_effect = LockAcquisitionError
 
-    assert run.run() == EXIT_CODE_SKIPPED
+    assert run.run() == ExitStatus.ALREADY_RUNNING
     factory.assert_not_called()
     loader.load.assert_not_called()
     reporter.log_system_error.assert_called_once_with(
         "Another instance is currently running. Aborting..."
+    )
+    reporter.log_error.assert_not_called()
+
+
+def test_lock_storage_failure_is_reported_as_storage_without_state_or_client_access():
+    item = TrackedItem("one", "One", 1, _custom={URL: "https://store.example/one"})
+    run, loader, _, reporter, factory, _ = _orchestrator(_load(items=[item]))
+    run.lock_manager.acquire.side_effect = LockStorageError(
+        "Cannot use `state/locks/store.lock`; check its permissions.",
+        "Storage operation: acquire machine-state lock\nPath: /project/state/locks/store.lock",
+    )
+
+    assert run.run() == ExitStatus.STORAGE_ERROR
+    factory.assert_not_called()
+    loader.load.assert_not_called()
+    reporter.log_storage_error.assert_called_once_with(
+        "Machine-state lock could not be used.",
+        "Cannot use `state/locks/store.lock`; check its permissions.",
     )
     reporter.log_error.assert_not_called()
 
@@ -143,7 +158,7 @@ def test_dependency_failure_happens_after_locked_state_load(monkeypatch):
     run, loader, _, reporter, _, state = _orchestrator(_load(items=[item]))
     loader.load.side_effect = PluginDependencyError("install it")
 
-    assert run.run() == EXIT_CODE_PLUGIN_DEPENDENCY_ERROR
+    assert run.run() == ExitStatus.PLUGIN_DEPENDENCY_ERROR
     state.load.assert_called_once()
     reporter.log_system_error.assert_called_once_with("install it")
     reporter.log_error.assert_not_called()
@@ -153,7 +168,7 @@ def test_zero_items_still_loads_state_and_malformed_state_is_storage_error(monke
     state = _state_mock()
     state.load.side_effect = StateFileError("malformed")
     run, loader, _, _, factory, _ = _orchestrator(_load(), state=state)
-    assert run.run() == EXIT_CODE_STORAGE_ERROR
+    assert run.run() == ExitStatus.STORAGE_ERROR
     factory.assert_called_once()
     state.load.assert_called_once()
     state.save.assert_not_called()
@@ -183,7 +198,7 @@ def test_state_load_failure_is_isolated_from_later_targets(monkeypatch):
     executor_type.return_value.stale_items = []
     monkeypatch.setattr("core.application.target.ItemExecutor", executor_type)
 
-    assert run.run() == EXIT_CODE_STORAGE_ERROR
+    assert run.run() == ExitStatus.STORAGE_ERROR
     assert factory.call_count == 2
     loader.load.assert_called_once()
     loader.load.return_value.close.assert_called_once()
@@ -271,7 +286,7 @@ def test_one_state_commit_failure_is_storage_error(monkeypatch):
     executor_type.return_value.stale_items = []
     monkeypatch.setattr("core.application.target.ItemExecutor", executor_type)
 
-    assert run.run() == EXIT_CODE_STORAGE_ERROR
+    assert run.run() == ExitStatus.STORAGE_ERROR
     state.save.assert_called_once()
     assert executor_type.call_args.kwargs["suppress_repeated_price_alerts"] is True
     reporter.log_storage_error.assert_called_once_with(
@@ -296,7 +311,7 @@ def test_success_commits_once_closes_client_and_aggregates_notification_failures
     executor_type.return_value.stale_items = [item]
     monkeypatch.setattr("core.application.target.ItemExecutor", executor_type)
 
-    assert run.run() == EXIT_CODE_NOTIFICATION_ERROR
+    assert run.run() == ExitStatus.NOTIFICATION_ERROR
     state.load.assert_called_once()
     state.save.assert_called_once()
     notifier.notify_stale_items.assert_called_once_with("Store", [item], 48, mock.ANY)
@@ -313,13 +328,13 @@ def test_interruption_stops_target_and_wins_exit_priority(monkeypatch):
 
     def interrupt(_item):
         run.interrupted = True
-        return ItemRunOutcome(item, affects_scrape_status=True)
+        return ItemRunOutcome(item, statuses=frozenset({ExitStatus.SCRAPE_ERROR}))
 
     executor_type.return_value.process.side_effect = interrupt
     executor_type.return_value.stale_items = []
     monkeypatch.setattr("core.application.target.ItemExecutor", executor_type)
 
-    assert run.run() == EXIT_CODE_INTERRUPT
+    assert run.run() == ExitStatus.INTERRUPTED
     reporter.log_interrupt.assert_called_once_with("Received signal SIGTERM")
     loader.load.return_value.close.assert_called_once()
 
@@ -338,6 +353,6 @@ def test_cleanup_fault_does_not_hide_primary_target_fault(monkeypatch):
         "core.application.target.ItemExecutor", mock.Mock(side_effect=PrimaryFault("execute"))
     )
 
-    assert run.run() == EXIT_CODE_SCRAPE_ERROR
+    assert run.run() == ExitStatus.SCRAPE_ERROR
     assert "PrimaryFault" in reporter.log_error.call_args.args[1]
     loader.load.return_value.close.assert_called_once()

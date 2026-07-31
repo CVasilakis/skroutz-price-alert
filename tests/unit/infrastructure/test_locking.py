@@ -6,10 +6,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from filelock import Timeout
 
-from core.exceptions import LockAcquisitionError
+from core.exceptions import LockAcquisitionError, LockStorageError
 from core.infrastructure.locking import StateLockManager
 
 
@@ -64,7 +65,7 @@ class TestStateLockManager(unittest.TestCase):
         self.manager.state_dir.mkdir()
         self.manager.locks_dir.symlink_to(outside, target_is_directory=True)
 
-        with self.assertRaises(OSError):
+        with self.assertRaises(LockStorageError):
             with self.manager.acquire("skroutz"):
                 self.fail("symlinked lock directory should not be used")
 
@@ -76,7 +77,7 @@ class TestStateLockManager(unittest.TestCase):
         outside.touch()
         self.manager.lock_path("skroutz").symlink_to(outside)
 
-        with self.assertRaises(OSError):
+        with self.assertRaises(LockStorageError):
             with self.manager.acquire("skroutz"):
                 self.fail("symlinked lock file should not be used")
 
@@ -84,9 +85,36 @@ class TestStateLockManager(unittest.TestCase):
         self.manager.locks_dir.mkdir(parents=True)
         self.manager.lock_path("skroutz").mkdir()
 
-        with self.assertRaises(OSError):
+        with self.assertRaises(LockStorageError):
             with self.manager.acquire("skroutz"):
                 self.fail("special lock-file destination should not be used")
+
+    def test_os_error_from_protected_body_is_not_a_lock_storage_error(self):
+        body_error = OSError("client body failed")
+
+        with self.assertRaises(OSError) as raised:
+            with self.manager.acquire("skroutz"):
+                raise body_error
+
+        self.assertIs(raised.exception, body_error)
+
+    def test_acquire_and_release_os_errors_are_typed_storage_failures(self):
+        lock = mock.Mock()
+        lock.acquire.side_effect = PermissionError("denied")
+        with mock.patch("core.infrastructure.locking.FileLock", return_value=lock):
+            with self.assertRaises(LockStorageError) as acquire_error:
+                with self.manager.acquire("skroutz"):
+                    self.fail("lock acquisition should fail")
+        self.assertIn("acquire machine-state lock", acquire_error.exception.diagnostic_detail)
+
+        lock.reset_mock()
+        lock.acquire.side_effect = None
+        lock.release.side_effect = OSError("release failed")
+        with mock.patch("core.infrastructure.locking.FileLock", return_value=lock):
+            with self.assertRaises(LockStorageError) as release_error:
+                with self.manager.acquire("skroutz"):
+                    pass
+        self.assertIn("release machine-state lock", release_error.exception.diagnostic_detail)
 
     def _holder(self) -> subprocess.Popen[str]:
         script = """

@@ -14,6 +14,7 @@ from core.exceptions import (
     ScraperParseError,
     ServerError,
 )
+from core.exit_status import ExitStatus
 
 SKIP_ERRORS = (ResourceNotFoundError, PriceUnavailableError, InvalidURLError)
 ERRORS_LOG_TOKEN = "<errors_log>"
@@ -24,13 +25,13 @@ class ErrorPolicy:
     prepare_before_retry: bool = True
     abort: bool = False
     counts_as_failure: bool = True
-    affects_exit_status: bool = False
+    exit_status: ExitStatus | None = None
     save_traceback: bool = False
     extra_notes: tuple[str, ...] = ()
 
 
 DEFAULT_POLICY = ErrorPolicy(
-    affects_exit_status=True,
+    exit_status=ExitStatus.SCRAPE_ERROR,
     save_traceback=True,
     extra_notes=(ERRORS_LOG_TOKEN,),
 )
@@ -40,12 +41,13 @@ RETRY_POLICIES: tuple[tuple[type[Exception], ErrorPolicy], ...] = (
         RateLimitError,
         ErrorPolicy(
             abort=True,
+            exit_status=ExitStatus.RATE_LIMIT_ERROR,
             save_traceback=True,
             extra_notes=(messages.NOTE_RATE_LIMIT_ABORTED, ERRORS_LOG_TOKEN),
         ),
     ),
     (ServerError, ErrorPolicy(prepare_before_retry=False, counts_as_failure=False)),
-    (ScraperParseError, ErrorPolicy(affects_exit_status=True)),
+    (ScraperParseError, ErrorPolicy(exit_status=ExitStatus.SCRAPE_ERROR)),
     (ScraperError, ErrorPolicy(save_traceback=True, extra_notes=(ERRORS_LOG_TOKEN,))),
 )
 

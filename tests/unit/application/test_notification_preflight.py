@@ -1,7 +1,7 @@
 from unittest import mock
 
 from core.application.preflight import validate_notification_preflight
-from core.constants import EXIT_CODE_NOTIFICATION_CONFIG_ERROR
+from core.exit_status import ExitStatus
 from core.general.configuration import GeneralConfigLoad
 from core.notifications.configuration import NotificationConfig
 from core.settings import ResolvedSettings
@@ -21,7 +21,7 @@ def test_quiet_preflight_requires_one_valid_notification_url():
     with mock.patch("core.application.preflight.get_target_logger", return_value=logger):
         result = validate_notification_preflight(["alpha"], general)
 
-    assert result == EXIT_CODE_NOTIFICATION_CONFIG_ERROR
+    assert result == ExitStatus.NOTIFICATION_CONFIG_ERROR
     logger.error.assert_called_once()
 
 
