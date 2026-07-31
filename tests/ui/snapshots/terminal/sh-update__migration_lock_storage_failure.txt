@@ -1,0 +1,25 @@
+# border: red
+# exit: 19
+
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [i] Fetching origin/main...
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [i] [skroutz] Stopping and disabling its timer...
+    [v] [skroutz] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward...
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+    [i] Migrating managed JSON documents...
+    [x] JSON migration infrastructure failed.
+    [!] Affected timers remain disabled for safety.
+    [!] Retry with ./update.sh --debug.

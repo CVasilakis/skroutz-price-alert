@@ -585,6 +585,12 @@ main() {
         esac
     done
     IFS="$OLD_IFS"
+    if [ "$MIGRATION_STATUS" -ne 0 ] && [ "$MIGRATION_FAILURES" -eq 0 ]; then
+        update_task failure "JSON migration infrastructure failed."
+        update_task warning "Affected timers remain disabled for safety."
+        update_task warning "Retry with ./update.sh --debug."
+        update_exit "$MIGRATION_STATUS"
+    fi
     if [ "$MIGRATION_FAILURES" -eq 0 ]; then
         update_task success "Managed JSON documents are ready for the updated source."
     fi

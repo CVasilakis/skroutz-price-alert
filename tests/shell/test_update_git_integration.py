@@ -222,6 +222,28 @@ def test_update_machine_migration_hides_child_noise_and_parses_only_tsv():
         _cleanup(checkout)
 
 
+def test_update_aborts_when_nonzero_migration_has_no_failed_outcome():
+    world = ShellWorld(
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+        enabled_timers=("skroutz",),
+        active_timers=("skroutz",),
+        config_files=("skroutz.json", "general.json"),
+        migration_status=19,
+    )
+    checkout = _build_sandbox(world)
+    try:
+        result = run_update(checkout, _fake_env(checkout, world))
+        assert result.returncode == 19
+        assert "JSON migration infrastructure failed." in result.stdout
+        assert "Managed JSON documents are ready" not in result.stdout
+        state = checkout / "systemd-state"
+        assert not (state / "enabled.skroutz").exists()
+        assert not (state / "timer_active.skroutz").exists()
+    finally:
+        _cleanup(checkout)
+
+
 def test_update_internal_debug_mirrors_migration_tsv_to_stderr_without_corrupting_it():
     report = "general_config\tgeneral\tcurrent\tconfig/general.json\t"
     world = ShellWorld(

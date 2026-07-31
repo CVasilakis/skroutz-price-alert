@@ -269,6 +269,12 @@ _case(
     tags=("error", "system"),
 )
 _case(
+    "migration_lock_storage_failure",
+    "A lock-storage status without a failure report aborts update provisioning.",
+    world=replace(_BASE, migration_status=19),
+    tags=("error", "system"),
+)
+_case(
     "timer_only_repair",
     "A timer-only damaged installation gets its service half back.",
     world=replace(_BASE, installed_services=()),
