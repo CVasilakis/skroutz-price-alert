@@ -102,13 +102,13 @@ def classify_service_state(
     Returns:
         ServiceVerdict: The icon/label/color and a fully-resolved note (or None).
     """
-    if result == "success" and exec_status == str(ExitStatus.SUCCESS):
-        return _VERDICTS[ExitStatus.SUCCESS]
-
     try:
         status = ExitStatus(int(exec_status))
     except (TypeError, ValueError):
         status = None
+
+    if result == "success" and status is ExitStatus.SUCCESS:
+        return _VERDICTS[ExitStatus.SUCCESS]
 
     verdict = (
         _VERDICTS.get(status) if status is not None and status is not ExitStatus.SUCCESS else None
