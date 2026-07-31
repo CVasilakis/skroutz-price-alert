@@ -60,6 +60,95 @@ their TUI, runtime diagnostics, and logging.
   - **`42`**: Indicates that a specific scraper target did not start because another instance of it is already running (file lock timeout).
   - **`130`**: Indicates that the script was interrupted (e.g., via Ctrl+C or system termination).
 
+## Engineering Decision Principles
+
+Agents must optimize for long-term clarity, separation of concerns, testability,
+and maintainability. Architectural patterns are tools, not goals.
+
+- Implement the smallest coherent change that fully solves the demonstrated
+  problem. Do not add speculative extension points, generalized frameworks, or
+  abstractions for hypothetical future requirements.
+- Before changing code, identify which layer owns the behavior. Keep application
+  policy, infrastructure I/O, persistence, presentation, and plugin responsibilities
+  separate. Do not move behavior into a layer merely because it is convenient to
+  access there.
+- Preserve dependency direction. Infrastructure must not depend on application or
+  TUI code; presentation must receive collected data rather than perform filesystem,
+  configuration, network, or systemd access; plugins must use only their documented
+  framework-facing contracts.
+- Centralize rules and invariants that must remain consistent, such as error
+  classification, status priority, schema validation, and persistence safety.
+  Do not centralize unrelated code merely because it looks similar.
+- Apply DRY to knowledge and policy, not every repeated expression. Small local
+  duplication is preferable to a shared abstraction that couples unrelated
+  responsibilities or makes behavior harder to understand.
+- Introduce an abstraction only when it provides a concrete benefit: removing
+  repeated policy, enforcing an invariant, isolating an external dependency, or
+  creating a stable test seam. The benefit must outweigh the added indirection,
+  API surface, and cognitive cost.
+- Prefer explicit typed contracts and straightforward control flow over dynamic
+  registries, implicit conventions, inheritance hierarchies, or metaprogramming
+  when a simpler design provides the same safety.
+- Design for local reasoning. A maintainer should be able to understand a behavior
+  by reading its owning module and direct contracts without tracing unrelated
+  layers or hidden global state.
+- Keep plugin contributions additive and framework-light. Adding a normal plugin
+  must not require changes to application orchestration, persistence, exit-status
+  handling, shell scripts, or presentation code.
+- Add dependency injection only at meaningful nondeterministic or external
+  boundaries, such as clocks, clients, locks, storage, notifications, and process
+  services. Do not add test-only production hooks or inject ordinary pure logic
+  without a concrete need.
+- Test behavior and boundaries rather than implementation details. Cover ownership
+  decisions, failure classification, invariants, and externally visible results.
+  Avoid mocks that merely reproduce the implementation.
+- Consider failure modes and cleanup paths before implementation. New behavior must
+  preserve resource cleanup, atomicity, malformed-data protection, lock safety,
+  interruption behavior, and diagnostic usefulness where applicable.
+- Do not broaden a change into an unrelated cleanup. Refactor adjacent code only
+  when it is necessary to implement the requested behavior safely or removes a
+  concrete maintainability problem exposed by the change.
+- If a proposed change adds more coupling, indirection, maintenance burden, or
+  failure modes than the problem justifies, reject it and explain why. Leaving
+  clear, working code unchanged is an acceptable and often preferable outcome.
+- When multiple designs are viable, prefer the one with fewer concepts, clearer
+  ownership, smaller public surface area, and stronger focused tests. Record any
+  non-obvious tradeoff in code comments or documentation close to the decision.
+
+## Commit Message Guidance
+
+Agents must never create commits, but when asked to suggest a commit message they
+must first inspect recent project history and match its established style and
+detail level.
+
+- Use a concise conventional subject when consistent with recent history, such as
+  `fix(locking): ...`, `refactor(errors): ...`, or `test(ui): ...`.
+- Describe the outcome in the subject, not the activity. Prefer “classify lock
+  storage failures as storage errors” over “update locking code.”
+- Use left-aligned `-` bullets in the body with no leading indentation.
+- Make the message understandable without reading the diff. It should preserve
+  enough context for a future maintainer to understand what changed, why it
+  changed, which architectural boundary owns it, and which important behavior was
+  deliberately preserved.
+- Explain the reasoning behind non-obvious decisions. Include why a shared policy,
+  typed contract, or boundary was introduced and why responsibilities remain in
+  separate layers.
+- Describe important invariants and compatibility decisions, such as unchanged
+  plugin responsibilities, preserved persistence safety, contention semantics, or
+  presentation behavior.
+- Prefer behavior-level details over file inventories, symbol lists, or a
+  chronological account of implementation steps.
+- Avoid filler, repetition, promotional language, and vague phrases such as
+  “improve robustness,” “clean up code,” or “various fixes” unless the message
+  immediately states the concrete behavior involved.
+- Give each bullet one clear purpose. Combine closely related implementation and
+  rationale, but do not repeat the subject or restate another bullet.
+- Mention tests and the mandatory local CI gate only when they were actually run.
+  Include the exact passing test count when known, and never claim CI readiness
+  when the required gate failed or could not run.
+- Keep the message detailed enough to preserve history and design intent, but no
+  longer than necessary to explain the change accurately.
+
 ## Development Conventions
 - **Scraping Practices & Rate Limiting:** The framework intentionally paces requests using a base delay (20s) plus randomized jitter (1-5s) between item checks to reduce pressure on monitored sites. Concurrency is avoided. Do not "optimize" this away.
 - **Data Integrity:** Runtime never writes `config/*.json`. Scraper machine updates go through `JsonStateRepository` under the existing per-target lock; reminder updates go through `ReminderStateRepository` under the reminder lock. Both use the atomic writer and preserve malformed existing state.
