@@ -1,9 +1,7 @@
 """Drift guards for shell-shadowed and internal reserved plugin names.
 
-``SHELL_RESERVED_PLUGIN_NAMES`` protects the target-selection flags plus the established
-``ping`` and ``status`` command vocabulary. The latter remain reserved after their shell
-owners were split from run.sh so an organizational refactor cannot silently broaden the
-plugin descriptor contract. Framework pseudo-targets are reserved separately.
+``SHELL_RESERVED_PLUGIN_NAMES`` contains only built-in flags that shadow a target flag
+in a target-selecting command. Framework pseudo-targets are reserved separately.
 """
 
 import re
@@ -33,9 +31,8 @@ TARGET_SELECTING_SCRIPTS = tuple(
     script for script in SCRIPTS if script.name in TARGET_SELECTING_NAMES
 )
 SHARED_PARSERS = (REPO_ROOT / "scripts/lib/common.sh",)
-COMMAND_RESERVED_NAMES = {"ping", "status"}
 
-# A case branch whose pattern is made of literal flags, e.g. "-h|--help)" or "--ping)".
+# A case branch whose pattern is made of literal flags, e.g. "-h|--help)".
 # Deliberately excludes the globs ("--*)", "*)") and the bare "--)" separator branch.
 _CASE_BRANCH = re.compile(r"^\s*((?:-{1,2}[a-z][a-z-]*\|?)+)\)")
 _FLAG_NAME = re.compile(r"--([a-z][a-z-]*)")
@@ -62,7 +59,7 @@ class TestReservedFlagNames(unittest.TestCase):
         for script in (*TARGET_SELECTING_SCRIPTS, *SHARED_PARSERS):
             claimed |= builtin_flags_of(script)
         self.assertEqual(
-            claimed | COMMAND_RESERVED_NAMES,
+            claimed,
             set(SHELL_RESERVED_PLUGIN_NAMES),
             "SHELL_RESERVED_PLUGIN_NAMES (framework/naming.py) and the scripts' built-in "
             "'--<flag>' "

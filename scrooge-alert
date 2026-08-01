@@ -47,7 +47,7 @@ show_version() {
     if [ ! -L "$BASE_DIR/venv" ] && [ -x "$BASE_DIR/venv/bin/python3" ]; then
         _sv_version="$(
             PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" \
-                -m core.scrapers.tooling.cli version 2>/dev/null || true
+                -m core.tooling.version_cli 2>/dev/null || true
         )"
     fi
     case "$_sv_version" in
@@ -65,6 +65,8 @@ dispatch() {
             "Error: Command owner is missing or unsafe: $_d_owner" >&2
         exit 1
     fi
+    # Presentation context only: owners use this to select canonical
+    # ./scrooge-alert help wording instead of direct-script wording.
     SCROOGE_PUBLIC_COMMAND="$_d_command"
     export SCROOGE_PUBLIC_COMMAND
     exec "$_d_owner" "$@"

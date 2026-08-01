@@ -455,8 +455,8 @@ _SHELLCHECK_SHIM = """#!/bin/sh
 exit 0
 """
 
-# The venv responder implements the small machine-readable scraper CLI used by
-# common.sh, plus pip failure injection and run.sh's final dispatch marker.
+# The venv responder implements the machine-readable Python commands used by the
+# shell layer, plus pip failure injection and the runtime wrappers' final dispatch marker.
 _VENV_PYTHON_SHIM = """#!/bin/sh
 # venv python responder: canned catalog answers, pip failure injection, and a
 # dispatch marker for run.sh's final exec.
@@ -522,7 +522,7 @@ case "${1:-}" in
                 [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
                 [ -n "${FAKE_SCHEDULE_REPORT:-}" ] && printf '%s\\n' "$FAKE_SCHEDULE_REPORT" ;;
             "core.scrapers.tooling.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
-            "core.scrapers.tooling.cli version") printf '%s\\n' "${FAKE_LOCAL_VERSION:-1.2.3}" ;;
+            "core.tooling.version_cli") printf '%s\\n' "${FAKE_LOCAL_VERSION:-1.2.3}" ;;
             "core.scrapers.tooling.cli diagnose")
                 if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
                     printf '  %s\\n' "$FAKE_DISCOVERY_ERROR"

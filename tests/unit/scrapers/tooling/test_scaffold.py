@@ -75,6 +75,13 @@ def test_scaffold_rejects_invalid_identity_and_url_inputs(scaffold_request):
         validate_request(scaffold_request)
 
 
+@pytest.mark.parametrize("target", ["ping", "status"])
+def test_scaffold_accepts_command_names_as_targets(target):
+    request = ScaffoldRequest(target, target.title(), f"{target}.example", "/products/")
+
+    assert validate_request(request) == request
+
+
 def test_scaffold_refuses_collisions_without_touching_other_destination(tmp_path):
     source = tmp_path / "src/core/scrapers/plugins/acme_store"
     source.mkdir(parents=True)

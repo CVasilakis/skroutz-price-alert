@@ -169,6 +169,25 @@ def test_command_help_is_canonical_and_keeps_dynamic_targets():
     assert "--skroutz" not in status_help.stdout
 
 
+@pytest.mark.parametrize("target", ("ping", "status"))
+def test_command_names_remain_unambiguous_as_dynamic_targets(target: str):
+    world = ShellWorld(plugins=("ping", "status"))
+    checkout = _build_sandbox(world)
+    try:
+        command = _run(checkout, world, target)
+        selected_target = _run(checkout, world, "run", f"--{target}")
+        run_help = _run(checkout, world, "run", "--help")
+        install_help = _run(checkout, world, "install", "--help")
+    finally:
+        _cleanup(checkout)
+
+    assert command.returncode == selected_target.returncode == 0
+    assert command.stdout.rstrip().endswith(f"src/core/{target}.py")
+    assert selected_target.stdout.rstrip().endswith(f"src/core/run.py --{target}")
+    assert f"--{target}" in run_help.stdout
+    assert f"--{target}" in install_help.stdout
+
+
 def test_absolute_invocation_resolves_checkout_from_another_directory(tmp_path: Path):
     world = ShellWorld()
     checkout = _build_sandbox(world)
@@ -256,3 +275,91 @@ def test_install_does_not_create_shell_or_launcher_artifacts():
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert created == []
+
+
+_INSTALLED_WORLD = ShellWorld(
+    installed_timers=("skroutz",),
+    installed_services=("skroutz",),
+    enabled_timers=("skroutz",),
+    active_timers=("skroutz",),
+    config_files=("skroutz.json", "general.json"),
+)
+
+
+@pytest.mark.parametrize(
+    ("command", "args", "world", "expected"),
+    (
+        pytest.param(
+            "run",
+            ("--quiet", "--skroutz"),
+            ShellWorld(),
+            "src/core/run.py --quiet --skroutz",
+            id="run",
+        ),
+        pytest.param("ping", (), ShellWorld(), "src/core/ping.py", id="ping"),
+        pytest.param("status", (), ShellWorld(), "src/core/status.py", id="status"),
+        pytest.param(
+            "install",
+            (),
+            ShellWorld(config_files=("skroutz.json", "general.json")),
+            "Installation complete.",
+            id="install",
+        ),
+        pytest.param(
+            "enable",
+            (),
+            ShellWorld(
+                installed_timers=("skroutz",),
+                installed_services=("skroutz",),
+                config_files=("skroutz.json", "general.json"),
+            ),
+            "Background schedule enabled and started.",
+            id="enable",
+        ),
+        pytest.param(
+            "disable", (), _INSTALLED_WORLD, "Background execution disabled.", id="disable"
+        ),
+        pytest.param(
+            "stop",
+            (),
+            ShellWorld(installed_services=("skroutz",), active_services=("skroutz",)),
+            "Active execution stopped.",
+            id="stop",
+        ),
+        pytest.param(
+            "schedule",
+            (),
+            _INSTALLED_WORLD,
+            "No eligible timer changes were required.",
+            id="schedule",
+        ),
+        pytest.param(
+            "update",
+            (),
+            _INSTALLED_WORLD,
+            "Update complete. You are now running origin/main.",
+            id="update",
+        ),
+        pytest.param(
+            "uninstall",
+            ("--skroutz",),
+            _INSTALLED_WORLD,
+            "Timer and service unit entries removed.",
+            id="uninstall",
+        ),
+    ),
+)
+def test_public_commands_reach_real_owners(
+    command: str,
+    args: tuple[str, ...],
+    world: ShellWorld,
+    expected: str,
+):
+    checkout = _build_sandbox(world)
+    try:
+        result = _run(checkout, world, command, *args)
+    finally:
+        _cleanup(checkout)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert expected in result.stdout

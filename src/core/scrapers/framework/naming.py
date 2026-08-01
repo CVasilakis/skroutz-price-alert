@@ -2,7 +2,7 @@
 
 import re
 
-SHELL_RESERVED_PLUGIN_NAMES = frozenset({"debug", "help", "quiet", "ping", "status"})
+SHELL_RESERVED_PLUGIN_NAMES = frozenset({"debug", "help", "quiet"})
 INTERNAL_RESERVED_PLUGIN_NAMES = frozenset({"general", "migration", "reminder"})
 RESERVED_PLUGIN_NAMES = SHELL_RESERVED_PLUGIN_NAMES | INTERNAL_RESERVED_PLUGIN_NAMES
 FRAMEWORK_ITEM_KEYS = frozenset({"id", "name", "target_price", "skip"})

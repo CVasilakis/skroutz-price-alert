@@ -68,9 +68,10 @@ def test_verifier_and_tooling_cli(capsys, tmp_path, catalog):
         assert cli_main(["diagnose"]) == 1
 
 
-def test_manifest_command_was_removed():
+@pytest.mark.parametrize("command", ["manifest", "version"])
+def test_non_scraper_commands_are_not_accepted(command):
     with pytest.raises(SystemExit) as exc:
-        cli_main(["manifest"])
+        cli_main([command])
     assert exc.value.code == 2
 
 

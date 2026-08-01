@@ -44,6 +44,11 @@ def test_invalid_or_reserved_target_rejected(target):
         _compile(target=target)
 
 
+@pytest.mark.parametrize("target", ["ping", "status"])
+def test_command_names_are_valid_plugin_targets(target):
+    assert _compile(target=target).target == target
+
+
 @pytest.mark.parametrize(
     "changes",
     [

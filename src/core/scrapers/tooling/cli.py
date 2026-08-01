@@ -9,7 +9,6 @@ from pathlib import Path
 
 from core.constants import CONFIG_DIR
 from core.exceptions import ConfigFileError
-from core.infrastructure.updates import local_software_version
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS, oncalendar_for
@@ -108,7 +107,6 @@ def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None)
     subparsers.add_parser("intervals")
     subparsers.add_parser("requirements")
     subparsers.add_parser("diagnose")
-    subparsers.add_parser("version")
     plugin_check = subparsers.add_parser("plugin-check")
     plugin_check.add_argument("target")
 
@@ -126,10 +124,6 @@ def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None)
             print(row)
     elif args.command == "diagnose":
         return _diagnose()
-    elif args.command == "version":
-        version = local_software_version()
-        if version is not None:
-            print(version)
     else:
         try:
             checks = check_plugin(args.target, catalog)
