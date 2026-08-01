@@ -79,8 +79,22 @@ def _safe_display_name(value: str) -> str:
 
 def _target_name(value: str) -> str:
     result = value.strip()
-    if SNAKE_CASE_KEY.fullmatch(result) is None or result in RESERVED_PLUGIN_NAMES:
-        raise ValueError("target must be a non-reserved snake_case name")
+    if not result:
+        raise ValueError("target name must not be empty")
+    lowercase = result.lower()
+    if lowercase != result and SNAKE_CASE_KEY.fullmatch(lowercase) is not None:
+        raise ValueError(
+            f"target name must use lowercase letters; try {lowercase!r} instead of {result!r}"
+        )
+    if not "a" <= result[0] <= "z":
+        raise ValueError("target name must begin with a lowercase letter")
+    if SNAKE_CASE_KEY.fullmatch(result) is None:
+        raise ValueError(
+            "target name may contain only lowercase letters, digits, and underscores; "
+            "use underscores between words"
+        )
+    if result in RESERVED_PLUGIN_NAMES:
+        raise ValueError(f"target name {result!r} is reserved; choose a store-specific name")
     return result
 
 
@@ -612,9 +626,21 @@ def create_plugin(repo_root: Path, request: ScaffoldRequest) -> ScaffoldResult:
 
 def _json_value(raw: str, *, context: str) -> object:
     try:
-        return json.loads(raw)
+        return _parse_strict_json(raw)
+    except ValueError as exc:
+        raise ValueError(f"{context} must be valid JSON: {exc}") from exc
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"{value} is not permitted by strict JSON")
+
+
+def _parse_strict_json(raw: str) -> object:
+    """Decode standards-compliant JSON, rejecting Python's non-finite extensions."""
+    try:
+        return json.loads(raw, parse_constant=_reject_json_constant)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"{context} must be valid JSON: {exc.msg}") from exc
+        raise ValueError(exc.msg) from exc
 
 
 def _argument_specs(

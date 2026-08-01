@@ -70,28 +70,22 @@ while [ "$remaining" -gt 0 ]; do
 done
 
 if [ "$ORIGINAL_ARGUMENT_COUNT" -eq 0 ]; then
-    begin_operational_output
-    section_heading success "Plugin scaffold wizard"
     if ! run_action reject_project_venv_symlink; then
         task_status failure "The development venv path is a symlink."
         task_status info "Recreate it with ./scripts/dev/setup.sh --debug."
-        end_operational_output
         exit 1
     fi
-    wizard_python="$PROJECT_ROOT/venv/bin/python3"
+    wizard_python="${SCROOGE_PLUGIN_CREATE_PYTHON:-$PROJECT_ROOT/venv/bin/python3}"
     if ! run_action require_python_310 "$wizard_python" "./scripts/dev/setup.sh --debug"; then
         task_status failure "The guided wizard requires the development venv."
         task_status info "Run ./scripts/dev/setup.sh --debug, then retry."
-        end_operational_output
         exit 127
     fi
     if ! run_action "$wizard_python" -c 'import rich'; then
         task_status failure "The guided wizard requires the pinned Rich dependency."
         task_status info "Run ./scripts/dev/setup.sh --debug, then retry."
-        end_operational_output
         exit 1
     fi
-    end_operational_output
     PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
         "$wizard_python" -m core.scrapers.tooling.scaffold --interactive
     exit $?

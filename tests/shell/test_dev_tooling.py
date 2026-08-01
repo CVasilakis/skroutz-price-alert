@@ -51,6 +51,22 @@ def test_plugin_create_help_needs_no_venv_and_has_required_inputs():
     assert "--debug" in result.stdout
 
 
+def test_plugin_create_interactive_output_is_owned_by_rich_panels():
+    env = os.environ.copy()
+    env["SCROOGE_PLUGIN_CREATE_PYTHON"] = sys.executable
+
+    result = _run("scripts/dev/plugin-create.sh", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr == ""
+    assert "[+] Plugin scaffold wizard" not in result.stdout
+    assert result.stdout.startswith("\n╭")
+    assert "New scrooge-alert plugin wizard" in result.stdout
+    assert "Interactive terminal required" in result.stdout
+    assert "╯\n\n╭" in result.stdout
+    assert result.stdout.endswith("\n\n")
+
+
 def _plugin_create_args(repo_root: Path, target: str = "acme_store") -> list[str]:
     return [
         target,

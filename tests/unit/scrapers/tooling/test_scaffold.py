@@ -11,6 +11,7 @@ from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.tooling.scaffold import (
     CustomValueSpec,
     ScaffoldRequest,
+    _json_value,
     create_plugin,
     main,
     validate_request,
@@ -94,6 +95,186 @@ def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
 def test_scaffold_rejects_invalid_identity_and_url_inputs(scaffold_request):
     with pytest.raises(ValueError):
         validate_request(scaffold_request)
+
+
+@pytest.mark.parametrize(
+    ("target", "message"),
+    [
+        ("HAHA", "must use lowercase letters; try 'haha' instead of 'HAHA'"),
+        ("1store", "must begin with a lowercase letter"),
+        ("acme-store", "use underscores between words"),
+        ("help", "is reserved; choose a store-specific name"),
+    ],
+)
+def test_scaffold_target_errors_explain_how_to_correct_the_name(target, message):
+    request = ScaffoldRequest(target, "Acme", ("store.example",), "/products/")
+
+    with pytest.raises(ValueError, match=message):
+        validate_request(request)
+
+
+@pytest.mark.parametrize(
+    ("value_type", "example", "message"),
+    [
+        ("text", "", "nonblank string"),
+        ("integer", True, "integer"),
+        ("number", float("inf"), "finite"),
+        ("nonnegative-number", -1, "non-negative"),
+        ("boolean", "haha", "boolean"),
+        ("text-list", ["valid", ""], "array of nonblank strings"),
+        ("unknown", "value", "type must be one of"),
+    ],
+)
+def test_scaffold_rejects_examples_that_do_not_match_the_declared_type(
+    value_type, example, message
+):
+    request = ScaffoldRequest(
+        "acme",
+        "Acme",
+        ("store.example",),
+        "/products/",
+        item_fields=(CustomValueSpec("custom_value", value_type, example),),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        validate_request(request)
+
+
+@pytest.mark.parametrize(
+    ("value_type", "example", "expected"),
+    [
+        ("text", "  value  ", "value"),
+        ("integer", 2, 2),
+        ("number", 2.5, 2.5),
+        ("nonnegative-number", 0, 0.0),
+        ("boolean", False, False),
+        ("text-list", [" one ", "two"], ("one", "two")),
+    ],
+)
+def test_scaffold_accepts_and_normalizes_every_declared_value_type(value_type, example, expected):
+    request = ScaffoldRequest(
+        "acme",
+        "Acme",
+        ("store.example",),
+        "/products/",
+        item_fields=(CustomValueSpec("custom_value", value_type, example),),
+    )
+
+    validated = validate_request(request)
+
+    assert validated.item_fields[0].example == expected
+
+
+@pytest.mark.parametrize(
+    ("value_type", "example", "invalid_default", "message"),
+    [
+        ("text", "valid", "", "nonblank string"),
+        ("integer", 1, True, "integer"),
+        ("number", 1, float("inf"), "finite"),
+        ("nonnegative-number", 1, -1, "non-negative"),
+        ("boolean", True, "haha", "boolean"),
+        ("text-list", ["valid"], [""], "array of nonblank strings"),
+    ],
+)
+def test_scaffold_rejects_invalid_optional_defaults_for_every_declared_type(
+    value_type, example, invalid_default, message
+):
+    request = ScaffoldRequest(
+        "acme",
+        "Acme",
+        ("store.example",),
+        "/products/",
+        settings=(CustomValueSpec("custom_setting", value_type, example, invalid_default),),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        validate_request(request)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["'value'", "True", "None", '["value",]', "NaN", "Infinity", "-Infinity"],
+)
+def test_automation_arguments_reject_values_outside_strict_json(raw):
+    with pytest.raises(ValueError, match="field example must be valid JSON"):
+        _json_value(raw, context="field example")
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ('"value"', "value"),
+        ("2", 2),
+        ("2.5", 2.5),
+        ("false", False),
+        ('["value"]', ["value"]),
+        ("null", None),
+    ],
+)
+def test_automation_arguments_accept_standard_json_values(raw, expected):
+    assert _json_value(raw, context="field example") == expected
+
+
+def test_scaffold_cli_rejects_nonfinite_json_before_creating_files(tmp_path, capsys):
+    args = [
+        "acme",
+        "--display-name",
+        "Acme",
+        "--domain",
+        "store.example",
+        "--url-prefix",
+        "/products/",
+        "--result-type",
+        "price",
+        "--default-interval",
+        "1h",
+        "--transport",
+        "bare",
+        "--with-tests",
+        "--required-item-field",
+        "score",
+        "number",
+        "NaN",
+        "--repo-root",
+        str(tmp_path),
+    ]
+
+    assert main(args) == 1
+    assert "NaN is not permitted by strict JSON" in capsys.readouterr().err
+    assert not (tmp_path / "src/core/scrapers/plugins/acme").exists()
+
+
+@pytest.mark.parametrize(
+    ("item_fields", "settings", "message"),
+    [
+        ((CustomValueSpec("url", "text", "value"),), (), "item field key 'url'"),
+        (
+            (),
+            (CustomValueSpec("execution_interval", "text", "1h"),),
+            "setting key 'execution_interval'",
+        ),
+        (
+            (
+                CustomValueSpec("region", "text", "eu"),
+                CustomValueSpec("region", "text", "us"),
+            ),
+            (),
+            "duplicate item field key 'region'",
+        ),
+    ],
+)
+def test_scaffold_rejects_reserved_and_duplicate_custom_keys(item_fields, settings, message):
+    request = ScaffoldRequest(
+        "acme",
+        "Acme",
+        ("store.example",),
+        "/products/",
+        item_fields=item_fields,
+        settings=settings,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        validate_request(request)
 
 
 @pytest.mark.parametrize("target", ["ping", "status"])
@@ -284,15 +465,13 @@ def test_fresh_scaffold_passes_ruff_and_basedpyright(tmp_path):
                 "extraPaths": [str(repo_root / "src"), str(tmp_path / "src")],
                 "pythonVersion": "3.10",
                 "typeCheckingMode": "standard",
-                "venvPath": str(repo_root),
-                "venv": "venv",
             }
         ),
         encoding="utf-8",
     )
-    subprocess.run(
+    pyright = subprocess.run(
         [sys.executable, "-m", "basedpyright", "--project", str(pyright_config)],
-        check=True,
         capture_output=True,
         text=True,
     )
+    assert pyright.returncode == 0, pyright.stdout + pyright.stderr

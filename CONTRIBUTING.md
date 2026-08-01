@@ -21,10 +21,15 @@ Prepare the development environment once, then launch the guided Rich wizard:
 ./scripts/dev/plugin-create.sh
 ```
 
-The wizard explains framework-owned fields and settings, single-price versus listing
-results, shared HTTP versus bare clients, custom typed declarations, private
-dependencies, and starter tests before showing a final review. It creates nothing
-until that review is confirmed.
+The wizard keeps every question and answer inside a detailed Rich panel. Each panel
+explains where the value is used, the generated result, its validation rules, and a
+representative example. The first question opens immediately. Press Enter or Down to
+accept the current answer, Up to revisit and edit an earlier answer, and Esc at any
+point to abort. Answers are retained while navigating, and no plugin is created until
+the final review is confirmed. The guided topics include
+framework-owned fields and settings, single-price versus listing results, shared HTTP
+versus bare clients, custom typed declarations, private dependencies, and starter
+tests.
 
 For automation or an experienced contributor, provide every required choice in one
 strict non-interactive invocation:
