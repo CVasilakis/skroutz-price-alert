@@ -3,5 +3,4 @@
 
 [+] Run preflight
     [x] The project venv path must be a project-owned directory, not a symlink.
-    [!] Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or
-        ./install.sh.
+    [!] Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or ./install.sh.

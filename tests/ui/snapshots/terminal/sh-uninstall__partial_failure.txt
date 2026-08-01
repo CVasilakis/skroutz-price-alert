@@ -4,8 +4,7 @@
 [+] Background execution
     [i] [amazon] Stopping and disabling the background timer and service...
     [x] [amazon] Background timer or service could not be disabled safely.
-    [i] [amazon] Run ./scripts/uninstall.sh --debug --amazon for underlying diagnostics.
+    [i] [amazon] Run scrooge-alert uninstall --debug --amazon for underlying diagnostics.
     [i] [skroutz] Stopping and disabling the background timer and service...
     [v] [skroutz] Background timer and service disabled.
-    [!] No unit entries were removed because every selected target must stop safely
-        first.
+    [!] No unit entries were removed because every selected target must stop safely first.

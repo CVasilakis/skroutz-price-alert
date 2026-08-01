@@ -9,6 +9,9 @@
     [v] [skroutz] Timer and service unit entries removed.
     [v] systemd user manager reloaded.
 
+[+] User command
+    [v] User command and owned shell completions removed.
+
 [+] Python environment
     [i] Removing the project Python virtual environment...
     [v] Python virtual environment removed.

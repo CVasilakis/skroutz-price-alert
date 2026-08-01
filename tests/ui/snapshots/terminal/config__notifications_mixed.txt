@@ -7,5 +7,5 @@
 │   ✅    Reminder Day            Saturday (default)                      │
 │   ✅    Reminder Time           13:00 (default)                         │
 │                                                                         │
-│   [1] Run ./scripts/run.sh --ping for more details.                     │
+│   [1] Run scrooge-alert ping for more details.                          │
 ╰─────────────────────────────────────────────────────────────────────────╯

@@ -110,6 +110,13 @@ def test_missing_local_release_is_unknown_without_remote_access(
     assert calls == [("tag", "--merged", "HEAD", "--list", "v*")]
 
 
+def test_local_version_never_inspects_a_remote(monkeypatch: pytest.MonkeyPatch):
+    calls = _git_outputs(monkeypatch, local_tags="v1.9.0\nv1.10.0")
+
+    assert updates.local_software_version() == "1.10.0"
+    assert calls == [("tag", "--merged", "HEAD", "--list", "v*")]
+
+
 def test_boolean_compatibility_wrapper_preserves_success_and_failure(
     monkeypatch: pytest.MonkeyPatch,
 ):

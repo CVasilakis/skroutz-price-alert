@@ -34,10 +34,19 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_units service 2>/dev/null || true)"
     _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
-    printf '\n%s\n\n' "Usage: stop.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = stop ]; then
+        printf '\n%s\n\n' "Usage: scrooge-alert stop [--help] [--debug] [--<target> ...]"
+    else
+        printf '\n%s\n\n' "Usage: stop.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '%s\n\n' "Stop currently running installed scraper services."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = stop ]; then
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+    else
+        printf '%s\n' "Optional arguments:"
+        printf '%s\n' "  -h, --help        show this help message and exit"
+    fi
     printf '%s\n' "  --debug           show underlying command output"
     _ph_old_ifs="$IFS"
     IFS='
@@ -82,7 +91,8 @@ show_selection_failure() {
                 stop_task info \
                     "Available targets: $(stream_for_display "$_st_known")"
             else
-                stop_task info "Run ./scripts/stop.sh --help for available targets."
+                stop_task info \
+                    "Run $(command_text scrooge-alert stop --help) for available targets."
             fi
             IFS="$_ssf_old_ifs"
             return
@@ -90,7 +100,8 @@ show_selection_failure() {
     done
     IFS="$_ssf_old_ifs"
     stop_task failure "The installed target services could not be selected safely."
-    stop_task info "Run ./scripts/stop.sh --debug for underlying diagnostics."
+    stop_task info \
+        "Run $(command_text scrooge-alert stop --debug) for underlying diagnostics."
 }
 
 show_uninstalled_notices() {
@@ -135,7 +146,7 @@ begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Stop preflight"
     stop_task failure "The command-line arguments are invalid."
-    stop_task info "Run ./scripts/stop.sh --help for usage."
+    stop_task info "Run $(command_text scrooge-alert stop --help) for usage."
     stop_finish 1
 fi
 if ! run_action require_systemctl; then
@@ -171,7 +182,7 @@ for plugin in $PLUGINS; do
     if ! state="$(capture_service_state "$plugin")"; then
         stop_task failure "[$plugin] Could not determine the service state."
         stop_task info \
-            "[$plugin] Run ./scripts/stop.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert stop --debug --"$plugin") for underlying diagnostics."
         FAILED=1
     elif state_is_stopped "$state"; then
         stop_task info "[$plugin] No active background execution detected."
@@ -183,7 +194,7 @@ for plugin in $PLUGINS; do
         else
             stop_task failure "[$plugin] Active execution could not be stopped."
             stop_task info \
-                "[$plugin] Run ./scripts/stop.sh --debug --$plugin for underlying diagnostics."
+                "[$plugin] Run $(command_text scrooge-alert stop --debug --"$plugin") for underlying diagnostics."
             FAILED=1
         fi
     fi
@@ -193,5 +204,6 @@ IFS="$OLD_IFS"
 [ "$FAILED" -eq 0 ] || stop_finish 1
 printf '\n'
 section_heading success "Optional controls"
-stop_task info "To disable future executions, run: ./scripts/disable.sh"
+stop_task info \
+    "To disable future executions, run: $(command_text scrooge-alert disable)"
 stop_finish 0

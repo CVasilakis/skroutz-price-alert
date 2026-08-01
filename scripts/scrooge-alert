@@ -1,0 +1,167 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
+if [ -z "${NO_COLOR:-}" ] && { [ -t 1 ] || [ -n "${CLICOLOR_FORCE:-}" ]; }; then
+    COMMAND_COLOR='\033[1;36m'
+    NC='\033[0m'
+else
+    COMMAND_COLOR=''
+    NC=''
+fi
+case "${SCROOGE_ALERT_CHECKOUT:-}" in
+    /*) BASE_DIR="$SCROOGE_ALERT_CHECKOUT" ;;
+    '') BASE_DIR="$(dirname -- "$SCRIPT_DIR")" ;;
+    *)
+        printf '%s\n' "Error: The installed checkout path is invalid." >&2
+        exit 1
+        ;;
+esac
+
+print_help() {
+    printf '%s\n' "Usage: scrooge-alert <command> [options]"
+    printf '\n%s\n' "Commands:"
+    printf '%s\n' \
+        "  run          Check prices for tracked items" \
+        "  ping         Send a test notification" \
+        "  status       Inspect configuration and service health" \
+        "  install      Install or reprovision targets" \
+        "  enable       Enable and start target timers" \
+        "  disable      Stop and disable target timers" \
+        "  stop         Stop running target services" \
+        "  schedule     Apply configured target schedules" \
+        "  update       Update this checkout" \
+        "  uninstall    Remove installed targets or this installation"
+    printf '\n%s\n' "Options:"
+    printf '%s\n' \
+        "  --help       Show this help message and exit" \
+        "  --version    Show the installed release version and exit"
+}
+
+print_leaf_help() {
+    _plh_command="$1"
+    _plh_summary="$2"
+    printf '%s\n' "Usage: scrooge-alert $_plh_command [--help]"
+    printf '\n%s\n' "$_plh_summary"
+    printf '\n%s\n' "Options:"
+    printf '%s\n' "  --help       Show this help message and exit"
+}
+
+fail_usage() {
+    printf '%s\n' "Error: $1" >&2
+    printf "Run '%bscrooge-alert --help%b' for usage.\n" \
+        "$COMMAND_COLOR" "$NC" >&2
+    exit 1
+}
+
+show_version() {
+    _sv_version=''
+    if [ ! -L "$BASE_DIR/venv" ] && [ -x "$BASE_DIR/venv/bin/python3" ]; then
+        _sv_version="$(
+            PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" \
+                -m core.scrapers.tooling.cli version 2>/dev/null || true
+        )"
+    fi
+    case "$_sv_version" in
+        ''|*[!0-9.]*) _sv_version=unknown ;;
+    esac
+    printf '%s\n' "Scrooge Alert $_sv_version"
+}
+
+validate_target_options() {
+    _vto_allow_quiet="$1"
+    _vto_allow_debug="$2"
+    shift 2
+    for _vto_arg in "$@"; do
+        case "$_vto_arg" in
+            --quiet)
+                [ "$_vto_allow_quiet" -eq 1 ] ||
+                    fail_usage "Option '--quiet' is not supported by this command."
+                ;;
+            --debug)
+                [ "$_vto_allow_debug" -eq 1 ] ||
+                    fail_usage "Option '--debug' is not supported by this command."
+                ;;
+            --help|-h|--version|--ping|--status)
+                fail_usage "Option '$_vto_arg' must be used in a supported help context."
+                ;;
+            --)
+                fail_usage "Invalid argument: --."
+                ;;
+            --*)
+                _vto_target="${_vto_arg#--}"
+                case "$_vto_target" in
+                    ''|[!a-z]*|*[!a-z0-9_]*)
+                        fail_usage "Invalid target option: $_vto_arg."
+                        ;;
+                esac
+                ;;
+            *) fail_usage "Unexpected argument: $_vto_arg." ;;
+        esac
+    done
+}
+
+if [ "$#" -eq 0 ]; then
+    print_help
+    exit 0
+fi
+if [ "$#" -eq 1 ]; then
+    case "$1" in
+        --help) print_help; exit 0 ;;
+        --version) show_version; exit 0 ;;
+    esac
+fi
+
+command_name="$1"
+shift
+case "$command_name" in
+    run)
+        if [ "$#" -eq 1 ] && [ "$1" = --help ]; then
+            SCROOGE_PUBLIC_COMMAND=run exec "$BASE_DIR/scripts/run.sh" --help
+        fi
+        validate_target_options 1 0 "$@"
+        exec "$BASE_DIR/scripts/run.sh" "$@"
+        ;;
+    ping)
+        if [ "$#" -eq 1 ] && [ "$1" = --help ]; then
+            print_leaf_help ping "Send a test notification through configured endpoints."
+            exit 0
+        fi
+        [ "$#" -eq 0 ] || fail_usage "Command 'ping' accepts no arguments."
+        exec "$BASE_DIR/scripts/run.sh" --ping
+        ;;
+    status)
+        if [ "$#" -eq 1 ] && [ "$1" = --help ]; then
+            print_leaf_help status "Inspect configuration, updates, and background services."
+            exit 0
+        fi
+        [ "$#" -eq 0 ] || fail_usage "Command 'status' accepts no arguments."
+        exec "$BASE_DIR/scripts/run.sh" --status
+        ;;
+    install|enable|disable|stop|schedule|uninstall)
+        if [ "$#" -eq 1 ] && [ "$1" = --help ]; then
+            SCROOGE_PUBLIC_COMMAND="$command_name"; export SCROOGE_PUBLIC_COMMAND
+            case "$command_name" in
+                install) exec "$BASE_DIR/install.sh" --help ;;
+                *) exec "$BASE_DIR/scripts/$command_name.sh" --help ;;
+            esac
+        fi
+        validate_target_options 0 1 "$@"
+        case "$command_name" in
+            install) exec "$BASE_DIR/install.sh" "$@" ;;
+            *) exec "$BASE_DIR/scripts/$command_name.sh" "$@" ;;
+        esac
+        ;;
+    update)
+        if [ "$#" -eq 1 ] && [ "$1" = --help ]; then
+            SCROOGE_PUBLIC_COMMAND=update exec "$BASE_DIR/update.sh" --help
+        fi
+        for _update_arg in "$@"; do
+            [ "$_update_arg" = --debug ] ||
+                fail_usage "Command 'update' accepts only '--debug'."
+        done
+        [ "$#" -le 1 ] || fail_usage "Option '--debug' may be specified only once."
+        exec "$BASE_DIR/update.sh" "$@"
+        ;;
+    -h|--ping|--status|--*|*) fail_usage "Unknown command: $command_name." ;;
+esac

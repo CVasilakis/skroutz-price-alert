@@ -57,6 +57,8 @@ def test_reminder_variants_and_error_summary_truncation():
         assert notifier.notify_reminder(update, "1 month", "soon")
         assert phrase in app.notify.call_args.kwargs["body"]
         assert app.notify.call_args.kwargs["title"] == TITLE_STATUS_UPDATE
+        if update is True:
+            assert '"scrooge-alert update"' in app.notify.call_args.kwargs["body"]
     failures = [(_item(i), ValueError("boom")) for i in range(5)]
     assert notifier.notify_errors("Store", failures)
     body = app.notify.call_args.kwargs["body"]

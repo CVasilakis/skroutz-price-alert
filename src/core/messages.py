@@ -16,7 +16,7 @@ production place and is pinned by the snapshots.
 # --- Success-row notes (application execution) ---------------------------------------
 
 NOTE_NOTIFIED_OK = "Notification delivered to all valid apprise URL(s)."
-NOTE_NOTIFIED_FAIL = "Notification failed; test with `./scripts/run.sh --ping`."
+NOTE_NOTIFIED_FAIL = "Notification failed; test with `scrooge-alert ping`."
 NOTE_NOTIFIED_NONE = "No notification sent (notifications not configured)."
 NOTE_REPEATED_PRICE_ALERT_SUPPRESSED = "Repeated price alert suppressed."
 
@@ -152,7 +152,7 @@ def plugin_dependency_detail(name: str, missing: str | None = None) -> str:
     """The error detail for a plugin whose deferred dependencies are not installed.
 
     Args:
-        name (str): The plugin name (also its ``./install.sh`` flag).
+        name (str): The plugin name (also its ``scrooge-alert install`` flag).
         missing (str | None): The unimportable module name, when known.
 
     Returns:
@@ -161,7 +161,7 @@ def plugin_dependency_detail(name: str, missing: str | None = None) -> str:
     missing_note = f" (missing module: {missing})" if missing else ""
     return (
         f"Scraper '{name}' requires missing dependencies{missing_note}. "
-        f"Install with `./install.sh --{name}`."
+        f"Install with `scrooge-alert install --{name}`."
     )
 
 

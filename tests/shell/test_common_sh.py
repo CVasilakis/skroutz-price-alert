@@ -104,6 +104,22 @@ class TestColorGuard(unittest.TestCase):
 
 
 class TestPresentationHelpers(unittest.TestCase):
+    def test_actionable_commands_are_bold_cyan_and_wrap_by_visible_width(self):
+        result = run_sh(
+            "COLUMNS=32\n"
+            'task_status info "Run $(command_text scrooge-alert schedule --debug) '
+            'for diagnostics."',
+            extra_env={"NO_COLOR": None, "CLICOLOR_FORCE": "1"},
+        )
+        self.assertIn("\x1b[1;36mscrooge-alert\n", result.stdout)
+        self.assertIn("schedule --debug\x1b[0m", result.stdout)
+        plain = result.stdout.replace("\x1b[0;36m", "").replace("\x1b[1;36m", "")
+        plain = plain.replace("\x1b[0m", "")
+        self.assertEqual(
+            plain.splitlines(),
+            ["    [i] Run scrooge-alert", "        schedule --debug for", "        diagnostics."],
+        )
+
     def test_sections_statuses_and_spacing_are_source_silent_and_colorless(self):
         result = run_sh(
             "begin_operational_output\n"

@@ -4,6 +4,7 @@
 [+] Installation checks
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
+    [v] The user command destinations are safe.
     [v] The existing Python environment uses a supported Python.
     [x] Python venv support is not available.
     [i] Install the Python venv module, then run ./install.sh again.

@@ -11,4 +11,4 @@ ActiveState=inactive
     [v] [skroutz] Active execution stopped.
 
 [+] Optional controls
-    [i] To disable future executions, run: ./scripts/disable.sh
+    [i] To disable future executions, run: scrooge-alert disable

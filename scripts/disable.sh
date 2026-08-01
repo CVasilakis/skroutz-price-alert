@@ -34,11 +34,20 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_targets 2>/dev/null || true)"
     _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
-    printf '\n%s\n\n' "Usage: disable.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = disable ]; then
+        printf '\n%s\n\n' "Usage: scrooge-alert disable [--help] [--debug] [--<target> ...]"
+    else
+        printf '\n%s\n\n' "Usage: disable.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '%s\n' "Stop and disable installed scraper timer/service pairs."
     printf '%s\n\n' "Orphaned and partial unit pairs remain selectable for teardown."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = disable ]; then
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+    else
+        printf '%s\n' "Optional arguments:"
+        printf '%s\n' "  -h, --help        show this help message and exit"
+    fi
     printf '%s\n' "  --debug           show underlying command output"
     _ph_old_ifs="$IFS"
     IFS='
@@ -85,7 +94,7 @@ show_selection_failure() {
                     "Available targets: $(stream_for_display "$_st_known")"
             else
                 disable_task info \
-                    "Run ./scripts/disable.sh --help for available targets."
+                    "Run $(command_text scrooge-alert disable --help) for available targets."
             fi
             IFS="$_ssf_old_ifs"
             return
@@ -94,7 +103,7 @@ show_selection_failure() {
     IFS="$_ssf_old_ifs"
     disable_task failure "The installed target units could not be selected safely."
     disable_task info \
-        "Run ./scripts/disable.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert disable --debug) for underlying diagnostics."
 }
 
 show_uninstalled_notices() {
@@ -131,7 +140,7 @@ begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Disable preflight"
     disable_task failure "The command-line arguments are invalid."
-    disable_task info "Run ./scripts/disable.sh --help for usage."
+    disable_task info "Run $(command_text scrooge-alert disable --help) for usage."
     disable_finish 1
 fi
 if ! run_action require_systemctl; then
@@ -174,7 +183,7 @@ for plugin in $PLUGINS; do
     if [ "$state_status" -eq 2 ]; then
         disable_task failure "[$plugin] Could not determine the systemd state."
         disable_task info \
-            "[$plugin] Run ./scripts/disable.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert disable --debug --"$plugin") for underlying diagnostics."
         FAILED=1
         continue
     fi
@@ -186,7 +195,7 @@ for plugin in $PLUGINS; do
         disable_task failure \
             "[$plugin] Background execution was not fully disabled."
         disable_task info \
-            "[$plugin] Run ./scripts/disable.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert disable --debug --"$plugin") for underlying diagnostics."
         FAILED=1
     fi
 done
@@ -196,5 +205,5 @@ IFS="$OLD_IFS"
 printf '\n'
 section_heading success "Optional controls"
 disable_task info \
-    "To re-enable background execution, run: ./scripts/enable.sh"
+    "To re-enable background execution, run: $(command_text scrooge-alert enable)"
 disable_finish 0

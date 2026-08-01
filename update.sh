@@ -24,13 +24,22 @@ main() {
 
     print_help() {
         printf '\n'
-        printf '%s\n' "Usage: update.sh [-h|--help] [--debug]"
+        if [ "${SCROOGE_PUBLIC_COMMAND:-}" = update ]; then
+            printf '%s\n' "Usage: scrooge-alert update [--help] [--debug]"
+        else
+            printf '%s\n' "Usage: update.sh [-h|--help] [--debug]"
+        fi
         printf '\n'
         printf '%s\n' "Safely update Scrooge Alert from origin/main and transactionally"
         printf '%s\n' "reprovision exactly the scraper targets that are already installed."
         printf '\n'
-        printf '%s\n' "Optional arguments:"
-        printf '%s\n' "  -h, --help        show this help message and exit"
+        if [ "${SCROOGE_PUBLIC_COMMAND:-}" = update ]; then
+            printf '%s\n' "Options:"
+            printf '%s\n' "  --help            Show this help message and exit"
+        else
+            printf '%s\n' "Optional arguments:"
+            printf '%s\n' "  -h, --help        show this help message and exit"
+        fi
         printf '%s\n' "  --debug           show underlying command output"
         printf '\n'
     }
@@ -424,10 +433,14 @@ main() {
         ! run_update_helper update_require_revision_paths origin/main \
             install.sh \
             scripts/migrate.sh \
+            scripts/scrooge-alert \
             scripts/lib/common.sh \
+            scripts/lib/cli.sh \
             scripts/lib/preflight.sh \
             scripts/lib/systemd.sh \
-            scripts/lib/provisioning.sh; then
+            scripts/lib/provisioning.sh \
+            completions/scrooge-alert.bash \
+            completions/scrooge-alert.fish; then
         update_task failure "The fetched update failed safety validation."
         update_task warning \
             "Reconcile the checkout or fetched origin/main, then rerun ./update.sh --debug."

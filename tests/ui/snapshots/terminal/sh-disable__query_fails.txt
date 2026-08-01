@@ -3,4 +3,4 @@
 
 [+] Background execution
     [x] [skroutz] Could not determine the systemd state.
-    [i] [skroutz] Run ./scripts/disable.sh --debug --skroutz for underlying diagnostics.
+    [i] [skroutz] Run scrooge-alert disable --debug --skroutz for underlying diagnostics.

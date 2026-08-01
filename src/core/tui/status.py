@@ -50,7 +50,7 @@ def build_orphan_panel(name: str) -> StatusPanelBuilder:
         StatusPanelBuilder: The orphan panel (one error row + an uninstall footnote).
     """
     orphan_panel = StatusPanelBuilder(f"{name.capitalize()} Service Status (Orphaned)")
-    ref = orphan_panel.add_note_ref(f"Run `./scripts/uninstall.sh --{name}` to remove it")
+    ref = orphan_panel.add_note_ref(f"Run `scrooge-alert uninstall --{name}` to remove it")
     orphan_panel.add_row("❗", "Removed Scraper", f"[red]Still scheduled{ref}[/red]")
     return orphan_panel
 
@@ -151,7 +151,7 @@ def build_service_panel(
     if interval.status in (SettingStatus.OK, SettingStatus.DEFAULT):
         if active_oncalendar and active_oncalendar != expected_oncalendar:
             next_exec += service_panel.add_note_ref(
-                "Timer differs from config. Run `./scripts/schedule.sh`."
+                "Timer differs from config. Run `scrooge-alert schedule`."
             )
 
     service_panel.add_row(next_exec_icon, "Next Scheduled Execution", next_exec)

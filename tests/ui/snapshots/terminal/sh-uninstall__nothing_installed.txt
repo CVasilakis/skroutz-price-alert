@@ -4,6 +4,9 @@
 [+] Installed units
     [i] No installed target timer or service units found.
 
+[+] User command
+    [v] User command and owned shell completions removed.
+
 [+] Python environment
     [i] Removing the project Python virtual environment...
     [v] Python virtual environment removed.

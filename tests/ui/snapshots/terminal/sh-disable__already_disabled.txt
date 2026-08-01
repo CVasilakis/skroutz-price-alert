@@ -5,4 +5,4 @@
     [i] [skroutz] Background timer and service are already disabled.
 
 [+] Optional controls
-    [i] To re-enable background execution, run: ./scripts/enable.sh
+    [i] To re-enable background execution, run: scrooge-alert enable

@@ -5,6 +5,7 @@
     [v] The project venv path is safe.
 3.12.0
     [v] System Python 3.10 or newer is available.
+    [v] The user command destinations are safe.
 skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
 skroutz
 3.12.0
@@ -38,6 +39,11 @@ LoadState=loaded
 UnitFileState=enabled
 ActiveState=active
     [v] Configured timers for the selected targets.
+
+[+] User command
+    [v] Installed the scrooge-alert command for this user.
+    [i] Add <BASE_DIR>/home/.local/bin to PATH to run scrooge-alert from any
+        directory.
 Linger=yes
 skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
 

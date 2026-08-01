@@ -3,5 +3,5 @@
 ╭────────────────── Oldstore Service Status (Orphaned) ───────────────────╮
 │   ❗    Removed Scraper         Still scheduled [1]                     │
 │                                                                         │
-│   [1] Run ./scripts/uninstall.sh --oldstore to remove it.               │
+│   [1] Run scrooge-alert uninstall --oldstore to remove it.              │
 ╰─────────────────────────────────────────────────────────────────────────╯

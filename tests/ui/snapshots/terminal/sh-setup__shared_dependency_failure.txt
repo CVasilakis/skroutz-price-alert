@@ -16,5 +16,4 @@
     [v] Packaging tools updated.
     [i] Installing core and development dependencies...
     [x] Core and development dependencies could not be installed.
-    [i] Check the requirements and package-index access, then run ./scripts/dev/setup.sh
-        --debug.
+    [i] Check the requirements and package-index access, then run ./scripts/dev/setup.sh --debug.

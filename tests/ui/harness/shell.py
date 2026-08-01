@@ -45,6 +45,7 @@ _SCRIPT_FILES = (
     "install.sh",
     "update.sh",
     "scripts/run.sh",
+    "scripts/scrooge-alert",
     "scripts/migrate.sh",
     "scripts/schedule.sh",
     "scripts/enable.sh",
@@ -52,6 +53,7 @@ _SCRIPT_FILES = (
     "scripts/stop.sh",
     "scripts/uninstall.sh",
     "scripts/lib/common.sh",
+    "scripts/lib/cli.sh",
     "scripts/lib/preflight.sh",
     "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
@@ -62,6 +64,8 @@ _SCRIPT_FILES = (
     "scripts/dev/install-hooks.sh",
     "scripts/dev/requirements-dev.txt",
     ".githooks/pre-push",
+    "completions/scrooge-alert.bash",
+    "completions/scrooge-alert.fish",
 )
 
 # The coreutils allowlist symlinked into the sandbox bin/ in EVERY mode. PATH is
@@ -84,6 +88,7 @@ _REAL_TOOLS = (
     "cmp",
     "readlink",
     "mktemp",
+    "sed",
     "sh",
     "xargs",
 )

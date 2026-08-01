@@ -70,6 +70,20 @@ def _remote_refs(output: str) -> tuple[str, list[str]]:
     return remote_head, tags
 
 
+def local_software_version() -> str | None:
+    """Return the highest stable release tag reachable from ``HEAD``.
+
+    This inspection is deliberately local-only so callers such as the installed
+    command's ``--version`` path never depend on a remote or network access.
+    """
+    try:
+        local_tags = _git_output("tag", "--merged", "HEAD", "--list", "v*").splitlines()
+        current = _latest_version(local_tags)
+    except Exception:
+        return None
+    return current[1] if current is not None else None
+
+
 def inspect_software_version() -> SoftwareVersionStatus:
     """Collect the local release and remote update state without leaking Git failures.
 
@@ -77,16 +91,10 @@ def inspect_software_version() -> SoftwareVersionStatus:
     installed ``HEAD``. Remote inspection remains a comparison with remote ``HEAD``;
     advertised tags only enrich an available update with its release version.
     """
-    try:
-        local_tags = _git_output("tag", "--merged", "HEAD", "--list", "v*").splitlines()
-        current = _latest_version(local_tags)
-    except Exception:
+    current_display = local_software_version()
+    if current_display is None:
         return SoftwareVersionStatus(None, None)
-
-    if current is None:
-        return SoftwareVersionStatus(None, None)
-
-    current_parsed, current_display = current
+    current_parsed = tuple(int(part) for part in current_display.split("."))
     try:
         remote_url = _git_output("config", "--get", "remote.origin.url")
         if remote_url.startswith("git@github.com:"):
@@ -127,4 +135,5 @@ __all__ = [
     "SoftwareVersionStatus",
     "check_for_updates",
     "inspect_software_version",
+    "local_software_version",
 ]

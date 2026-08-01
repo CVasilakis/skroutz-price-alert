@@ -245,7 +245,7 @@ def test_interactive_system_error_spans_labeled_columns_responsively(width):
     reporter.settings_rows = [("✅", "Tracked Items", "5 loaded")]
     reporter.log_system_error(
         "Scraper 'store' requires missing dependencies (missing module: tls_client). "
-        "Install with ./install.sh --store."
+        "Install with scrooge-alert install --store."
     )
 
     output = _render(reporter._generate_panel())

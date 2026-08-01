@@ -5,6 +5,8 @@ SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
 BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=scripts/lib/cli.sh
+. "$SCRIPT_DIR/lib/cli.sh"
 # shellcheck source=scripts/lib/systemd.sh
 . "$SCRIPT_DIR/lib/systemd.sh"
 
@@ -34,11 +36,20 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_targets 2>/dev/null || true)"
     _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
-    printf '\n%s\n\n' "Usage: uninstall.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = uninstall ]; then
+        printf '\n%s\n\n' "Usage: scrooge-alert uninstall [--help] [--debug] [--<target> ...]"
+    else
+        printf '\n%s\n\n' "Usage: uninstall.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '%s\n' "With no target, remove all installed units and the project venv."
     printf '%s\n\n' "With target flags, remove only those targets' unit entries."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = uninstall ]; then
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+    else
+        printf '%s\n' "Optional arguments:"
+        printf '%s\n' "  -h, --help        show this help message and exit"
+    fi
     printf '%s\n' "  --debug           show underlying command output"
     _ph_old_ifs="$IFS"
     IFS='
@@ -85,7 +96,7 @@ show_selection_failure() {
                     "Available targets: $(stream_for_display "$_st_known")"
             else
                 uninstall_task info \
-                    "Run ./scripts/uninstall.sh --help for available targets."
+                    "Run $(command_text scrooge-alert uninstall --help) for available targets."
             fi
             IFS="$_ssf_old_ifs"
             return
@@ -95,7 +106,7 @@ show_selection_failure() {
     uninstall_task failure \
         "The installed target units could not be selected safely."
     uninstall_task info \
-        "Run ./scripts/uninstall.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert uninstall --debug) for underlying diagnostics."
 }
 
 show_uninstalled_notices() {
@@ -132,7 +143,8 @@ begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Uninstall preflight"
     uninstall_task failure "The command-line arguments are invalid."
-    uninstall_task info "Run ./scripts/uninstall.sh --help for usage."
+    uninstall_task info \
+        "Run $(command_text scrooge-alert uninstall --help) for usage."
     uninstall_finish 1
 fi
 if ! run_action reject_project_venv_symlink; then
@@ -179,7 +191,7 @@ if [ -n "$REMOVE_TARGETS" ]; then
             uninstall_task failure \
                 "[$target] Background timer or service could not be disabled safely."
             uninstall_task info \
-                "[$target] Run ./scripts/uninstall.sh --debug --$target for underlying diagnostics."
+                "[$target] Run $(command_text scrooge-alert uninstall --debug --"$target") for underlying diagnostics."
             TEARDOWN_FAILED=1
         fi
     done
@@ -204,7 +216,7 @@ if [ -n "$REMOVE_TARGETS" ]; then
             uninstall_task failure \
                 "[$target] Timer and service unit entries could not be removed."
             uninstall_task info \
-                "[$target] Run ./scripts/uninstall.sh --debug --$target for underlying diagnostics."
+                "[$target] Run $(command_text scrooge-alert uninstall --debug --"$target") for underlying diagnostics."
             uninstall_finish 1
         fi
         uninstall_task success \
@@ -235,6 +247,17 @@ if [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ]; then
 fi
 
 printf '\n'
+section_heading success "User command"
+if run_action cli_remove_artifacts; then
+    uninstall_task success "User command and owned shell completions removed."
+else
+    uninstall_task failure "User command artifacts could not be removed safely."
+    uninstall_task info "${CLI_ERROR:-Fix the managed artifact and retry full uninstall.}"
+    uninstall_task warning "The Python virtual environment was retained for a safe retry."
+    uninstall_finish 1
+fi
+
+printf '\n'
 section_heading success "Python environment"
 if [ -d "$BASE_DIR/venv" ]; then
     if run_with_progress "Removing the project Python virtual environment..." \
@@ -243,7 +266,7 @@ if [ -d "$BASE_DIR/venv" ]; then
     else
         uninstall_task failure "Python virtual environment could not be removed."
         uninstall_task info \
-            "Run ./scripts/uninstall.sh --debug for underlying diagnostics."
+            "Run $(command_text scrooge-alert uninstall --debug) for underlying diagnostics."
         uninstall_finish 1
     fi
 else

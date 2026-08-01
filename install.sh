@@ -11,6 +11,8 @@ BASE_DIR="$SCRIPT_DIR"
 # Shared helpers (colors, plugin enumeration, systemd helpers)
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/scripts/lib/common.sh"
+# shellcheck source=scripts/lib/cli.sh
+. "$SCRIPT_DIR/scripts/lib/cli.sh"
 # shellcheck source=scripts/lib/preflight.sh
 . "$SCRIPT_DIR/scripts/lib/preflight.sh"
 # shellcheck source=scripts/lib/systemd.sh
@@ -33,7 +35,11 @@ IS_UPDATE=0
 print_help() {
     load_plugin_catalog || true
     printf '\n'
-    printf '%s\n' "Usage: install.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = install ]; then
+        printf '%s\n' "Usage: scrooge-alert install [--help] [--debug] [--<target> ...]"
+    else
+        printf '%s\n' "Usage: install.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '\n'
     printf '%s\n' "Set up the Python virtual environment and install the systemd timer(s) and"
     printf '%s\n' "service(s). With no target flag every registered scraper is installed and"
@@ -41,8 +47,13 @@ print_help() {
     printf '%s\n' "run this command as many times as you like - run it again in the future"
     printf '%s\n' "to install additional scrapers."
     printf '\n'
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = install ]; then
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+    else
+        printf '%s\n' "Optional arguments:"
+        printf '%s\n' "  -h, --help        show this help message and exit"
+    fi
     printf '%s\n' "  --debug           show underlying command output"
     for plugin in $(list_plugins 2>/dev/null || true); do
         display_name="$(plugin_display_name "$plugin")"
@@ -210,6 +221,11 @@ if ! run_action require_python_310 python3 "./install.sh"; then
         "Install a supported Python, then run ./install.sh again."
 fi
 install_task success "System Python 3.10 or newer is available."
+if ! run_action cli_preflight_install; then
+    install_fail "The user command destinations are unsafe or unusable." \
+        "${CLI_ERROR:-Fix the reported command integration path, then retry.}"
+fi
+install_task success "The user command destinations are safe."
 
 # Validate the import-light catalog, selection, source inputs, and every unit
 # destination before venv creation or package installation.
@@ -248,8 +264,10 @@ else
     IFS="$OLD_IFS"
 fi
 
-for required_file in requirements.txt scripts/run.sh scripts/lib/common.sh \
-    scripts/lib/preflight.sh scripts/lib/systemd.sh scripts/lib/provisioning.sh; do
+for required_file in requirements.txt scripts/run.sh scripts/scrooge-alert \
+    scripts/lib/common.sh scripts/lib/cli.sh scripts/lib/preflight.sh \
+    scripts/lib/systemd.sh scripts/lib/provisioning.sh \
+    completions/scrooge-alert.bash completions/scrooge-alert.fish; do
     if ! run_action require_regular_owned_file "$BASE_DIR/$required_file"; then
         install_fail "Required project file '$required_file' is missing or unsafe." \
             "Restore the regular project file, then run ./install.sh again."
@@ -525,6 +543,18 @@ else
     else
         install_task info "No registered targets require systemd provisioning."
     fi
+fi
+
+install_section "User command"
+if ! run_action cli_install_artifacts; then
+    install_fail "The user command could not be installed safely." \
+        "${CLI_ERROR:-Fix the command destination, then rerun ./install.sh --debug.}"
+fi
+install_task success \
+    "Installed the $(command_text scrooge-alert) command for this user."
+if [ "$CLI_PATH_GUIDANCE" -eq 1 ]; then
+    install_task info \
+        "Add $HOME/.local/bin to PATH to run $(command_text scrooge-alert) from any directory."
 fi
 
 if command -v loginctl >/dev/null 2>&1; then

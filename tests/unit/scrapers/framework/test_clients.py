@@ -52,7 +52,7 @@ def test_third_party_import_failure_gets_dependency_guidance():
     plugin = _compile()
     missing = ModuleNotFoundError("No module named 'optional_transport'", name="optional_transport")
     with mock.patch("core.scrapers.framework.clients.importlib.import_module", side_effect=missing):
-        with pytest.raises(PluginDependencyError, match="install.sh --teststore"):
+        with pytest.raises(PluginDependencyError, match="scrooge-alert install --teststore"):
             ClientLoader().load(plugin, resolve_settings(plugin.setting_specs, {}))
 
 

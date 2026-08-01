@@ -4,6 +4,7 @@
 [+] Installation checks
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
+    [v] The user command destinations are safe.
     [v] The existing Python environment uses a supported Python.
     [v] Python venv support is available.
     [v] Systemd user services are available.
@@ -22,6 +23,11 @@
     [x] [insomnia] Remove unsupported keys from `config/insomnia.json`.
     [i] [insomnia] Existing systemd units were left unchanged.
     [i] No valid selected targets could be provisioned.
+
+[+] User command
+    [v] Installed the scrooge-alert command for this user.
+    [i] Add <BASE_DIR>/home/.local/bin to PATH to run scrooge-alert from any
+        directory.
 
 [+] Installation result
     [x] One or more targets were skipped because their configuration is invalid.

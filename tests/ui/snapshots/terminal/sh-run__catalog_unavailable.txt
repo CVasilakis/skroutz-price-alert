@@ -4,5 +4,4 @@
 [+] Run preflight
     [x] The target catalog could not be loaded.
     [i] PluginDiscoveryError: plugin package 'zzzbroken' failed to import: boom
-    [!] Fix (or remove) the offending package under src/core/scrapers/plugins/, then
-        retry.
+    [!] Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry.

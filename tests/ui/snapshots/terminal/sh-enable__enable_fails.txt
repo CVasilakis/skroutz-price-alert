@@ -4,4 +4,4 @@
 [+] Background schedules
     [i] [skroutz] Enabling and starting the background schedule...
     [x] [skroutz] Failed to enable and start the timer.
-    [i] [skroutz] Run ./scripts/enable.sh --debug --skroutz for underlying diagnostics.
+    [i] [skroutz] Run scrooge-alert enable --debug --skroutz for underlying diagnostics.

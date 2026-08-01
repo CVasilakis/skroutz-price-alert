@@ -59,13 +59,22 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_units timer 2>/dev/null || true)"
     _ph_intervals="$(list_supported_intervals 2>/dev/null || true)"
-    printf '\n%s\n\n' "Usage: schedule.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = schedule ]; then
+        printf '\n%s\n\n' "Usage: scrooge-alert schedule [--help] [--debug] [--<target> ...]"
+    else
+        printf '\n%s\n\n' "Usage: schedule.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '%s\n' "Apply configured execution intervals to installed target timers."
     printf '%s\n' "Only registered targets are eligible; orphaned timers are skipped."
     printf '%s\n\n' \
         "Supported intervals: ${_ph_intervals:-unavailable (run ./install.sh first)}"
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = schedule ]; then
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+    else
+        printf '%s\n' "Optional arguments:"
+        printf '%s\n' "  -h, --help        show this help message and exit"
+    fi
     printf '%s\n' "  --debug           show underlying command output"
     _ph_old_ifs="$IFS"
     IFS='
@@ -122,20 +131,21 @@ show_selection_failure() {
                 schedule_task failure \
                     "'$_ssf_target' is installed but no longer registered (orphan)."
                 schedule_task warning \
-                    "Remove it with: ./scripts/uninstall.sh --$_ssf_target"
+                    "Remove it with: $(command_text scrooge-alert uninstall --"$_ssf_target")"
                 IFS="$_ssf_old_ifs"
                 return
             fi
         elif stream_contains "$_ssf_target" "${_st_registered:-}"; then
             schedule_task failure \
                 "'$_ssf_target' is registered but not installed."
-            schedule_task warning "Install it with: ./install.sh --$_ssf_target"
+            schedule_task warning \
+                "Install it with: $(command_text scrooge-alert install --"$_ssf_target")"
             IFS="$_ssf_old_ifs"
             return
         else
             schedule_task failure "Unknown target '$_ssf_target'."
             schedule_task info \
-                "Run ./scripts/schedule.sh --help for available targets."
+                "Run $(command_text scrooge-alert schedule --help) for available targets."
             IFS="$_ssf_old_ifs"
             return
         fi
@@ -143,7 +153,7 @@ show_selection_failure() {
     IFS="$_ssf_old_ifs"
     schedule_task failure "The installed target timers could not be selected safely."
     schedule_task info \
-        "Run ./scripts/schedule.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert schedule --debug) for underlying diagnostics."
 }
 
 # shellcheck disable=SC2329  # invoked indirectly through run_action
@@ -174,7 +184,7 @@ begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Schedule preflight"
     schedule_task failure "The command-line arguments are invalid."
-    schedule_task info "Run ./scripts/schedule.sh --help for usage."
+    schedule_task info "Run $(command_text scrooge-alert schedule --help) for usage."
     schedule_finish 1
 fi
 if ! run_action require_systemctl; then
@@ -204,35 +214,35 @@ if ! run_action load_plugin_schedules ||
     ! run_action capture_schedule_value list_plugin_schedules; then
     schedule_task failure "Failed to resolve target scheduling metadata."
     schedule_task info \
-        "Run ./scripts/schedule.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert schedule --debug) for underlying diagnostics."
     schedule_finish 1
 fi
 ALL_SCHEDULES="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value list_interval_status; then
     schedule_task failure "Failed to resolve target scheduling metadata."
     schedule_task info \
-        "Run ./scripts/schedule.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert schedule --debug) for underlying diagnostics."
     schedule_finish 1
 fi
 INTERVAL_STATUS="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value list_schedule_errors; then
     schedule_task failure "Failed to resolve target scheduling metadata."
     schedule_task info \
-        "Run ./scripts/schedule.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert schedule --debug) for underlying diagnostics."
     schedule_finish 1
 fi
 SCHEDULE_ERRORS="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value catalog_cli intervals; then
     schedule_task failure "Failed to resolve target scheduling metadata."
     schedule_task info \
-        "Run ./scripts/schedule.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert schedule --debug) for underlying diagnostics."
     schedule_finish 1
 fi
 SUPPORTED_INTERVAL_KEYS="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value list_plugin_examples; then
     schedule_task failure "Failed to resolve target scheduling metadata."
     schedule_task info \
-        "Run ./scripts/schedule.sh --debug for underlying diagnostics."
+        "Run $(command_text scrooge-alert schedule --debug) for underlying diagnostics."
     schedule_finish 1
 fi
 EXAMPLE_PAIRS="$SCHEDULE_VALUE"
@@ -249,7 +259,7 @@ for plugin in $PLUGINS; do
     status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")" || {
         schedule_task failure "[$plugin] No interval status was returned."
         schedule_task info \
-            "[$plugin] Run ./scripts/schedule.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert schedule --debug --"$plugin") for underlying diagnostics."
         FAILED=1
         continue
     }
@@ -283,14 +293,14 @@ for plugin in $PLUGINS; do
     new_calendar="$(plugin_stream_value "$plugin" "$ALL_SCHEDULES")" || {
         schedule_task failure "[$plugin] No resolved schedule was returned."
         schedule_task info \
-            "[$plugin] Run ./scripts/schedule.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert schedule --debug --"$plugin") for underlying diagnostics."
         FAILED=1
         continue
     }
     if ! run_action capture_schedule_value read_timer_oncalendar "$plugin"; then
         schedule_task failure "[$plugin] Could not read the installed timer schedule."
         schedule_task info \
-            "[$plugin] Run ./scripts/schedule.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert schedule --debug --"$plugin") for underlying diagnostics."
         FAILED=1
         continue
     fi
@@ -331,7 +341,7 @@ if [ -n "$CHANGED" ]; then
             schedule_task info "No live timer file or state was changed."
         fi
         schedule_task info \
-            "Run ./scripts/schedule.sh --debug for underlying diagnostics."
+            "Run $(command_text scrooge-alert schedule --debug) for underlying diagnostics."
         FAILED=1
     fi
 fi

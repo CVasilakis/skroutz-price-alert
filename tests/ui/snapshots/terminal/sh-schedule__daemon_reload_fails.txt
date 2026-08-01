@@ -9,4 +9,4 @@
     [x] One or more timer schedules could not be applied.
     [!] Rollback was incomplete. Recovery files:
     [!] <BASE_DIR>/xdg/systemd/user/.scrooge-units.<PID>
-    [i] Run ./scripts/schedule.sh --debug for underlying diagnostics.
+    [i] Run scrooge-alert schedule --debug for underlying diagnostics.

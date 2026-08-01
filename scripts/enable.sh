@@ -33,11 +33,20 @@ print_help() {
     load_plugin_catalog || true
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_units timer 2>/dev/null || true)"
-    printf '\n%s\n\n' "Usage: enable.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = enable ]; then
+        printf '\n%s\n\n' "Usage: scrooge-alert enable [--help] [--debug] [--<target> ...]"
+    else
+        printf '\n%s\n\n' "Usage: enable.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '%s\n' "Enable and start installed, registered scraper timers."
     printf '%s\n\n' "With no target flag, every eligible installed timer is enabled."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = enable ]; then
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+    else
+        printf '%s\n' "Optional arguments:"
+        printf '%s\n' "  -h, --help        show this help message and exit"
+    fi
     printf '%s\n' "  --debug           show underlying command output"
     _ph_old_ifs="$IFS"
     IFS='
@@ -94,26 +103,29 @@ show_selection_failure() {
                 enable_task failure \
                     "'$_ssf_target' is installed but no longer registered (orphan)."
                 enable_task warning \
-                    "Remove it with: ./scripts/uninstall.sh --$_ssf_target"
+                    "Remove it with: $(command_text scrooge-alert uninstall --"$_ssf_target")"
                 IFS="$_ssf_old_ifs"
                 return
             fi
         elif stream_contains "$_ssf_target" "${_st_registered:-}"; then
             enable_task failure \
                 "'$_ssf_target' is registered but not installed."
-            enable_task warning "Install it with: ./install.sh --$_ssf_target"
+            enable_task warning \
+                "Install it with: $(command_text scrooge-alert install --"$_ssf_target")"
             IFS="$_ssf_old_ifs"
             return
         else
             enable_task failure "Unknown target '$_ssf_target'."
-            enable_task info "Run ./scripts/enable.sh --help for available targets."
+            enable_task info \
+                "Run $(command_text scrooge-alert enable --help) for available targets."
             IFS="$_ssf_old_ifs"
             return
         fi
     done
     IFS="$_ssf_old_ifs"
     enable_task failure "The installed target timers could not be selected safely."
-    enable_task info "Run ./scripts/enable.sh --debug for underlying diagnostics."
+    enable_task info \
+        "Run $(command_text scrooge-alert enable --debug) for underlying diagnostics."
 }
 
 enable_timer_property() {
@@ -147,7 +159,7 @@ begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Enable preflight"
     enable_task failure "The command-line arguments are invalid."
-    enable_task info "Run ./scripts/enable.sh --help for usage."
+    enable_task info "Run $(command_text scrooge-alert enable --help) for usage."
     enable_finish 1
 fi
 if ! run_action require_systemctl; then
@@ -169,7 +181,8 @@ PLUGINS="$SELECTED_TARGETS"
 section_heading success "Background schedules"
 if [ -z "$PLUGINS" ]; then
     enable_task info "No installed, registered target timers found."
-    enable_task warning "Run ./install.sh to provision targets."
+    enable_task warning \
+        "Run $(command_text scrooge-alert install) to provision targets."
     enable_finish 0
 fi
 
@@ -195,7 +208,7 @@ for plugin in $PLUGINS; do
     if [ "$state_failed" -eq 1 ]; then
         enable_task failure "[$plugin] Could not determine the timer state."
         enable_task info \
-            "[$plugin] Run ./scripts/enable.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert enable --debug --"$plugin") for underlying diagnostics."
         FAILED=1
         continue
     fi
@@ -209,7 +222,7 @@ for plugin in $PLUGINS; do
     else
         enable_task failure "[$plugin] Failed to enable and start the timer."
         enable_task info \
-            "[$plugin] Run ./scripts/enable.sh --debug --$plugin for underlying diagnostics."
+            "[$plugin] Run $(command_text scrooge-alert enable --debug --"$plugin") for underlying diagnostics."
         FAILED=1
     fi
 done
@@ -219,5 +232,5 @@ IFS="$OLD_IFS"
 printf '\n'
 section_heading success "Optional controls"
 enable_task info \
-    "If needed, disable background execution with: ./scripts/disable.sh"
+    "If needed, disable background execution with: $(command_text scrooge-alert disable)"
 enable_finish 0

@@ -27,6 +27,7 @@
 [+] Installation checks
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
+    [v] The user command destinations are safe.
     [v] The existing Python environment uses a supported Python.
     [v] Python venv support is available.
     [v] Systemd user services are available.
@@ -47,6 +48,11 @@
     [i] Configuring selected target timers...
     [v] Configured timers for the selected targets.
 
+[+] User command
+    [v] Installed the scrooge-alert command for this user.
+    [i] Add <BASE_DIR>/home/.local/bin to PATH to run scrooge-alert from any
+        directory.
+
 [+] Installation result
     [x] One or more targets were skipped because their configuration is invalid.
     [i] Fix each reported target configuration, then run ./install.sh again.
@@ -59,6 +65,6 @@
     [v] [beta] Restored its prior timer state.
 
 [!] Update result
-    [!] Update complete, but one or more targets retained their existing units because
-        their configuration is invalid.
+    [!] Update complete, but one or more targets retained their existing units because their
+        configuration is invalid.
     [!] Fix each reported target configuration, then rerun ./update.sh.

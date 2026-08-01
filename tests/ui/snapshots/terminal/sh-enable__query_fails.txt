@@ -3,4 +3,4 @@
 
 [+] Background schedules
     [x] [skroutz] Could not determine the timer state.
-    [i] [skroutz] Run ./scripts/enable.sh --debug --skroutz for underlying diagnostics.
+    [i] [skroutz] Run scrooge-alert enable --debug --skroutz for underlying diagnostics.

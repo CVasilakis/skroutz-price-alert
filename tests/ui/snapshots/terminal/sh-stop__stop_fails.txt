@@ -4,4 +4,4 @@
 [+] Active executions
     [i] [skroutz] Stopping active background execution...
     [x] [skroutz] Active execution could not be stopped.
-    [i] [skroutz] Run ./scripts/stop.sh --debug --skroutz for underlying diagnostics.
+    [i] [skroutz] Run scrooge-alert stop --debug --skroutz for underlying diagnostics.

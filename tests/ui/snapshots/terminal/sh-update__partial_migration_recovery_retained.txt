@@ -21,12 +21,12 @@
 [+] JSON migration
     [i] Migrating managed JSON documents...
     [x] [state/general.json] Migration failed: invalid legacy state
-    [!] JSON migration recovery copies were retained at
-        /project/state/.migration-recovery.example.
+    [!] JSON migration recovery copies were retained at /project/state/.migration-recovery.example.
 
 [+] Installation checks
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
+    [v] The user command destinations are safe.
     [v] The existing Python environment uses a supported Python.
     [v] Python venv support is available.
     [v] Systemd user services are available.
@@ -44,6 +44,11 @@
 [+] Target provisioning
     [i] Configuring selected target timers...
     [v] Configured timers for the selected targets.
+
+[+] User command
+    [v] Installed the scrooge-alert command for this user.
+    [i] Add <BASE_DIR>/home/.local/bin to PATH to run scrooge-alert from any
+        directory.
 
 [+] Timer activation
     [i] Restoring eligible target timer states.

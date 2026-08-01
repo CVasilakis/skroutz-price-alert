@@ -3,4 +3,4 @@
 
 [+] Enable preflight
     [x] The command-line arguments are invalid.
-    [i] Run ./scripts/enable.sh --help for usage.
+    [i] Run scrooge-alert enable --help for usage.

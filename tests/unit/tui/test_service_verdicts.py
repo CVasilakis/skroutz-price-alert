@@ -87,7 +87,7 @@ class TestClassifyServiceState(unittest.TestCase):
             target="insomnia",
         )
         assert dependency.note is not None
-        self.assertIn("./install.sh --insomnia", dependency.note)
+        self.assertIn("scrooge-alert install --insomnia", dependency.note)
 
     def test_unknown_code_carries_the_raw_reason_and_code(self):
         verdict = self._classify(result="core-dump", exec_status="99")

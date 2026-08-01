@@ -23,6 +23,17 @@ CATALOG_AVAILABLE=0
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_fixed_help() {
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = run ]; then
+        printf '\n'
+        printf '%s\n' "Usage: scrooge-alert run [--help] [--quiet] [--<target> ...]"
+        printf '\n'
+        printf '%s\n' "Check prices for every registered target or only selected targets."
+        printf '\n'
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+        printf '%s\n' "  --quiet           Run with no console output"
+        return
+    fi
     printf '\n'
     printf '%s\n' "Usage: run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]"
     printf '\n'
@@ -50,7 +61,11 @@ print_missing_venv_help() {
     printf '\n'
     printf '%s\n' "Target-specific options are unavailable because the project"
     printf '%s\n' "virtual environment is not installed."
-    printf '%s\n' "Run ./install.sh, then rerun this help command to list registered targets."
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = run ]; then
+        printf '%s\n' "Run ./install.sh, then rerun this help command to list registered targets."
+    else
+        printf '%s\n' "Run ./install.sh, then rerun this help command to list registered targets."
+    fi
     printf '\n'
 }
 

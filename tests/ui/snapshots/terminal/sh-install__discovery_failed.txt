@@ -4,5 +4,6 @@
 [+] Installation checks
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
+    [v] The user command destinations are safe.
     [x] The target catalog could not be loaded.
     [i] Fix the catalog error, then run ./install.sh --debug.
