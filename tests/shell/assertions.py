@@ -37,25 +37,34 @@ def assert_task_status(output: str, marker: str, message: str) -> None:
     assert expected in tasks, f"{expected!r} not found in logical task lines: {tasks!r}"
 
 
+def shell_outer_padding_errors(output: str) -> tuple[str, ...]:
+    """Return outer-padding errors in a human-facing shell transcript."""
+    lines = output.splitlines()
+    errors: list[str] = []
+    if not lines or lines[0] != "" or (len(lines) > 1 and lines[1] == ""):
+        errors.append("shell output must start with exactly one blank line")
+    if not lines or lines[-1] != "" or (len(lines) > 1 and lines[-2] == ""):
+        errors.append("shell output must end with exactly one blank line")
+    return tuple(errors)
+
+
 def shell_tui_layout_errors(output: str) -> tuple[str, ...]:
     """Return structural errors in a sectioned, non-debug shell transcript.
 
-    Help output has no section headings and is outside this grammar. Operational
-    output must have one outer blank line, exactly one blank line between sections,
-    no blank lines within a section, and body text indented by four or eight spaces.
-    This semantic check complements exact UI snapshots: regenerating snapshots
-    cannot accidentally approve a malformed section layout.
+    Help, terse errors, and machine-facing protocols have no section headings and are
+    outside this grammar. Sectioned operational output must have one outer blank line,
+    exactly one blank line between sections, no blank lines within a section, and body
+    text indented by four or eight spaces. This semantic check complements exact UI
+    snapshots: regenerating snapshots cannot accidentally approve malformed layout.
     """
     lines = output.splitlines()
     headings = [index for index, line in enumerate(lines) if _SECTION_HEADING.fullmatch(line)]
     if not headings:
         return ()
 
-    errors: list[str] = []
-    if headings[0] != 1 or not lines or lines[0] != "":
-        errors.append("sectioned output must start with exactly one blank line")
-    if not lines or lines[-1] != "" or (len(lines) > 1 and lines[-2] == ""):
-        errors.append("sectioned output must end with exactly one blank line")
+    errors = list(shell_outer_padding_errors(output))
+    if headings[0] != 1:
+        errors.append("first section must immediately follow the leading blank line")
 
     for position, heading_index in enumerate(headings):
         line_number = heading_index + 1

@@ -3,6 +3,7 @@ import pytest
 from shell.assertions import (
     assert_task_status,
     logical_task_lines,
+    shell_outer_padding_errors,
     shell_tui_layout_errors,
 )
 
@@ -51,7 +52,7 @@ def test_valid_sectioned_shell_tui_layout_has_no_errors():
     (
         (
             "[+] Section\n    [v] Task.\n\n",
-            "sectioned output must start with exactly one blank line",
+            "shell output must start with exactly one blank line",
         ),
         (
             "\n[+] One\n    [v] Task.\n[+] Two\n    [v] Task.\n\n",
@@ -71,7 +72,7 @@ def test_valid_sectioned_shell_tui_layout_has_no_errors():
         ),
         (
             "\n[+] Section\n    [v] Task.\n",
-            "sectioned output must end with exactly one blank line",
+            "shell output must end with exactly one blank line",
         ),
     ),
 )
@@ -81,5 +82,16 @@ def test_shell_tui_layout_reports_malformed_sections(output, expected):
     assert any(expected in error for error in errors), errors
 
 
-def test_help_output_is_outside_the_section_layout_grammar():
+def test_help_output_obeys_outer_padding_without_section_layout():
     assert shell_tui_layout_errors("\nUsage: tool.sh [-h]\n\n") == ()
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    (
+        ("Error: failed.\n\n", "shell output must start with exactly one blank line"),
+        ("\nError: failed.\n", "shell output must end with exactly one blank line"),
+    ),
+)
+def test_non_sectioned_shell_output_still_requires_outer_padding(output, expected):
+    assert expected in shell_outer_padding_errors(output)

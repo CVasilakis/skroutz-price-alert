@@ -37,8 +37,9 @@ print_help() {
 }
 
 fail_usage() {
-    printf '%s\n' "Error: $1" >&2
+    printf '\n%s\n' "Error: $1" >&2
     printf '%s\n' "Run $(command_text './scrooge-alert --help') for usage." >&2
+    printf '\n' >&2
     exit 1
 }
 
@@ -61,7 +62,7 @@ dispatch() {
     _d_owner="$2"
     shift 2
     if [ -L "$_d_owner" ] || [ ! -f "$_d_owner" ] || [ ! -x "$_d_owner" ]; then
-        printf '%s\n' \
+        printf '\n%s\n\n' \
             "Error: Command owner is missing or unsafe: $_d_owner" >&2
         exit 1
     fi

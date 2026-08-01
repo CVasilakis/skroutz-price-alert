@@ -8,6 +8,8 @@ import pytest
 import ui.catalog  # noqa: F401  # initialize the shared shell catalog
 from ui.harness.shell import ShellWorld, _build_sandbox, _cleanup, _fake_env
 
+from shell.assertions import shell_outer_padding_errors
+
 
 def _run(checkout: Path, world: ShellWorld, *args: str, cwd: Path | None = None):
     env = _fake_env(checkout, world)
@@ -34,6 +36,7 @@ def test_bare_and_global_help_are_stable_without_installation():
 
     assert bare.returncode == short.returncode == explicit.returncode == 0
     assert bare.stdout == short.stdout == explicit.stdout
+    assert shell_outer_padding_errors(bare.stdout) == ()
     assert "Usage: ./scrooge-alert <command> [options]" in bare.stdout
     assert "Commands:\n" in bare.stdout
     assert "  --version " in bare.stdout
@@ -239,6 +242,7 @@ def test_unsafe_command_owner_is_rejected(owner_kind: str):
 
     assert result.returncode == 1
     assert "Command owner is missing or unsafe" in result.stderr
+    assert shell_outer_padding_errors(result.stderr) == ()
 
 
 def test_unknown_command_fails_with_public_guidance():
@@ -251,8 +255,10 @@ def test_unknown_command_fails_with_public_guidance():
 
     assert result.returncode == 1
     assert result.stdout == ""
-    assert "Unknown command: scrape" in result.stderr
-    assert "Run ./scrooge-alert --help for usage." in result.stderr
+    assert result.stderr == (
+        "\nError: Unknown command: scrape.\nRun ./scrooge-alert --help for usage.\n\n"
+    )
+    assert shell_outer_padding_errors(result.stderr) == ()
 
 
 def test_install_does_not_create_shell_or_launcher_artifacts():
