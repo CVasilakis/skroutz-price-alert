@@ -59,11 +59,32 @@ finish_verification() {
     exit "$1"
 }
 
+verification_detail() {
+    _vd_details="$1"
+    _vd_match=''
+    _vd_old_ifs="$IFS"
+    IFS='
+'
+    # shellcheck disable=SC2086  # deliberate newline-only diagnostic iteration
+    for _vd_line in $_vd_details; do
+        case "$_vd_line" in
+            "Plugin check failed:"*) _vd_match="$_vd_line" ;;
+        esac
+    done
+    IFS="$_vd_old_ifs"
+    [ -n "$_vd_match" ] || return 1
+    task_status info "$_vd_match"
+}
+
 verification_failure() {
     _vf_status="$1"
     shift
-    task_status failure "[$target] $1"
-    if [ "$DEBUG_MODE" -eq 1 ]; then
+    _vf_summary="$1"
+    _vf_detail="${2:-}"
+    task_status failure "[$target] $_vf_summary"
+    if [ "$DEBUG_MODE" -eq 0 ] && verification_detail "$_vf_detail"; then
+        :
+    elif [ "$DEBUG_MODE" -eq 1 ]; then
         task_status warning "Review the underlying diagnostic above, then retry."
     else
         task_status warning \
@@ -73,6 +94,18 @@ verification_failure() {
     section_heading success "Verification result"
     task_status failure "[$target] Target verification failed."
     finish_verification "$_vf_status"
+}
+
+# Invoked indirectly through run_with_progress.
+# shellcheck disable=SC2329
+run_source_contract_check() {
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+        env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
+            -m core.scrapers.tooling.cli plugin-check "$target"
+    else
+        run_captured env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
+            -m core.scrapers.tooling.cli plugin-check "$target"
+    fi
 }
 
 begin_operational_output
@@ -111,12 +144,12 @@ plugin_check_venv_dir="$(dirname -- "$(dirname -- "$plugin_check_python")")"
 plugin_check_venv_parent="$(dirname -- "$plugin_check_venv_dir")"
 
 if run_with_progress "[$target] Checking the source and dependency contract..." \
-    run_action env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
-    -m core.scrapers.tooling.cli plugin-check "$target"; then
+    run_source_contract_check; then
     task_status success "[$target] Source and dependency contract passed."
 else
     verification_status=$?
-    verification_failure "$verification_status" "Source and dependency contract failed."
+    verification_failure "$verification_status" "Source and dependency contract failed." \
+        "${CAPTURED_COMMAND_STDERR:-}"
 fi
 
 printf '\n'

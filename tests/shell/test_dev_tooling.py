@@ -988,6 +988,9 @@ case "${1:-}" in
         esac
         printf '%s: %s\\n' "injected verification stdout" "$stage"
         printf '%s: %s\\n' "injected verification stderr" "$stage" >&2
+        if [ "$stage" = "source" ] && [ -n "${SOURCE_DIAGNOSTIC:-}" ]; then
+            printf '%s\\n' "$SOURCE_DIAGNOSTIC" >&2
+        fi
         if [ "${FAIL_STAGE:-}" = "$stage" ]; then
             exit "${FAIL_STATUS:-23}"
         fi
@@ -1108,6 +1111,62 @@ def test_plugin_check_normal_hides_tool_noise_and_preserves_failure_status(tmp_p
     assert_task_status(result.stdout, "x", "[skroutz] Target verification failed.")
     assert result.stdout.startswith("\n")
     assert result.stdout.endswith("\n\n")
+
+
+def test_plugin_check_normal_shows_only_the_source_contract_diagnostic(tmp_path):
+    _, env = _fake_plugin_check_python(tmp_path)
+    env.update(
+        {
+            "FAIL_STAGE": "source",
+            "FAIL_STATUS": "23",
+            "SOURCE_DIAGNOSTIC": "Plugin check failed: invalid plugin domain",
+        }
+    )
+
+    result = _run("scripts/dev/plugin-check.sh", "--skroutz", env=env)
+
+    assert result.returncode == 23
+    assert "injected verification" not in result.stdout
+    assert "injected verification" not in result.stderr
+    assert_task_status(result.stdout, "x", "[skroutz] Source and dependency contract failed.")
+    assert_task_status(result.stdout, "i", "Plugin check failed: invalid plugin domain")
+    assert "--debug" not in result.stdout
+
+
+def test_plugin_check_normal_keeps_debug_guidance_without_a_known_diagnostic(tmp_path):
+    _, env = _fake_plugin_check_python(tmp_path)
+    env.update({"FAIL_STAGE": "source", "FAIL_STATUS": "23"})
+
+    result = _run("scripts/dev/plugin-check.sh", "--skroutz", env=env)
+
+    assert result.returncode == 23
+    assert "injected verification" not in result.stdout
+    assert "injected verification" not in result.stderr
+    assert_task_status(
+        result.stdout,
+        "!",
+        "Run ./scripts/dev/plugin-check.sh --debug --skroutz to inspect the failure.",
+    )
+
+
+def test_plugin_check_debug_exposes_the_source_contract_diagnostic_and_noise(tmp_path):
+    _, env = _fake_plugin_check_python(tmp_path)
+    env.update(
+        {
+            "FAIL_STAGE": "source",
+            "FAIL_STATUS": "23",
+            "SOURCE_DIAGNOSTIC": "Plugin check failed: invalid plugin domain",
+        }
+    )
+
+    result = _run("scripts/dev/plugin-check.sh", "--debug", "--skroutz", env=env)
+
+    assert result.returncode == 23
+    assert "injected verification stdout: source" in result.stdout
+    assert "injected verification stderr: source" in result.stderr
+    assert "Plugin check failed: invalid plugin domain" in result.stderr
+    assert result.stdout.count("Plugin check failed: invalid plugin domain") == 0
+    assert_task_status(result.stdout, "!", "Review the underlying diagnostic above, then retry.")
 
 
 def test_plugin_check_debug_exposes_same_tool_noise_and_preserves_failure_status(tmp_path):

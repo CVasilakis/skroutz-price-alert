@@ -93,6 +93,59 @@ def test_conventional_client_symbol_and_type_are_validated():
         sys.modules.pop(module_name, None)
 
 
+def test_incompatible_client_constructor_is_a_contextual_validation_failure():
+    class Client(ScraperClient):
+        def __init__(self):
+            pass
+
+        def scrape(self, item):
+            raise NotImplementedError
+
+    plugin = _compile()
+    module_name = f"{plugin.package}.client"
+    module = types.ModuleType(module_name)
+    module.Client = Client
+    sys.modules[module_name] = module
+    try:
+        with pytest.raises(
+            PluginValidationError,
+            match=r"Plugin 'teststore' Client construction failed: TypeError:",
+        ) as caught:
+            ClientLoader().load(plugin, resolve_settings(plugin.setting_specs, {}))
+        assert isinstance(caught.value.__cause__, TypeError)
+    finally:
+        sys.modules.pop(module_name, None)
+
+
+def test_client_initialization_failure_is_a_contextual_validation_failure():
+    failure = RuntimeError("initialization broke")
+
+    class Client(ScraperClient):
+        def __init__(self, settings):
+            raise failure
+
+        def scrape(self, item):
+            raise NotImplementedError
+
+    plugin = _compile()
+    module_name = f"{plugin.package}.client"
+    module = types.ModuleType(module_name)
+    module.Client = Client
+    sys.modules[module_name] = module
+    try:
+        with pytest.raises(
+            PluginValidationError,
+            match=(
+                r"Plugin 'teststore' Client construction failed: "
+                r"RuntimeError: initialization broke"
+            ),
+        ) as caught:
+            ClientLoader().load(plugin, resolve_settings(plugin.setting_specs, {}))
+        assert caught.value.__cause__ is failure
+    finally:
+        sys.modules.pop(module_name, None)
+
+
 def test_client_lifecycle_remains_with_the_caller():
     class Client(ScraperClient):
         def scrape(self, item):

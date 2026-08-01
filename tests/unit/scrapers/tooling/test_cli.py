@@ -4,6 +4,7 @@ from unittest import mock
 import pytest
 from support import fake_plugin, synthetic_catalog
 
+from core.exceptions import PluginValidationError
 from core.scrapers.tooling.cli import _tsv_row, catalog_rows, resolve_schedule, schedule_rows
 from core.scrapers.tooling.cli import main as cli_main
 from core.settings import SettingStatus
@@ -66,6 +67,25 @@ def test_verifier_and_tooling_cli(capsys, tmp_path, catalog):
         "core.scrapers.tooling.cli.PluginCatalog.discover", side_effect=RuntimeError("bad")
     ):
         assert cli_main(["diagnose"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("failure", "detail"),
+    (
+        (
+            PluginValidationError("bad constructor\nsecond line\x1b[31m"),
+            "bad constructor second line [31m",
+        ),
+        (PluginValidationError("\n\t"), "PluginValidationError"),
+    ),
+)
+def test_plugin_check_failures_are_single_line_and_terminal_safe(capsys, catalog, failure, detail):
+    with mock.patch("core.scrapers.tooling.cli.check_plugin", side_effect=failure):
+        assert cli_main(["plugin-check", "skroutz"], catalog=catalog) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == f"Plugin check failed: {detail}\n"
 
 
 @pytest.mark.parametrize("command", ["manifest", "version"])

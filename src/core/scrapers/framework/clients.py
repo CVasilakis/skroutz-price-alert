@@ -53,6 +53,10 @@ class ClientLoader:
             return client_type(settings)
         except ImportError as exc:
             raise self._import_failure(plugin, exc) from exc
+        except Exception as exc:
+            raise PluginValidationError(
+                f"Plugin '{plugin.target}' Client construction failed: {type(exc).__name__}: {exc}"
+            ) from exc
 
 
 __all__ = ["ClientLoader"]

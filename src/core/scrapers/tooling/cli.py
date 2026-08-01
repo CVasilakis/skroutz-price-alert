@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.constants import CONFIG_DIR
-from core.exceptions import ConfigFileError
+from core.exceptions import ConfigFileError, PluginError, StorageFileError
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS, oncalendar_for
@@ -98,6 +98,13 @@ def _diagnose() -> int:
     return 0
 
 
+def _plugin_check_failure(exc: Exception) -> str:
+    """Render one terminal-safe diagnostic record for the shell wrapper."""
+    printable = "".join(character if character.isprintable() else " " for character in str(exc))
+    detail = " ".join(printable.split()) or type(exc).__name__
+    return f"Plugin check failed: {detail}"
+
+
 def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.scrapers.tooling.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -127,8 +134,8 @@ def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None)
     else:
         try:
             checks = check_plugin(args.target, catalog)
-        except (RuntimeError, ValueError) as exc:
-            print(f"Plugin check failed: {exc}", file=sys.stderr)
+        except (PluginError, StorageFileError, RuntimeError, ValueError) as exc:
+            print(_plugin_check_failure(exc), file=sys.stderr)
             return 1
         for label in checks:
             print(f"ok\t{label}")
