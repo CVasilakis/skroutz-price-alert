@@ -19,4 +19,4 @@ skroutz
 injected failing pip stdout
 injected failing pip stderr
     [x] Packaging tools could not be updated.
-    [i] Check package-index access, then run ./install.sh --debug.
+    [i] Check package-index access, then run ./scrooge-alert install --debug.

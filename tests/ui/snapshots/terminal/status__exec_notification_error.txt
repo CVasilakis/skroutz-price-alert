@@ -12,5 +12,5 @@
 │   🟡    Last Execution Status       Notification Warning [1]            │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
-│   [1] A configured notification failed. Run ./scripts/run.sh --ping.    │
+│   [1] A configured notification failed. Run ./scrooge-alert ping.       │
 ╰─────────────────────────────────────────────────────────────────────────╯

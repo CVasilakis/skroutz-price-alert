@@ -25,11 +25,9 @@ from core.scrapers.framework.naming import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Every executable script that parses command-line flags.
-SCRIPTS = sorted(
-    [REPO_ROOT / "install.sh", REPO_ROOT / "update.sh"] + list((REPO_ROOT / "scripts").glob("*.sh"))
-)
+SCRIPTS = sorted([REPO_ROOT / "scrooge-alert"] + list((REPO_ROOT / "scripts").glob("*.sh")))
 TARGET_SELECTING_SCRIPTS = tuple(
-    script for script in SCRIPTS if script.name not in {"migrate.sh", "update.sh"}
+    script for script in SCRIPTS if script.name not in {"scrooge-alert", "migrate.sh", "update.sh"}
 )
 SHARED_PARSERS = (REPO_ROOT / "scripts/lib/common.sh",)
 

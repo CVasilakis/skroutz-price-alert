@@ -3,4 +3,4 @@
 
 [+] Enable preflight
     [x] The target catalog could not be loaded.
-    [!] Reinstall it with: ./scripts/uninstall.sh then ./install.sh
+    [!] Reinstall it with: ./scrooge-alert uninstall then ./scrooge-alert install

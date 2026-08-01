@@ -55,4 +55,4 @@
     [!] All selected targets were left disabled for safety.
     [!] Recorded timer states were retained at
         <BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>.
-    [!] Inspect with ./scripts/run.sh --status before enabling timers.
+    [!] Inspect with ./scrooge-alert status before enabling timers.

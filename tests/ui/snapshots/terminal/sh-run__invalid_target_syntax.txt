@@ -3,4 +3,4 @@
 
 [+] Run arguments
     [x] Invalid target flag: --bad-target (expected --<snake_case target>).
-    [!] Run ./scripts/run.sh --help to view supported options.
+    [!] Run ./scrooge-alert run --help to view supported options.

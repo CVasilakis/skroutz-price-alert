@@ -3,7 +3,7 @@
 This suite automatically verifies **everything Scrooge Alert draws in the terminal** — the
 live scraping panel of a normal run, the `--status`, `--ping`, and Configuration Check
 panels, and the colored transcripts printed by the management shell scripts
-(`install.sh`, `update.sh`, and the user-facing `scripts/*.sh`). It exists so that
+(`scripts/install.sh`, `scripts/update.sh`, and the other operational scripts). It exists so that
 changes to the UI (a new
 footnote, a reworded message, a border-color rule, a layout tweak) are caught the moment
 they alter what a user would see, without anyone having to run the app and manually
@@ -101,13 +101,13 @@ tests/ui/
     status_scenarios.py    #    --status: service / not-installed / orphan panels
     ping_scenarios.py      #    --ping: Notification Check Results
     shell_inputs.py        #    shared ShellWorld presets + the shell_case registrar
-    sh_install_scenarios.py    # install.sh transcripts       (surface sh-install)
+    sh_install_scenarios.py    # scripts/install.sh transcripts (surface sh-install)
     sh_run_scenarios.py        # scripts/run.sh               (surface sh-run)
     sh_schedule_scenarios.py   # scripts/schedule.sh          (surface sh-schedule)
     sh_enable_scenarios.py     # scripts/enable.sh            (surface sh-enable)
     sh_disable_scenarios.py    # scripts/disable.sh           (surface sh-disable)
     sh_stop_scenarios.py       # scripts/stop.sh              (surface sh-stop)
-    sh_update_scenarios.py     # update.sh transcripts        (surface sh-update)
+    sh_update_scenarios.py     # scripts/update.sh transcripts  (surface sh-update)
     sh_uninstall_scenarios.py  # scripts/uninstall.sh         (surface sh-uninstall)
     __init__.py            #    imports every module above and exposes ALL_SCENARIOS
   harness/                 # ── HOW to render: turn a scenario into captured text
@@ -275,7 +275,7 @@ real production builder:
 | `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, config_error_msg)`   | `ping.build_ping_panel`                              |
 | `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check.build_config_panel`                    |
 | `STARTUP`| Full startup transcript (interactive artifact test-only) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript plus target/reminder background logs (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
-| `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real `install.sh` / `update.sh` / `scripts/*.sh`  |
+| `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real operational scripts under `scripts/`        |
 
 The per-scraper **target-configuration health** (the `Config` row) is no longer a `CONFIG`-surface
 concern: it leads each `STATUS` Service Status panel (`drive_service`'s `config`) and each
@@ -451,7 +451,7 @@ A shell golden adds the script's exit status to the header:
 
 [skroutz] Enabling and starting background schedule (timer)...
 [skroutz] Error: Failed to enable the timer!
-Try running ./install.sh to fix the issue.
+Try running ./scrooge-alert install to fix the issue.
 ```
 
 - The **`# border:` header** records the resolved border color, so color regressions are a

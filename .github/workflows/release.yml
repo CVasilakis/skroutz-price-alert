@@ -51,5 +51,5 @@ jobs:
             If you are already using an older version of the project, go to the project's folder and execute the update script. User-authored files under `config/` remain untouched.
 
             ```sh
-            ./update.sh
+            ./scrooge-alert update
             ```

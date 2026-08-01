@@ -1,7 +1,7 @@
 """Deterministic sandboxed execution of the management shell scripts.
 
-The shell surfaces snapshot the transcript a management script (install.sh, update.sh,
-scripts/*.sh) prints to the terminal. To reproduce every message without systemd, git,
+The shell surfaces snapshot the transcript a management script under ``scripts/``
+prints to the terminal. To reproduce every message without systemd, git,
 the network, or a real venv, :func:`drive_shell` copies the *real* scripts into a
 throwaway install tree, replaces every external command they touch with an
 env-var-driven fake, runs one script with ``/bin/sh``, and returns a
@@ -42,8 +42,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # checkout, so each script's $0-based BASE_DIR discovery and `. lib/common.sh`
 # sourcing work unchanged.
 _SCRIPT_FILES = (
-    "install.sh",
-    "update.sh",
+    "scrooge-alert",
+    "scripts/install.sh",
+    "scripts/update.sh",
     "scripts/run.sh",
     "scripts/migrate.sh",
     "scripts/schedule.sh",
@@ -518,6 +519,7 @@ case "${1:-}" in
                 [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
                 [ -n "${FAKE_SCHEDULE_REPORT:-}" ] && printf '%s\\n' "$FAKE_SCHEDULE_REPORT" ;;
             "core.scrapers.tooling.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
+            "core.scrapers.tooling.cli version") printf '%s\\n' "${FAKE_LOCAL_VERSION:-1.2.3}" ;;
             "core.scrapers.tooling.cli diagnose")
                 if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
                     printf '  %s\\n' "$FAKE_DISCOVERY_ERROR"
@@ -826,7 +828,7 @@ def drive_shell(
     border: str | None = None,
 ) -> BuildResult:
     """Runs one management script (sandbox-relative, e.g. ``"scripts/enable.sh"`` or
-    ``"install.sh"``) in a fresh sandbox and returns its transcript as a BuildResult.
+    ``"scripts/install.sh"``) in a fresh sandbox and returns its transcript as a BuildResult.
 
     stdout and stderr are interleaved (exactly what a terminal user sees), the
     sandbox path is normalized to ``<BASE_DIR>``, and the border color defaults to

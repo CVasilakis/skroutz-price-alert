@@ -3,4 +3,4 @@
 
 [+] Update checks
     [x] The working tree contains tracked changes or nonignored untracked files.
-    [!] Commit or stash your work before running update.sh.
+    [!] Commit or stash your work before running ./scrooge-alert update.

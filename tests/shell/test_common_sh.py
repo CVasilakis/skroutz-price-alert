@@ -25,7 +25,7 @@ SYSTEMD_SH = REPO_ROOT / "scripts" / "lib" / "systemd.sh"
 
 
 def test_install_does_not_invoke_configuration_migration():
-    install = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
+    install = (REPO_ROOT / "scripts/install.sh").read_text(encoding="utf-8")
     assert "catalog_cli migration" not in install
 
 
@@ -104,6 +104,19 @@ class TestColorGuard(unittest.TestCase):
 
 
 class TestPresentationHelpers(unittest.TestCase):
+    def test_command_text_is_bold_cyan_only_when_color_is_enabled(self):
+        colored = run_sh(
+            "command_text './scrooge-alert status'",
+            extra_env={"NO_COLOR": None, "CLICOLOR_FORCE": "1"},
+        )
+        plain = run_sh(
+            "command_text './scrooge-alert status'",
+            extra_env={"NO_COLOR": "1", "CLICOLOR_FORCE": "1"},
+        )
+
+        self.assertEqual(colored.stdout, "\x1b[1;36m./scrooge-alert status\x1b[0m")
+        self.assertEqual(plain.stdout, "./scrooge-alert status")
+
     def test_sections_statuses_and_spacing_are_source_silent_and_colorless(self):
         result = run_sh(
             "begin_operational_output\n"
@@ -604,7 +617,7 @@ class TestCatalogDiagnose(unittest.TestCase):
         result = run_sh("catalog_diagnose", base_dir=self.tmp)
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing or broken", result.stderr)
-        self.assertIn("./install.sh", result.stderr)
+        self.assertIn("./scrooge-alert install", result.stderr)
 
     def test_broken_plugin_reports_the_real_discovery_error(self):
         # A real venv + a copied source tree containing one broken plugin package:

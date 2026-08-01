@@ -14,7 +14,7 @@ def _run(world: ShellWorld, *args: str, extra_env: dict[str, str] | None = None)
         env.update(extra_env or {})
         env["NO_COLOR"] = "1"
         return subprocess.run(
-            ["/bin/sh", str(checkout / "install.sh"), *args],
+            ["/bin/sh", str(checkout / "scripts/install.sh"), *args],
             cwd=checkout,
             env=env,
             text=True,
@@ -86,7 +86,7 @@ def test_invalid_arguments_keep_exit_one_and_use_framed_status_output(args):
 
     assert result.returncode == 1
     assert_task_status(result.stdout, "x", "The command-line arguments are invalid.")
-    assert_task_status(result.stdout, "i", "Run ./install.sh --help for usage.")
+    assert_task_status(result.stdout, "i", "Run ./scrooge-alert install --help for usage.")
     _assert_standalone_frame(result.stdout)
 
 
@@ -201,7 +201,7 @@ def test_install_prints_configuration_commands_without_creating_files():
         env = _fake_env(checkout, world)
         env["NO_COLOR"] = "1"
         result = subprocess.run(
-            ["/bin/sh", str(checkout / "install.sh")],
+            ["/bin/sh", str(checkout / "scripts/install.sh")],
             cwd=checkout,
             env=env,
             text=True,

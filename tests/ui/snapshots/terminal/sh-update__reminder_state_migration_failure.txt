@@ -50,4 +50,4 @@
 
 [!] Update result
     [!] Update complete, but one or more state migrations failed.
-    [!] Inspect the reported state and recovery data, then rerun ./update.sh.
+    [!] Inspect the reported state and recovery data, then rerun ./scrooge-alert update.

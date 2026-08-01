@@ -93,18 +93,18 @@ if ! run_action reject_project_venv_symlink; then
     fi
     section_heading success "Migration preflight"
     migration_task failure "The project Python environment must not be a symlink."
-    migration_task info "Remove the symlink, then run ./scripts/dev/setup.sh or ./install.sh."
+    migration_task info "Remove the symlink, then run ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')."
     end_operational_output
     exit 1
 fi
-if ! run_action require_python_310 "$BASE_DIR/venv/bin/python3" "./install.sh"; then
+if ! run_action require_python_310 "$BASE_DIR/venv/bin/python3" "./scrooge-alert install"; then
     if [ "$MACHINE_MODE" -eq 1 ]; then
-        printf '%s\n' "Error: Python 3.10 or newer is required. Run ./install.sh." >&2
+        printf '%s\n' "Error: Python 3.10 or newer is required. Run $(command_text './scrooge-alert install')." >&2
         exit 1
     fi
     section_heading success "Migration preflight"
     migration_task failure "Python 3.10 or newer is required."
-    migration_task info "Run ./install.sh, then retry the migration."
+    migration_task info "Run $(command_text './scrooge-alert install'), then retry the migration."
     end_operational_output
     exit 1
 fi

@@ -64,7 +64,7 @@ def test_uninstall_removes_unit_links_without_following_targets(kind, selected):
         _cleanup(checkout)
 
 
-@pytest.mark.parametrize("script", ("install.sh", "scripts/schedule.sh"))
+@pytest.mark.parametrize("script", ("scripts/install.sh", "scripts/schedule.sh"))
 @pytest.mark.parametrize("kind", ("relative", "absolute", "dangling", "devnull"))
 def test_write_workflows_reject_unit_links_without_file_or_state_changes(script, kind):
     world = ShellWorld(
@@ -85,7 +85,7 @@ def test_write_workflows_reject_unit_links_without_file_or_state_changes(script,
         before_state = sorted(path.name for path in state_dir.iterdir())
         result = _run(checkout, script, "--alpha", world=world)
         assert result.returncode != 0
-        if script == "install.sh":
+        if script == "scripts/install.sh":
             assert "A managed systemd unit destination is unsafe." in result.stdout
             assert "Refusing to replace managed unit symlink" not in result.stderr
         else:

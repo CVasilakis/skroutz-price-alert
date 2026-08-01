@@ -79,6 +79,19 @@ def test_silent_system_error_preserves_existing_log_wording():
     )
 
 
+def test_silent_reporter_quotes_rich_code_spans_in_plain_logs():
+    logger = mock.create_autospec(logging.Logger, instance=True)
+    reporter = SilentRunReporter()
+    reporter.start_target("Store", logger, ResolvedSettings(()), ConfigOutcome(1))
+    logger.reset_mock()
+
+    reporter.log_system_error("Install with `./scrooge-alert install --store`.")
+
+    logger.error.assert_called_once_with(
+        '❗ System: Install with "./scrooge-alert install --store".'
+    )
+
+
 def test_silent_storage_error_preserves_existing_log_wording():
     logger = mock.create_autospec(logging.Logger, instance=True)
     reporter = SilentRunReporter()
@@ -95,6 +108,6 @@ def test_silent_storage_error_preserves_existing_log_wording():
 
     logger.error.assert_called_once_with(
         "❗ Storage: Latest scrape state was not saved. "
-        "(Cannot save `state/store.json`; check its permissions.) "
+        '(Cannot save "state/store.json"; check its permissions.) '
         "(Technical details could not be written to the error log.)"
     )

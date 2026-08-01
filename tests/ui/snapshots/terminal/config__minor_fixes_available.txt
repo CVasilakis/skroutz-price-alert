@@ -7,5 +7,5 @@
 │   ✅    Reminder Day            Saturday (default)                      │
 │   ✅    Reminder Time           13:00 (default)                         │
 │                                                                         │
-│   [1] Run ./update.sh to install the latest version.                    │
+│   [1] Run ./scrooge-alert update to install the latest version.         │
 ╰─────────────────────────────────────────────────────────────────────────╯

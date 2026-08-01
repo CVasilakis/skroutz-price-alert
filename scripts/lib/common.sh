@@ -7,12 +7,14 @@ if [ -z "${NO_COLOR:-}" ] && { [ -t 1 ] || [ -n "${CLICOLOR_FORCE:-}" ]; }; then
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
     CYAN='\033[0;36m'
+    COMMAND_COLOR='\033[1;36m'
     NC='\033[0m'
 else
     RED=''
     GREEN=''
     YELLOW=''
     CYAN=''
+    COMMAND_COLOR=''
     NC=''
 fi
 
@@ -58,6 +60,18 @@ task_status() {
     shift
     _ts_prefix="    ${_ts_color}[${_ts_marker}]${NC} "
     _print_indented_wrapped "$_ts_prefix" '        ' "$@"
+}
+
+# Render an actionable command distinctly without adding quotes that could be
+# mistaken for literal shell syntax. Callers embed the result in task prose.
+command_text() {
+    printf '%b' "$COMMAND_COLOR"
+    _ct_separator=''
+    for _ct_part in "$@"; do
+        printf '%s%s' "$_ct_separator" "$_ct_part"
+        _ct_separator=' '
+    done
+    printf '%b' "$NC"
 }
 
 # Deliberately isolated so shell tests can synchronize the delayed presentation
@@ -300,7 +314,10 @@ _print_indented_wrapped() {
             line = prefix
             for (i = 1; i <= NF; i++) {
                 separator = (line == prefix ? "" : " ")
-                if (length(line separator $i) > width && line != prefix) {
+                visible = line separator $i
+                escape = sprintf("%c", 27)
+                gsub(escape "\\[[0-9;]*m", "", visible)
+                if (length(visible) > width && line != prefix) {
                     print line
                     prefix = continuation
                     line = prefix $i
@@ -386,7 +403,7 @@ reject_project_venv_symlink() {
         printf '%s\n' \
             "Error: $BASE_DIR/venv must be a project-owned directory, not a symlink." >&2
         printf '%s\n' \
-            "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or ./install.sh." >&2
+            "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')." >&2
         return 1
     fi
 }
@@ -631,7 +648,7 @@ catalog_diagnose() {
             printf '%s\n' \
                 "Error: Cannot read the plugin catalog - the Python environment looks missing or broken." >&2
             printf '%s\n' \
-                "Reinstall it with: ./scripts/uninstall.sh then ./install.sh" >&2
+                "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')" >&2
             return 1
         fi
     fi
@@ -727,7 +744,7 @@ select_targets() {
                     printf '%s\n' \
                         "Error: '$_st_target' is installed but no longer registered (orphan)." >&2
                     printf '%s\n' \
-                        "Remove it with: ./scripts/uninstall.sh --$_st_target" >&2
+                        "Remove it with: $(command_text "./scrooge-alert uninstall --$_st_target")" >&2
                     IFS="$_st_old_ifs"
                     return 1
                 fi

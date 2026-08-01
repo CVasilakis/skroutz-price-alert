@@ -21,4 +21,4 @@
 [+] Target provisioning
     [i] Configuring selected target timers...
     [x] Transactional systemd provisioning failed.
-    [i] Rerun ./install.sh --debug, or inspect with ./scripts/run.sh --status.
+    [i] Rerun ./scrooge-alert install --debug, or inspect with ./scrooge-alert status.

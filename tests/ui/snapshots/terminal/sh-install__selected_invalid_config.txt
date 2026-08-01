@@ -25,4 +25,4 @@
 
 [+] Installation result
     [x] One or more targets were skipped because their configuration is invalid.
-    [i] Fix each reported target configuration, then run ./install.sh again.
+    [i] Fix each reported target configuration, then run ./scrooge-alert install again.

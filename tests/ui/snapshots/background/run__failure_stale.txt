@@ -8,4 +8,4 @@
 [2026-07-04 12:00:00 UTC] ❗ Flaky Stale Item: Attempt 1/3 FAILED (ConnectionError: Connection aborted)
 [2026-07-04 12:00:00 UTC] ❗ Flaky Stale Item: Attempt 2/3 FAILED (ConnectionError: Connection aborted)
 [2026-07-04 12:00:00 UTC] ❗ Flaky Stale Item: Attempt 3/3 FAILED (ConnectionError: Connection aborted)
-[2026-07-04 12:00:00 UTC] ❗ Flaky Stale Item: All attempts failed (ConnectionError) (See `logs/skroutz/errors.txt` for details.) (Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago).)
+[2026-07-04 12:00:00 UTC] ❗ Flaky Stale Item: All attempts failed (ConnectionError) (See "logs/skroutz/errors.txt" for details.) (Stale: last scraped 25-06-2026 09:00:00 UTC (over 48h ago).)

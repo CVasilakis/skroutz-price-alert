@@ -12,5 +12,6 @@
 │   ❗    Last Execution Status       Dependencies Missing [1]            │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC         │
 │                                                                         │
-│   [1] Install this scraper's dependencies with ./install.sh --skroutz.  │
+│   [1] Install this scraper's dependencies with ./scrooge-alert install  │
+│       --skroutz.                                                        │
 ╰─────────────────────────────────────────────────────────────────────────╯

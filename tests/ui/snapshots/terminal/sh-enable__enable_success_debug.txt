@@ -13,4 +13,4 @@ ActiveState=active
     [v] [skroutz] Background schedule enabled and started.
 
 [+] Optional controls
-    [i] If needed, disable background execution with: ./scripts/disable.sh
+    [i] If needed, disable background execution with: ./scrooge-alert disable

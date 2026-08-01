@@ -49,7 +49,7 @@
 
 [+] Installation result
     [x] One or more targets were skipped because their configuration is invalid.
-    [i] Fix each reported target configuration, then run ./install.sh again.
+    [i] Fix each reported target configuration, then run ./scrooge-alert install again.
 
 [+] Timer activation
     [i] Restoring eligible target timer states.
@@ -59,6 +59,6 @@
     [v] [beta] Restored its prior timer state.
 
 [!] Update result
-    [!] Update complete, but one or more targets retained their existing units because
-        their configuration is invalid.
-    [!] Fix each reported target configuration, then rerun ./update.sh.
+    [!] Update complete, but one or more targets retained their existing units because their
+        configuration is invalid.
+    [!] Fix each reported target configuration, then rerun ./scrooge-alert update.

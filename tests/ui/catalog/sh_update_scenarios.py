@@ -5,7 +5,7 @@ from dataclasses import replace
 from ui.catalog._base import Surface
 from ui.catalog.shell_inputs import ShellWorld, shell_case
 
-_case = shell_case(Surface.SH_UPDATE, "update.sh")
+_case = shell_case(Surface.SH_UPDATE, "scripts/update.sh")
 
 _BASE = ShellWorld(
     installed_timers=("skroutz",),

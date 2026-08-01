@@ -1,5 +1,5 @@
 # Development/CI-only dependencies. Kept separate from requirements.txt so an
-# end-user install (./install.sh) never pulls the test toolchain.
+# end-user install (./scrooge-alert install) never pulls the test toolchain.
 #
 #   pip install -r scripts/dev/requirements-dev.txt
 #

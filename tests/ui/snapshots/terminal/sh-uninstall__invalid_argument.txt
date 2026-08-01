@@ -3,4 +3,4 @@
 
 [+] Uninstall preflight
     [x] The command-line arguments are invalid.
-    [i] Run ./scripts/uninstall.sh --help for usage.
+    [i] Run ./scrooge-alert uninstall --help for usage.

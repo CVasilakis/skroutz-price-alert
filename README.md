@@ -52,7 +52,7 @@
 ## 🌍 Supported Stores
 
 Supported targets are discovered from the checked-in plugin packages. After
-installation, run `./scripts/run.sh --help` to see the exact target flags available
+installation, run `./scrooge-alert run --help` to see the exact target flags available
 in your checkout; before installation, the command prints setup guidance instead.
 Each target's accepted URLs, custom fields, settings, dependencies, and examples are
 documented in `src/core/scrapers/plugins/<target>/README.md` beside its implementation.
@@ -101,14 +101,13 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     cd scrooge-alert
     ```
 
-3. **Run the installation script:**
+3. **Run the installation command:**
 
     ```sh
-    chmod +x install.sh
-    ./install.sh
+    ./scrooge-alert install
     ```
 
-    The `install.sh` script will automatically create a project-owned Python virtual environment, install the required dependencies, and set up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
+    The install command creates a project-owned Python virtual environment, installs the required dependencies, and sets up one systemd user timer per scraper using its valid configured `execution_interval`, or the plugin's built-in default when unset. If one scraper config is structurally invalid, that scraper is reported and skipped while healthy scrapers are still installed; its existing units are preserved and the command exits with status `15`. No `sudo` or elevated privileges are required for the installation.
 
     Scrooge Alert creates a real root `venv/` directory and regular canonical
     systemd unit files. The enablement symlinks created by systemd below
@@ -116,7 +115,7 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     unit destinations. A symlink placed at a managed destination is unsupported:
     install, schedule, and update reject it before changing packages, units, or
     timer state. Remove such a unit entry safely with
-    `./scripts/uninstall.sh --<target>`, then reinstall it.
+    `./scrooge-alert uninstall --<target>`, then reinstall it.
 
 4. **Configure your settings:**
 
@@ -148,7 +147,7 @@ stored separately in the ignored, schema-versioned `state/<target>.json`. Exampl
 live beside their plugins:
 
 ```sh
-target=TARGET_NAME  # replace with a target shown by ./scripts/run.sh --help
+target=TARGET_NAME  # replace with a target shown by ./scrooge-alert run --help
 cp "src/core/scrapers/plugins/$target/config.example.json" "config/$target.json"
 nano "config/$target.json"
 ```
@@ -188,7 +187,7 @@ The optional top-level `settings` holds per-scraper preferences, separate from y
 | `suppress_repeated_price_alerts` | Boolean | Whether to suppress a price alert that was already delivered successfully for the same active deal. Defaults to `false`, so below-target prices alert on every run. When `true`, single-price alerts resume only after the price is observed at or above the target and later drops again; listing alerts are deduplicated by canonical offer URL and resume if an offer leaves the below-target result set and later returns. Failed deliveries remain eligible for retry. |
 
 > [!NOTE]
-> Changing `execution_interval` does not take effect on its own. After editing it, apply it to the live timer with the [Set Execution Interval](#set-execution-interval) script: `./scripts/schedule.sh`.
+> Changing `execution_interval` does not take effect on its own. After editing it, apply it to the live timer with the [Set Execution Interval](#set-execution-interval) script: `./scrooge-alert schedule`.
 
 #### Tracked Items
 
@@ -209,7 +208,7 @@ ending in `Z`. Cooperative runtime and migration locks are machine-managed under
 
 > [!IMPORTANT]
 > Scraper state and target configuration have independent schema sequences. Both begin
-> at version 1. `./update.sh` migrates known documents before reactivating timers; use
+> at version 1. `./scrooge-alert update` migrates known documents before reactivating timers; use
 > `./scripts/migrate.sh --check` to validate and report without modifying managed JSON
 > documents. Check mode still takes the cooperative locks, so `state/locks/` and its
 > lock metadata may be created. Add `--debug` to expose the underlying migration output
@@ -262,7 +261,7 @@ preserved by `--ping`.
 
 At least one valid URL is required for background/systemd execution. An interactive run
 may continue without one so configuration problems can be inspected. Invalid entries are
-ignored when a valid endpoint also exists and are detailed by `./scripts/run.sh --ping`.
+ignored when a valid endpoint also exists and are detailed by `./scrooge-alert ping`.
 The Configuration Check panel recommends `chmod 600` when the file is accessible to
 group or other users, but this permission warning never prevents a run.
 
@@ -288,14 +287,14 @@ There are two ways to execute the script: automatically via the scheduled system
 
 ### Automated Systemd Execution
 
-Once `install.sh` has run successfully, each scraper executes automatically via its own systemd timer — on its plugin-defined default cadence, or on the valid cadence set by its [execution_interval](#scraper-settings) setting. The systemd timer applies a randomized up-to-3m startup delay before launching the execution wrapper (`scripts/run.sh`) to simulate human timing and avoid exact scheduling footprints.
+Once `./scrooge-alert install` has run successfully, each scraper executes automatically via its own systemd timer — on its plugin-defined default cadence, or on the valid cadence set by its [execution_interval](#scraper-settings) setting. The systemd timer applies a randomized up-to-3m startup delay before launching the execution wrapper (`scripts/run.sh`) to simulate human timing and avoid exact scheduling footprints.
 
 ### Manual Execution
 
 You can manually interact with the application using the wrapper script. You can safely interrupt the manual execution at any time by pressing `Ctrl+C`.
 
 ```
-./scripts/run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]
+./scrooge-alert run [-h] [--quiet] [--<target> ...]
 ```
 
 #### Available CLI Flags:
@@ -307,8 +306,6 @@ These flags modify the overall behavior of the script or trigger user assistance
 | :--- | :--- |
 | `-h`, `--help` | Displays the help message with all available script arguments. |
 | `--quiet` | Suppresses all console output and redirects execution logs to the `logs/` directory. This is utilized by the systemd setup to ensure silent background operation. |
-| `--status` | Performs a comprehensive health check. It validates the configuration, and verifies the background systemd service and timer status. |
-| `--ping` | Sends a test notification directly to the Apprise URLs in `config/general.json`, then immediately exits. |
 
 **Target Scraper Flags:**
 These flags allow you to isolate execution to specific platforms. If no target flags are provided, the script defaults to running all registered scrapers sequentially. They can be combined with `--quiet`.
@@ -318,7 +315,7 @@ These flags allow you to isolate execution to specific platforms. If no target f
 | `--<target>` | Activates only the specified target's scraper (e.g., `--skroutz`). You can pass one or more target flags simultaneously. |
 
 > [!NOTE]
-> Only one instance of a specific scraper target is allowed to run at a time to avoid triggering anti-bot protections. These machine-managed locks live at `state/locks/<target>.lock`. If a background execution for a target (e.g., Skroutz) is currently in progress, your manual run for that target will be blocked and skipped. If you need to forcefully stop all active background executions to run the scraper manually, you can safely use the [stop script](#stop-active-runs): `./scripts/stop.sh`. This stops all the current background runs but will not break any future scheduled executions.
+> Only one instance of a specific scraper target is allowed to run at a time to avoid triggering anti-bot protections. These machine-managed locks live at `state/locks/<target>.lock`. If a background execution for a target (e.g., Skroutz) is currently in progress, your manual run for that target will be blocked and skipped. If you need to forcefully stop all active background executions to run the scraper manually, you can safely use the [stop script](#stop-active-runs): `./scrooge-alert stop`. This stops all the current background runs but will not break any future scheduled executions.
 
 #### Status Check:
 
@@ -327,7 +324,7 @@ your JSON configuration, validates notification URLs, and queries systemd to dis
 following background execution details:
 
 ```
-./scripts/run.sh --status
+./scrooge-alert status
 ```
 
 - **Systemd Timer Active:** Shows whether the timer is currently active.
@@ -360,7 +357,7 @@ To test notification URLs without waiting for a scheduled run or price drop, use
 `--ping`:
 
 ```
-./scripts/run.sh --ping
+./scrooge-alert ping
 ```
 
 This will send a test message to each configured Apprise URL(s). It will output a report of successes and failures, helping you quickly identify and debug any misconfigured notification endpoints.
@@ -370,13 +367,13 @@ This will send a test message to each configured Apprise URL(s). It will output 
 
 ### Helper Scripts
 
-The project includes several helper scripts to manage your background scraper services and update the application. User-facing management commands are located directly in the `scripts/` directory, while the install and update scripts are in the root directory. Developer-only setup, validation, and plugin-contributor commands are grouped under `scripts/dev/` and documented in `CONTRIBUTING.md`. The management scripts support a `--help` flag and can be applied to specific targets. They suppress underlying system-command output by default so the status interface stays readable; pass `--debug` to expose that output when diagnosing a failure. `scripts/run.sh` is the deliberate exception because its Python entry points own their terminal UI, runtime diagnostics, and logging.
+The repository-local `./scrooge-alert` command is the user-facing interface for managing background scrapers and updates. Its POSIX shell owners live under `scripts/`; it does not install a launcher, modify `PATH`, edit shell profiles, or place completion files outside the checkout. Developer-only setup, validation, and plugin-contributor commands remain under `scripts/dev/` and are documented in `CONTRIBUTING.md`. Management commands support `--help` and can be applied to specific targets. They suppress underlying system-command output by default; pass `--debug` to expose it when diagnosing a failure. The `run` command is the deliberate exception because its Python entry points own their terminal UI, runtime diagnostics, and logging.
 
 #### Install & Add Scrapers
 Sets up the Python virtual environment and installs the systemd timer(s) and service(s). Run it as many times as you like to add more scrapers later:
 
 ```
-./install.sh [-h] [--debug] [--<target> ...]
+./scrooge-alert install [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
@@ -389,7 +386,7 @@ Sets up the Python virtual environment and installs the systemd timer(s) and ser
 Stops the currently running scraper service(s), aborting any scrape in progress:
 
 ```
-./scripts/stop.sh [-h] [--debug] [--<target> ...]
+./scrooge-alert stop [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
@@ -402,7 +399,7 @@ Stops the currently running scraper service(s), aborting any scrape in progress:
 Stops and disables the background schedule (systemd timer) so the scraper(s) no longer run automatically:
 
 ```
-./scripts/disable.sh [-h] [--debug] [--<target> ...]
+./scrooge-alert disable [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
@@ -415,7 +412,7 @@ Stops and disables the background schedule (systemd timer) so the scraper(s) no 
 Re-enables and starts the background schedule (systemd timer) for the installed scraper(s):
 
 ```
-./scripts/enable.sh [-h] [--debug] [--<target> ...]
+./scrooge-alert enable [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
@@ -428,7 +425,7 @@ Re-enables and starts the background schedule (systemd timer) for the installed 
 Applies each scraper's configured `execution_interval` (from `config/<target>.json`) to the installed systemd timer. Run it whenever you change an interval:
 
 ```
-./scripts/schedule.sh [-h] [--debug] [--<target> ...]
+./scrooge-alert schedule [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
@@ -446,7 +443,7 @@ state is restored.
 Performs a full or partial teardown of the background services:
 
 ```
-./scripts/uninstall.sh [-h] [--debug] [--<target> ...]
+./scrooge-alert uninstall [-h] [--debug] [--<target> ...]
 ```
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
@@ -461,7 +458,7 @@ for exactly the scraper targets that already have timer or service units, and
 transactionally replaces their systemd unit files:
 
 ```
-./update.sh [-h|--help] [--debug]
+./scrooge-alert update [-h|--help] [--debug]
 ```
 
 Pass `--debug` to expose the Git, migration, package, and systemd command output
@@ -504,7 +501,7 @@ You might receive the following push notification alerts throughout the lifecycl
 To completely remove the background service and clean up the Python virtual environment, execute the uninstallation script:
 
 ```sh
-./scripts/uninstall.sh
+./scrooge-alert uninstall
 ```
 
 The uninstallation process safely performs the following actions:
@@ -530,7 +527,7 @@ output, `--status`, and the application logs described below.
 **1. Failing to Fetch Items:**
 
 If the script cannot retrieve data for certain items, review the target's package-local guide and verify the source inputs in `config/<target>.json`. For URL-based targets, check for broken links; invalid URLs are often redirected to similar pages.
-If the inputs are correct but failures persist across multiple items, your connection has likely been temporarily restricted by the website's anti-bot protection. To mitigate this, reduce your network traffic by tracking fewer active items, or decrease the script's run frequency by setting a longer [`execution_interval`](#scraper-settings) in the scraper's config and applying it with `./scripts/schedule.sh`.
+If the inputs are correct but failures persist across multiple items, your connection has likely been temporarily restricted by the website's anti-bot protection. To mitigate this, reduce your network traffic by tracking fewer active items, or decrease the script's run frequency by setting a longer [`execution_interval`](#scraper-settings) in the scraper's config and applying it with `./scrooge-alert schedule`.
 
 > [!TIP]  
 > For the best results, this script should **not** be run behind a VPN and should ideally be executed from a standard Greek residential IP address. High traffic coming from known VPS providers, data centers, or VPNs is very likely to trigger strict anti-bot mechanisms, causing the script to fail.
@@ -542,7 +539,7 @@ section and verify the Apprise URLs in `config/general.json`.
 You can easily test your notification setup using the `--ping` flag:
 
 ```sh
-./scripts/run.sh --ping
+./scrooge-alert ping
 ```
 
 **3. Application Logs & Crash Reports:**
@@ -573,11 +570,11 @@ The default configuration applies rate limiting to reduce traffic and increase t
 To confirm the script is running in the background, use the `--status` flag. If the script reports no errors, you can be sure it is configured correctly and running in the background:
 
 ```sh
-./scripts/run.sh --status
+./scrooge-alert status
 ```
 
 The systemd execution metrics reported by the `--status` flag only reflect background scheduled executions, not manual runs.
-If the command reveals any warnings, please run `./update.sh` which re-installs the background service and ensures that you are on the latest version. If the issue persists after updating, please [open an issue](https://github.com/CVasilakis/scrooge-alert/issues) for further assistance.
+If the command reveals any warnings, please run `./scrooge-alert update` which re-installs the background service and ensures that you are on the latest version. If the issue persists after updating, please [open an issue](https://github.com/CVasilakis/scrooge-alert/issues) for further assistance.
 </details>
 
 <details>
@@ -600,7 +597,7 @@ scrapers, updates their dependencies, and transactionally replaces their systemd
 unit files:
 
 ```sh
-./update.sh
+./scrooge-alert update
 ```
 
 The updater preserves selective installations and prior timer activation states.
@@ -634,10 +631,10 @@ To mimic human behavior, the script spaces out its requests. It applies a base d
 <summary><b>8. How do I move the project to a different folder?</b></summary>
 <br>
 
-1. Run `./scripts/uninstall.sh` in the old folder to clean up the existing background processes.
+1. Run `./scrooge-alert uninstall` in the old folder to clean up the existing background processes.
 2. Clone the repository into your new desired folder using Git.
 3. Move your `config/` and `state/` data from the old folder to the new one.
-4. Run `./install.sh` in the new location to rebuild the environment and background timers.
+4. Run `./scrooge-alert install` in the new location to rebuild the environment and background timers.
 5. Safely delete the old project folder.
 </details>
 
@@ -655,13 +652,13 @@ By default, Linux kills all background processes associated with a user the mome
 If you want to stop the script from running automatically in the background without completely uninstalling it, you can use the disable script:
 
 ```sh
-./scripts/disable.sh
+./scrooge-alert disable
 ```
 
 To re-enable background scheduled executions later, run:
 
 ```sh
-./scripts/enable.sh
+./scrooge-alert enable
 ```
 </details>
 

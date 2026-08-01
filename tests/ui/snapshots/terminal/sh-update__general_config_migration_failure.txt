@@ -48,6 +48,5 @@
     [!] [skroutz] Left disabled after general configuration migration failed.
 
 [!] Update result
-    [!] Update complete, but timers remain disabled because general configuration
-        migration failed.
-    [!] Fix config/general.json, then rerun ./update.sh.
+    [!] Update complete, but timers remain disabled because general configuration migration failed.
+    [!] Fix config/general.json, then rerun ./scrooge-alert update.

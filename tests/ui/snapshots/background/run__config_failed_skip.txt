@@ -1,6 +1,6 @@
 # logs/skroutz/output.log
 
-[2026-07-04 12:00:00 UTC] ❗ Tracked Items: Failed (Fix JSON in `config/skroutz.json` at line 12, column 4.)
+[2026-07-04 12:00:00 UTC] ❗ Tracked Items: Failed (Fix JSON in "config/skroutz.json" at line 12, column 4.)
 [2026-07-04 12:00:00 UTC] ⚙️  Execution Interval: 1h (default)
 [2026-07-04 12:00:00 UTC] ⚙️  Log Retention: 7 days (default)
 [2026-07-04 12:00:00 UTC] ⚙️  Notify On Errors: true (default)

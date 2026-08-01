@@ -86,7 +86,7 @@ def test_interactive_system_error_text_is_literal_and_inline_code_is_styled():
     reporter = InteractiveRunReporter()
     reporter.target_name = "Store"
     reporter.log_system_error(
-        "Missing [red]dependency[/red]; run `./install.sh --[blue]store[/blue]`."
+        "Missing [red]dependency[/red]; run `./scrooge-alert install --[blue]store[/blue]`."
     )
     panel = reporter._generate_panel()
     console = Console(width=PANEL_WIDTH + 25, color_system="truecolor")
@@ -94,9 +94,9 @@ def test_interactive_system_error_text_is_literal_and_inline_code_is_styled():
     rendered = "".join(segment.text for segment in segments)
 
     assert "[red]dependency[/red]" in rendered
-    assert "./install.sh" in rendered
+    assert "./scrooge-alert install" in rendered
     assert "--[blue]store[/blue]" in rendered
-    command = next(segment for segment in segments if "./install.sh" in segment.text)
+    command = next(segment for segment in segments if "./scrooge-alert install" in segment.text)
     assert str(command.style) == "dim cyan"
     assert "System" not in rendered
 

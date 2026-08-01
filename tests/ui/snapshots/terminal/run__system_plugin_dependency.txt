@@ -8,5 +8,6 @@
 │   ✅    Repeat Alerts           false (default)                         │
 │ ─────────────────────────────────────────────────────────────────────── │
 │   ❗    Scraper 'skroutz' requires missing dependencies (missing        │
-│         module: tls_client). Install with ./install.sh --skroutz.       │
+│         module: tls_client). Install with ./scrooge-alert install       │
+│         --skroutz.                                                      │
 ╰─────────────────────────────────────────────────────────────────────────╯

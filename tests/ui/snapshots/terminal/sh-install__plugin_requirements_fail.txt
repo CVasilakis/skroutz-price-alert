@@ -19,4 +19,4 @@
 [+] Target dependencies
     [i] [skroutz] Installing private dependencies...
     [x] [skroutz] Its private dependencies could not be installed.
-    [i] Check that target's requirements, then run ./install.sh --debug --skroutz.
+    [i] Check that target's requirements, then run ./scrooge-alert install --debug --skroutz.

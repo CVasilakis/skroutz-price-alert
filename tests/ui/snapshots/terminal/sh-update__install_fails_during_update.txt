@@ -34,11 +34,11 @@
     [v] The Python environment is ready.
     [i] Updating Python packaging tools...
     [x] Packaging tools could not be updated.
-    [i] Check package-index access, then run ./install.sh --debug.
+    [i] Check package-index access, then run ./scrooge-alert install --debug.
 
 [+] Update recovery
     [x] Provisioning failed after the source update.
     [!] Affected timers remain disabled for safety.
-    [!] Rerun ./update.sh, or inspect with ./scripts/run.sh --status.
+    [!] Rerun ./scrooge-alert update, or inspect with ./scrooge-alert status.
     [!] Original timer states were recorded at
         <BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>.

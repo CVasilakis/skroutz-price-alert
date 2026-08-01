@@ -22,4 +22,4 @@
     [i] Migrating managed JSON documents...
     [x] JSON migration infrastructure failed.
     [!] Affected timers remain disabled for safety.
-    [!] Retry with ./update.sh --debug.
+    [!] Retry with ./scrooge-alert update --debug.

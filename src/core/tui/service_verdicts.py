@@ -65,13 +65,13 @@ _VERDICTS: dict[ExitStatus, ServiceVerdict] = {
         "🟡",
         "Notification Warning",
         "yellow",
-        "A configured notification failed. Run `./scripts/run.sh --ping`.",
+        "A configured notification failed. Run `./scrooge-alert ping`.",
     ),
     ExitStatus.PLUGIN_DEPENDENCY_ERROR: ServiceVerdict(
         "❗",
         "Dependencies Missing",
         "red",
-        "Install this scraper's dependencies with `./install.sh --{target}`.",
+        "Install this scraper's dependencies with `./scrooge-alert install --{target}`.",
     ),
     ExitStatus.INTERRUPTED: ServiceVerdict(
         "🟡", "Interrupted", "yellow", "Process was terminated by the user or system."

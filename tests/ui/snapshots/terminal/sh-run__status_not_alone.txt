@@ -3,4 +3,4 @@
 
 [+] Run arguments
     [x] The --status flag must be used alone.
-    [!] Run ./scripts/run.sh --help to view supported options.
+    [!] Run ./scrooge-alert run --help to view supported options.

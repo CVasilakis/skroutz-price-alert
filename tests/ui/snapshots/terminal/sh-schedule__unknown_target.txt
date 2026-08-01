@@ -3,4 +3,4 @@
 
 [+] Schedule preflight
     [x] Unknown target 'bogus'.
-    [i] Run ./scripts/schedule.sh --help for available targets.
+    [i] Run ./scrooge-alert schedule --help for available targets.

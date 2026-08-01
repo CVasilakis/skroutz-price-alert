@@ -18,5 +18,4 @@
     [v] Core and development dependencies installed.
     [i] Installing private target dependencies...
     [x] Private dependencies for the skroutz target could not be installed.
-    [i] Check that target's requirements, then run ./scripts/dev/setup.sh --debug
-        --skroutz.
+    [i] Check that target's requirements, then run ./scripts/dev/setup.sh --debug --skroutz.

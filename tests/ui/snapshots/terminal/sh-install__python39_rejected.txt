@@ -4,4 +4,4 @@
 [+] Installation checks
     [v] The project venv path is safe.
     [x] System Python 3.10 or newer is required.
-    [i] Install a supported Python, then run ./install.sh again.
+    [i] Install a supported Python, then run ./scrooge-alert install again.

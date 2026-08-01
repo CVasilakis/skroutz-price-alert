@@ -35,7 +35,7 @@ class Surface(Enum):
     PING = "ping"  # the --ping Notification Check Results panel
     # Shell surfaces: the transcript a management script prints to the terminal.
     # The "sh-" prefix groups them in the gallery and keeps "sh-run" clear of RUN.
-    SH_INSTALL = "sh-install"  # install.sh (repo root)
+    SH_INSTALL = "sh-install"  # scripts/install.sh
     SH_SETUP = "sh-setup"  # scripts/dev/setup.sh
     SH_PLUGIN_CREATE = "sh-plugin-create"  # scripts/dev/plugin-create.sh
     SH_PLUGIN_CHECK = "sh-plugin-check"  # scripts/dev/plugin-check.sh
@@ -47,7 +47,7 @@ class Surface(Enum):
     SH_ENABLE = "sh-enable"  # scripts/enable.sh
     SH_DISABLE = "sh-disable"  # scripts/disable.sh
     SH_STOP = "sh-stop"  # scripts/stop.sh
-    SH_UPDATE = "sh-update"  # update.sh (repo root)
+    SH_UPDATE = "sh-update"  # scripts/update.sh
     SH_UNINSTALL = "sh-uninstall"  # scripts/uninstall.sh
 
 
@@ -75,7 +75,7 @@ class SurfaceInfo:
 SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     Surface.RUN: SurfaceInfo(
         "Scraping panel (interactive)",
-        "The live panel a manual ./scripts/run.sh draws while checking items.",
+        "The live panel a manual ./scrooge-alert run draws while checking items.",
     ),
     Surface.E2E_RUN: SurfaceInfo(
         "Scraping panel (end-to-end)",
@@ -92,10 +92,10 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     ),
     Surface.STATUS: SurfaceInfo(
         "Health check (--status)",
-        "The per-scraper Service Status panels and global checks from ./scripts/run.sh --status.",
+        "The per-scraper Service Status panels and global checks from ./scrooge-alert status.",
     ),
     Surface.PING: SurfaceInfo(
-        "Notification check (--ping)", "The delivery test results from ./scripts/run.sh --ping."
+        "Notification check (--ping)", "The delivery test results from ./scrooge-alert ping."
     ),
     Surface.SH_INSTALL: SurfaceInfo(
         "install.sh", "First-time installation transcript (venv, dependencies, systemd units)."

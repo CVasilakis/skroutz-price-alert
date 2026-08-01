@@ -11,4 +11,4 @@
 [+] Python environment
     [i] Creating the project Python environment...
     [x] The Python environment could not be created.
-    [i] Fix Python venv support, then run ./install.sh --debug.
+    [i] Fix Python venv support, then run ./scrooge-alert install --debug.

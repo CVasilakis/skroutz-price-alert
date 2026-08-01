@@ -5,4 +5,4 @@
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
     [x] Required project file 'requirements.txt' is missing or unsafe.
-    [i] Restore the regular project file, then run ./install.sh again.
+    [i] Restore the regular project file, then run ./scrooge-alert install again.

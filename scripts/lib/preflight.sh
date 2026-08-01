@@ -64,18 +64,18 @@ require_clean_worktree() {
     fi
     if [ -n "$_rcw_status" ]; then
         printf '%s\n' "Error: The working tree contains tracked changes or nonignored untracked files." >&2
-        printf '%s\n' "Commit or stash your work before running update.sh; nothing was changed." >&2
+        printf '%s\n' "Commit or stash your work before running $(command_text './scrooge-alert update'); nothing was changed." >&2
         return 1
     fi
 }
 
 require_main_branch() {
     if ! _rmb_branch="$(git -C "$BASE_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null)"; then
-        printf '%s\n' "Error: The checkout is in detached-HEAD state; update.sh requires branch 'main'." >&2
+        printf '%s\n' "Error: The checkout is in detached-HEAD state; $(command_text './scrooge-alert update') requires branch 'main'." >&2
         return 1
     fi
     if [ "$_rmb_branch" != "main" ]; then
-        printf '%s\n' "Error: update.sh requires branch 'main' (current branch: '$_rmb_branch')." >&2
+        printf '%s\n' "Error: $(command_text './scrooge-alert update') requires branch 'main' (current branch: '$_rmb_branch')." >&2
         printf '%s\n' "Switch branches yourself after saving any work, then retry." >&2
         return 1
     fi

@@ -3,4 +3,4 @@
 
 [+] Installation arguments
     [x] The command-line arguments are invalid.
-    [i] Run ./install.sh --help for usage.
+    [i] Run ./scrooge-alert install --help for usage.

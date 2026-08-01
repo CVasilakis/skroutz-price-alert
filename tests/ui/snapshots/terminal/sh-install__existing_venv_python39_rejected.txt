@@ -5,4 +5,4 @@
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
     [x] The existing Python environment is unusable.
-    [i] Run ./scripts/uninstall.sh, then run ./install.sh again.
+    [i] Run ./scrooge-alert uninstall, then run ./scrooge-alert install again.

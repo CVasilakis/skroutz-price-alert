@@ -3,4 +3,4 @@
 
 [+] Update arguments
     [x] Invalid argument: foo
-    [!] Run ./update.sh --help for usage.
+    [!] Run ./scrooge-alert update --help for usage.

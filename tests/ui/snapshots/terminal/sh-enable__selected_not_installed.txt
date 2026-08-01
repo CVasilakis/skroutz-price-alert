@@ -3,4 +3,4 @@
 
 [+] Enable preflight
     [x] 'amazon' is registered but not installed.
-    [!] Install it with: ./install.sh --amazon
+    [!] Install it with: ./scrooge-alert install --amazon

@@ -29,6 +29,6 @@
     [i] Restoring eligible target timer states.
 
 [!] Update result
-    [!] Update complete, but one or more targets retained their existing units because
-        their configuration is invalid.
-    [!] Fix each reported target configuration, then rerun ./update.sh.
+    [!] Update complete, but one or more targets retained their existing units because their
+        configuration is invalid.
+    [!] Fix each reported target configuration, then rerun ./scrooge-alert update.

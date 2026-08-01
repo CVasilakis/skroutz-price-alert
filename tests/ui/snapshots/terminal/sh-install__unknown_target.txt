@@ -5,4 +5,4 @@
     [v] The project venv path is safe.
     [v] System Python 3.10 or newer is available.
     [x] The requested target selection is invalid.
-    [i] Run ./install.sh --help to list available targets.
+    [i] Run ./scrooge-alert install --help to list available targets.

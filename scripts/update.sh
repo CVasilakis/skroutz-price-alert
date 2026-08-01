@@ -5,16 +5,16 @@ set -eu
 # before git replaces files in the checkout.
 main() {
     SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
-    BASE_DIR="$SCRIPT_DIR"
+    BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 
     # shellcheck source=scripts/lib/common.sh
-    . "$SCRIPT_DIR/scripts/lib/common.sh"
+    . "$SCRIPT_DIR/lib/common.sh"
     # shellcheck source=scripts/lib/preflight.sh
-    . "$SCRIPT_DIR/scripts/lib/preflight.sh"
+    . "$SCRIPT_DIR/lib/preflight.sh"
     # shellcheck source=scripts/lib/systemd.sh
-    . "$SCRIPT_DIR/scripts/lib/systemd.sh"
+    . "$SCRIPT_DIR/lib/systemd.sh"
     # shellcheck source=scripts/lib/provisioning.sh
-    . "$SCRIPT_DIR/scripts/lib/provisioning.sh"
+    . "$SCRIPT_DIR/lib/provisioning.sh"
 
     UPDATE_PHASE="preflight"
     UPDATE_RECOVERY_DIR=''
@@ -24,7 +24,11 @@ main() {
 
     print_help() {
         printf '\n'
-        printf '%s\n' "Usage: update.sh [-h|--help] [--debug]"
+        if [ "${SCROOGE_PUBLIC_COMMAND:-}" = update ]; then
+            printf '%s\n' "Usage: ./scrooge-alert update [--help] [--debug]"
+        else
+            printf '%s\n' "Usage: update.sh [-h|--help] [--debug]"
+        fi
         printf '\n'
         printf '%s\n' "Safely update Scrooge Alert from origin/main and transactionally"
         printf '%s\n' "reprovision exactly the scraper targets that are already installed."
@@ -146,7 +150,7 @@ main() {
             printf '%s\n' \
                 "Error: The working tree contains tracked changes or nonignored untracked files." >&2
             printf '%s\n' \
-                "Commit or stash your work before running update.sh; nothing was changed." >&2
+                "Commit or stash your work before running $(command_text './scrooge-alert update'); nothing was changed." >&2
             return 1
         fi
     }
@@ -159,12 +163,12 @@ main() {
         }
         if ! run_captured git -C "$BASE_DIR" symbolic-ref --short HEAD; then
             printf '%s\n' \
-                "Error: The checkout is in detached-HEAD state; update.sh requires branch 'main'." >&2
+                "Error: The checkout is in detached-HEAD state; $(command_text './scrooge-alert update') requires branch 'main'." >&2
             return 1
         fi
         if [ "$CAPTURED_COMMAND_OUTPUT" != "main" ]; then
             printf '%s\n' \
-                "Error: update.sh requires branch 'main' (current branch: '$CAPTURED_COMMAND_OUTPUT')." >&2
+                "Error: $(command_text './scrooge-alert update') requires branch 'main' (current branch: '$CAPTURED_COMMAND_OUTPUT')." >&2
             printf '%s\n' \
                 "Switch branches yourself after saving any work, then retry." >&2
             return 1
@@ -290,7 +294,7 @@ main() {
                 fi
                 update_task warning "Recovery data was retained at $UPDATE_RECOVERY_DIR."
                 update_task warning \
-                    "Rerun ./update.sh or inspect ./scripts/run.sh --status."
+                    "Rerun $(command_text './scrooge-alert update') or inspect $(command_text './scrooge-alert status')."
                 ;;
         esac
         update_exit "$_ui_status"
@@ -320,14 +324,14 @@ main() {
     if [ "$DEBUG_ARGUMENTS" -gt 1 ]; then
         update_section success "Update arguments"
         update_task failure "The --debug flag may be specified only once."
-        update_task warning "Run ./update.sh --help for usage."
+        update_task warning "Run $(command_text './scrooge-alert update --help') for usage."
         update_exit 1
     fi
     if [ "$NONDEBUG_ARGUMENTS" -gt 1 ]; then
         update_section success "Update arguments"
         update_task failure \
-            "update.sh accepts no arguments other than one -h or --help, plus --debug."
-        update_task warning "Run ./update.sh --help for usage."
+            "$(command_text './scrooge-alert update') accepts no arguments other than one -h or --help, plus --debug."
+        update_task warning "Run $(command_text './scrooge-alert update --help') for usage."
         update_exit 1
     fi
     if [ "$NONDEBUG_ARGUMENTS" -eq 1 ]; then
@@ -336,7 +340,7 @@ main() {
             *)
                 update_section success "Update arguments"
                 update_task failure "Invalid argument: $NONDEBUG_ARGUMENT"
-                update_task warning "Run ./update.sh --help for usage."
+                update_task warning "Run $(command_text './scrooge-alert update --help') for usage."
                 update_exit 1
                 ;;
         esac
@@ -350,7 +354,7 @@ main() {
     if ! run_update_helper reject_project_venv_symlink; then
         update_task failure "The project venv path is a symlink."
         update_task warning \
-            "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or ./install.sh."
+            "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')."
         update_exit 1
     fi
     if ! run_update_helper require_systemctl; then
@@ -371,7 +375,7 @@ main() {
     if ! run_update_helper update_require_clean_worktree; then
         update_task failure \
             "The working tree contains tracked changes or nonignored untracked files."
-        update_task warning "Commit or stash your work before running update.sh."
+        update_task warning "Commit or stash your work before running $(command_text './scrooge-alert update')."
         update_exit 1
     fi
     if ! run_update_helper update_require_origin_remote; then
@@ -383,12 +387,12 @@ main() {
         INSTALLED_TARGETS="$CAPTURED_COMMAND_OUTPUT"
     else
         update_task failure "Installed target units could not be inspected."
-        update_task warning "Inspect with ./scripts/run.sh --status, then retry."
+        update_task warning "Inspect with $(command_text './scrooge-alert status'), then retry."
         update_exit 1
     fi
     if [ -z "$INSTALLED_TARGETS" ]; then
         update_task failure "No installed target timer or service units were found."
-        update_task warning "Choose targets explicitly with ./install.sh --<target>."
+        update_task warning "Choose targets explicitly with $(command_text './scrooge-alert install --<target>')."
         update_exit 1
     fi
     # Updates only own absent or regular unit destinations. Reject links and
@@ -397,7 +401,7 @@ main() {
         "$INSTALLED_TARGETS" pair; then
         update_task failure "A managed systemd unit destination is unsafe."
         update_task warning \
-            "Remove the unsafe unit with ./scripts/uninstall.sh --<target>, then retry."
+            "Remove the unsafe unit with $(command_text './scrooge-alert uninstall --<target>'), then retry."
         update_exit 1
     fi
     update_task success "The checkout and installed target selection are safe to update."
@@ -422,7 +426,8 @@ main() {
         ! run_update_helper update_require_origin_main ||
         ! run_update_helper require_fast_forward_to_origin ||
         ! run_update_helper update_require_revision_paths origin/main \
-            install.sh \
+            scrooge-alert \
+            scripts/install.sh \
             scripts/migrate.sh \
             scripts/lib/common.sh \
             scripts/lib/preflight.sh \
@@ -430,7 +435,7 @@ main() {
             scripts/lib/provisioning.sh; then
         update_task failure "The fetched update failed safety validation."
         update_task warning \
-            "Reconcile the checkout or fetched origin/main, then rerun ./update.sh --debug."
+            "Reconcile the checkout or fetched origin/main, then rerun $(command_text './scrooge-alert update --debug')."
         update_exit 1
     fi
     update_task success "Verified origin/main can safely fast-forward this checkout."
@@ -513,16 +518,16 @@ main() {
     update_task success "Fast-forwarded the project files to origin/main."
 
     if [ ! -f "$SCRIPT_DIR/install.sh" ] || [ -L "$SCRIPT_DIR/install.sh" ]; then
-        update_task failure "The fetched update has no safe install.sh."
+        update_task failure "The fetched update has no safe scripts/install.sh."
         update_task warning "Target timers remain disabled."
-        update_task warning "Repair the checkout, then rerun ./update.sh."
+        update_task warning "Repair the checkout, then rerun $(command_text './scrooge-alert update')."
         update_exit 1
     fi
 
     UPDATE_PHASE="migrating"
     update_section success "JSON migration"
     if run_with_progress "Migrating managed JSON documents..." \
-        run_captured "$SCRIPT_DIR/scripts/migrate.sh" --machine; then
+        run_captured "$SCRIPT_DIR/migrate.sh" --machine; then
         MIGRATION_STATUS=0
     else
         MIGRATION_STATUS=$?
@@ -533,7 +538,7 @@ main() {
         *)
             update_task failure "JSON migration infrastructure failed."
             update_task warning "Affected timers remain disabled for safety."
-            update_task warning "Retry with ./update.sh --debug."
+            update_task warning "Retry with $(command_text './scrooge-alert update --debug')."
             update_exit "$MIGRATION_STATUS"
             ;;
     esac
@@ -588,7 +593,7 @@ main() {
     if [ "$MIGRATION_STATUS" -ne 0 ] && [ "$MIGRATION_FAILURES" -eq 0 ]; then
         update_task failure "JSON migration infrastructure failed."
         update_task warning "Affected timers remain disabled for safety."
-        update_task warning "Retry with ./update.sh --debug."
+        update_task warning "Retry with $(command_text './scrooge-alert update --debug')."
         update_exit "$MIGRATION_STATUS"
     fi
     if [ "$MIGRATION_FAILURES" -eq 0 ]; then
@@ -632,7 +637,7 @@ main() {
         update_task failure "Provisioning failed after the source update."
         update_task warning "Affected timers remain disabled for safety."
         update_task warning \
-            "Rerun ./update.sh, or inspect with ./scripts/run.sh --status."
+            "Rerun $(command_text './scrooge-alert update'), or inspect with $(command_text './scrooge-alert status')."
         update_task warning \
             "Original timer states were recorded at $UPDATE_RECOVERY_DIR."
         update_exit 1
@@ -658,7 +663,7 @@ main() {
         update_task warning \
             "Recorded timer states were retained at $UPDATE_RECOVERY_DIR."
         update_task warning \
-            "Rerun ./update.sh, or inspect with ./scripts/run.sh --status."
+            "Rerun $(command_text './scrooge-alert update'), or inspect with $(command_text './scrooge-alert status')."
         update_exit 1
     fi
     if run_captured list_interval_status; then
@@ -686,7 +691,7 @@ main() {
         fi
         if ! stream_contains "$target" "$CURRENT_TARGETS"; then
             update_task warning "[$target] Left disabled because it is no longer registered."
-            update_task warning "Remove it with ./scripts/uninstall.sh --$target."
+            update_task warning "Remove it with $(command_text "./scrooge-alert uninstall --$target")."
             continue
         fi
         read_captured_state "$UPDATE_RECOVERY_DIR/state/$target"
@@ -729,7 +734,7 @@ main() {
         update_task warning \
             "Recorded timer states were retained at $UPDATE_RECOVERY_DIR."
         update_task warning \
-            "Inspect with ./scripts/run.sh --status before enabling timers."
+            "Inspect with $(command_text './scrooge-alert status') before enabling timers."
         update_exit 1
     fi
 
@@ -761,7 +766,7 @@ main() {
         update_section warning "Additional targets"
         update_task info \
             "Available but not installed: $(stream_for_display "$NEW_TARGETS")"
-        update_task info "Install any of them with ./install.sh --<target>."
+        update_task info "Install any of them with $(command_text './scrooge-alert install --<target>')."
     fi
 
     if [ "$MIGRATION_CONFIG_FAILED" -ne 0 ] || [ "$PARTIAL_CONFIG" -ne 0 ]; then
@@ -769,14 +774,14 @@ main() {
         update_task warning \
             "Update complete, but one or more targets retained their existing units because their configuration is invalid."
         update_task warning \
-            "Fix each reported target configuration, then rerun ./update.sh."
+            "Fix each reported target configuration, then rerun $(command_text './scrooge-alert update')."
         update_exit "$EXIT_STATUS_TARGET_CONFIG_ERROR"
     fi
     if [ "$MIGRATION_GENERAL_FAILED" -ne 0 ]; then
         update_section warning "Update result"
         update_task warning \
             "Update complete, but timers remain disabled because general configuration migration failed."
-        update_task warning "Fix config/general.json, then rerun ./update.sh."
+        update_task warning "Fix config/general.json, then rerun $(command_text './scrooge-alert update')."
         update_exit "$EXIT_STATUS_NOTIFICATION_CONFIG_ERROR"
     fi
     if [ "$MIGRATION_STATE_FAILED" -ne 0 ]; then
@@ -784,7 +789,7 @@ main() {
         update_task warning \
             "Update complete, but one or more state migrations failed."
         update_task warning \
-            "Inspect the reported state and recovery data, then rerun ./update.sh."
+            "Inspect the reported state and recovery data, then rerun $(command_text './scrooge-alert update')."
         update_exit "$EXIT_STATUS_STORAGE_ERROR"
     fi
 

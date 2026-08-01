@@ -7,4 +7,4 @@
     [v] The existing Python environment uses a supported Python.
     [v] Python venv support is available.
     [x] Systemd user services are not available.
-    [i] Install or enable systemd user services, then run ./install.sh again.
+    [i] Install or enable systemd user services, then run ./scrooge-alert install again.

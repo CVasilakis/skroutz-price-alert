@@ -23,6 +23,33 @@ CATALOG_AVAILABLE=0
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_fixed_help() {
+    case "${SCROOGE_PUBLIC_COMMAND:-}" in
+        run)
+            printf '\n'
+            printf '%s\n' "Usage: ./scrooge-alert run [--help] [--quiet] [--<target> ...]"
+            printf '\n'
+            printf '%s\n' "Check prices for every registered target or only selected targets."
+            printf '\n'
+            printf '%s\n' "Options:"
+            printf '%s\n' "  --help            Show this help message and exit"
+            printf '%s\n' "  --quiet           Run with no console output"
+            return
+            ;;
+        ping)
+            printf '\n%s\n\n' "Usage: ./scrooge-alert ping [--help]"
+            printf '%s\n\n' "Send a test notification through configured endpoints."
+            printf '%s\n' "Options:"
+            printf '%s\n\n' "  --help            Show this help message and exit"
+            return
+            ;;
+        status)
+            printf '\n%s\n\n' "Usage: ./scrooge-alert status [--help]"
+            printf '%s\n\n' "Inspect configuration, updates, and background services."
+            printf '%s\n' "Options:"
+            printf '%s\n\n' "  --help            Show this help message and exit"
+            return
+            ;;
+    esac
     printf '\n'
     printf '%s\n' "Usage: run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]"
     printf '\n'
@@ -38,6 +65,7 @@ print_fixed_help() {
 
 print_help() {
     print_fixed_help
+    case "${SCROOGE_PUBLIC_COMMAND:-}" in ping|status) return ;; esac
     for plugin in $PLUGINS; do
         display_name="$(plugin_display_name "$plugin")"
         printf '  --%-15s Run exclusively the %s scraper\n' "$plugin" "${display_name:-$plugin}"
@@ -50,7 +78,7 @@ print_missing_venv_help() {
     printf '\n'
     printf '%s\n' "Target-specific options are unavailable because the project"
     printf '%s\n' "virtual environment is not installed."
-    printf '%s\n' "Run ./install.sh, then rerun this help command to list registered targets."
+    printf '%s\n' "Run ./scrooge-alert install, then rerun this help command to list registered targets."
     printf '\n'
 }
 
@@ -74,11 +102,12 @@ run_failure() {
 }
 
 argument_failure() {
+    _af_command="${SCROOGE_PUBLIC_COMMAND:-run}"
     run_failure \
         "Run arguments" \
         "$1" \
         "" \
-        "Run ./scripts/run.sh --help to view supported options."
+        "Run $(command_text "./scrooge-alert $_af_command --help") to view supported options."
 }
 
 catalog_failure() {
@@ -113,14 +142,14 @@ if [ -L "$BASE_DIR/venv" ]; then
         "Run preflight" \
         "The project venv path must be a project-owned directory, not a symlink." \
         "" \
-        "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or ./install.sh."
+        "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')."
 fi
 if [ ! -x "$VENV_PYTHON" ]; then
     run_failure \
         "Run preflight" \
         "The project Python environment is missing or unusable." \
         "" \
-        "Run ./install.sh, then retry."
+        "Run $(command_text './scrooge-alert install'), then retry."
 fi
 if ! RUN_PYTHON_VERSION="$(
     "$VENV_PYTHON" -c \
@@ -130,7 +159,7 @@ if ! RUN_PYTHON_VERSION="$(
         "Run preflight" \
         "The project Python environment could not be executed." \
         "" \
-        "Run ./install.sh, then retry."
+        "Run $(command_text './scrooge-alert install'), then retry."
 fi
 if ! "$VENV_PYTHON" -c \
     'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
@@ -140,7 +169,7 @@ if ! "$VENV_PYTHON" -c \
         "Run preflight" \
         "Python $RUN_PYTHON_VERSION is unsupported; Python 3.10 or newer is required." \
         "" \
-        "Install a supported Python, run ./install.sh, then retry."
+        "Install a supported Python, run $(command_text './scrooge-alert install'), then retry."
 fi
 
 # Registered plugins (one --<plugin> flag is accepted per registered scraper).

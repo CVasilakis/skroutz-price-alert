@@ -4,6 +4,6 @@
 [+] Active executions
     [i] [amazon] Stopping active background execution...
     [x] [amazon] Active execution could not be stopped.
-    [i] [amazon] Run ./scripts/stop.sh --debug --amazon for underlying diagnostics.
+    [i] [amazon] Run ./scrooge-alert stop --debug --amazon for underlying diagnostics.
     [i] [skroutz] Stopping active background execution...
     [v] [skroutz] Active execution stopped.

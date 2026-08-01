@@ -303,7 +303,7 @@ schema-v1 machine state is owned by the framework in `state/<target>.json`.
 
 Put client-only dependencies in the colocated `requirements.txt`. A missing
 dependency must remain discoverable and produce the install hint
-`./install.sh --<target>` only when the client is constructed. Missing `client.py`,
+`./scrooge-alert install --<target>` only when the client is constructed. Missing `client.py`,
 a missing or invalid `Client`, and plugin-internal import defects are validation
 errors, not dependency errors.
 
@@ -343,7 +343,7 @@ configuration, target configuration, scraper state, and reminder state have inde
 version sequences. Target configs also carry `plugin_schema_version`: the shared
 framework sequence and each plugin's private sequence advance independently.
 
-Runtime loaders never migrate files. `./update.sh` invokes `./scripts/migrate.sh`, and
+Runtime loaders never migrate files. `./scrooge-alert update` invokes `./scripts/migrate.sh`, and
 contributors can use `./scripts/migrate.sh --check` to validate and report without
 modifying managed JSON documents. Check mode still acquires cooperative locks, so it
 may create `state/locks/` and its metadata. Target locks use

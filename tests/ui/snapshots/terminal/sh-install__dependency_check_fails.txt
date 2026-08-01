@@ -17,4 +17,4 @@
     [v] Updated core dependencies.
     [i] Checking installed dependencies...
     [x] Installed core and target dependencies are incompatible.
-    [i] Resolve the dependency conflict, then run ./install.sh --debug.
+    [i] Resolve the dependency conflict, then run ./scrooge-alert install --debug.

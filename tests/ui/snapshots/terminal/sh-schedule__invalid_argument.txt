@@ -3,4 +3,4 @@
 
 [+] Schedule preflight
     [x] The command-line arguments are invalid.
-    [i] Run ./scripts/schedule.sh --help for usage.
+    [i] Run ./scrooge-alert schedule --help for usage.

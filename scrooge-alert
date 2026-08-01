@@ -1,0 +1,102 @@
+#!/bin/sh
+set -eu
+
+BASE_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
+if [ -z "${NO_COLOR:-}" ] && { [ -t 1 ] || [ -n "${CLICOLOR_FORCE:-}" ]; }; then
+    COMMAND_COLOR='\033[1;36m'
+    NC='\033[0m'
+else
+    COMMAND_COLOR=''
+    NC=''
+fi
+
+command_text() {
+    printf '%b%s%b' "$COMMAND_COLOR" "$1" "$NC"
+}
+
+print_help() {
+    printf '\n'
+    printf '%s\n' "Usage: ./scrooge-alert <command> [options]"
+    printf '\n%s\n' "Commands:"
+    printf '  %-13s%s\n' \
+        run "Check prices for tracked items" \
+        ping "Send a test notification" \
+        status "Inspect configuration and service health" \
+        install "Install or reprovision targets" \
+        enable "Enable and start target timers" \
+        disable "Stop and disable target timers" \
+        stop "Stop running target services" \
+        schedule "Apply configured target schedules" \
+        update "Update this checkout" \
+        uninstall "Remove installed targets or this installation"
+    printf '\n%s\n' "Options:"
+    printf '%s\n' \
+        "  -h, --help   Show this help message and exit" \
+        "  --version    Show the installed release version and exit"
+    printf '\n'
+}
+
+fail_usage() {
+    printf '%s\n' "Error: $1" >&2
+    printf '%s\n' "Run $(command_text './scrooge-alert --help') for usage." >&2
+    exit 1
+}
+
+show_version() {
+    _sv_version=''
+    if [ ! -L "$BASE_DIR/venv" ] && [ -x "$BASE_DIR/venv/bin/python3" ]; then
+        _sv_version="$(
+            PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" \
+                -m core.scrapers.tooling.cli version 2>/dev/null || true
+        )"
+    fi
+    case "$_sv_version" in
+        ''|*[!0-9.]*) _sv_version=unknown ;;
+    esac
+    printf '%s\n' "Scrooge Alert $_sv_version"
+}
+
+dispatch() {
+    _d_command="$1"
+    _d_owner="$2"
+    shift 2
+    if [ -L "$_d_owner" ] || [ ! -f "$_d_owner" ] || [ ! -x "$_d_owner" ]; then
+        printf '%s\n' \
+            "Error: Command owner is missing or unsafe: $_d_owner" >&2
+        exit 1
+    fi
+    SCROOGE_PUBLIC_COMMAND="$_d_command"
+    export SCROOGE_PUBLIC_COMMAND
+    exec "$_d_owner" "$@"
+}
+
+if [ "$#" -eq 0 ]; then
+    print_help
+    exit 0
+fi
+if [ "$#" -eq 1 ]; then
+    case "$1" in
+        -h|--help) print_help; exit 0 ;;
+        --version) show_version; exit 0 ;;
+    esac
+fi
+
+command_name="$1"
+shift
+case "$command_name" in
+    run)
+        dispatch run "$BASE_DIR/scripts/run.sh" "$@"
+        ;;
+    ping)
+        dispatch ping "$BASE_DIR/scripts/run.sh" --ping "$@"
+        ;;
+    status)
+        dispatch status "$BASE_DIR/scripts/run.sh" --status "$@"
+        ;;
+    install|enable|disable|stop|schedule|update|uninstall)
+        dispatch "$command_name" "$BASE_DIR/scripts/$command_name.sh" "$@"
+        ;;
+    *)
+        fail_usage "Unknown command: $command_name."
+        ;;
+esac

@@ -3,4 +3,4 @@
 
 [+] Schedule preflight
     [x] 'ghost' is installed but no longer registered (orphan).
-    [!] Remove it with: ./scripts/uninstall.sh --ghost
+    [!] Remove it with: ./scrooge-alert uninstall --ghost

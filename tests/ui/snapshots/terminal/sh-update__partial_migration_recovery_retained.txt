@@ -21,8 +21,7 @@
 [+] JSON migration
     [i] Migrating managed JSON documents...
     [x] [state/general.json] Migration failed: invalid legacy state
-    [!] JSON migration recovery copies were retained at
-        /project/state/.migration-recovery.example.
+    [!] JSON migration recovery copies were retained at /project/state/.migration-recovery.example.
 
 [+] Installation checks
     [v] The project venv path is safe.
@@ -52,4 +51,4 @@
 
 [!] Update result
     [!] Update complete, but one or more state migrations failed.
-    [!] Inspect the reported state and recovery data, then rerun ./update.sh.
+    [!] Inspect the reported state and recovery data, then rerun ./scrooge-alert update.

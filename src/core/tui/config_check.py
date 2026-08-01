@@ -115,7 +115,7 @@ def _append_version_row(panel: StatusPanelBuilder, status: SoftwareVersionStatus
         value = f"{current} (Could not check for updates){ref}"
         panel.add_row("🟡", "Software Version", value)
     elif status.update_available:
-        ref = panel.add_note_ref("Run `./update.sh` to install the latest version.")
+        ref = panel.add_note_ref("Run `./scrooge-alert update` to install the latest version.")
         update = (
             f"{escape(status.available_version)} available"
             if status.available_version is not None
@@ -154,7 +154,7 @@ def _append_notifications_row(panel: StatusPanelBuilder, general: GeneralConfigL
     if notifications.valid_urls:
         if notifications.invalid_urls or permission_ref:
             invalid_ref = (
-                panel.add_note_ref("Run `./scripts/run.sh --ping` for more details.")
+                panel.add_note_ref("Run `./scrooge-alert ping` for more details.")
                 if notifications.invalid_urls
                 else ""
             )
@@ -171,7 +171,7 @@ def _append_notifications_row(panel: StatusPanelBuilder, general: GeneralConfigL
         else:
             panel.add_row("✅", "Notifications", f"{len(notifications.valid_urls)} valid URL(s)")
     elif notifications.invalid_urls:
-        detail_ref = panel.add_note_ref("Run `./scripts/run.sh --ping` for more details.")
+        detail_ref = panel.add_note_ref("Run `./scrooge-alert ping` for more details.")
         panel.add_row(
             "❗",
             "Notifications",

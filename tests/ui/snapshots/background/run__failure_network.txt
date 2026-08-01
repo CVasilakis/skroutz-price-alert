@@ -8,4 +8,4 @@
 [2026-07-04 12:00:00 UTC] ❗ Sony WH-1000XM5: Attempt 1/3 FAILED (ConnectionError: Connection aborted)
 [2026-07-04 12:00:00 UTC] ❗ Sony WH-1000XM5: Attempt 2/3 FAILED (ConnectionError: Connection aborted)
 [2026-07-04 12:00:00 UTC] ❗ Sony WH-1000XM5: Attempt 3/3 FAILED (ConnectionError: Connection aborted)
-[2026-07-04 12:00:00 UTC] ❗ Sony WH-1000XM5: All attempts failed (ConnectionError) (See `logs/skroutz/errors.txt` for details.)
+[2026-07-04 12:00:00 UTC] ❗ Sony WH-1000XM5: All attempts failed (ConnectionError) (See "logs/skroutz/errors.txt" for details.)

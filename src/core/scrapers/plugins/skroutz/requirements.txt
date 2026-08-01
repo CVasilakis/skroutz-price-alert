@@ -1,5 +1,5 @@
 # Dependencies specific to the Skroutz scraper. Installed only when this plugin
-# is provisioned (./install.sh or ./install.sh --skroutz), so an install that
+# is provisioned (./scrooge-alert install or ./scrooge-alert install --skroutz), so an install that
 # skips Skroutz never pulls its transport stack. tls-client backs the shared
 # HttpScraperClient this plugin's client extends.
 tls-client

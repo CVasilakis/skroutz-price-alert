@@ -8,4 +8,4 @@
 [2026-07-04 12:00:00 UTC] ❗ Blocked Item: Attempt 1/3 FAILED (RateLimitError: Blocked or rate limited (HTTP 429))
 [2026-07-04 12:00:00 UTC] ❗ Blocked Item: Attempt 2/3 FAILED (RateLimitError: Blocked or rate limited (HTTP 429))
 [2026-07-04 12:00:00 UTC] ❗ Blocked Item: Attempt 3/3 FAILED (RateLimitError: Blocked or rate limited (HTTP 429))
-[2026-07-04 12:00:00 UTC] ❗ Blocked Item: All attempts failed (RateLimitError) (Rate limit reached; scraping aborted.) (See `logs/skroutz/errors.txt` for details.)
+[2026-07-04 12:00:00 UTC] ❗ Blocked Item: All attempts failed (RateLimitError) (Rate limit reached; scraping aborted.) (See "logs/skroutz/errors.txt" for details.)

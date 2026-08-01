@@ -3,4 +3,4 @@
 
 [+] Run preflight
     [x] The project Python environment could not be executed.
-    [!] Run ./install.sh, then retry.
+    [!] Run ./scrooge-alert install, then retry.

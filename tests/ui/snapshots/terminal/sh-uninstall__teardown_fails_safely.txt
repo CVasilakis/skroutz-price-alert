@@ -4,7 +4,5 @@
 [+] Background execution
     [i] [skroutz] Stopping and disabling the background timer and service...
     [x] [skroutz] Background timer or service could not be disabled safely.
-    [i] [skroutz] Run ./scripts/uninstall.sh --debug --skroutz for underlying
-        diagnostics.
-    [!] No unit entries were removed because every selected target must stop safely
-        first.
+    [i] [skroutz] Run ./scrooge-alert uninstall --debug --skroutz for underlying diagnostics.
+    [!] No unit entries were removed because every selected target must stop safely first.

@@ -14,4 +14,4 @@ Optional arguments:
 
 Target-specific options are unavailable because the project
 virtual environment is not installed.
-Run ./install.sh, then rerun this help command to list registered targets.
+Run ./scrooge-alert install, then rerun this help command to list registered targets.

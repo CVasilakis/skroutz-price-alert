@@ -3,4 +3,4 @@
 
 [+] Update checks
     [x] No installed target timer or service units were found.
-    [!] Choose targets explicitly with ./install.sh --<target>.
+    [!] Choose targets explicitly with ./scrooge-alert install --<target>.

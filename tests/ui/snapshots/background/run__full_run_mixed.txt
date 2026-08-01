@@ -9,4 +9,4 @@
 [2026-07-04 12:00:00 UTC] ✅ Logitech MX Master 3S: 79.0 € (Target: 70.0 €)
 [2026-07-04 12:00:00 UTC] ❗ Removed Resource: Skipping (ResourceNotFoundError) (Resource not found or removed (HTTP 404).)
 [2026-07-04 12:00:00 UTC] 🟡 Untargeted Item: 55.0 € (Target: 0.0 €)
-[2026-07-04 12:00:00 UTC] ❗ Flaky Item: All attempts failed (ConnectionError) (See `logs/skroutz/errors.txt` for details.)
+[2026-07-04 12:00:00 UTC] ❗ Flaky Item: All attempts failed (ConnectionError) (See "logs/skroutz/errors.txt" for details.)

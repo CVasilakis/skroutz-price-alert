@@ -35,7 +35,7 @@ WORLD_HEALTHY = ShellWorld(
 #: skroutz installed but not armed (fresh install.sh output, timer never enabled).
 WORLD_INSTALLED = ShellWorld(installed_timers=("skroutz",), installed_services=("skroutz",))
 
-#: skroutz registered, nothing installed (before any ./install.sh run).
+#: skroutz registered, nothing installed (before any ./scrooge-alert install run).
 WORLD_EMPTY = ShellWorld()
 
 #: Two registered plugins, only skroutz installed - 'amazon' is the

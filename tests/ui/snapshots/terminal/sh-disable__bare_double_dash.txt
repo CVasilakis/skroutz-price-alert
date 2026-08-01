@@ -3,4 +3,4 @@
 
 [+] Disable preflight
     [x] The command-line arguments are invalid.
-    [i] Run ./scripts/disable.sh --help for usage.
+    [i] Run ./scrooge-alert disable --help for usage.

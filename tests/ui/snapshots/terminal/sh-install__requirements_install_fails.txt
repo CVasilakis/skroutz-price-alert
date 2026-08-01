@@ -15,4 +15,4 @@
     [v] Packaging tools updated.
     [i] Installing core dependencies...
     [x] Core dependencies could not be installed.
-    [i] Check requirements.txt and package-index access, then run ./install.sh --debug.
+    [i] Check requirements.txt and package-index access, then run ./scrooge-alert install --debug.

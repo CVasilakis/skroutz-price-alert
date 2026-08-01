@@ -12,8 +12,9 @@ from shell.assertions import assert_task_status
 ROOT = Path(__file__).resolve().parents[2]
 
 HELP_SCRIPTS = (
-    "install.sh",
-    "update.sh",
+    "scrooge-alert",
+    "scripts/install.sh",
+    "scripts/update.sh",
     "scripts/run.sh",
     "scripts/stop.sh",
     "scripts/disable.sh",
@@ -526,8 +527,9 @@ def test_check_reports_pytest_failure_and_error_counts(tmp_path):
 
 def test_command_entrypoints_are_executable_and_libraries_are_not():
     commands = [
-        ROOT / "install.sh",
-        ROOT / "update.sh",
+        ROOT / "scrooge-alert",
+        ROOT / "scripts/install.sh",
+        ROOT / "scripts/update.sh",
         *(ROOT / "scripts").glob("*.sh"),
         *(ROOT / "scripts/dev").glob("*.sh"),
         ROOT / ".githooks/pre-push",
@@ -541,7 +543,7 @@ def test_command_entrypoints_are_executable_and_libraries_are_not():
 
 def test_update_help_runs_through_direct_executable_entrypoint():
     result = subprocess.run(
-        [str(ROOT / "update.sh"), "--help"],
+        [str(ROOT / "scripts/update.sh"), "--help"],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -566,7 +568,7 @@ def test_shellcheck_ci_job_provisions_and_selects_supported_python():
 
 
 def test_indirect_signal_handler_has_cross_version_shellcheck_suppression():
-    update = (ROOT / "update.sh").read_text(encoding="utf-8")
+    update = (ROOT / "scripts/update.sh").read_text(encoding="utf-8")
     assert "# shellcheck disable=SC2317,SC2329" in update
 
 
@@ -649,7 +651,7 @@ def test_dev_setup_contains_no_service_or_user_data_operations():
 
 
 def test_dependency_installers_upgrade_all_requirement_sets_on_rerun():
-    install = (ROOT / "install.sh").read_text(encoding="utf-8")
+    install = (ROOT / "scripts/install.sh").read_text(encoding="utf-8")
     setup = (ROOT / "scripts/dev/setup.sh").read_text(encoding="utf-8")
 
     assert 'pip_install -r "$REQUIREMENTS_FILE"' in install

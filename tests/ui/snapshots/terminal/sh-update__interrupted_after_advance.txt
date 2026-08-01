@@ -22,4 +22,4 @@
     [!] Affected timers were left disabled for safety.
     [!] Recovery data was retained at
         <BASE_DIR>/xdg/systemd/user/.scrooge-update.<PID>.
-    [!] Rerun ./update.sh or inspect ./scripts/run.sh --status.
+    [!] Rerun ./scrooge-alert update or inspect ./scrooge-alert status.

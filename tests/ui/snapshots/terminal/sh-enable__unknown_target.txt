@@ -3,4 +3,4 @@
 
 [+] Enable preflight
     [x] Unknown target 'bogus'.
-    [i] Run ./scripts/enable.sh --help for available targets.
+    [i] Run ./scrooge-alert enable --help for available targets.

@@ -231,7 +231,7 @@ def test_missing_python_preflight_is_quiet_actionable_and_padded(tmp_path):
         "\n"
         "[+] Migration preflight\n"
         "    [x] Python 3.10 or newer is required.\n"
-        "    [i] Run ./install.sh, then retry the migration.\n"
+        "    [i] Run ./scrooge-alert install, then retry the migration.\n"
         "\n"
     )
     assert result.stderr == ""

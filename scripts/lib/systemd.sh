@@ -63,7 +63,7 @@ require_writable_unit_path() {
         printf '%s\n' \
             "Error: Refusing to replace managed unit symlink: $_rwup_path" >&2
         printf '%s\n' \
-            "Remove it with ./scripts/uninstall.sh, then retry." >&2
+            "Remove it with $(command_text './scrooge-alert uninstall'), then retry." >&2
         return 1
     fi
     if [ -e "$_rwup_path" ] && [ ! -f "$_rwup_path" ]; then

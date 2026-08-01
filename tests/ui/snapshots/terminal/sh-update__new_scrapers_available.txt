@@ -50,7 +50,7 @@
 
 [!] Additional targets
     [i] Available but not installed: amazon
-    [i] Install any of them with ./install.sh --<target>.
+    [i] Install any of them with ./scrooge-alert install --<target>.
 
 [+] Update result
     [v] Update complete. You are now running origin/main.

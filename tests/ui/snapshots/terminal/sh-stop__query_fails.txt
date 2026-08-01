@@ -3,4 +3,4 @@
 
 [+] Active executions
     [x] [skroutz] Could not determine the service state.
-    [i] [skroutz] Run ./scripts/stop.sh --debug --skroutz for underlying diagnostics.
+    [i] [skroutz] Run ./scrooge-alert stop --debug --skroutz for underlying diagnostics.

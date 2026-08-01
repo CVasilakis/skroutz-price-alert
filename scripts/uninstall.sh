@@ -34,7 +34,11 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_targets 2>/dev/null || true)"
     _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
-    printf '\n%s\n\n' "Usage: uninstall.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = uninstall ]; then
+        printf '\n%s\n\n' "Usage: ./scrooge-alert uninstall [--help] [--debug] [--<target> ...]"
+    else
+        printf '\n%s\n\n' "Usage: uninstall.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '%s\n' "With no target, remove all installed units and the project venv."
     printf '%s\n\n' "With target flags, remove only those targets' unit entries."
     printf '%s\n' "Optional arguments:"
@@ -85,7 +89,7 @@ show_selection_failure() {
                     "Available targets: $(stream_for_display "$_st_known")"
             else
                 uninstall_task info \
-                    "Run ./scripts/uninstall.sh --help for available targets."
+                    "Run $(command_text './scrooge-alert uninstall --help') for available targets."
             fi
             IFS="$_ssf_old_ifs"
             return
@@ -95,7 +99,7 @@ show_selection_failure() {
     uninstall_task failure \
         "The installed target units could not be selected safely."
     uninstall_task info \
-        "Run ./scripts/uninstall.sh --debug for underlying diagnostics."
+        "Run $(command_text './scrooge-alert uninstall --debug') for underlying diagnostics."
 }
 
 show_uninstalled_notices() {
@@ -132,7 +136,7 @@ begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Uninstall preflight"
     uninstall_task failure "The command-line arguments are invalid."
-    uninstall_task info "Run ./scripts/uninstall.sh --help for usage."
+    uninstall_task info "Run $(command_text './scrooge-alert uninstall --help') for usage."
     uninstall_finish 1
 fi
 if ! run_action reject_project_venv_symlink; then
@@ -140,7 +144,7 @@ if ! run_action reject_project_venv_symlink; then
     uninstall_task failure \
         "$BASE_DIR/venv must be a project-owned directory, not a symlink."
     uninstall_task warning \
-        "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or ./install.sh."
+        "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')."
     uninstall_finish 1
 fi
 if [ "$DEBUG_MODE" -eq 1 ]; then
@@ -179,7 +183,7 @@ if [ -n "$REMOVE_TARGETS" ]; then
             uninstall_task failure \
                 "[$target] Background timer or service could not be disabled safely."
             uninstall_task info \
-                "[$target] Run ./scripts/uninstall.sh --debug --$target for underlying diagnostics."
+                "[$target] Run $(command_text "./scrooge-alert uninstall --debug --$target") for underlying diagnostics."
             TEARDOWN_FAILED=1
         fi
     done
@@ -204,7 +208,7 @@ if [ -n "$REMOVE_TARGETS" ]; then
             uninstall_task failure \
                 "[$target] Timer and service unit entries could not be removed."
             uninstall_task info \
-                "[$target] Run ./scripts/uninstall.sh --debug --$target for underlying diagnostics."
+                "[$target] Run $(command_text "./scrooge-alert uninstall --debug --$target") for underlying diagnostics."
             uninstall_finish 1
         fi
         uninstall_task success \
@@ -243,7 +247,7 @@ if [ -d "$BASE_DIR/venv" ]; then
     else
         uninstall_task failure "Python virtual environment could not be removed."
         uninstall_task info \
-            "Run ./scripts/uninstall.sh --debug for underlying diagnostics."
+            "Run $(command_text './scrooge-alert uninstall --debug') for underlying diagnostics."
         uninstall_finish 1
     fi
 else

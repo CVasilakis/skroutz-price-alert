@@ -5,7 +5,7 @@ Usage: schedule.sh [-h] [--debug] [--<target> ...]
 
 Apply configured execution intervals to installed target timers.
 Only registered targets are eligible; orphaned timers are skipped.
-Supported intervals: unavailable (run ./install.sh first)
+Supported intervals: unavailable (run ./scrooge-alert install first)
 
 Optional arguments:
   -h, --help        show this help message and exit

@@ -6,17 +6,17 @@ set -eu
 # ==============================================================================
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
-BASE_DIR="$SCRIPT_DIR"
+BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 
 # Shared helpers (colors, plugin enumeration, systemd helpers)
 # shellcheck source=scripts/lib/common.sh
-. "$SCRIPT_DIR/scripts/lib/common.sh"
+. "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=scripts/lib/preflight.sh
-. "$SCRIPT_DIR/scripts/lib/preflight.sh"
+. "$SCRIPT_DIR/lib/preflight.sh"
 # shellcheck source=scripts/lib/systemd.sh
-. "$SCRIPT_DIR/scripts/lib/systemd.sh"
+. "$SCRIPT_DIR/lib/systemd.sh"
 # shellcheck source=scripts/lib/provisioning.sh
-. "$SCRIPT_DIR/scripts/lib/provisioning.sh"
+. "$SCRIPT_DIR/lib/provisioning.sh"
 
 # Environment and File Configurations
 VENV_DIR="venv"
@@ -33,7 +33,11 @@ IS_UPDATE=0
 print_help() {
     load_plugin_catalog || true
     printf '\n'
-    printf '%s\n' "Usage: install.sh [-h] [--debug] [--<target> ...]"
+    if [ "${SCROOGE_PUBLIC_COMMAND:-}" = install ]; then
+        printf '%s\n' "Usage: ./scrooge-alert install [--help] [--debug] [--<target> ...]"
+    else
+        printf '%s\n' "Usage: install.sh [-h] [--debug] [--<target> ...]"
+    fi
     printf '\n'
     printf '%s\n' "Set up the Python virtual environment and install the systemd timer(s) and"
     printf '%s\n' "service(s). With no target flag every registered scraper is installed and"
@@ -153,7 +157,7 @@ install_load_schedules() {
     return 1
 }
 
-cd "$SCRIPT_DIR"
+cd "$BASE_DIR"
 CATALOG_PYTHON=python3
 INHERITED_DEBUG="$DEBUG_MODE"
 for argument in "$@"; do
@@ -168,7 +172,7 @@ done
 if ! run_action parse_target_flags "$@"; then
     install_section "Installation arguments"
     install_task failure "The command-line arguments are invalid."
-    install_task info "Run ./install.sh --help for usage."
+    install_task info "Run $(command_text './scrooge-alert install --help') for usage."
     install_exit 1
 fi
 if [ "$TARGET_HELP_REQUESTED" -eq 1 ]; then
@@ -184,7 +188,7 @@ case "${SCROOGE_INSTALL_CONTEXT:-normal}" in
             [ -z "$TARGET_FLAGS" ]; then
             install_section "Installation context"
             install_fail "The internal deferred-install context is invalid." \
-                "Rerun ./update.sh to restart the update safely."
+                "Rerun $(command_text './scrooge-alert update') to restart the update safely."
         fi
         if [ "$INHERITED_DEBUG" -eq 1 ]; then
             DEBUG_MODE=1
@@ -195,19 +199,19 @@ case "${SCROOGE_INSTALL_CONTEXT:-normal}" in
     *)
         install_section "Installation context"
         install_fail "The installation context is invalid." \
-            "Run ./install.sh directly without internal environment overrides."
+            "Run $(command_text './scrooge-alert install') directly without internal environment overrides."
         ;;
 esac
 
 install_section "Installation checks"
 if ! run_action reject_project_venv_symlink; then
     install_fail "The project venv path is a symlink." \
-        "Remove the venv symlink, then run ./install.sh again."
+        "Remove the venv symlink, then run $(command_text './scrooge-alert install') again."
 fi
 install_task success "The project venv path is safe."
-if ! run_action require_python_310 python3 "./install.sh"; then
+if ! run_action require_python_310 python3 "$(command_text './scrooge-alert install')"; then
     install_fail "System Python 3.10 or newer is required." \
-        "Install a supported Python, then run ./install.sh again."
+        "Install a supported Python, then run $(command_text './scrooge-alert install') again."
 fi
 install_task success "System Python 3.10 or newer is available."
 
@@ -216,18 +220,18 @@ install_task success "System Python 3.10 or newer is available."
 if ! install_load_catalog; then
     run_action catalog_diagnose || true
     install_fail "The target catalog could not be loaded." \
-        "Fix the catalog error, then run ./install.sh --debug."
+        "Fix the catalog error, then run $(command_text './scrooge-alert install --debug')."
 fi
 if run_captured list_plugins; then
     ALL_PLUGINS="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "The registered targets could not be read." \
-        "Fix the target catalog, then run ./install.sh --debug."
+        "Fix the target catalog, then run $(command_text './scrooge-alert install --debug')."
 fi
 if [ "$IS_UPDATE" -eq 0 ]; then
     if ! run_action select_targets registered; then
         install_fail "The requested target selection is invalid." \
-            "Run ./install.sh --help to list available targets."
+            "Run $(command_text './scrooge-alert install --help') to list available targets."
     fi
     PLUGINS="$SELECTED_TARGETS"
 else
@@ -242,24 +246,24 @@ else
         else
             install_task info \
                 "Target '$sel' is no longer registered; its units remain disabled."
-            install_task info "Remove them with ./scripts/uninstall.sh --$sel."
+            install_task info "Remove them with $(command_text "./scrooge-alert uninstall --$sel")."
         fi
     done
     IFS="$OLD_IFS"
 fi
 
-for required_file in requirements.txt scripts/run.sh scripts/lib/common.sh \
+for required_file in scrooge-alert requirements.txt scripts/run.sh scripts/lib/common.sh \
     scripts/lib/preflight.sh scripts/lib/systemd.sh scripts/lib/provisioning.sh; do
     if ! run_action require_regular_owned_file "$BASE_DIR/$required_file"; then
         install_fail "Required project file '$required_file' is missing or unsafe." \
-            "Restore the regular project file, then run ./install.sh again."
+            "Restore the regular project file, then run $(command_text './scrooge-alert install') again."
     fi
 done
 if run_captured list_plugin_requirements; then
     EARLY_PLUGIN_REQS="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "Target dependency metadata could not be read." \
-        "Fix the target catalog, then run ./install.sh --debug."
+        "Fix the target catalog, then run $(command_text './scrooge-alert install --debug')."
 fi
 OLD_IFS="$IFS"
 IFS='
@@ -273,20 +277,20 @@ for pair in $EARLY_PLUGIN_REQS; do
     if ! run_action require_regular_owned_file "$req_path"; then
         IFS="$OLD_IFS"
         install_fail "[$req_name] Its requirements file is missing or unsafe." \
-            "Restore the target's regular requirements.txt, then run ./install.sh again."
+            "Restore the target's regular requirements.txt, then run $(command_text './scrooge-alert install') again."
     fi
 done
 IFS="$OLD_IFS"
 if ! run_action validate_unit_destinations "$PLUGINS" pair; then
     install_fail "A managed systemd unit destination is unsafe." \
-        "Remove the unsafe unit with ./scripts/uninstall.sh --<target>, then retry."
+        "Remove the unsafe unit with $(command_text './scrooge-alert uninstall --<target>'), then retry."
 fi
 
 if [ -d "$VENV_DIR" ]; then
     if ! run_action require_python_310 \
-        "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh"; then
+        "$VENV_DIR/bin/python3" "$(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')"; then
         install_fail "The existing Python environment is unusable." \
-            "Run ./scripts/uninstall.sh, then run ./install.sh again."
+            "Run $(command_text './scrooge-alert uninstall'), then run $(command_text './scrooge-alert install') again."
     fi
     install_task success "The existing Python environment uses a supported Python."
 else
@@ -295,13 +299,13 @@ fi
 
 if ! run_action python3 -c "import ensurepip"; then
     install_fail "Python venv support is not available." \
-        "Install the Python venv module, then run ./install.sh again."
+        "Install the Python venv module, then run $(command_text './scrooge-alert install') again."
 fi
 install_task success "Python venv support is available."
 
 if ! run_action require_systemctl; then
     install_fail "Systemd user services are not available." \
-        "Install or enable systemd user services, then run ./install.sh again."
+        "Install or enable systemd user services, then run $(command_text './scrooge-alert install') again."
 fi
 install_task success "Systemd user services are available."
 
@@ -316,7 +320,7 @@ if [ ! -d "$VENV_DIR" ]; then
     if ! run_with_progress "Creating the project Python environment..." \
         run_action python3 -m venv "$VENV_DIR"; then
         install_fail "The Python environment could not be created." \
-            "Fix Python venv support, then run ./install.sh --debug."
+            "Fix Python venv support, then run $(command_text './scrooge-alert install --debug')."
     fi
     install_task success "Created a new Python environment."
     VENV_NEWLY_CREATED=true
@@ -325,16 +329,16 @@ else
 fi
 
 if ! run_action require_python_310 \
-    "$VENV_DIR/bin/python3" "./scripts/uninstall.sh then ./install.sh"; then
+    "$VENV_DIR/bin/python3" "$(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')"; then
     install_fail "The Python environment is not usable with Python 3.10 or newer." \
-        "Run ./scripts/uninstall.sh, then run ./install.sh again."
+        "Run $(command_text './scrooge-alert uninstall'), then run $(command_text './scrooge-alert install') again."
 fi
 install_task success "The Python environment is ready."
 
 # Safely upgrade pip and install matching requirements
 if ! run_with_progress "Updating Python packaging tools..." pip_install pip; then
     install_fail "Packaging tools could not be updated." \
-        "Check package-index access, then run ./install.sh --debug."
+        "Check package-index access, then run $(command_text './scrooge-alert install --debug')."
 fi
 install_task success "Packaging tools updated."
 
@@ -342,11 +346,11 @@ if [ -f "$REQUIREMENTS_FILE" ]; then
     if ! run_with_progress "Installing core dependencies..." \
         pip_install -r "$REQUIREMENTS_FILE"; then
         install_fail "Core dependencies could not be installed." \
-            "Check requirements.txt and package-index access, then run ./install.sh --debug."
+            "Check requirements.txt and package-index access, then run $(command_text './scrooge-alert install --debug')."
     fi
 else
     install_fail "$REQUIREMENTS_FILE was not found." \
-        "Restore requirements.txt, then run ./install.sh again."
+        "Restore requirements.txt, then run $(command_text './scrooge-alert install') again."
 fi
 
 if [ "$VENV_NEWLY_CREATED" = true ]; then
@@ -362,17 +366,17 @@ reset_catalog_cache
 if ! install_load_catalog; then
     run_action catalog_diagnose || true
     install_fail "The target catalog could not be loaded from the completed environment." \
-        "Fix the catalog error, then run ./install.sh --debug."
+        "Fix the catalog error, then run $(command_text './scrooge-alert install --debug')."
 fi
 if run_captured list_plugins; then
     FINAL_PLUGINS="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "The registered targets could not be re-read." \
-        "Fix the target catalog, then run ./install.sh --debug."
+        "Fix the target catalog, then run $(command_text './scrooge-alert install --debug')."
 fi
 if [ "$FINAL_PLUGINS" != "$ALL_PLUGINS" ]; then
     install_fail "The target catalog changed during installation." \
-        "Retry ./install.sh after the source tree is stable."
+        "Retry $(command_text './scrooge-alert install') after the source tree is stable."
 fi
 
 # ------------------------------------------------------------------------------
@@ -388,7 +392,7 @@ if run_captured list_plugin_requirements; then
     PLUGIN_REQS="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "Target dependency metadata could not be read." \
-        "Fix the target catalog, then run ./install.sh --debug."
+        "Fix the target catalog, then run $(command_text './scrooge-alert install --debug')."
 fi
 
 HAS_PLUGIN_REQS=0
@@ -418,7 +422,7 @@ for pair in $PLUGIN_REQS; do
         pip_install -r "$req_path"; then
         IFS="$OLD_IFS"
         install_fail "[$req_name] Its private dependencies could not be installed." \
-            "Check that target's requirements, then run ./install.sh --debug --$req_name."
+            "Check that target's requirements, then run $(command_text "./scrooge-alert install --debug --$req_name")."
     fi
     install_task success "[$req_name] Installed private dependencies."
 done
@@ -427,7 +431,7 @@ IFS="$OLD_IFS"
 if ! run_with_progress "Checking installed dependencies..." \
     run_action "$VENV_DIR/bin/python3" -m pip check; then
     install_fail "Installed core and target dependencies are incompatible." \
-        "Resolve the dependency conflict, then run ./install.sh --debug."
+        "Resolve the dependency conflict, then run $(command_text './scrooge-alert install --debug')."
 fi
 if [ "$HAS_PLUGIN_REQS" -eq 1 ]; then
     install_task success "All installed dependencies are compatible."
@@ -443,32 +447,32 @@ install_section "Target provisioning"
 
 if ! run_action mkdir -p "$SYSTEMD_USER_DIR"; then
     install_fail "The systemd user directory could not be created." \
-        "Fix its ownership or permissions, then run ./install.sh --debug."
+        "Fix its ownership or permissions, then run $(command_text './scrooge-alert install --debug')."
 fi
 
 # Resolve config-dependent schedules separately from the immutable plugin catalog.
 # A structurally invalid config excludes only its own target from this transaction.
 if ! install_load_schedules; then
     install_fail "Target scheduling metadata could not be resolved." \
-        "Fix the target configuration, then run ./install.sh --debug."
+        "Fix the target configuration, then run $(command_text './scrooge-alert install --debug')."
 fi
 if run_captured list_plugin_schedules; then
     ALL_SCHEDULES="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "Resolved target schedules could not be read." \
-        "Fix the target configuration, then run ./install.sh --debug."
+        "Fix the target configuration, then run $(command_text './scrooge-alert install --debug')."
 fi
 if run_captured list_interval_status; then
     INTERVAL_STATUS="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "Target schedule statuses could not be read." \
-        "Fix the target configuration, then run ./install.sh --debug."
+        "Fix the target configuration, then run $(command_text './scrooge-alert install --debug')."
 fi
 if run_captured list_schedule_errors; then
     SCHEDULE_ERRORS="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "Target schedule errors could not be read." \
-        "Fix the target configuration, then run ./install.sh --debug."
+        "Fix the target configuration, then run $(command_text './scrooge-alert install --debug')."
 fi
 
 CONFIG_FAILED=0
@@ -482,7 +486,7 @@ for plugin in $PLUGINS; do
     if [ -z "$status" ]; then
         IFS="$OLD_IFS"
         install_fail "No scheduling result was returned for target '$plugin'." \
-            "Fix the target catalog, then run ./install.sh --debug."
+            "Fix the target catalog, then run $(command_text './scrooge-alert install --debug')."
     fi
     if [ "$status" = "error" ]; then
         schedule_error="$(plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true)"
@@ -515,7 +519,7 @@ if [ -n "$PROVISION_PLUGINS" ]; then
             install_task warning "Recovery files were retained at $UNIT_RECOVERY_DIR."
         fi
         install_task info \
-            "Rerun ./install.sh --debug, or inspect with ./scripts/run.sh --status."
+            "Rerun $(command_text './scrooge-alert install --debug'), or inspect with $(command_text './scrooge-alert status')."
         install_exit 1
     fi
     install_task success "Configured timers for the selected targets."
@@ -570,7 +574,7 @@ if run_captured list_plugin_examples; then
     EXAMPLE_PAIRS="$CAPTURED_COMMAND_OUTPUT"
 else
     install_fail "Target configuration metadata could not be read." \
-        "Fix the target catalog, then run ./install.sh --debug."
+        "Fix the target catalog, then run $(command_text './scrooge-alert install --debug')."
 fi
 OLD_IFS="$IFS"
 IFS='
@@ -637,7 +641,7 @@ if [ "$CONFIG_FAILED" -ne 0 ]; then
     install_task failure \
         "One or more targets were skipped because their configuration is invalid."
     install_task info \
-        "Fix each reported target configuration, then run ./install.sh again."
+        "Fix each reported target configuration, then run $(command_text './scrooge-alert install') again."
     install_exit "$EXIT_STATUS_TARGET_CONFIG_ERROR"
 fi
 

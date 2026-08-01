@@ -103,7 +103,7 @@ def reminder_message(
     update_available: bool | None, interval_display: str, next_due: str
 ) -> NotificationMessage:
     if update_available is True:
-        update_line = "A project update is available — run ./update.sh to install it."
+        update_line = 'A project update is available — run "./scrooge-alert update" to install it.'
     elif update_available is False:
         update_line = "You are running the latest version."
     else:

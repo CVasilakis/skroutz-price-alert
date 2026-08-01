@@ -3,4 +3,4 @@
 
 [+] Run arguments
     [x] Unknown target flag: --debug.
-    [!] Run ./scripts/run.sh --help to view supported options.
+    [!] Run ./scrooge-alert run --help to view supported options.

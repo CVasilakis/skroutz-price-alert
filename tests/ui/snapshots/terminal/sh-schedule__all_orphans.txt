@@ -3,4 +3,4 @@
 
 [+] Execution intervals
     [i] No installed, registered target timers found.
-    [!] Run ./install.sh to provision targets.
+    [!] Run ./scrooge-alert install to provision targets.

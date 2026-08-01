@@ -77,7 +77,7 @@ def push_remote_change(tmp_path: Path, origin: Path):
 
 def run_update(checkout: Path, env, *args: str):
     return subprocess.run(
-        ["/bin/sh", str(checkout / "update.sh"), *args],
+        ["/bin/sh", str(checkout / "scripts/update.sh"), *args],
         cwd=checkout,
         env=env,
         text=True,
@@ -126,8 +126,8 @@ def test_real_git_debug_survives_fast_forward_and_reaches_deferred_install(
 
 def test_real_git_dirty_tree_is_refused_without_prompt(real_git_update_world):
     checkout, _, env = real_git_update_world
-    (checkout / "update.sh").write_text(
-        (checkout / "update.sh").read_text(encoding="utf-8") + "\n# dirty\n",
+    (checkout / "scripts/update.sh").write_text(
+        (checkout / "scripts/update.sh").read_text(encoding="utf-8") + "\n# dirty\n",
         encoding="utf-8",
     )
     result = run_update(checkout, env)

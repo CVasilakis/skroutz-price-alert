@@ -10,6 +10,13 @@ from core.presentation import resolved_setting_views
 from core.settings import ResolvedSettings
 
 
+def _plain_text(value: str | None) -> str:
+    """Render paired code spans distinctly in output channels without styling."""
+    if value is None:
+        return ""
+    return value.replace("`", '"') if value.count("`") % 2 == 0 else value
+
+
 class SilentRunReporter(RunReporter):
     """Report a run exclusively through its target logger."""
 
@@ -26,7 +33,7 @@ class SilentRunReporter(RunReporter):
             return []
 
         def ensure_period(value: str) -> str:
-            stripped = value.strip()
+            stripped = _plain_text(value).strip()
             return stripped + "." if stripped and not stripped.endswith(".") else stripped
 
         if isinstance(notes, str):
@@ -48,7 +55,7 @@ class SilentRunReporter(RunReporter):
     ) -> None:
         self.target_logger = target_logger
         if config.error:
-            detail = config.error
+            detail = _plain_text(config.error)
             if config.diagnostic_saved is False:
                 detail = f"{detail} {messages.DIAGNOSTIC_WRITE_FAILED}"
             target_logger.warning(f"❗ Tracked Items: Failed ({detail})")
@@ -65,7 +72,9 @@ class SilentRunReporter(RunReporter):
             target_logger.info(f"🗄️  Tracked Items: {config.loaded_count} loaded")
         for view in resolved_setting_views(settings):
             if view.has_warning:
-                target_logger.warning(f"❗ {view.label}: {view.display_value} ({view.footnote})")
+                target_logger.warning(
+                    f"❗ {view.label}: {view.display_value} ({_plain_text(view.footnote)})"
+                )
             else:
                 suffix = " (default)" if view.is_default else ""
                 target_logger.info(f"⚙️  {view.label}: {view.display_value}{suffix}")
@@ -81,7 +90,7 @@ class SilentRunReporter(RunReporter):
     ) -> None:
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            self.target_logger.info(f"{icon} {name}: {value}{suffix}")
+            self.target_logger.info(f"{icon} {name}: {_plain_text(value)}{suffix}")
 
     def log_price_result(
         self,
@@ -112,14 +121,14 @@ class SilentRunReporter(RunReporter):
     ) -> None:
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            self.target_logger.warning(f"❗ {name}: {warning_str}{suffix}")
+            self.target_logger.warning(f"❗ {name}: {_plain_text(warning_str)}{suffix}")
 
     def log_error(
         self, name: str, error_str: str, notes: Notes = None, attempt_notes: Notes = None
     ) -> None:
         if self.target_logger:
             suffix = self._format_notes_suffix(self._normalize_notes(notes))
-            self.target_logger.error(f"❗ {name}: {error_str}{suffix}")
+            self.target_logger.error(f"❗ {name}: {_plain_text(error_str)}{suffix}")
 
     def log_system_error(self, error_str: str) -> None:
         """Log a target-start system failure with the established file-log wording."""
@@ -132,7 +141,7 @@ class SilentRunReporter(RunReporter):
     def log_attempt(self, name: str, attempt: int, max_retries: int, detail: str) -> None:
         if self.target_logger:
             self.target_logger.warning(
-                f"❗ {name}: Attempt {attempt}/{max_retries} FAILED ({detail})"
+                f"❗ {name}: Attempt {attempt}/{max_retries} FAILED ({_plain_text(detail)})"
             )
 
     def log_failure(
@@ -156,9 +165,9 @@ class SilentRunReporter(RunReporter):
 
     def log_interrupt(self, message: str) -> None:
         if self.target_logger:
-            self.target_logger.info(f"🛑 {message}")
+            self.target_logger.info(f"🛑 {_plain_text(message)}")
         else:
-            logging.info(f"🛑 {message}")
+            logging.info(f"🛑 {_plain_text(message)}")
 
 
 __all__ = ["SilentRunReporter"]

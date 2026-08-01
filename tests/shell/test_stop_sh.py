@@ -86,7 +86,7 @@ def test_invalid_arguments_keep_exit_one_and_use_framed_status_output(args):
 
     assert result.returncode == 1
     assert_task_status(result.stdout, "x", "The command-line arguments are invalid.")
-    assert_task_status(result.stdout, "i", "Run ./scripts/stop.sh --help for usage.")
+    assert_task_status(result.stdout, "i", "Run ./scrooge-alert stop --help for usage.")
     _assert_standalone_frame(result.stdout)
 
 

@@ -2,5 +2,5 @@
 # exit: 1
 
 [+] Update arguments
-    [x] update.sh accepts no arguments other than one -h or --help, plus --debug.
-    [!] Run ./update.sh --help for usage.
+    [x] ./scrooge-alert update accepts no arguments other than one -h or --help, plus --debug.
+    [!] Run ./scrooge-alert update --help for usage.

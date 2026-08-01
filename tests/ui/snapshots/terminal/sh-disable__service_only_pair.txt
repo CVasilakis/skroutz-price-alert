@@ -6,4 +6,4 @@
     [v] [ghost] Background execution disabled.
 
 [+] Optional controls
-    [i] To re-enable background execution, run: ./scripts/enable.sh
+    [i] To re-enable background execution, run: ./scrooge-alert enable

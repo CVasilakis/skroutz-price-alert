@@ -12,5 +12,5 @@
 │   ✅    Last Execution Status       OK                                  │
 │   ✅    Next Scheduled Execution    Mon 2026-06-29 13:00:00 UTC [1]     │
 │                                                                         │
-│   [1] Timer differs from config. Run ./scripts/schedule.sh.             │
+│   [1] Timer differs from config. Run ./scrooge-alert schedule.          │
 ╰─────────────────────────────────────────────────────────────────────────╯

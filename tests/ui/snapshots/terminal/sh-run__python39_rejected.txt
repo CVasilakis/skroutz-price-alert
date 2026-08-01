@@ -3,4 +3,4 @@
 
 [+] Run preflight
     [x] Python 3.9.18 is unsupported; Python 3.10 or newer is required.
-    [!] Install a supported Python, run ./install.sh, then retry.
+    [!] Install a supported Python, run ./scrooge-alert install, then retry.
