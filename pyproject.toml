@@ -19,11 +19,6 @@ filterwarnings = [
     "ignore:^'imghdr' is deprecated and slated for removal in Python 3\\.13$:DeprecationWarning:apprise\\.utils\\.pgp$",
 ]
 
-[tool.coverage.run]
-# The underscore-prefixed package is a copyable contributor template, deliberately
-# excluded from runtime discovery and therefore not part of production coverage.
-omit = ["src/core/scrapers/plugins/_example/*"]
-
 # Static-analysis configuration for Pyright / Pylance / basedpyright (basedpyright
 # reads [tool.pyright] as a fallback). extraPaths mirrors pytest's `pythonpath`
 # above so `core.*` (src/) and `ui.*` (tests/) resolve in the editor exactly as

@@ -117,6 +117,7 @@ printf '\n'
 section_heading success "Next steps"
 task_status info "Run ./scripts/dev/setup.sh --$scaffold_target."
 task_status info "Run ./scripts/dev/plugin-check.sh --$scaffold_target."
+task_status info "Run ./scripts/dev/check.sh --debug before submitting."
 printf '\n'
 section_heading success "Scaffold result"
 task_status success "[$scaffold_target] Target scaffold created."

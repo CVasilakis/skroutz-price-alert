@@ -80,6 +80,7 @@ def test_plugin_create_success_uses_sectioned_tui_and_preserves_spaced_values(tm
         "[+] Next steps\n"
         "    [i] Run ./scripts/dev/setup.sh --acme_store.\n"
         "    [i] Run ./scripts/dev/plugin-check.sh --acme_store.\n"
+        "    [i] Run ./scripts/dev/check.sh --debug before submitting.\n"
         "\n"
         "[+] Scaffold result\n"
         "    [v] [acme_store] Target scaffold created.\n"
@@ -1032,6 +1033,7 @@ def test_plugin_check_success_uses_required_sections_and_spacing(tmp_path):
         "\n"
         "[+] Verification result\n"
         "    [v] [skroutz] Target verification complete.\n"
+        "    [i] Run ./scripts/dev/check.sh --debug before submitting.\n"
         "\n"
     )
     assert "injected verification" not in result.stdout

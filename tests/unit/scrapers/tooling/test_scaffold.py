@@ -33,6 +33,7 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     assert document["plugin_schema_version"] == 1
     assert document["items"][0]["url"] == "https://store.example/products/sample"
     generated_test = (tests / "test_client.py").read_text(encoding="utf-8")
+    generated_readme = (source / "README.md").read_text(encoding="utf-8")
     assert "pytest.fail" in generated_test
     assert "from support import decode_test_config" in generated_test
     assert "values.items[0][URL]" in generated_test
@@ -40,6 +41,9 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     assert "core.settings" not in generated_test
     assert "core.exceptions" not in generated_test
     assert "core.scrapers.framework" not in generated_test
+    assert "./scripts/dev/plugin-check.sh --acme_store" in generated_readme
+    assert "./scripts/dev/check.sh --debug" in generated_readme
+    assert "../../../../../CONTRIBUTING.md" in generated_readme
 
 
 def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
@@ -136,7 +140,9 @@ def test_scaffold_cli_reports_success_and_collision(tmp_path, capsys):
         str(tmp_path),
     ]
     assert main(args) == 0
-    assert "./scripts/dev/plugin-check.sh --acme_store" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "./scripts/dev/plugin-check.sh --acme_store" in output
+    assert "./scripts/dev/check.sh --debug" in output
     assert main(args) == 1
     assert "refusing to overwrite" in capsys.readouterr().err
 

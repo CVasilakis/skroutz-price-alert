@@ -9,6 +9,7 @@
 [+] Next steps
     [i] Run ./scripts/dev/setup.sh --acme.
     [i] Run ./scripts/dev/plugin-check.sh --acme.
+    [i] Run ./scripts/dev/check.sh --debug before submitting.
 
 [+] Scaffold result
     [v] [acme] Target scaffold created.

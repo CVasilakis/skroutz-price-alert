@@ -11,10 +11,11 @@ from support import mock_notifier, mock_ui
 
 from core.application.orchestrator import ScrapingOrchestrator
 from core.application.preflight import load_target_configs
-from core.scrapers.api import ScraperClient
+from core.scrapers.api import PriceResult, ScraperClient
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.tooling.check import check_plugin
+from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
 
 CATALOG = PluginCatalog.discover()
 
@@ -25,7 +26,6 @@ def test_every_plugin_passes_contributor_verifier(target):
 
 
 def test_plugin_source_and_test_packages_are_one_to_one():
-    assert "_example" not in CATALOG.targets
     test_targets = {
         path.name
         for path in Path("tests/plugins").iterdir()
@@ -70,16 +70,15 @@ def test_client_binding_is_lazy_and_typed(target, tmp_path):
         client.close()
 
 
-def test_copyable_template_runs_end_to_end_without_framework_edits(tmp_path):
-    """A copied package reaches state persistence through the production bindings."""
+def test_scaffolded_plugin_runs_end_to_end_without_framework_edits(tmp_path):
+    """The contributor scaffold reaches persistence through production bindings."""
     import core.scrapers.plugins as plugin_package
 
-    discovery_root = tmp_path / "core" / "scrapers" / "plugins"
-    target_dir = discovery_root / "template_store"
-    shutil.copytree(Path("src/core/scrapers/plugins/_example"), target_dir)
-    test_dir = tmp_path / "tests" / "plugins" / "template_store"
-    test_dir.mkdir(parents=True)
-    (test_dir / "test_client.py").write_text("def test_placeholder(): pass\n")
+    target_dir, _test_dir = create_plugin(
+        tmp_path,
+        ScaffoldRequest("template_store", "Template Store", "store.example", "/items/"),
+    )
+    discovery_root = target_dir.parent
 
     saved_path = list(plugin_package.__path__)
     plugin_package.__path__.append(str(discovery_root))
@@ -105,13 +104,17 @@ def test_copyable_template_runs_end_to_end_without_framework_edits(tmp_path):
             mock.patch("core.application.pacing.Pacer.sleep"),
             mock.patch("core.application.orchestrator.signal.signal"),
             mock.patch(
+                "core.scrapers.plugins.template_store.client.Client.scrape",
+                return_value=PriceResult(price=1.0, currency="EUR"),
+            ),
+            mock.patch(
                 "core.application.orchestrator.get_target_logger",
                 return_value=logging.getLogger("template-e2e"),
             ),
         ):
             assert orchestrator.run() == 0
         state = json.loads((state_dir / "template_store.json").read_text())
-        assert state["items"]["sample-widget"]["last_price"] == 1.0
+        assert state["items"]["sample-item"]["last_price"] == 1.0
     finally:
         plugin_package.__path__[:] = saved_path
         for name in tuple(sys.modules):

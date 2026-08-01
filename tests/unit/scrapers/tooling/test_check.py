@@ -1,7 +1,5 @@
 import json
-import shutil
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +14,7 @@ from core.scrapers.tooling.check import (
     _check_self_contained,
     check_plugin,
 )
+from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
 from core.tooling.migration import STATUS_MIGRATED, MigrationRunner
 
 
@@ -153,9 +152,11 @@ def test_declaration_imports_reject_absolute_third_party_modules(tmp_path):
 def test_verifier_rejects_an_empty_example_config(tmp_path):
     import core.scrapers.plugins as plugin_package
 
-    discovery_root = tmp_path / "core" / "scrapers" / "plugins"
-    target_dir = discovery_root / "empty_store"
-    shutil.copytree(Path("src/core/scrapers/plugins/_example"), target_dir)
+    target_dir, _tests = create_plugin(
+        tmp_path,
+        ScaffoldRequest("empty_store", "Empty Store", "store.example", "/items/"),
+    )
+    discovery_root = target_dir.parent
     example = target_dir / "config.example.json"
     example.write_text(
         (
@@ -164,10 +165,6 @@ def test_verifier_rejects_an_empty_example_config(tmp_path):
         ),
         encoding="utf-8",
     )
-    tests = tmp_path / "tests" / "plugins" / "empty_store"
-    tests.mkdir(parents=True)
-    (tests / "test_client.py").write_text("def test_placeholder(): pass\n", encoding="utf-8")
-
     saved_path = list(plugin_package.__path__)
     plugin_package.__path__.append(str(discovery_root))
     try:

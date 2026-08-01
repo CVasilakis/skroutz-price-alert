@@ -140,8 +140,10 @@ URL-shape cases, and clean client shutdown.
 ## Verification
 
 Run `./scripts/dev/plugin-check.sh --{request.target}`, then
-`./scripts/dev/check.sh`. See `CONTRIBUTING.md` for optional custom fields,
-settings, listing results, HTTP helpers, migrations, and presentation rules.
+`./scripts/dev/check.sh --debug`. See
+[`CONTRIBUTING.md`](../../../../../CONTRIBUTING.md) for the complete contract,
+including optional custom fields, settings, listing results, HTTP helpers,
+migrations, and presentation rules.
 """,
         "config.example.json": json.dumps(config, indent=2) + "\n",
     }
@@ -245,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Created {tests}")
         print(f"Next: ./scripts/dev/setup.sh --{args.target}")
         print(f"Then: ./scripts/dev/plugin-check.sh --{args.target}")
+        print("Finally: ./scripts/dev/check.sh --debug")
     return 0
 
 

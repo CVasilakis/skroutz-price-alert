@@ -11,6 +11,7 @@ For a new scraper plugin, confirm that:
 - [ ] `config.example.json` contains a valid item and demonstrates every custom key.
 - [ ] The package README documents its inputs, result type, custom keys, and dependencies.
 - [ ] `requirements.txt` contains only plugin-private dependencies, when needed.
-- [ ] `./scripts/dev/plugin-check.sh --<target>` and the full suite pass.
+- [ ] `./scripts/dev/plugin-check.sh --<target>` and
+      `./scripts/dev/check.sh --debug` pass.
 
 For non-plugin changes, remove this checklist or mark non-applicable items clearly.

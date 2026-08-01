@@ -1,7 +1,10 @@
 import subprocess
 from pathlib import Path
 
+from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
+
 ROOT = Path(__file__).resolve().parents[2]
+FULL_GATE = "./scripts/dev/check.sh --debug"
 
 
 def test_coverage_reporting_has_no_failure_threshold() -> None:
@@ -51,14 +54,43 @@ def test_plugin_artifacts_and_ci_use_the_current_package_layout() -> None:
     assert "core.scrapers." + "cli requirements" not in workflow
 
 
-def test_contributor_guide_owns_advanced_migration_details() -> None:
+def test_contributor_surfaces_share_the_required_commands(tmp_path) -> None:
     contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
-    copyable = (ROOT / "src/core/scrapers/plugins/_example/README.md").read_text(encoding="utf-8")
+    pull_request = (ROOT / ".github/pull_request_template.md").read_text(encoding="utf-8")
+    source, _tests = create_plugin(
+        tmp_path,
+        ScaffoldRequest("acme_store", "Acme Store", "store.example", "/items/"),
+    )
+    generated = (source / "README.md").read_text(encoding="utf-8")
+
+    for name, surface in {
+        "contributor guide": contributing,
+        "generated README": generated,
+        "pull request template": pull_request,
+    }.items():
+        assert FULL_GATE in surface, f"{name} must recommend the complete debug gate"
+        assert "`./scripts/dev/check.sh`" not in surface, (
+            f"{name} recommends the incomplete non-debug gate"
+        )
+
+    assert "./scripts/dev/plugin-check.sh --acme_store" in generated
+    assert "CONTRIBUTING.md" in generated
+    assert "supported inputs or URL shapes" in contributing
+    assert "docstring is fine" in contributing
+
+
+def test_contributor_guide_owns_advanced_migration_details(tmp_path) -> None:
+    contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    source, _tests = create_plugin(
+        tmp_path,
+        ScaffoldRequest("acme_store", "Acme Store", "store.example", "/items/"),
+    )
+    generated = (source / "README.md").read_text(encoding="utf-8")
 
     assert "from core.scrapers.api import JsonObject" in contributing
     assert "config_schema_version" in contributing
     assert "plugin_schema_version" in contributing
     assert "CONFIG_MIGRATIONS" in contributing
-    assert "migrations" in copyable
-    assert "CONTRIBUTING.md" in copyable
+    assert "migrations" in generated
+    assert "CONTRIBUTING.md" in generated
     assert "core.infrastructure.migration" not in contributing

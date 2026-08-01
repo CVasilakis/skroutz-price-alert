@@ -673,22 +673,14 @@ To see all the undergoing feature requests or to request a new feature, please c
 
 ## 🤝 Contributing & Issues
 
-New stores use the in-repository plugin contract: run
-`./scripts/dev/plugin-create.sh`, keep `plugin.py` import-light, export `Client` from
-`client.py`, add mocked target-owned tests, and run
-`./scripts/dev/plugin-check.sh --<target>`. The immutable plugin
-catalog and separate shell catalog/schedule reports discover the new adapter
-automatically, so framework,
-CLI, UI, and management-script edits are unnecessary. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the complete input, URL, field, setting, result,
-exception, dependency, and testing contracts.
-Existing help assertions and UI snapshots are also plugin-addition invariant; an
-unrelated change there is a framework defect rather than required plugin work.
+New stores use the additive in-repository plugin contract. Start with
+`./scripts/dev/plugin-create.sh`; the generated package README and
+[CONTRIBUTING.md](CONTRIBUTING.md) provide the complete workflow, public contracts,
+testing requirements, and submission checks. The catalog discovers a valid new
+adapter automatically, so normal plugin contributions do not edit the framework,
+CLI, UI, workflows, root documentation, or snapshots.
 
 Contributions are always welcome! If you have an idea to make this project better, feel free to fork the repository and submit a pull request.
-To add a marketplace, follow [CONTRIBUTING.md](CONTRIBUTING.md): a scraper is one
-self-contained package discovered by the immutable catalog, with no application,
-shell, or UI edits required.
 If you encounter a bug or run into any issues, please [open an issue](https://github.com/CVasilakis/scrooge-alert/issues). To help me resolve it quickly, include as much detail as possible.
 
 ## 💝 Support & Donations

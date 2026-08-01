@@ -194,4 +194,5 @@ fi
 printf '\n'
 section_heading success "Verification result"
 task_status success "[$target] Target verification complete."
+task_status info "Run ./scripts/dev/check.sh --debug before submitting."
 finish_verification 0

@@ -19,3 +19,4 @@
 
 [+] Verification result
     [v] [skroutz] Target verification complete.
+    [i] Run ./scripts/dev/check.sh --debug before submitting.
