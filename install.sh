@@ -266,8 +266,7 @@ fi
 
 for required_file in requirements.txt scripts/run.sh scripts/scrooge-alert \
     scripts/lib/common.sh scripts/lib/cli.sh scripts/lib/preflight.sh \
-    scripts/lib/systemd.sh scripts/lib/provisioning.sh \
-    completions/scrooge-alert.bash completions/scrooge-alert.fish; do
+    scripts/lib/systemd.sh scripts/lib/provisioning.sh; do
     if ! run_action require_regular_owned_file "$BASE_DIR/$required_file"; then
         install_fail "Required project file '$required_file' is missing or unsafe." \
             "Restore the regular project file, then run ./install.sh again."
@@ -552,6 +551,8 @@ if ! run_action cli_install_artifacts; then
 fi
 install_task success \
     "Installed the $(command_text scrooge-alert) command for this user."
+[ -z "$CLI_BASH_NOTICE" ] || install_task info "$CLI_BASH_NOTICE"
+[ -z "$CLI_FISH_NOTICE" ] || install_task info "$CLI_FISH_NOTICE"
 if [ "$CLI_PATH_GUIDANCE" -eq 1 ]; then
     install_task info \
         "Add $HOME/.local/bin to PATH to run $(command_text scrooge-alert) from any directory."

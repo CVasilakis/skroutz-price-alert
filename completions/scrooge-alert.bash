@@ -28,8 +28,7 @@ _scrooge_alert_complete()
     elif (( COMP_CWORD > 1 )); then
         command=${COMP_WORDS[1]}
         case $command in
-            run|ping|status|install|enable|disable|stop|schedule|update|uninstall) ;;
-            *) return 0 ;;
+            ''|[!a-z]*|*[!a-z0-9_-]*) return 0 ;;
         esac
         help_allowed=1
         for ((index = 2; index < COMP_CWORD; index++)); do

@@ -11,14 +11,11 @@ function __scrooge_alert_top
 end
 
 function __scrooge_alert_command
-    for word in (commandline -opc)
-        switch $word
-            case run ping status install enable disable stop schedule update uninstall
-                echo $word
-                return 0
-        end
-    end
-    return 1
+    set -l words (commandline -opc)
+    test (count $words) -ge 2; or return 1
+    string match -rq -- '^[a-z][a-z0-9_-]*$' $words[2]; or return 1
+    scrooge-alert $words[2] --help >/dev/null 2>&1; or return 1
+    echo $words[2]
 end
 
 function __scrooge_alert_options

@@ -39,6 +39,12 @@ jobs:
           pip install -r scripts/dev/requirements-dev.txt
           pip check
 
+      - name: Install completion shell coverage
+        if: matrix.python-version == '3.10'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bash-completion fish pkg-config
+
       - name: Run tests
         # Coverage is report-only: never add a percentage failure threshold here
         # or in pyproject.toml. Test outcomes, not coverage totals, gate CI.

@@ -438,9 +438,7 @@ main() {
             scripts/lib/cli.sh \
             scripts/lib/preflight.sh \
             scripts/lib/systemd.sh \
-            scripts/lib/provisioning.sh \
-            completions/scrooge-alert.bash \
-            completions/scrooge-alert.fish; then
+            scripts/lib/provisioning.sh; then
         update_task failure "The fetched update failed safety validation."
         update_task warning \
             "Reconcile the checkout or fetched origin/main, then rerun ./update.sh --debug."
