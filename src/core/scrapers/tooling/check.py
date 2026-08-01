@@ -23,6 +23,7 @@ from core.scrapers.framework.migrations import (
 from core.scrapers.framework.model import RegisteredPlugin
 from core.scrapers.framework.settings import framework_setting_specs
 from core.scrapers.framework.state import JsonStateRepository, StateEntry
+from core.scrapers.tooling import SCAFFOLD_TEST_TODO
 from core.settings import MISSING
 
 _IMPORT_PROBE = r"""
@@ -143,6 +144,20 @@ def _check_contributor_files(
             f"plugin {target!r} has no tests/plugins/{target}/test_*.py; "
             "submission is allowed, but scraper behavior is unverified"
         )
+    else:
+        for test_module in test_modules:
+            try:
+                contents = test_module.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise RuntimeError(
+                    f"plugin {target!r} test module {test_module.name} is unreadable: {exc}"
+                ) from exc
+            if SCAFFOLD_TEST_TODO in contents:
+                warnings.append(
+                    f"plugin {target!r} still contains the generated skipped behavior TODO; "
+                    "replace it with mocked scraper coverage before submission when practical"
+                )
+                break
     migrations = source / "migrations.py"
     migration_tests = tests / "test_migrations.py"
     if config_schema_version == 1 and migrations.exists():

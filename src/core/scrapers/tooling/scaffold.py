@@ -21,6 +21,7 @@ from core.scrapers.framework.naming import (
     SNAKE_CASE_KEY,
 )
 from core.scrapers.framework.settings import framework_setting_specs
+from core.scrapers.tooling import SCAFFOLD_TEST_TODO
 
 ResultType = Literal["price", "listing"]
 Transport = Literal["bare", "http"]
@@ -319,38 +320,39 @@ def _plugin_source(request: ScaffoldRequest) -> str:
     ]
     item_names = ["URL", *(f"ITEM_{spec.key.upper()}" for spec in request.item_fields)]
     setting_names = [f"SETTING_{spec.key.upper()}" for spec in request.settings]
-    declaration_block = "\n\n\n".join(declarations)
-    if declaration_block:
-        declaration_block += "\n\n\n"
-    decoder_separator = "\n" if decoder_source else ""
     domains_source = _python_literal(request.domains)
-    return f'''"""Import-light descriptor for {request.display_name}."""
-
-{math_import}from urllib.parse import SplitResult
-
-from core.scrapers.api import {", ".join(imports)}
-
-
-{decoder_source}{decoder_separator}
-def accepts_url(url: SplitResult) -> bool:
+    import_block = (
+        f"{math_import}from urllib.parse import SplitResult\n\n"
+        f"from core.scrapers.api import {', '.join(imports)}"
+    )
+    blocks = [
+        f'''"""Import-light descriptor for {request.display_name}."""\n\n{import_block}''',
+    ]
+    if decoder_source:
+        blocks.append(decoder_source.rstrip())
+    blocks.extend(
+        [
+            f"""def accepts_url(url: SplitResult) -> bool:
     return url.path.startswith({_python_literal(request.url_prefix)})
-
-
-URL = UrlField(
+""",
+            f"""URL = UrlField(
     key="url",
     domains={domains_source},
     accepts_url=accepts_url,
 )
-
-
-{declaration_block}PLUGIN = ScraperPlugin(
+""",
+            *declarations,
+            f"""PLUGIN = ScraperPlugin(
     display_name={_python_literal(request.display_name)},
     item_fields=({", ".join(item_names)}{"," if len(item_names) == 1 else ""}),
     settings=({", ".join(setting_names)}{"," if len(setting_names) == 1 else ""}),
     reference_url=URL,
     default_interval={_python_literal(request.default_interval)},
 )
-'''
+""",
+        ]
+    )
+    return "\n\n\n".join(block.rstrip() for block in blocks) + "\n"
 
 
 def _client_source(request: ScaffoldRequest) -> str:
@@ -362,7 +364,8 @@ def _client_source(request: ScaffoldRequest) -> str:
             *(f"SETTING_{spec.key.upper()}" for spec in request.settings),
         ]
     )
-    access_lines = ["        source_url = item[URL]"]
+    source_url_name = "source_url" if request.transport == "http" else "_source_url"
+    access_lines = [f"        {source_url_name} = item[URL]"]
     access_lines.extend(
         f"        _{spec.key} = item[ITEM_{spec.key.upper()}]" for spec in request.item_fields
     )
@@ -390,15 +393,20 @@ def _client_source(request: ScaffoldRequest) -> str:
         if request.result_type == "price"
         else "parse the response and return ListingResult(currency=..., offers=(Offer(...), ...))"
     )
-    declaration_imports = ",\n    ".join(declarations)
+    declaration_imports = ",\n    ".join(declarations) + ","
     access_source = "\n".join(access_lines)
+    import_lines = [
+        api_import,
+        f"""from core.scrapers.plugins.{request.target}.plugin import (
+    {declaration_imports}
+)""",
+    ]
+    if support_import:
+        import_lines.append(support_import)
+    imports_source = "\n".join(import_lines)
     return f'''"""Client implementation for {request.display_name}."""
 
-{api_import}
-from core.scrapers.plugins.{request.target}.plugin import (
-    {declaration_imports},
-)
-{support_import}
+{imports_source}
 
 
 class Client({base_class}):
@@ -444,7 +452,7 @@ def _readme_source(request: ScaffoldRequest) -> str:
     fields = ", ".join(f"`{spec.key}`" for spec in request.item_fields) or "none"
     settings = ", ".join(f"`{spec.key}`" for spec in request.settings) or "none"
     test_text = (
-        "Replace the generated failing behavior test with mocked response and parser coverage."
+        "Replace the generated skipped behavior TODO with mocked response and parser coverage."
         if request.include_tests
         else "No tests were generated. Add mocked target-owned tests when practical; the verifier will warn but will not block solely because they are absent."
     )
@@ -520,10 +528,14 @@ def _test_files(request: ScaffoldRequest) -> dict[str, str]:
     )
     declaration_imports = ",\n    ".join(imports)
     assertion_source = "\n".join(assertions)
-    setting_lines = "\n".join(
-        f"            {_python_literal(key)}: {_python_literal(value)},"
-        for key, value in raw_settings.items()
-    )
+    if raw_settings:
+        setting_lines = "\n".join(
+            f"            {_python_literal(key)}: {_python_literal(value)},"
+            for key, value in raw_settings.items()
+        )
+        settings_source = f"{{\n{setting_lines}\n        }}"
+    else:
+        settings_source = "{}"
     item_lines = "\n".join(
         f"                {_python_literal(key)}: {_python_literal(value)},"
         for key, value in item.items()
@@ -544,9 +556,7 @@ def test_example_values_decode_through_the_runtime_contract() -> None:
     values = decode_test_config(
         PLUGIN,
         {_python_literal(request.target)},
-        settings={{
-{setting_lines}
-        }},
+        settings={settings_source},
         items=[
             {{
 {item_lines}
@@ -558,8 +568,9 @@ def test_example_values_decode_through_the_runtime_contract() -> None:
 
 
 def test_replace_scaffold_with_mocked_scraper_behavior() -> None:
-    pytest.fail(
-        "replace this scaffold with success, malformed-response, unavailable/no-match, "
+    # {SCAFFOLD_TEST_TODO}: replace this skipped placeholder with mocked scraper behavior.
+    pytest.skip(
+        "replace the generated scaffold with success, malformed-response, unavailable/no-match, "
         "relevant HTTP-status, URL-shape, codec, and clean-shutdown coverage"
     )
 ''',

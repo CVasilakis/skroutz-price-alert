@@ -270,9 +270,9 @@ def collect_request(console: Console | None = None) -> ScaffoldRequest | None:
 
     console.print(
         "\n[bold]Tests[/bold]\n"
-        "Generated tests demonstrate configuration decoding and deliberately fail until "
-        "you replace the behavior placeholder. Tests may be skipped, but plugin-check will "
-        "show a warning because scraper behavior is then unverified."
+        "Generated tests demonstrate configuration decoding and skip the behavior TODO until "
+        "you replace it. The static and test gates stay green, while plugin-check warns that "
+        "scraper behavior is not covered yet. Tests may also be omitted entirely."
     )
     include_tests = Confirm.ask("Generate starter tests?", default=True, console=console)
 

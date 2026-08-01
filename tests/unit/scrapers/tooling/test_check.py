@@ -7,6 +7,7 @@ import pytest
 from core.scrapers.framework import migrations as framework_migrations
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
+from core.scrapers.tooling import SCAFFOLD_TEST_TODO
 from core.scrapers.tooling.check import (
     _check_contributor_files,
     _check_declaration_imports,
@@ -28,6 +29,23 @@ def test_contributor_files_warn_when_target_owned_tests_are_missing(tmp_path):
 
     assert not result.has_tests
     assert "behavior is unverified" in result.warnings[0]
+
+
+def test_contributor_files_warn_while_generated_test_todo_remains(tmp_path):
+    source = tmp_path / "source"
+    tests = tmp_path / "tests"
+    source.mkdir()
+    tests.mkdir()
+    (source / "README.md").write_text("guide", encoding="utf-8")
+    (source / "config.example.json").write_text("{}", encoding="utf-8")
+    (tests / "test_client.py").write_text(
+        f"# {SCAFFOLD_TEST_TODO}\ndef test_placeholder(): pass\n", encoding="utf-8"
+    )
+
+    result = _check_contributor_files(source, tests, "acme", 1)
+
+    assert result.has_tests
+    assert "generated skipped behavior TODO" in result.warnings[0]
 
 
 def test_contributor_files_warn_when_migration_tests_are_missing(tmp_path):

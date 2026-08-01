@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -41,7 +43,8 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     assert document["items"][0]["url"] == "https://store.example/products/sample"
     generated_test = (tests / "test_client.py").read_text(encoding="utf-8")
     generated_readme = (source / "README.md").read_text(encoding="utf-8")
-    assert "pytest.fail" in generated_test
+    assert "pytest.skip" in generated_test
+    assert "SCROOGE_SCAFFOLD_TODO" in generated_test
     assert "from support import decode_test_config" in generated_test
     assert "values.items[0][URL]" in generated_test
     assert "_custom" not in generated_test
@@ -244,3 +247,52 @@ def test_scaffold_generates_listing_http_custom_contract_without_tests(tmp_path)
     assert "SETTING_API_TOKEN" in descriptor
     assert "sensitive=True" in descriptor
     assert requirements.splitlines() == ["tls-client", "beautifulsoup4"]
+
+
+def test_fresh_scaffold_passes_ruff_and_basedpyright(tmp_path):
+    result = create_plugin(tmp_path, REQUEST)
+    assert result.tests is not None
+    paths = (str(result.source), str(result.tests))
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--config",
+            'lint.isort.known-first-party=["core"]',
+            *paths,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        [sys.executable, "-m", "ruff", "format", "--check", *paths],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    repo_root = Path(__file__).resolve().parents[4]
+    pyright_config = tmp_path / "pyrightconfig.json"
+    pyright_config.write_text(
+        json.dumps(
+            {
+                "include": [str(result.source)],
+                "extraPaths": [str(repo_root / "src"), str(tmp_path / "src")],
+                "pythonVersion": "3.10",
+                "typeCheckingMode": "standard",
+                "venvPath": str(repo_root),
+                "venv": "venv",
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [sys.executable, "-m", "basedpyright", "--project", str(pyright_config)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
