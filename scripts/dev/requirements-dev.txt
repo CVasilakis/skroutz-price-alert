@@ -3,13 +3,13 @@
 #
 #   pip install -r scripts/dev/requirements-dev.txt
 #
-# pytest >= 7 is required for the `pythonpath` ini option used in pyproject.toml.
-pytest>=7.0
+# Exact direct-tool pins keep local and CI diagnostics aligned with the tested toolchain.
+pytest==9.1.1
 # Coverage visibility (report-only; CI prints the summary, no threshold gate).
-pytest-cov
+pytest-cov==7.1.0
 # Shell linting is pinned separately so local and CI checks use the same binary.
 -r requirements-shell.txt
 # Static contract checking (reads [tool.pyright] from pyproject.toml).
-basedpyright
+basedpyright==1.39.9
 # Fast Python linting and formatting (configured for the Python 3.10 floor).
-ruff
+ruff==0.16.1

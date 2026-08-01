@@ -12,20 +12,82 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: draft-release
+  cancel-in-progress: false
+
 jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout release commit and tags
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Validate release request
+        env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+          VERSION_TAG: ${{ inputs.version_tag }}
+        run: |
+          set -eu
+          if [ "${GITHUB_REF_TYPE}" != "branch" ]; then
+            printf '%s\n' 'Error: Draft releases must be dispatched from a branch.' >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$VERSION_TAG" |
+            grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            printf '%s\n' 'Error: Version tag must use strict vMAJOR.MINOR.PATCH syntax.' >&2
+            exit 1
+          fi
+          case "$RELEASE_NAME" in
+            *[![:space:]]*) ;;
+            *)
+              printf '%s\n' 'Error: Release name must not be blank.' >&2
+              exit 1
+              ;;
+          esac
+          if git show-ref --verify --quiet "refs/tags/$VERSION_TAG"; then
+            printf '%s\n' "Error: Tag $VERSION_TAG already exists." >&2
+            exit 1
+          fi
+
+  verify-release:
+    needs: validate-release
+    uses: ./.github/workflows/tests.yml
+
   create-draft-release:
+    needs: [validate-release, verify-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout verified release commit and tags
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Confirm version tag is still available
+        env:
+          VERSION_TAG: ${{ inputs.version_tag }}
+        run: |
+          set -eu
+          if git show-ref --verify --quiet "refs/tags/$VERSION_TAG"; then
+            printf '%s\n' "Error: Tag $VERSION_TAG was created while verification ran." >&2
+            exit 1
+          fi
 
       - name: Create Draft Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.version_tag }}
+          target_commitish: ${{ github.sha }}
           name: "${{ inputs.version_tag }} - ${{ inputs.release_name }}"
           draft: true
           generate_release_notes: true
