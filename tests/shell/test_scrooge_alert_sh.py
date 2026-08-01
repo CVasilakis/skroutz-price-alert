@@ -82,8 +82,8 @@ def test_help_has_no_color_when_color_is_enabled(args: tuple[str, ...]):
     ("command", "relative_script", "public_args", "expected_args"),
     (
         ("run", "scripts/run.sh", ("--quiet", "--skroutz"), ("--quiet", "--skroutz")),
-        ("ping", "scripts/run.sh", (), ("--ping",)),
-        ("status", "scripts/run.sh", (), ("--status",)),
+        ("ping", "scripts/ping.sh", (), ()),
+        ("status", "scripts/status.sh", (), ()),
         (
             "install",
             "scripts/install.sh",

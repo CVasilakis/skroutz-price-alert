@@ -1,15 +1,13 @@
 # border: green
 # exit: 0
 
-Usage: run.sh [-h] [--quiet] [--status] [--ping] [--<target> ...]
+Usage: run.sh [-h] [--quiet] [--<target> ...]
 
-Run price checks, send a test notification, or inspect installation health.
+Check prices for every registered target or only selected targets.
 With no target flag, price-check every registered target.
 
 Optional arguments:
   -h, --help        show this help message and exit
   --quiet           Run script with no console output
-  --status          Perform a health check of the background service
-  --ping            Send a test notification via Apprise
   --skroutz         Run exclusively the Skroutz scraper
   --amazon          Run exclusively the Amazon scraper

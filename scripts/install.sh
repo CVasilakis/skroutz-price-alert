@@ -253,7 +253,8 @@ else
 fi
 
 for required_file in scrooge-alert requirements.txt scripts/run.sh scripts/lib/common.sh \
-    scripts/lib/preflight.sh scripts/lib/systemd.sh scripts/lib/provisioning.sh; do
+    scripts/lib/runtime.sh scripts/lib/preflight.sh scripts/lib/systemd.sh \
+    scripts/lib/provisioning.sh; do
     if ! run_action require_regular_owned_file "$BASE_DIR/$required_file"; then
         install_fail "Required project file '$required_file' is missing or unsafe." \
             "Restore the regular project file, then run $(command_text './scrooge-alert install') again."

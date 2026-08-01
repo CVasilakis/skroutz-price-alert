@@ -1,0 +1,9 @@
+# border: green
+# exit: 0
+
+Usage: ping.sh [-h]
+
+Send a test notification through configured endpoints.
+
+Options:
+  -h, --help        show this help message and exit

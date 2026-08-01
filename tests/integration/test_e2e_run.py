@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 from support import catalog_sandbox, fake_plugin, mock_notifier
 
-import core.main
+import core.run
 from core.exit_status import ExitStatus
 from core.scrapers.framework.catalog import PluginCatalog
 from integration.fake_store import URL, FakeStoreClient, fake_store_server
@@ -73,7 +73,7 @@ def _restore_logging_state():
             logger.removeHandler(handler)
 
 
-def _invoke_main(
+def _invoke_run(
     monkeypatch,
     catalog: PluginCatalog,
     config_dir: Path,
@@ -81,15 +81,15 @@ def _invoke_main(
     notifier,
     *args: str,
 ) -> int:
-    monkeypatch.setattr(sys, "argv", ["main", *args])
-    monkeypatch.setattr(core.main, "CONFIG_DIR", str(config_dir))
-    monkeypatch.setattr(core.main, "STATE_DIR", str(state_dir))
-    monkeypatch.setattr(core.main.PluginCatalog, "discover", mock.Mock(return_value=catalog))
-    monkeypatch.setattr(core.main, "AppriseNotifier", mock.Mock(return_value=notifier))
+    monkeypatch.setattr(sys, "argv", ["run", *args])
+    monkeypatch.setattr(core.run, "CONFIG_DIR", str(config_dir))
+    monkeypatch.setattr(core.run, "STATE_DIR", str(state_dir))
+    monkeypatch.setattr(core.run.PluginCatalog, "discover", mock.Mock(return_value=catalog))
+    monkeypatch.setattr(core.run, "AppriseNotifier", mock.Mock(return_value=notifier))
     monkeypatch.setattr("core.application.pacing.Pacer.sleep", mock.Mock())
     monkeypatch.setattr("core.application.orchestrator.signal.signal", mock.Mock())
     with pytest.raises(SystemExit) as caught:
-        core.main.main()
+        core.run.main()
     return caught.value.code
 
 
@@ -114,7 +114,7 @@ def test_quiet_selected_target_is_silent_and_writes_state_and_output_log(
             _write_general(config_dir)
             notifier = mock_notifier(True)
 
-            code = _invoke_main(
+            code = _invoke_run(
                 monkeypatch,
                 catalog,
                 config_dir,
@@ -163,7 +163,7 @@ def test_quiet_default_run_isolates_bad_config_and_continues_healthy_target(
             _write_target(config_dir, "healthystore", f"http://{netloc}/healthy")
             _write_general(config_dir)
 
-            code = _invoke_main(
+            code = _invoke_run(
                 monkeypatch,
                 catalog,
                 config_dir,
@@ -194,7 +194,7 @@ def test_quiet_notification_preflight_is_silent_and_never_scrapes(tmp_path, monk
         _write_general(config_dir, usable_notifications=False)
         notifier = mock_notifier(False)
 
-        code = _invoke_main(
+        code = _invoke_run(
             monkeypatch,
             catalog,
             config_dir,
@@ -214,15 +214,15 @@ def test_quiet_notification_preflight_is_silent_and_never_scrapes(tmp_path, monk
 
 
 def test_quiet_startup_crash_is_silent_and_saved_to_root_log(tmp_path, monkeypatch, capfd):
-    monkeypatch.setattr(sys, "argv", ["main", "--quiet"])
+    monkeypatch.setattr(sys, "argv", ["run", "--quiet"])
     monkeypatch.setattr(
-        core.main.PluginCatalog,
+        core.run.PluginCatalog,
         "discover",
         mock.Mock(side_effect=RuntimeError("catalog exploded")),
     )
 
     with pytest.raises(SystemExit) as caught:
-        core.main.main()
+        core.run.main()
 
     assert caught.value.code == ExitStatus.APPLICATION_ERROR
     assert capfd.readouterr() == ("", "")
@@ -243,12 +243,12 @@ def test_quiet_runtime_crash_is_silent_saved_and_notified(tmp_path, monkeypatch,
         _write_general(config_dir)
         notifier = mock_notifier(True)
         monkeypatch.setattr(
-            core.main.ScrapingOrchestrator,
+            core.run.ScrapingOrchestrator,
             "run",
             mock.Mock(side_effect=RuntimeError("orchestrator exploded")),
         )
 
-        code = _invoke_main(
+        code = _invoke_run(
             monkeypatch,
             catalog,
             config_dir,
@@ -265,15 +265,15 @@ def test_quiet_runtime_crash_is_silent_saved_and_notified(tmp_path, monkeypatch,
 
 
 def test_quiet_does_not_hide_explicit_help(monkeypatch, capfd):
-    monkeypatch.setattr(sys, "argv", ["main", "--quiet", "--help"])
+    monkeypatch.setattr(sys, "argv", ["run", "--quiet", "--help"])
     monkeypatch.setattr(
-        core.main.PluginCatalog,
+        core.run.PluginCatalog,
         "discover",
         mock.Mock(return_value=PluginCatalog(())),
     )
 
     with pytest.raises(SystemExit) as caught:
-        core.main.main()
+        core.run.main()
 
     assert caught.value.code == 0
     captured = capfd.readouterr()
@@ -282,15 +282,15 @@ def test_quiet_does_not_hide_explicit_help(monkeypatch, capfd):
 
 
 def test_quiet_does_not_hide_invalid_argument_usage(monkeypatch, capfd):
-    monkeypatch.setattr(sys, "argv", ["main", "--quiet", "--unknown"])
+    monkeypatch.setattr(sys, "argv", ["run", "--quiet", "--unknown"])
     monkeypatch.setattr(
-        core.main.PluginCatalog,
+        core.run.PluginCatalog,
         "discover",
         mock.Mock(return_value=PluginCatalog(())),
     )
 
     with pytest.raises(SystemExit) as caught:
-        core.main.main()
+        core.run.main()
 
     assert caught.value.code == 2
     captured = capfd.readouterr()

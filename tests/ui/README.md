@@ -1,7 +1,7 @@
 # Terminal-UI test suite
 
 This suite automatically verifies **everything Scrooge Alert draws in the terminal** — the
-live scraping panel of a normal run, the `--status`, `--ping`, and Configuration Check
+live scraping panel of a normal run, the `status`, `ping`, and Configuration Check
 panels, and the colored transcripts printed by the management shell scripts
 (`scripts/install.sh`, `scripts/update.sh`, and the other operational scripts). It exists so that
 changes to the UI (a new
@@ -98,11 +98,13 @@ tests/ui/
     e2e_run_scenarios.py   #    the same panel, driven by the real application workflow
     config_scenarios.py    #    Configuration Check panel
     startup_scenarios.py   #    the full pre-scrape console transcript (surface startup)
-    status_scenarios.py    #    --status: service / not-installed / orphan panels
-    ping_scenarios.py      #    --ping: Notification Check Results
+    status_scenarios.py    #    status: service / not-installed / orphan panels
+    ping_scenarios.py      #    ping: Notification Check Results
     shell_inputs.py        #    shared ShellWorld presets + the shell_case registrar
     sh_install_scenarios.py    # scripts/install.sh transcripts (surface sh-install)
     sh_run_scenarios.py        # scripts/run.sh               (surface sh-run)
+    sh_ping_scenarios.py       # scripts/ping.sh              (surface sh-ping)
+    sh_status_scenarios.py     # scripts/status.sh            (surface sh-status)
     sh_schedule_scenarios.py   # scripts/schedule.sh          (surface sh-schedule)
     sh_enable_scenarios.py     # scripts/enable.sh            (surface sh-enable)
     sh_disable_scenarios.py    # scripts/disable.sh           (surface sh-disable)
@@ -271,8 +273,8 @@ real production builder:
 |----------|---------------|-------------------------------------------------------------|------------------------------------------------------|
 | `RUN`    | Scraping panel (interactive) | `drive_run(script)`                                         | the real `run_reporter.InteractiveRunReporter` panel    |
 | `E2E_RUN`| Scraping panel (end-to-end) | `drive_orchestrated_run(items, results_by_url)`             | the real application workflow driving that same panel |
-| `STATUS` | Health check (--status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
-| `PING`   | Notification check (--ping) | `drive_ping(url_entries, test_results, config_error_msg)`   | `ping.build_ping_panel`                              |
+| `STATUS` | Health check (status) | `drive_service(…, config)`, `drive_not_installed`, `drive_orphan` | `status.build_service_panel` / …               |
+| `PING`   | Notification check (ping) | `drive_ping(url_entries, test_results, config_error_msg)`   | `ping.build_ping_panel`                              |
 | `CONFIG` | Configuration Check panel | `drive_config(version_state, …)`                            | `config_check.build_config_panel`                    |
 | `STARTUP`| Full startup transcript (interactive artifact test-only) | `drive_startup(run_script, …)`                              | the whole pre-scrape transcript plus target/reminder background logs (guards against text leaking *between* panels; see `test_ui_snapshots.TestNoTextOutsidePanels`) |
 | `SH_*`   | the script filename (e.g. install.sh) | `drive_shell(script, *args, world=…, stdin=…)`              | the real operational scripts under `scripts/`        |
@@ -383,8 +385,8 @@ formatting and warning text), `inputs.py` offers small factories:
   resolved-setting entry; `views_all_ok() / views_all_default() /
   views_one_invalid_each()` provide ready-made settings sections.
 - `resolved_settings(interval=…, retention=…, notify=…)` — a full
-  `ResolvedSettings` for `--status`.
-- `timer_props(...)` / `service_props(...)` — the systemd property dicts `--status` reads.
+  `ResolvedSettings` for status.
+- `timer_props(...)` / `service_props(...)` — the systemd property dicts status reads.
 - `config_ok(...) / config_faulty(...) / config_failed(...)` — target
   configuration row outcomes.
 - `stub_logger()`, `CURRENCY` — misc helpers.

@@ -107,7 +107,7 @@ def resolved_settings(
     notify: _Triple = (True, STATUS_OK, True),
     suppress_repeated: _Triple = (False, STATUS_OK, False),
 ) -> ResolvedSettings:
-    """A ``ResolvedSettings`` for ``--status``, built from synthetic ``(value, status, raw)``."""
+    """A ``ResolvedSettings`` for status, built from synthetic ``(value, status, raw)``."""
     pairs = [
         (SPEC_INTERVAL, ResolvedSetting(interval[0], interval[1])),
         (SPEC_RETENTION, ResolvedSetting(retention[0], retention[1])),

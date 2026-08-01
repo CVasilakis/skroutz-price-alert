@@ -1,0 +1,6 @@
+# border: red
+# exit: 1
+
+[+] Run preflight
+    [x] The project Python environment is missing or unusable.
+    [!] Run ./scrooge-alert install, then retry.

@@ -46,6 +46,8 @@ _SCRIPT_FILES = (
     "scripts/install.sh",
     "scripts/update.sh",
     "scripts/run.sh",
+    "scripts/ping.sh",
+    "scripts/status.sh",
     "scripts/migrate.sh",
     "scripts/schedule.sh",
     "scripts/enable.sh",
@@ -53,6 +55,7 @@ _SCRIPT_FILES = (
     "scripts/stop.sh",
     "scripts/uninstall.sh",
     "scripts/lib/common.sh",
+    "scripts/lib/runtime.sh",
     "scripts/lib/preflight.sh",
     "scripts/lib/systemd.sh",
     "scripts/lib/provisioning.sh",
@@ -381,7 +384,7 @@ case "${1:-}" in
         esac ;;
     fetch) : > "$FAKE_GIT_STATE_DIR/fetched" ;;
     cat-file) [ "${FAKE_FETCHED_PATHS_VALID:-1}" = "1" ] || exit 1 ;;
-    status) [ "${FAKE_GIT_DIRTY:-0}" = "1" ] && printf ' M src/core/main.py\\n' ;;
+    status) [ "${FAKE_GIT_DIRTY:-0}" = "1" ] && printf ' M src/core/run.py\\n' ;;
     merge)
         [ "${FAKE_GIT_SIGNAL:-}" = "${1:-}" ] && kill -TERM "$PPID" ;;
     config)
@@ -542,7 +545,7 @@ case "${1:-}" in
             *" pip")                 [ "${FAKE_PIP_FAIL:-}" = "upgrade" ] && exit 1 ;;
         esac ;;
     *)
-        # run.sh's final exec: leave a marker line the golden can lock.
+        # Runtime wrappers' final exec: leave a marker line the golden can lock.
         printf '[exec] python3 %s\\n' "$*" ;;
 esac
 exit 0

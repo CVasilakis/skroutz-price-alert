@@ -73,7 +73,7 @@ EXPECTED_COLORS = {
     "sh-enable__enable_fails": "red",
     "sh-disable__disable_success": "green",
     "sh-stop__not_running": "green",
-    "sh-run__ping_not_alone": "red",
+    "sh-ping__invalid_argument": "red",
     "sh-uninstall__full_teardown": "green",
 }
 

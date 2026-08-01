@@ -1,4 +1,4 @@
-"""``--ping`` scenarios: the Notification Check Results panel.
+"""Ping-command scenarios: the Notification Check Results panel.
 
 ``drive_ping`` feeds ``ping.build_ping_panel`` configuration-ordered URL entries and
 delivery results, exercising row icons, URL obfuscation, and panel coloring.

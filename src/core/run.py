@@ -33,7 +33,7 @@ from core.tui.config_check import render_config_panel
 from core.tui.run_reporter import InteractiveRunReporter
 
 
-def _run_main() -> None:
+def _run() -> None:
     """Run the parsed Scrooge Alert application workflow.
 
     This function initializes the environment, parses arguments, sets up logging,
@@ -147,7 +147,7 @@ def main() -> None:
     quiet_requested = "--quiet" in sys.argv[1:]
     setup_global_logging(quiet_requested)
     try:
-        _run_main()
+        _run()
     except SystemExit:
         raise
     except Exception:

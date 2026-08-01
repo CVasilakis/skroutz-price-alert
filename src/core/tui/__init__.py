@@ -2,7 +2,7 @@
 
 A cohesive package for the Rich-rendered surfaces, kept together so the presentation
 concern has one home (like ``settings``, ``scrapers`` and ``general``) and the entry
-points (``main.py``, ``status.py``, ``ping.py``) import their panels from here rather than
+points (``run.py``, ``status.py``, ``ping.py``) import their panels from here rather than
 from loose top-level modules.
 
 Layout:
@@ -11,7 +11,7 @@ Layout:
     * :mod:`~core.tui.footnotes` - safe shared note registration, inline-code styling,
       and responsive hanging-indent rendering.
     * :mod:`~core.tui.config_check` - the Configuration Check panel and the shared settings/
-      config row helpers reused by the ``--status`` and Scraping panels.
+      config row helpers reused by the status and Scraping panels.
     * :mod:`~core.tui.run_reporter` - the live interactive Scraping reporter.
     * :mod:`~core.tui.ping` and :mod:`~core.tui.status` - pure one-shot panel builders.
     * :mod:`~core.tui.service_verdicts` - service exit-code presentation decisions.

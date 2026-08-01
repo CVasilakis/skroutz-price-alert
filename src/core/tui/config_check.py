@@ -17,7 +17,7 @@ class ConfigView:
     """Presentation summary of a target's target-configuration health (the 'Config' row).
 
     The single rendering-agnostic model behind the 'Config' row shown atop each Service
-    Status panel (``--status``) and Scraping panel (a run). Built by :func:`config_view`
+    Status panel and Scraping panel (a run). Built by :func:`config_view`
     so the icon/value/footnote decision lives in one place, and consumed by
     :func:`add_config_row` (StatusPanelBuilder panels) and the interactive reporter.
 
@@ -69,7 +69,7 @@ def config_view(
 def add_config_row(panel: StatusPanelBuilder, view: ConfigView) -> None:
     """Renders a :class:`ConfigView` as the 'Config' row on a StatusPanelBuilder panel.
 
-    Used atop the ``--status`` Service Status panel; the interactive Scraping panel
+    Used atop the status Service Status panel; the interactive Scraping panel
     renders the same view through the reporter's own footnote mechanism.
 
     Args:
@@ -87,7 +87,7 @@ def add_setting_row(panel: StatusPanelBuilder, view: SettingView) -> None:
     shows its active default as ``✅`` with a dim ``(default)`` marker. An invalid value
     shows the default it fell back to as ``🟡`` plus a footnote naming the problem.
 
-    Shared by the per-scraper Service Status panels (``--status``) and the general
+    Shared by the per-scraper Service Status panels (status) and the general
     settings rows of the Configuration Check panel, so every settings row renders
     identically.
 
@@ -204,9 +204,9 @@ def render_config_panel(
 
     Renders already-collected update and project-wide configuration results.
     Per-scraper target-configuration health is intentionally not shown here — it is surfaced
-    as a 'Config' row atop each Service Status panel (``--status``) and Scraping panel
+    as a 'Config' row atop each Service Status panel (status) and Scraping panel
     (a run). This is the single presentation path shared by the interactive scraper run
-    (main.py) and the health check (status.py); it performs no config-file I/O itself.
+    (run.py) and the health check (status.py); it performs no config-file I/O itself.
 
     Args:
         console (Console): The Rich console to render to.

@@ -8,7 +8,7 @@ appended to :data:`GENERAL_SETTING_SPECS` - its vocabulary lives in
 :mod:`core.general.vocab`, and resolution, defaulting and the panel row need no new code.
 
 Import-light: builds on the stdlib-only :mod:`core.settings` engine and the general
-vocabulary, so it is safe to import from ``--status`` and the config panel.
+vocabulary, so it is safe to import from the status command and the config panel.
 """
 
 import os

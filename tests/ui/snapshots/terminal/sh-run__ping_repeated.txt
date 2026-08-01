@@ -1,6 +1,0 @@
-# border: red
-# exit: 1
-
-[+] Run arguments
-    [x] The --ping flag must be used alone.
-    [!] Run ./scrooge-alert run --help to view supported options.

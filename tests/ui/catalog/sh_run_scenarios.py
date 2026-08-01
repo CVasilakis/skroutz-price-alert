@@ -1,7 +1,7 @@
 """SH_RUN scenarios: every user-facing transcript run.sh can produce.
 
-run.sh is the dispatcher the systemd services call; its own output is flag
-validation plus the final exec into the venv python. The sandbox's venv responder
+run.sh is the scraping dispatcher the systemd services call; its own output is target
+validation plus the final exec into the venv Python. The sandbox's venv responder
 prints an ``[exec] python3 <script> <args>`` marker for that exec, so the goldens
 lock which entry point and arguments each flag combination dispatches to.
 """
@@ -80,22 +80,6 @@ _case(
 )
 
 _case(
-    "ping_not_alone",
-    "--ping combined with another flag is rejected.",
-    "--ping",
-    "--quiet",
-    tags=("error",),
-)
-
-_case(
-    "ping_repeated",
-    "A repeated --ping still violates the must-be-used-alone rule.",
-    "--ping",
-    "--ping",
-    tags=("error",),
-)
-
-_case(
     "bare_double_dash",
     "A bare '--' is rejected (it would parse as an empty target name).",
     "--",
@@ -130,15 +114,7 @@ _case(
     tags=("error",),
 )
 
-_case(
-    "status_not_alone",
-    "--status combined with another flag is rejected.",
-    "--status",
-    "--skroutz",
-    tags=("error",),
-)
-
-_case("dispatch_default", "No flags: dispatches to main.py.")
+_case("dispatch_default", "No flags: dispatches to run.py.")
 
 _case(
     "dispatch_target_quiet",
@@ -156,7 +132,3 @@ _case(
         schedule_errors={"insomnia": "Remove unsupported keys from `config/insomnia.json`."},
     ),
 )
-
-_case("dispatch_ping", "--ping alone dispatches to ping.py.", "--ping")
-
-_case("dispatch_status", "--status alone dispatches to status.py.", "--status")

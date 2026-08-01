@@ -1,0 +1,9 @@
+# border: green
+# exit: 0
+
+Usage: status.sh [-h]
+
+Inspect configuration, updates, and background services.
+
+Options:
+  -h, --help        show this help message and exit

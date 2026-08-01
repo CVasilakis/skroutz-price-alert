@@ -31,8 +31,8 @@ class Surface(Enum):
     E2E_RUN = "e2e-run"  # the same panel, driven end-to-end by the real ScrapingOrchestrator
     CONFIG = "config"  # the shared Configuration Check panel
     STARTUP = "startup"  # the full interactive pre-scrape console transcript (multi-panel)
-    STATUS = "status"  # a --status panel (service / not-installed / orphan)
-    PING = "ping"  # the --ping Notification Check Results panel
+    STATUS = "status"  # a status panel (service / not-installed / orphan)
+    PING = "ping"  # the ping Notification Check Results panel
     # Shell surfaces: the transcript a management script prints to the terminal.
     # The "sh-" prefix groups them in the gallery and keeps "sh-run" clear of RUN.
     SH_INSTALL = "sh-install"  # scripts/install.sh
@@ -42,6 +42,8 @@ class Surface(Enum):
     SH_CHECK = "sh-check"  # scripts/dev/check.sh
     SH_INSTALL_HOOKS = "sh-install-hooks"  # scripts/dev/install-hooks.sh
     SH_RUN = "sh-run"  # scripts/run.sh
+    SH_PING = "sh-ping"  # scripts/ping.sh
+    SH_STATUS = "sh-status"  # scripts/status.sh
     SH_MIGRATE = "sh-migrate"  # scripts/migrate.sh
     SH_SCHEDULE = "sh-schedule"  # scripts/schedule.sh
     SH_ENABLE = "sh-enable"  # scripts/enable.sh
@@ -91,11 +93,11 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
         "Scraping panels stacked as one console.",
     ),
     Surface.STATUS: SurfaceInfo(
-        "Health check (--status)",
+        "Health check (status)",
         "The per-scraper Service Status panels and global checks from ./scrooge-alert status.",
     ),
     Surface.PING: SurfaceInfo(
-        "Notification check (--ping)", "The delivery test results from ./scrooge-alert ping."
+        "Notification check (ping)", "The delivery test results from ./scrooge-alert ping."
     ),
     Surface.SH_INSTALL: SurfaceInfo(
         "install.sh", "First-time installation transcript (venv, dependencies, systemd units)."
@@ -115,9 +117,9 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     Surface.SH_INSTALL_HOOKS: SurfaceInfo(
         "install-hooks.sh", "Enabling the repository-local versioned pre-push checks."
     ),
-    Surface.SH_RUN: SurfaceInfo(
-        "run.sh", "Argument handling and dispatch of the main wrapper script."
-    ),
+    Surface.SH_RUN: SurfaceInfo("run.sh", "Target selection and dispatch of the scraping runtime."),
+    Surface.SH_PING: SurfaceInfo("ping.sh", "Dispatch of the notification test command."),
+    Surface.SH_STATUS: SurfaceInfo("status.sh", "Dispatch of the installation health command."),
     Surface.SH_MIGRATE: SurfaceInfo(
         "migrate.sh", "Validating and migrating managed JSON documents."
     ),

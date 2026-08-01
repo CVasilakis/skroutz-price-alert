@@ -6,7 +6,7 @@ boundaries with locking, update inspection, logging, and notification delivery.
 
 The reminder tells the user the scrapers are still running in the background. Because
 the app is one-shot (systemd timers fire per-plugin runs), delivery happens on the
-first run at/after a due moment - the check itself rides every ``main.py`` invocation
+first run at/after a due moment - the check itself rides every ``run.py`` invocation
 (see the hook in ``main``), once per process, not per scraper.
 
 Schedule:
@@ -76,12 +76,12 @@ REMINDER_DISPLAY_FORMAT = "%d-%m-%Y %H:%M:%S"
 class ReminderService:
     """Sends the periodic liveness reminder, at most once per due grid slot.
 
-    One instance handles one ``main.py`` invocation via :meth:`run_once`, which never
+    One instance handles one ``run.py`` invocation via :meth:`run_once`, which never
     raises - a reminder bug must not kill a scraping run, and it executes *before* the
     orchestrator so an aborted scrape cannot suppress the heartbeat either.
 
     The authoritative read-check-send-persist sequence runs under the ``reminder`` file
-    lock: concurrent plugin timers each invoke ``main.py``, and the lock makes "send,
+    lock: concurrent plugin timers each invoke ``run.py``, and the lock makes "send,
     then record the slot" one serialized decision. A cheap unlocked pre-check skips the lock
     on the common "not due yet" path. Contenders never block (the lock fails immediately) -
     they skip and let the holder finish.
@@ -129,7 +129,7 @@ class ReminderService:
     def _log(self) -> logging.Logger:
         """The reminder's logger, created lazily and always file-backed.
 
-        The reminder rides every ``main.py`` invocation, including interactive runs whose
+        The reminder rides every ``run.py`` invocation, including interactive runs whose
         output is a sequence of Rich panels. Its diagnostics therefore always go to its
         own file log (``logs/reminder/output.log``) and *never* to the shared console -
         a raw log line printed to the terminal mid-run would break the panel layout, and

@@ -1,4 +1,4 @@
-"""Configuration Check panel scenarios (shared by ``--status`` and the interactive run).
+"""Configuration Check panel scenarios (shared by status and the interactive run).
 
 ``drive_config`` feeds an immutable general-config outcome to the real
 ``config_check._append_*`` helpers. Per-scraper target-configuration health is shown on each

@@ -1,4 +1,4 @@
 # border: green
 # exit: 0
 
-[exec] python3 <BASE_DIR>/src/core/main.py --quiet --skroutz
+[exec] python3 <BASE_DIR>/src/core/run.py --quiet --skroutz

@@ -16,6 +16,8 @@ HELP_SCRIPTS = (
     "scripts/install.sh",
     "scripts/update.sh",
     "scripts/run.sh",
+    "scripts/ping.sh",
+    "scripts/status.sh",
     "scripts/stop.sh",
     "scripts/disable.sh",
     "scripts/enable.sh",

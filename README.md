@@ -257,7 +257,7 @@ notifications through Discord, Telegram, Slack, email, and many other services. 
 the [supported-services documentation](https://appriseit.com/services/) or
 [URL builder](https://appriseit.com/tools/url-builder/) for the URL required by a
 service. Add each endpoint as a separate string in `notifications.urls`; order is
-preserved by `--ping`.
+preserved by the `ping` command.
 
 At least one valid URL is required for background/systemd execution. An interactive run
 may continue without one so configuration problems can be inspected. Invalid entries are
@@ -319,7 +319,7 @@ These flags allow you to isolate execution to specific platforms. If no target f
 
 #### Status Check:
 
-If you run the script using the `--status` flag, the script verifies the integrity of
+The `status` command verifies the integrity of
 your JSON configuration, validates notification URLs, and queries systemd to display the
 following background execution details:
 
@@ -353,8 +353,8 @@ rate-limit failures, notification warnings, and the all-targets-already-running 
 
 #### Test Notifications:
 
-To test notification URLs without waiting for a scheduled run or price drop, use
-`--ping`:
+To test notification URLs without waiting for a scheduled run or price drop, use the
+`ping` command:
 
 ```
 ./scrooge-alert ping
@@ -367,7 +367,7 @@ This will send a test message to each configured Apprise URL(s). It will output 
 
 ### Helper Scripts
 
-The repository-local `./scrooge-alert` command is the user-facing interface for managing background scrapers and updates. Its POSIX shell owners live under `scripts/`; it does not install a launcher, modify `PATH`, edit shell profiles, or place completion files outside the checkout. Developer-only setup, validation, and plugin-contributor commands remain under `scripts/dev/` and are documented in `CONTRIBUTING.md`. Management commands support `--help` and can be applied to specific targets. They suppress underlying system-command output by default; pass `--debug` to expose it when diagnosing a failure. The `run` command is the deliberate exception because its Python entry points own their terminal UI, runtime diagnostics, and logging.
+The repository-local `./scrooge-alert` command is the user-facing interface for managing background scrapers and updates. Its POSIX shell owners live under `scripts/`; it does not install a launcher, modify `PATH`, edit shell profiles, or place completion files outside the checkout. Developer-only setup, validation, and plugin-contributor commands remain under `scripts/dev/` and are documented in `CONTRIBUTING.md`. Management commands support `--help` and can be applied to specific targets. They suppress underlying system-command output by default; pass `--debug` to expose it when diagnosing a failure. The `run`, `ping`, and `status` commands are deliberate exceptions because their Python entry points own their terminal UI, runtime diagnostics, and logging.
 
 #### Install & Add Scrapers
 Sets up the Python virtual environment and installs the systemd timer(s) and service(s). Run it as many times as you like to add more scrapers later:
@@ -494,7 +494,7 @@ You might receive the following push notification alerts throughout the lifecycl
 | **Scrooge Alert - Scraping Errors** | Sent if the application hits request limits or unhandled exceptions. Can be turned off per scraper via the [notify_scraping_errors](#scraper-settings) setting. |
 | **Scrooge Alert - Script Crash** | Sent if the script completely failed to run. |
 | **Scrooge Alert - Status Update** | Periodic liveness reminder confirming the scrapers still run in the background, as well as notifying you of any available updates. Can be turned off via the project-wide [reminder](#general-settings) setting. |
-| **Scrooge Alert - Test Notification** | Sent when manually invoking the script with the `--ping` flag. |
+| **Scrooge Alert - Test Notification** | Sent when manually invoking the `ping` command. |
 
 ## 🗑️ Uninstallation
 
@@ -520,9 +520,9 @@ The uninstallation process safely performs the following actions:
 
 Shell management and developer tools normally suppress underlying command output
 and show only their concise status interface. Rerun a failing command with
-`--debug` to capture its complete subprocess diagnostics. `scripts/run.sh`
-intentionally has no shell-level `--debug` flag: use its Python-owned terminal
-output, `--status`, and the application logs described below.
+`--debug` to capture its complete subprocess diagnostics. The runtime wrappers
+intentionally have no shell-level `--debug` flag: use their Python-owned terminal
+output, the `status` command, and the application logs described below.
 
 **1. Failing to Fetch Items:**
 
@@ -536,7 +536,7 @@ If the inputs are correct but failures persist across multiple items, your conne
 
 If you do not receive a test message, review the [Notification Settings](#notification-settings)
 section and verify the Apprise URLs in `config/general.json`.
-You can easily test your notification setup using the `--ping` flag:
+You can easily test your notification setup using the `ping` command:
 
 ```sh
 ./scrooge-alert ping
@@ -567,13 +567,13 @@ The default configuration applies rate limiting to reduce traffic and increase t
 <summary><b>1. How can I tell if the script is actively running in the background?</b></summary>
 <br>
 
-To confirm the script is running in the background, use the `--status` flag. If the script reports no errors, you can be sure it is configured correctly and running in the background:
+To confirm the script is running in the background, use the `status` command. If the script reports no errors, you can be sure it is configured correctly and running in the background:
 
 ```sh
 ./scrooge-alert status
 ```
 
-The systemd execution metrics reported by the `--status` flag only reflect background scheduled executions, not manual runs.
+The systemd execution metrics reported by the `status` command only reflect background scheduled executions, not manual runs.
 If the command reveals any warnings, please run `./scrooge-alert update` which re-installs the background service and ensures that you are on the latest version. If the issue persists after updating, please [open an issue](https://github.com/CVasilakis/scrooge-alert/issues) for further assistance.
 </details>
 

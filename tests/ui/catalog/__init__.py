@@ -20,11 +20,13 @@ from ui.catalog import (
     sh_install_hooks_scenarios,  # noqa: F401
     sh_install_scenarios,  # noqa: F401
     sh_migrate_scenarios,  # noqa: F401
+    sh_ping_scenarios,  # noqa: F401
     sh_plugin_check_scenarios,  # noqa: F401
     sh_plugin_create_scenarios,  # noqa: F401
     sh_run_scenarios,  # noqa: F401
     sh_schedule_scenarios,  # noqa: F401
     sh_setup_scenarios,  # noqa: F401
+    sh_status_scenarios,  # noqa: F401
     sh_stop_scenarios,  # noqa: F401
     sh_uninstall_scenarios,  # noqa: F401
     sh_update_scenarios,  # noqa: F401

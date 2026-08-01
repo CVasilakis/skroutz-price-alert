@@ -1,4 +1,4 @@
-"""``--status`` panel scenarios: per-plugin Service Status, not-installed, and orphans.
+"""Status-command panel scenarios: per-plugin Service Status, not-installed, and orphans.
 
 Each Service Status scenario feeds ``status.build_service_panel`` synthetic systemd
 property dicts + a ``ResolvedSettings``, exercising the real settings section, the

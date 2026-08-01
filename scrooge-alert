@@ -88,10 +88,10 @@ case "$command_name" in
         dispatch run "$BASE_DIR/scripts/run.sh" "$@"
         ;;
     ping)
-        dispatch ping "$BASE_DIR/scripts/run.sh" --ping "$@"
+        dispatch ping "$BASE_DIR/scripts/ping.sh" "$@"
         ;;
     status)
-        dispatch status "$BASE_DIR/scripts/run.sh" --status "$@"
+        dispatch status "$BASE_DIR/scripts/status.sh" "$@"
         ;;
     install|enable|disable|stop|schedule|update|uninstall)
         dispatch "$command_name" "$BASE_DIR/scripts/$command_name.sh" "$@"

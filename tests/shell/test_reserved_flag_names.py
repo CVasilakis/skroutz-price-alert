@@ -1,15 +1,9 @@
 """Drift guards for shell-shadowed and internal reserved plugin names.
 
-``SHELL_RESERVED_PLUGIN_NAMES`` exists because target-selecting management scripts match
-their built-in flags (``--help``, ``--quiet``, ``--ping``, and ``--status``)
-*before* the per-plugin ``--*`` branch, so a plugin named after one of them would
-register fine yet never be dispatchable from the command line. The authoritative set is
-the ``case`` ladders in those shell scripts; this test parses their literal flag
-branches and asserts set-equality, so adding a new built-in target-selection flag
-without reserving the name (or vice versa) fails loudly instead of drifting. Flags
-owned only by non-target interfaces such as migrate.sh's ``--check`` and hidden
-``--machine`` protocol do not shadow target names and are deliberately excluded. Framework
-pseudo-targets are reserved separately and combined into ``RESERVED_PLUGIN_NAMES``.
+``SHELL_RESERVED_PLUGIN_NAMES`` protects the target-selection flags plus the established
+``ping`` and ``status`` command vocabulary. The latter remain reserved after their shell
+owners were split from run.sh so an organizational refactor cannot silently broaden the
+plugin descriptor contract. Framework pseudo-targets are reserved separately.
 """
 
 import re
@@ -26,10 +20,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Every executable script that parses command-line flags.
 SCRIPTS = sorted([REPO_ROOT / "scrooge-alert"] + list((REPO_ROOT / "scripts").glob("*.sh")))
+TARGET_SELECTING_NAMES = {
+    "run.sh",
+    "install.sh",
+    "enable.sh",
+    "disable.sh",
+    "stop.sh",
+    "schedule.sh",
+    "uninstall.sh",
+}
 TARGET_SELECTING_SCRIPTS = tuple(
-    script for script in SCRIPTS if script.name not in {"scrooge-alert", "migrate.sh", "update.sh"}
+    script for script in SCRIPTS if script.name in TARGET_SELECTING_NAMES
 )
 SHARED_PARSERS = (REPO_ROOT / "scripts/lib/common.sh",)
+COMMAND_RESERVED_NAMES = {"ping", "status"}
 
 # A case branch whose pattern is made of literal flags, e.g. "-h|--help)" or "--ping)".
 # Deliberately excludes the globs ("--*)", "*)") and the bare "--)" separator branch.
@@ -58,7 +62,7 @@ class TestReservedFlagNames(unittest.TestCase):
         for script in (*TARGET_SELECTING_SCRIPTS, *SHARED_PARSERS):
             claimed |= builtin_flags_of(script)
         self.assertEqual(
-            claimed,
+            claimed | COMMAND_RESERVED_NAMES,
             set(SHELL_RESERVED_PLUGIN_NAMES),
             "SHELL_RESERVED_PLUGIN_NAMES (framework/naming.py) and the scripts' built-in "
             "'--<flag>' "
