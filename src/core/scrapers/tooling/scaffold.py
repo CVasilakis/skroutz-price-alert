@@ -148,11 +148,32 @@ settings, listing results, HTTP helpers, migrations, and presentation rules.
 
 
 def _test_files(request: ScaffoldRequest) -> dict[str, str]:
+    sample_url = f"https://{request.domain}{request.url_prefix}sample"
     return {
         "__init__.py": "",
         "test_client.py": f'''"""Behavior tests for the {request.target} plugin."""
 
 import pytest
+from support import decode_test_config
+
+from core.scrapers.plugins.{request.target}.plugin import PLUGIN, URL
+
+
+def test_example_item_decodes_through_the_runtime_contract() -> None:
+    values = decode_test_config(
+        PLUGIN,
+        {request.target!r},
+        items=[
+            {{
+                "id": "sample-item",
+                "name": "Sample item",
+                "target_price": 100.0,
+                "url": {sample_url!r},
+            }}
+        ],
+    )
+
+    assert values.items[0][URL] == {sample_url!r}
 
 
 def test_replace_scaffold_with_mocked_scraper_behavior() -> None:

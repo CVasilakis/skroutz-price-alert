@@ -1,21 +1,19 @@
 from unittest import mock
 
 import pytest
-from support import compile_test_plugin
+from support import decode_test_config
 
-from core.exceptions import (
-    InvalidURLError,
+from core.scrapers.api import (
     PriceUnavailableError,
     RateLimitError,
     ResourceNotFoundError,
     ScraperError,
     ScraperParseError,
     ServerError,
+    TrackedItem,
 )
-from core.scrapers.api import TrackedItem
 from core.scrapers.plugins.skroutz.client import Client
-from core.scrapers.plugins.skroutz.plugin import PLUGIN, URL
-from core.settings import resolve_settings
+from core.scrapers.plugins.skroutz.plugin import PLUGIN, is_product_url
 
 
 class Response:
@@ -31,26 +29,36 @@ class Response:
 
 
 def _item(url: str) -> TrackedItem:
-    return TrackedItem("id", "Name", 500, _custom={URL: url})
+    values = decode_test_config(
+        PLUGIN,
+        "skroutz",
+        items=[{"id": "id", "name": "Name", "target_price": 500, "url": url}],
+    )
+    return values.items[0]
 
 
 def _client(response=None):
-    plugin = compile_test_plugin(PLUGIN, "skroutz")
+    values = decode_test_config(PLUGIN, "skroutz")
     with mock.patch("core.scrapers.support.http.tls_client.Session"):
-        client = Client(resolve_settings(plugin.setting_specs, {}))
+        client = Client(values.settings)
     client.get = mock.Mock(return_value=response or Response())
     return client
 
 
-def test_request_and_price_parsing_keeps_defensive_id_extraction():
+def test_request_and_price_parsing():
     client = _client()
 
     result = client.scrape(_item("https://www.skroutz.gr/s/123/Product.html"))
 
     assert result.price == 1234.56
     assert client.get.call_args.args[0].endswith("/s/123/filter_products.json?")
-    with pytest.raises(InvalidURLError):
-        client.scrape(_item("https://www.skroutz.gr/search?q=x"))
+
+
+def test_product_url_shape_is_explicit():
+    from urllib.parse import urlsplit
+
+    assert is_product_url(urlsplit("https://www.skroutz.gr/s/123/Product.html"))
+    assert not is_product_url(urlsplit("https://www.skroutz.gr/search?q=x"))
 
 
 def test_domain_specific_headers_and_currency():

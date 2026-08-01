@@ -40,15 +40,36 @@ Developer shell tools keep their normal output concise. Add `--debug` to
 recommended full acceptance command above uses debug mode so a captured failure
 contains all diagnostics.
 
-Plugin-owned tests should compile only their own descriptor, without discovering
-sibling packages:
+Plugin-owned tests should decode raw settings and item dictionaries through the
+repository test seam. This exercises the production configuration contract without
+discovering sibling packages or constructing framework-owned values directly:
 
 ```python
-from support import compile_test_plugin
-from core.scrapers.plugins.acme_store.plugin import PLUGIN
+from support import decode_test_config
+from core.scrapers.plugins.acme_store.client import Client
+from core.scrapers.plugins.acme_store.plugin import PLUGIN, URL
 
-plugin = compile_test_plugin(PLUGIN, "acme_store")
+values = decode_test_config(
+    PLUGIN,
+    "acme_store",
+    settings={},
+    items=[{
+        "id": "sample",
+        "name": "Sample",
+        "target_price": 10,
+        "url": "https://acme.example/items/sample",
+    }],
+)
+client = Client(values.settings)
+item = values.items[0]
+assert item[URL] == "https://acme.example/items/sample"
 ```
+
+Plugin tests import modeled exceptions and runtime values from `core.scrapers.api`.
+They must not import `core.settings`, `core.exceptions`, or
+`core.scrapers.framework`, and must not construct the private `TrackedItem._custom`
+mapping. `tests/support.py` is the single test-only adapter for those framework
+details.
 
 The complete gate intentionally includes dynamic all-plugin contracts, but a valid
 new plugin must not change existing framework expectations, shell scenarios, help

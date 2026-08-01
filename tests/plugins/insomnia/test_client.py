@@ -1,18 +1,11 @@
 from unittest import mock
 
 import pytest
-from support import compile_test_plugin
+from support import decode_test_config
 
-from core.exceptions import RateLimitError, ScraperParseError
-from core.scrapers.api import TrackedItem
+from core.scrapers.api import RateLimitError, ScraperParseError, TrackedItem
 from core.scrapers.plugins.insomnia.client import Client
-from core.scrapers.plugins.insomnia.plugin import (
-    PLUGIN,
-    TITLE_EXCLUDE,
-    TITLE_INCLUDE,
-    URL,
-)
-from core.settings import resolve_settings
+from core.scrapers.plugins.insomnia.plugin import PLUGIN
 
 HTML = """
 <li class="insAdvertsList"><h4><a href="/classifieds/ad/1/">Pixel 9 128GB</a></h4><p class="cFilePrice">450,00 €</p></li>
@@ -29,25 +22,33 @@ class Response:
 
 
 def _client(html: str = HTML, status: int = 200, floor: float = 30) -> Client:
-    plugin = compile_test_plugin(PLUGIN, "insomnia")
-    settings = resolve_settings(plugin.setting_specs, {"min_advert_price": floor})
+    values = decode_test_config(
+        PLUGIN,
+        "insomnia",
+        settings={"min_advert_price": floor},
+    )
     with mock.patch("core.scrapers.support.http.tls_client.Session"):
-        client = Client(settings)
+        client = Client(values.settings)
     client.get = mock.Mock(return_value=Response(text=html, status=status))
     return client
 
 
 def _search(include=(), exclude=()) -> TrackedItem:
-    return TrackedItem(
-        "id",
-        "Name",
-        500,
-        _custom={
-            URL: "https://www.insomnia.gr/classifieds/category/x/",
-            TITLE_INCLUDE: tuple(include),
-            TITLE_EXCLUDE: tuple(exclude),
-        },
+    values = decode_test_config(
+        PLUGIN,
+        "insomnia",
+        items=[
+            {
+                "id": "id",
+                "name": "Name",
+                "target_price": 500,
+                "url": "https://www.insomnia.gr/classifieds/category/x/",
+                "title_include": list(include),
+                "title_exclude": list(exclude),
+            }
+        ],
     )
+    return values.items[0]
 
 
 def test_filters_offers_and_returns_an_empty_listing_for_no_match():

@@ -1,3 +1,4 @@
+import ast
 import json
 import logging
 import shutil
@@ -31,6 +32,29 @@ def test_plugin_source_and_test_packages_are_one_to_one():
         if path.is_dir() and not path.name.startswith("_")
     }
     assert test_targets == set(CATALOG.targets)
+
+
+def test_plugin_tests_use_only_the_contributor_test_seam():
+    forbidden_imports = ("core.exceptions", "core.settings", "core.scrapers.framework")
+    for path in Path("tests/plugins").glob("*/test_*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported = [node.module]
+            else:
+                imported = []
+            for module in imported:
+                assert not module.startswith(forbidden_imports), (
+                    f"{path} imports private framework module {module!r}; "
+                    "use core.scrapers.api and tests/support.py"
+                )
+            if isinstance(node, ast.Call):
+                assert all(keyword.arg != "_custom" for keyword in node.keywords), (
+                    f"{path} constructs TrackedItem._custom directly; "
+                    "use support.decode_test_config"
+                )
 
 
 @pytest.mark.parametrize("target", CATALOG.targets)

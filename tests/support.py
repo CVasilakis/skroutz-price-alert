@@ -4,6 +4,7 @@ import contextlib
 import json
 import sys
 import types
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
@@ -11,10 +12,12 @@ from unittest import mock
 from core.application.contracts import RunReporter
 from core.general import general_config_path
 from core.notifications.contracts import NotificationService
-from core.scrapers.api import ScraperClient, ScraperPlugin, UrlField
+from core.scrapers.api import ScraperClient, ScraperPlugin, TrackedItem, UrlField
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.compiler import compile_plugin
+from core.scrapers.framework.configuration import SCHEMA_VERSION, decode_target_document
 from core.scrapers.framework.model import RegisteredPlugin
+from core.settings import ResolvedSettings
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,14 @@ class PluginFixture:
     target: str
     definition: ScraperPlugin
     client_class: type[ScraperClient] | None = None
+
+
+@dataclass(frozen=True)
+class PluginTestConfig:
+    """Framework-decoded values for plugin-owned behavior tests."""
+
+    settings: ResolvedSettings
+    items: tuple[TrackedItem, ...]
 
 
 def fake_plugin(
@@ -63,6 +74,30 @@ def compile_test_plugin(
         package=f"core.scrapers.plugins.{target}",
         source_dir=source_dir,
     )
+
+
+def decode_test_config(
+    definition: ScraperPlugin,
+    target: str,
+    *,
+    settings: Mapping[str, object] | None = None,
+    items: Sequence[Mapping[str, object]] = (),
+) -> PluginTestConfig:
+    """Decode raw plugin test values through the production configuration contract."""
+    plugin = compile_test_plugin(definition, target)
+    decoded = decode_target_document(
+        plugin,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "plugin_schema_version": definition.config_schema_version,
+            "settings": dict(settings) if settings is not None else {},
+            "items": [dict(item) for item in items],
+        },
+    )
+    if decoded.row_issues:
+        detail = "; ".join(f"item {issue.index}: {issue.message}" for issue in decoded.row_issues)
+        raise ValueError(f"invalid plugin test configuration: {detail}")
+    return PluginTestConfig(decoded.settings, decoded.items)
 
 
 def synthetic_catalog(*plugins: PluginFixture | RegisteredPlugin) -> PluginCatalog:

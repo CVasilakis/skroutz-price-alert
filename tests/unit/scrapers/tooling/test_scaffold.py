@@ -32,7 +32,14 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     assert document["schema_version"] == 1
     assert document["plugin_schema_version"] == 1
     assert document["items"][0]["url"] == "https://store.example/products/sample"
-    assert "pytest.fail" in (tests / "test_client.py").read_text(encoding="utf-8")
+    generated_test = (tests / "test_client.py").read_text(encoding="utf-8")
+    assert "pytest.fail" in generated_test
+    assert "from support import decode_test_config" in generated_test
+    assert "values.items[0][URL]" in generated_test
+    assert "_custom" not in generated_test
+    assert "core.settings" not in generated_test
+    assert "core.exceptions" not in generated_test
+    assert "core.scrapers.framework" not in generated_test
 
 
 def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
