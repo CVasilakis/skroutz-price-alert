@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,6 +75,23 @@ print(json.dumps({"unsafe": unsafe}))
 """
 
 
+@dataclass(frozen=True)
+class ContributorFiles:
+    readme: str
+    warnings: tuple[str, ...]
+    has_tests: bool
+
+
+@dataclass(frozen=True)
+class PluginCheckReport:
+    checks: tuple[str, ...]
+    warnings: tuple[str, ...]
+    has_tests: bool
+
+    def __contains__(self, label: object) -> bool:
+        return label in self.checks
+
+
 def _check_import_light(package: str, source: Path, *, include_migrations: bool) -> None:
     src_root = Path(__file__).resolve().parents[3]
     try:
@@ -108,7 +126,7 @@ def _check_contributor_files(
     tests: Path,
     target: str,
     config_schema_version: int,
-) -> str:
+) -> ContributorFiles:
     for filename in ("README.md", "config.example.json"):
         path = source / filename
         if not path.is_file():
@@ -119,8 +137,12 @@ def _check_contributor_files(
         except (OSError, UnicodeError) as exc:
             raise RuntimeError(f"plugin {target!r} {filename} is unreadable: {exc}") from exc
     test_modules = tuple(tests.glob("test_*.py")) if tests.is_dir() else ()
+    warnings: list[str] = []
     if not test_modules:
-        raise RuntimeError(f"plugin {target!r} requires tests/plugins/{target}/test_*.py")
+        warnings.append(
+            f"plugin {target!r} has no tests/plugins/{target}/test_*.py; "
+            "submission is allowed, but scraper behavior is unverified"
+        )
     migrations = source / "migrations.py"
     migration_tests = tests / "test_migrations.py"
     if config_schema_version == 1 and migrations.exists():
@@ -133,11 +155,15 @@ def _check_contributor_files(
             "requires migrations.py"
         )
     if config_schema_version > 1 and not migration_tests.is_file():
-        raise RuntimeError(
+        warnings.append(
             f"plugin {target!r} config schema version {config_schema_version} "
-            f"requires tests/plugins/{target}/test_migrations.py"
+            f"has no tests/plugins/{target}/test_migrations.py; migrations are unverified"
         )
-    return (source / "README.md").read_text(encoding="utf-8")
+    return ContributorFiles(
+        (source / "README.md").read_text(encoding="utf-8"),
+        tuple(warnings),
+        bool(test_modules),
+    )
 
 
 def _check_migrations(plugin: RegisteredPlugin) -> None:
@@ -224,7 +250,7 @@ def check_plugin(
     catalog: PluginCatalog | None = None,
     *,
     repo_root: str | Path | None = None,
-) -> list[str]:
+) -> PluginCheckReport:
     """Return successful check labels or raise with actionable guidance."""
     catalog = catalog or PluginCatalog.discover()
     plugin = catalog.get(target)
@@ -236,14 +262,16 @@ def check_plugin(
         source,
         include_migrations=plugin.config_schema_version > 1,
     )
-    _check_contributor_files(source, tests, target, plugin.config_schema_version)
+    contributor_files = _check_contributor_files(
+        source, tests, target, plugin.config_schema_version
+    )
     _check_self_contained(source, target, frozenset(catalog.targets))
     _check_declaration_imports(source, plugin.package, target)
     _check_migrations(plugin)
     checks = [
         "atomic discovery",
         "isolated import-light descriptor",
-        "contributor files and tests",
+        "contributor files",
         "self-contained package",
         "versioned pure migrations",
     ]
@@ -334,4 +362,8 @@ def check_plugin(
     checks.extend(["conventional lazy Client", "clean client shutdown"])
     if plugin.requirements_path:
         checks.append("private dependency guidance")
-    return checks
+    return PluginCheckReport(
+        checks=tuple(checks),
+        warnings=contributor_files.warnings,
+        has_tests=contributor_files.has_tests,
+    )

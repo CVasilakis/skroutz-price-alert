@@ -205,6 +205,7 @@ class ShellWorld:
     migration_stderr: str = ""
     migration_status: int = 0
     scaffold_target: str = "acme"
+    scaffold_tests: bool = True
     scaffold_output: str | None = None
     scaffold_stderr: str = ""
     scaffold_status: int = 0
@@ -490,6 +491,10 @@ case "${1:-}" in
                 printf '%s: %s\\n' "$FAKE_PLUGIN_CHECK_STDOUT" "$verification_stage"
             [ -z "${FAKE_PLUGIN_CHECK_STDERR:-}" ] ||
                 printf '%s: %s\\n' "$FAKE_PLUGIN_CHECK_STDERR" "$verification_stage" >&2
+            if [ "$verification_stage" = "source" ]; then
+                printf '%s\\n' "ok\tcontributor files"
+                printf '%s\\n' "tests\t1"
+            fi
             [ "${FAKE_PLUGIN_CHECK_FAIL:-}" != "$verification_stage" ] || exit 23
         fi
         if [ -n "$check_stage" ]; then
@@ -794,7 +799,11 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_SCAFFOLD_OUTPUT": (
             world.scaffold_output
             if world.scaffold_output is not None
-            else (f"scaffold\t1\t{world.scaffold_target}" if world.scaffold_status == 0 else "")
+            else (
+                f"scaffold\t1\t{world.scaffold_target}\t{int(world.scaffold_tests)}"
+                if world.scaffold_status == 0
+                else ""
+            )
         ),
         "FAKE_SCAFFOLD_STDERR": world.scaffold_stderr,
         "FAKE_SCAFFOLD_STATUS": str(world.scaffold_status),

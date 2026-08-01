@@ -4,6 +4,8 @@
 [+] Target verification
 3.12.0
 injected verification stdout: source
+ok      contributor files
+tests   1
 injected verification stderr: source
     [v] [skroutz] Source and dependency contract passed.
 

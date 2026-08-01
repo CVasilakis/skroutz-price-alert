@@ -57,10 +57,10 @@ def test_plugin_artifacts_and_ci_use_the_current_package_layout() -> None:
 def test_contributor_surfaces_share_the_required_commands(tmp_path) -> None:
     contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
     pull_request = (ROOT / ".github/pull_request_template.md").read_text(encoding="utf-8")
-    source, _tests = create_plugin(
+    source = create_plugin(
         tmp_path,
-        ScaffoldRequest("acme_store", "Acme Store", "store.example", "/items/"),
-    )
+        ScaffoldRequest("acme_store", "Acme Store", ("store.example",), "/items/"),
+    ).source
     generated = (source / "README.md").read_text(encoding="utf-8")
 
     for name, surface in {
@@ -81,10 +81,10 @@ def test_contributor_surfaces_share_the_required_commands(tmp_path) -> None:
 
 def test_contributor_guide_owns_advanced_migration_details(tmp_path) -> None:
     contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
-    source, _tests = create_plugin(
+    source = create_plugin(
         tmp_path,
-        ScaffoldRequest("acme_store", "Acme Store", "store.example", "/items/"),
-    )
+        ScaffoldRequest("acme_store", "Acme Store", ("store.example",), "/items/"),
+    ).source
     generated = (source / "README.md").read_text(encoding="utf-8")
 
     assert "from core.scrapers.api import JsonObject" in contributing

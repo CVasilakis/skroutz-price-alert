@@ -133,12 +133,15 @@ def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None)
         return _diagnose()
     else:
         try:
-            checks = check_plugin(args.target, catalog)
+            report = check_plugin(args.target, catalog)
         except (PluginError, StorageFileError, RuntimeError, ValueError) as exc:
             print(_plugin_check_failure(exc), file=sys.stderr)
             return 1
-        for label in checks:
+        for label in report.checks:
             print(f"ok\t{label}")
+        print(f"tests\t{int(report.has_tests)}")
+        for warning in report.warnings:
+            print(_tsv_row("warning", warning))
     return 0
 
 

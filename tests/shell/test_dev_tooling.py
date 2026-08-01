@@ -60,6 +60,13 @@ def _plugin_create_args(repo_root: Path, target: str = "acme_store") -> list[str
         "store.example",
         "--url-prefix",
         "/products/",
+        "--result-type",
+        "price",
+        "--default-interval",
+        "1h",
+        "--transport",
+        "bare",
+        "--with-tests",
         "--repo-root",
         str(repo_root),
     ]
@@ -106,7 +113,7 @@ def test_plugin_create_debug_alone_preserves_parser_status_and_exposes_diagnosti
     result = _run("scripts/dev/plugin-create.sh", "--debug")
 
     assert result.returncode == 2
-    assert "the following arguments are required" in result.stderr
+    assert "non-interactive mode requires" in result.stderr
     assert_task_status(result.stdout, "x", "Target scaffold could not be created.")
     assert result.stdout.startswith("\n")
     assert result.stdout.endswith("\n\n")
@@ -139,7 +146,7 @@ def test_plugin_create_accepts_duplicate_debug_without_forwarding_it(tmp_path):
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stderr.count("scaffold\t1\tacme_store") == 1
+    assert result.stderr.count("scaffold\t1\tacme_store\t1") == 1
 
 
 def test_plugin_create_preserves_duplicate_option_and_invalid_argument_semantics(tmp_path):
@@ -161,7 +168,7 @@ def test_plugin_create_preserves_duplicate_option_and_invalid_argument_semantics
     assert "Last Store Name" in plugin.read_text(encoding="utf-8")
     assert invalid.returncode == 2
     assert duplicate_target.returncode == 2
-    assert "unrecognized arguments" not in invalid.stdout
+    assert "unrecognized arguments: --unknown" in invalid.stdout
     assert "unrecognized arguments" not in invalid.stderr
     assert_task_status(invalid.stdout, "x", "Target scaffold could not be created.")
     assert_task_status(duplicate_target.stdout, "x", "Target scaffold could not be created.")
@@ -989,6 +996,13 @@ case "${1:-}" in
         esac
         printf '%s: %s\\n' "injected verification stdout" "$stage"
         printf '%s: %s\\n' "injected verification stderr" "$stage" >&2
+        if [ "$stage" = "source" ]; then
+            printf '%s\\n' "ok\tcontributor files"
+            printf '%s\\n' "tests\t${HAS_TESTS:-1}"
+            if [ "${HAS_TESTS:-1}" = "0" ]; then
+                printf '%s\\n' "warning\tplugin 'skroutz' has no target tests; behavior is unverified"
+            fi
+        fi
         if [ "$stage" = "source" ] && [ -n "${SOURCE_DIAGNOSTIC:-}" ]; then
             printf '%s\\n' "$SOURCE_DIAGNOSTIC" >&2
         fi
@@ -1039,6 +1053,28 @@ def test_plugin_check_success_uses_required_sections_and_spacing(tmp_path):
     assert "injected verification" not in result.stdout
 
 
+def test_plugin_check_missing_tests_warns_and_continues_with_source_checks(tmp_path):
+    _, env = _fake_plugin_check_python(tmp_path)
+    env["HAS_TESTS"] = "0"
+
+    result = _run("scripts/dev/plugin-check.sh", "--skroutz", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert_task_status(
+        result.stdout,
+        "!",
+        "[skroutz] plugin 'skroutz' has no target tests; behavior is unverified",
+    )
+    assert_task_status(
+        result.stdout,
+        "!",
+        "[skroutz] No target tests to run; continuing with source checks.",
+    )
+    assert "injected verification stdout: tests" not in result.stdout
+    assert_task_status(result.stdout, "!", "[skroutz] Target verification complete with warnings.")
+    assert "Type checking passed" in result.stdout
+
+
 @pytest.mark.parametrize(
     "args",
     (
@@ -1052,7 +1088,7 @@ def test_plugin_check_accepts_debug_in_either_order(tmp_path, args):
     result = _run("scripts/dev/plugin-check.sh", *args, env=env)
 
     assert result.returncode == 0
-    assert "injected verification stdout: source" in result.stdout
+    assert "injected verification stdout: source" in result.stderr
     assert "injected verification stderr: format" in result.stderr
     assert_task_status(result.stdout, "v", "[skroutz] Target verification complete.")
 
@@ -1164,7 +1200,7 @@ def test_plugin_check_debug_exposes_the_source_contract_diagnostic_and_noise(tmp
     result = _run("scripts/dev/plugin-check.sh", "--debug", "--skroutz", env=env)
 
     assert result.returncode == 23
-    assert "injected verification stdout: source" in result.stdout
+    assert "injected verification stdout: source" in result.stderr
     assert "injected verification stderr: source" in result.stderr
     assert "Plugin check failed: invalid plugin domain" in result.stderr
     assert result.stdout.count("Plugin check failed: invalid plugin domain") == 0

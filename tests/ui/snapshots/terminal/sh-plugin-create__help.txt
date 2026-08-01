@@ -1,17 +1,34 @@
 # border: green
 # exit: 0
 
-Usage: ./scripts/dev/plugin-create.sh [-h] [--debug] <target> --display-name <name>
-       --domain <domain> --url-prefix <prefix>
+Usage: ./scripts/dev/plugin-create.sh
+       ./scripts/dev/plugin-create.sh [-h] [--debug] <target> --display-name <name>
+       --domain <domain> [--domain <domain> ...] --url-prefix <prefix>
+       --result-type <price|listing> --default-interval <interval>
+       --transport <http|bare> <--with-tests|--without-tests> [options]
 
-Create an additive in-repository scraper target scaffold.
+With no arguments, launch the guided Rich wizard. Any argument selects
+strict non-interactive mode; all required choices must then be supplied.
 
 Required arguments:
   <target>                  non-reserved snake_case target name
   --display-name <name>     user-facing store name
-  --domain <domain>         supported hostname or IP address
+  --domain <domain>         repeatable supported hostname or IP address
   --url-prefix <prefix>     URL path prefix beginning with /
+  --result-type <type>      price or listing result scaffold
+  --default-interval <time> canonical framework execution interval
+  --transport <type>        shared http transport or bare client
+  --with-tests/--without-tests  explicitly choose starter tests
 
 Optional arguments:
+  --required-item-field KEY TYPE EXAMPLE_JSON
+  --optional-item-field KEY TYPE DEFAULT_JSON EXAMPLE_JSON
+  --required-setting KEY TYPE EXAMPLE_JSON
+  --optional-setting KEY TYPE DEFAULT_JSON EXAMPLE_JSON
+  --sensitive-setting KEY  mark a declared custom setting sensitive
+  --dependency <requirement> add a private Python requirement
+                              TYPE: text, integer, number,
+                              nonnegative-number, boolean, text-list
   -h, --help                show this help message and exit
   --debug                   show underlying command output
+Example field: --optional-item-field title_terms text-list '[]' '["Pixel"]'

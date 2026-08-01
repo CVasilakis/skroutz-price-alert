@@ -1,8 +1,9 @@
 # Contributing a scraper plugin
 
 Scrapers are checked-in price adapters. A contribution is strictly additive: it
-creates `src/core/scrapers/plugins/<target>/` and `tests/plugins/<target>/` and does not edit
-the framework, catalog, shell tools, UI, root documentation, workflows, or snapshots.
+creates `src/core/scrapers/plugins/<target>/` and may create
+`tests/plugins/<target>/`; it does not edit the framework, catalog, shell tools, UI,
+root documentation, workflows, or snapshots.
 The package name becomes the CLI flag and the stem for config, state, logs, and
 systemd units. Contributor commands and their development requirements are grouped
 under `scripts/dev/`.
@@ -13,28 +14,53 @@ the target-specific work and links back here for the complete contract.
 
 ## Quick start
 
-Generate both plugin-owned directories without installing or touching systemd:
+Prepare the development environment once, then launch the guided Rich wizard:
+
+```sh
+./scripts/dev/setup.sh --debug
+./scripts/dev/plugin-create.sh
+```
+
+The wizard explains framework-owned fields and settings, single-price versus listing
+results, shared HTTP versus bare clients, custom typed declarations, private
+dependencies, and starter tests before showing a final review. It creates nothing
+until that review is confirmed.
+
+For automation or an experienced contributor, provide every required choice in one
+strict non-interactive invocation:
 
 ```sh
 ./scripts/dev/plugin-create.sh acme_store \
   --display-name "Acme Store" \
   --domain store.example \
-  --url-prefix /items/
+  --url-prefix /items/ \
+  --result-type price \
+  --default-interval 1h \
+  --transport http \
+  --with-tests
 ./scripts/dev/setup.sh --acme_store
 ```
 
-The scaffold refuses existing destinations and leaves a failing behavior-test
-placeholder. Its descriptor and example configuration are valid, but its client
-deliberately raises `NotImplementedError`. Implement the client with mocked response
-fixtures, replace the failing test, complete the package-local guide, and run the
-one-target acceptance command:
+Any argument selects non-interactive mode; missing required choices are errors rather
+than prompts or silent defaults. Repeat `--domain` for another host and `--dependency`
+for a private requirement. Run `--help` for the typed item-field and setting forms.
+Advanced URL-less and multi-URL plugins remain manual because their input and
+reference-link design is plugin-specific.
+
+The scaffold refuses existing destinations. Its descriptor and example configuration
+are valid, but its client deliberately raises `NotImplementedError`. When starter
+tests are selected, they include a useful configuration-decoding example and a failing
+behavior placeholder. Implement the client, replace that placeholder, complete the
+package-local guide, and run the one-target acceptance command:
 
 ```sh
 ./scripts/dev/plugin-check.sh --acme_store
 ```
 
-That command checks the descriptor and example, runs only the target-owned tests,
-and statically checks the plugin package. Run the full suite before submitting:
+That command checks the descriptor and example, runs any target-owned tests, and
+statically checks the plugin package. A plugin without tests receives a visible warning
+but is not rejected solely for that reason. Existing tests must still pass. Run the full
+suite before submitting:
 
 ```sh
 ./scripts/dev/check.sh --debug
@@ -99,9 +125,10 @@ For a normal URL-based plugin, this is the complete path:
    client accepts.
 3. Implement `Client.scrape()` to fetch one URL and return
    `PriceResult(price, currency, url=None)`.
-4. Replace the failing generated test with mocked success, malformed-response,
-   unavailable-resource, relevant-status, URL-shape, and cleanup cases. Keep the
-   generated config runnable with at least one tracked item.
+4. If starter tests were generated, replace the failing placeholder with mocked
+   success, malformed-response, unavailable-resource, relevant-status, URL-shape, and
+   cleanup cases. If tests were skipped, the focused verifier will warn but continue.
+   Keep the generated config runnable with at least one tracked item.
 5. Complete the short package README, run
    `./scripts/dev/plugin-check.sh --<target>`, then run
    `./scripts/dev/check.sh --debug`.
@@ -120,7 +147,9 @@ The contributor verifier additionally requires:
 - `README.md` — supported inputs or URL shapes, result type, custom fields and
   settings, dependencies, and any store-specific behavior;
 - `config.example.json` — a strict, runnable example with at least one item;
-- `tests/plugins/<target>/test_*.py` — mocked target-owned behavior tests.
+
+Target-owned `tests/plugins/<target>/test_*.py` modules are recommended but optional.
+When present they must use mocked responses and pass the focused and full gates.
 
 Add `requirements.txt` only when the client needs private dependencies. Those
 dependencies must never be imported by `plugin.py` or `__init__.py`.
@@ -338,10 +367,11 @@ dependency must remain discoverable and produce the install hint
 a missing or invalid `Client`, and plugin-internal import defects are validation
 errors, not dependency errors.
 
-Add target-owned tests under `tests/plugins/<target>/` with focused parser tests for
+Prefer target-owned tests under `tests/plugins/<target>/` with focused parser tests for
 representative success payloads, malformed markup, no-price/unavailable cases,
 relevant status codes, accepted and rejected URL shapes when applicable, field
-and setting codecs, and cleanup. Never call the live store. The generic verifier checks descriptor
+and setting codecs, and cleanup. Never call the live store. Skipping tests produces a
+non-blocking verifier warning so the absence remains visible during review. The generic verifier checks descriptor
 imports, actual isolated import effects, contributor files, custom-schema examples,
 sibling-plugin isolation, canonical defaults, conventional client typing, URL
 acceptance, dependency guidance, schema-v1 state round trips, optional migration
@@ -372,9 +402,10 @@ informational only. Do not add `--cov-fail-under`, `fail_under`, or another
 coverage threshold: an otherwise successful local or CI test run must never fail
 because of its coverage percentage.
 
-The test suite itself scaffolds and discovers a temporary plugin to prove that the
-two new plugin-owned directories are sufficient. A plugin pull request should not
-contain changes outside those directories.
+The test suite itself scaffolds and discovers temporary plugins with and without a test
+package to prove that either additive layout is sufficient. A plugin pull request should
+not contain changes outside its source directory and optional matching test directory.
+
 # JSON schema migrations
 
 Every persisted JSON document carries a top-level integer `schema_version`. General
@@ -420,8 +451,9 @@ inspect other plugins. `CONFIG_MIGRATIONS` must retain exactly one plain callabl
 every source version from 1 through the version before current. A version-1 plugin
 must not contain `migrations.py`.
 
-Add `tests/plugins/<target>/test_migrations.py` covering every direct transition and
-the oldest supported document through the current version. Update
+Prefer `tests/plugins/<target>/test_migrations.py` covering every direct transition and
+the oldest supported document through the current version. Its absence produces a
+non-blocking warning, while an existing failing migration test still blocks. Update
 `plugin_schema_version` and all changed private fields in the checked-in example and
 guide. New plugins start at version 1 and do not implement historical no-op
 migrations. Declaration modules may import the standard library,

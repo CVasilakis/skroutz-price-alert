@@ -674,9 +674,12 @@ To see all the undergoing feature requests or to request a new feature, please c
 ## 🤝 Contributing & Issues
 
 New stores use the additive in-repository plugin contract. Start with
-`./scripts/dev/plugin-create.sh`; the generated package README and
+`./scripts/dev/setup.sh --debug`, then run `./scripts/dev/plugin-create.sh` for the
+guided Rich wizard. A strict all-argument mode is available for automation. The
+generated package README and
 [CONTRIBUTING.md](CONTRIBUTING.md) provide the complete workflow, public contracts,
-testing requirements, and submission checks. The catalog discovers a valid new
+recommended testing practices, and submission checks. Missing plugin tests produce a
+focused-verifier warning rather than blocking submission. The catalog discovers a valid new
 adapter automatically, so normal plugin contributions do not edit the framework,
 CLI, UI, workflows, root documentation, or snapshots.
 

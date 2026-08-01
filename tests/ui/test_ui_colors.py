@@ -62,6 +62,7 @@ EXPECTED_COLORS = {
     "sh-setup__all_dependencies": "green",
     "sh-setup__target_dependency_failure": "red",
     "sh-plugin-create__created": "green",
+    "sh-plugin-create__created_without_tests": "green",
     "sh-plugin-create__collision": "red",
     "sh-plugin-create__python_missing": "red",
     "sh-install-hooks__configured": "green",

@@ -9,7 +9,8 @@ BASE_DIR="$PROJECT_ROOT"
 
 print_help() {
     printf '\n%s\n\n' "Usage: ./scripts/dev/plugin-check.sh [-h] [--debug] --<target>"
-    printf '%s\n\n' "Verify one target against its source, tests, and private dependencies."
+    printf '%s\n' "Verify one target against its source, optional tests, and private dependencies."
+    printf '%s\n\n' "Missing tests produce a warning; existing test failures still block."
     printf '%s\n' "Required arguments:"
     printf '%s\n\n' "  --<target>        target to verify (for example, --skroutz)"
     printf '%s\n' "Optional arguments:"
@@ -99,13 +100,8 @@ verification_failure() {
 # Invoked indirectly through run_with_progress.
 # shellcheck disable=SC2329
 run_source_contract_check() {
-    if [ "$DEBUG_MODE" -eq 1 ]; then
-        env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
-            -m core.scrapers.tooling.cli plugin-check "$target"
-    else
-        run_captured env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
-            -m core.scrapers.tooling.cli plugin-check "$target"
-    fi
+    run_captured env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
+        -m core.scrapers.tooling.cli plugin-check "$target"
 }
 
 begin_operational_output
@@ -152,15 +148,51 @@ else
         "${CAPTURED_COMMAND_STDERR:-}"
 fi
 
+plugin_has_tests=''
+plugin_warnings=0
+tab="$(printf '\t')"
+old_ifs="$IFS"
+IFS='
+'
+# shellcheck disable=SC2086  # deliberate newline-only machine-report iteration
+for report_row in $CAPTURED_COMMAND_OUTPUT; do
+    report_kind="${report_row%%"$tab"*}"
+    report_value="${report_row#*"$tab"}"
+    case "$report_kind" in
+        ok) : ;;
+        tests)
+            if [ -n "$plugin_has_tests" ] ||
+               { [ "$report_value" != "0" ] && [ "$report_value" != "1" ]; }; then
+                IFS="$old_ifs"
+                verification_failure 1 "Source contract returned an invalid test report."
+            fi
+            plugin_has_tests="$report_value"
+            ;;
+        warning)
+            plugin_warnings=$((plugin_warnings + 1))
+            task_status warning "[$target] $report_value"
+            ;;
+        *) : ;; # debug/test harness diagnostics are not part of the TSV report
+    esac
+done
+IFS="$old_ifs"
+if [ -z "$plugin_has_tests" ]; then
+    verification_failure 1 "Source contract did not report test availability."
+fi
+
 printf '\n'
 section_heading success "Target tests"
-if run_with_progress "[$target] Running target tests..." \
-    run_action "$plugin_check_python" -m pytest --no-cov \
-    "$BASE_DIR/tests/plugins/$target"; then
-    task_status success "[$target] Tests passed."
+if [ "$plugin_has_tests" -eq 0 ]; then
+    task_status warning "[$target] No target tests to run; continuing with source checks."
 else
-    verification_status=$?
-    verification_failure "$verification_status" "Tests failed."
+    if run_with_progress "[$target] Running target tests..." \
+        run_action "$plugin_check_python" -m pytest --no-cov \
+        "$BASE_DIR/tests/plugins/$target"; then
+        task_status success "[$target] Tests passed."
+    else
+        verification_status=$?
+        verification_failure "$verification_status" "Tests failed."
+    fi
 fi
 
 printf '\n'
@@ -174,17 +206,19 @@ else
     verification_status=$?
     verification_failure "$verification_status" "Type checking failed."
 fi
+set -- "$BASE_DIR/src/core/scrapers/plugins/$target"
+if [ "$plugin_has_tests" -eq 1 ]; then
+    set -- "$@" "$BASE_DIR/tests/plugins/$target"
+fi
 if run_with_progress "[$target] Running Ruff lint..." \
-    run_action "$plugin_check_python" -m ruff check \
-    "$BASE_DIR/src/core/scrapers/plugins/$target" "$BASE_DIR/tests/plugins/$target"; then
+    run_action "$plugin_check_python" -m ruff check "$@"; then
     task_status success "[$target] Ruff lint passed."
 else
     verification_status=$?
     verification_failure "$verification_status" "Ruff lint failed."
 fi
 if run_with_progress "[$target] Checking Ruff formatting..." \
-    run_action "$plugin_check_python" -m ruff format --check \
-    "$BASE_DIR/src/core/scrapers/plugins/$target" "$BASE_DIR/tests/plugins/$target"; then
+    run_action "$plugin_check_python" -m ruff format --check "$@"; then
     task_status success "[$target] Ruff formatting passed."
 else
     verification_status=$?
@@ -193,6 +227,10 @@ fi
 
 printf '\n'
 section_heading success "Verification result"
-task_status success "[$target] Target verification complete."
+if [ "$plugin_warnings" -gt 0 ]; then
+    task_status warning "[$target] Target verification complete with warnings."
+else
+    task_status success "[$target] Target verification complete."
+fi
 task_status info "Run ./scripts/dev/check.sh --debug before submitting."
 finish_verification 0

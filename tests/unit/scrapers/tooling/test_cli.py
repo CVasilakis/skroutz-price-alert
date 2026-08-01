@@ -5,6 +5,7 @@ import pytest
 from support import fake_plugin, synthetic_catalog
 
 from core.exceptions import PluginValidationError
+from core.scrapers.tooling.check import PluginCheckReport
 from core.scrapers.tooling.cli import _tsv_row, catalog_rows, resolve_schedule, schedule_rows
 from core.scrapers.tooling.cli import main as cli_main
 from core.settings import SettingStatus
@@ -61,8 +62,17 @@ def test_verifier_and_tooling_cli(capsys, tmp_path, catalog):
     assert cli_main(["requirements"], catalog=catalog) == 0
     requirements_output = capsys.readouterr().out
     assert "skroutz\t" in requirements_output
-    with mock.patch("core.scrapers.tooling.cli.check_plugin", return_value=["contributor files"]):
+    with mock.patch(
+        "core.scrapers.tooling.cli.check_plugin",
+        return_value=PluginCheckReport(
+            checks=("contributor files",), warnings=("tests missing",), has_tests=False
+        ),
+    ):
         assert cli_main(["plugin-check", "skroutz"], catalog=catalog) == 0
+    report = capsys.readouterr().out
+    assert "ok\tcontributor files" in report
+    assert "tests\t0" in report
+    assert "warning\ttests missing" in report
     with mock.patch(
         "core.scrapers.tooling.cli.PluginCatalog.discover", side_effect=RuntimeError("bad")
     ):

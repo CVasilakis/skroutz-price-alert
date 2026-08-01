@@ -2,10 +2,11 @@
 
 For a new scraper plugin, confirm that:
 
-- [ ] The diff adds only `src/core/scrapers/plugins/<target>/` and `tests/plugins/<target>/`.
+- [ ] The diff adds only `src/core/scrapers/plugins/<target>/` and, when included,
+      `tests/plugins/<target>/`.
 - [ ] `plugin.py` and `__init__.py` are import-light and use no third-party imports.
 - [ ] `Client` uses bounded requests, modeled exceptions, and clean shutdown.
-- [ ] Tests use mocked/fixture responses and cover success, malformed data,
+- [ ] Optional tests, when included, use mocked/fixture responses and cover success, malformed data,
       unavailable/no-match behavior, relevant status codes, field/setting
       codecs, URL shapes when applicable, and cleanup.
 - [ ] `config.example.json` contains a valid item and demonstrates every custom key.

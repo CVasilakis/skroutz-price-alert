@@ -106,7 +106,7 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
         "setup.sh", "Preparing the development venv, dependencies, and repository checks."
     ),
     Surface.SH_PLUGIN_CREATE: SurfaceInfo(
-        "plugin-create.sh", "Creating an additive source and test scaffold for a new target."
+        "plugin-create.sh", "Creating a guided additive source and optional test scaffold."
     ),
     Surface.SH_PLUGIN_CHECK: SurfaceInfo(
         "plugin-check.sh", "Verifying one target's contract, tests, and static analysis."

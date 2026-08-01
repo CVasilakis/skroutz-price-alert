@@ -10,17 +10,36 @@ BASE_DIR="$PROJECT_ROOT"
 
 print_help() {
     printf '\n%s\n' \
-        "Usage: ./scripts/dev/plugin-create.sh [-h] [--debug] <target> --display-name <name>"
-    printf '%s\n\n' "       --domain <domain> --url-prefix <prefix>"
-    printf '%s\n\n' "Create an additive in-repository scraper target scaffold."
+        "Usage: ./scripts/dev/plugin-create.sh"
+    printf '%s\n' \
+        "       ./scripts/dev/plugin-create.sh [-h] [--debug] <target> --display-name <name>"
+    printf '%s\n' "       --domain <domain> [--domain <domain> ...] --url-prefix <prefix>"
+    printf '%s\n' "       --result-type <price|listing> --default-interval <interval>"
+    printf '%s\n\n' "       --transport <http|bare> <--with-tests|--without-tests> [options]"
+    printf '%s\n' "With no arguments, launch the guided Rich wizard. Any argument selects"
+    printf '%s\n\n' "strict non-interactive mode; all required choices must then be supplied."
     printf '%s\n' "Required arguments:"
     printf '%s\n' "  <target>                  non-reserved snake_case target name"
     printf '%s\n' "  --display-name <name>     user-facing store name"
-    printf '%s\n' "  --domain <domain>         supported hostname or IP address"
-    printf '%s\n\n' "  --url-prefix <prefix>     URL path prefix beginning with /"
+    printf '%s\n' "  --domain <domain>         repeatable supported hostname or IP address"
+    printf '%s\n' "  --url-prefix <prefix>     URL path prefix beginning with /"
+    printf '%s\n' "  --result-type <type>      price or listing result scaffold"
+    printf '%s\n' "  --default-interval <time> canonical framework execution interval"
+    printf '%s\n' "  --transport <type>        shared http transport or bare client"
+    printf '%s\n\n' "  --with-tests/--without-tests  explicitly choose starter tests"
     printf '%s\n' "Optional arguments:"
+    printf '%s\n' "  --required-item-field KEY TYPE EXAMPLE_JSON"
+    printf '%s\n' "  --optional-item-field KEY TYPE DEFAULT_JSON EXAMPLE_JSON"
+    printf '%s\n' "  --required-setting KEY TYPE EXAMPLE_JSON"
+    printf '%s\n' "  --optional-setting KEY TYPE DEFAULT_JSON EXAMPLE_JSON"
+    printf '%s\n' "  --sensitive-setting KEY  mark a declared custom setting sensitive"
+    printf '%s\n' "  --dependency <requirement> add a private Python requirement"
+    printf '%s\n' "                              TYPE: text, integer, number,"
+    printf '%s\n' "                              nonnegative-number, boolean, text-list"
     printf '%s\n' "  -h, --help                show this help message and exit"
-    printf '%s\n\n' "  --debug                   show underlying command output"
+    printf '%s\n' "  --debug                   show underlying command output"
+    printf '%s\n\n' \
+        "Example field: --optional-item-field title_terms text-list '[]' '[\"Pixel\"]'"
 }
 
 HELP_REQUESTED=0
@@ -33,6 +52,8 @@ if [ "$HELP_REQUESTED" -eq 1 ]; then
     print_help
     exit 0
 fi
+
+ORIGINAL_ARGUMENT_COUNT=$#
 
 remaining=$#
 while [ "$remaining" -gt 0 ]; do
@@ -47,6 +68,34 @@ while [ "$remaining" -gt 0 ]; do
     fi
     remaining=$((remaining - 1))
 done
+
+if [ "$ORIGINAL_ARGUMENT_COUNT" -eq 0 ]; then
+    begin_operational_output
+    section_heading success "Plugin scaffold wizard"
+    if ! run_action reject_project_venv_symlink; then
+        task_status failure "The development venv path is a symlink."
+        task_status info "Recreate it with ./scripts/dev/setup.sh --debug."
+        end_operational_output
+        exit 1
+    fi
+    wizard_python="$PROJECT_ROOT/venv/bin/python3"
+    if ! run_action require_python_310 "$wizard_python" "./scripts/dev/setup.sh --debug"; then
+        task_status failure "The guided wizard requires the development venv."
+        task_status info "Run ./scripts/dev/setup.sh --debug, then retry."
+        end_operational_output
+        exit 127
+    fi
+    if ! run_action "$wizard_python" -c 'import rich'; then
+        task_status failure "The guided wizard requires the pinned Rich dependency."
+        task_status info "Run ./scripts/dev/setup.sh --debug, then retry."
+        end_operational_output
+        exit 1
+    fi
+    end_operational_output
+    PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
+        "$wizard_python" -m core.scrapers.tooling.scaffold --interactive
+    exit $?
+fi
 
 scaffold_finish() {
     end_operational_output
@@ -102,17 +151,24 @@ if [ "$scaffold_status" -ne 0 ]; then
 fi
 
 tab="$(printf '\t')"
-scaffold_target="${CAPTURED_COMMAND_OUTPUT##*"$tab"}"
-expected_result="scaffold${tab}1${tab}${scaffold_target}"
+scaffold_tests="${CAPTURED_COMMAND_OUTPUT##*"$tab"}"
+scaffold_without_tests="${CAPTURED_COMMAND_OUTPUT%"$tab"*}"
+scaffold_target="${scaffold_without_tests##*"$tab"}"
+expected_result="scaffold${tab}1${tab}${scaffold_target}${tab}${scaffold_tests}"
 if [ "$CAPTURED_COMMAND_OUTPUT" != "$expected_result" ] ||
-   ! is_valid_target "$scaffold_target"; then
+   ! is_valid_target "$scaffold_target" ||
+   { [ "$scaffold_tests" != "0" ] && [ "$scaffold_tests" != "1" ]; }; then
     task_status failure "Target scaffold returned an invalid result."
     task_status info "Run ./scripts/dev/plugin-create.sh --debug to inspect the failure."
     scaffold_finish 1
 fi
 
 task_status success "[$scaffold_target] Created the target source package."
-task_status success "[$scaffold_target] Created the target test package."
+if [ "$scaffold_tests" -eq 1 ]; then
+    task_status success "[$scaffold_target] Created the target test package."
+else
+    task_status warning "[$scaffold_target] Starter tests were skipped."
+fi
 printf '\n'
 section_heading success "Next steps"
 task_status info "Run ./scripts/dev/setup.sh --$scaffold_target."

@@ -12,6 +12,13 @@ _ARGS = (
     "store.example",
     "--url-prefix",
     "/products/",
+    "--result-type",
+    "price",
+    "--default-interval",
+    "1h",
+    "--transport",
+    "bare",
+    "--with-tests",
 )
 
 _case(
@@ -25,6 +32,15 @@ _case(
     "created",
     "A source package and matching test package are created.",
     *_ARGS,
+    tags=("ok",),
+)
+
+_case(
+    "created_without_tests",
+    "A source-only scaffold reports the intentionally skipped test package.",
+    *_ARGS[:-1],
+    "--without-tests",
+    world=ShellWorld(scaffold_tests=False),
     tags=("ok",),
 )
 

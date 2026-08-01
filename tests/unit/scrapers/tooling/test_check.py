@@ -18,17 +18,19 @@ from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
 from core.tooling.migration import STATUS_MIGRATED, MigrationRunner
 
 
-def test_contributor_files_require_target_owned_tests(tmp_path):
+def test_contributor_files_warn_when_target_owned_tests_are_missing(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
     (source / "README.md").write_text("guide", encoding="utf-8")
     (source / "config.example.json").write_text("{}", encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="tests/plugins/acme/test_"):
-        _check_contributor_files(source, tmp_path / "missing-tests", "acme", 1)
+    result = _check_contributor_files(source, tmp_path / "missing-tests", "acme", 1)
+
+    assert not result.has_tests
+    assert "behavior is unverified" in result.warnings[0]
 
 
-def test_contributor_files_require_target_owned_migration_tests(tmp_path):
+def test_contributor_files_warn_when_migration_tests_are_missing(tmp_path):
     source = tmp_path / "source"
     tests = tmp_path / "tests"
     source.mkdir()
@@ -41,8 +43,9 @@ def test_contributor_files_require_target_owned_migration_tests(tmp_path):
     with pytest.raises(RuntimeError, match="version 1 must not contain"):
         _check_contributor_files(source, tests, "acme", 1)
 
-    with pytest.raises(RuntimeError, match="test_migrations.py"):
-        _check_contributor_files(source, tests, "acme", 2)
+    result = _check_contributor_files(source, tests, "acme", 2)
+    assert result.has_tests
+    assert "migrations are unverified" in result.warnings[0]
 
 
 @pytest.mark.parametrize(
@@ -152,10 +155,10 @@ def test_declaration_imports_reject_absolute_third_party_modules(tmp_path):
 def test_verifier_rejects_an_empty_example_config(tmp_path):
     import core.scrapers.plugins as plugin_package
 
-    target_dir, _tests = create_plugin(
+    target_dir = create_plugin(
         tmp_path,
-        ScaffoldRequest("empty_store", "Empty Store", "store.example", "/items/"),
-    )
+        ScaffoldRequest("empty_store", "Empty Store", ("store.example",), "/items/"),
+    ).source
     discovery_root = target_dir.parent
     example = target_dir / "config.example.json"
     example.write_text(

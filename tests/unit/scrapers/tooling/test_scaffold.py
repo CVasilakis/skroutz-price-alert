@@ -6,16 +6,23 @@ import pytest
 
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
-from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin, main, validate_request
+from core.scrapers.tooling.scaffold import (
+    CustomValueSpec,
+    ScaffoldRequest,
+    create_plugin,
+    main,
+    validate_request,
+)
 
-REQUEST = ScaffoldRequest("acme_store", "Acme Store", "Store.Example", "/products")
+REQUEST = ScaffoldRequest("acme_store", "Acme Store", ("Store.Example",), "/products")
 
 
 def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     sentinel = tmp_path / "README.md"
     sentinel.write_text("untouched", encoding="utf-8")
 
-    source, tests = create_plugin(tmp_path, REQUEST)
+    result = create_plugin(tmp_path, REQUEST)
+    source, tests = result.source, result.tests
 
     assert sentinel.read_text(encoding="utf-8") == "untouched"
     assert source == tmp_path / "src/core/scrapers/plugins/acme_store"
@@ -49,7 +56,7 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
 def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
     import core.scrapers.plugins as plugin_package
 
-    source, _tests = create_plugin(tmp_path, REQUEST)
+    source = create_plugin(tmp_path, REQUEST).source
     discovery_root = source.parent
     saved_path = list(plugin_package.__path__)
     plugin_package.__path__.append(str(discovery_root))
@@ -71,14 +78,14 @@ def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
 @pytest.mark.parametrize(
     "scaffold_request",
     [
-        ScaffoldRequest("Bad", "Acme", "store.example", "/products/"),
-        ScaffoldRequest("help", "Acme", "store.example", "/products/"),
-        ScaffoldRequest("migration", "Acme", "store.example", "/products/"),
-        ScaffoldRequest("reminder", "Acme", "store.example", "/products/"),
-        ScaffoldRequest("acme", " ", "store.example", "/products/"),
-        ScaffoldRequest("acme", "Acme", "https://store.example", "/products/"),
-        ScaffoldRequest("acme", "Acme", "store.example", "products/"),
-        ScaffoldRequest("acme", "Acme", "store.example", "/products/?q=x"),
+        ScaffoldRequest("Bad", "Acme", ("store.example",), "/products/"),
+        ScaffoldRequest("help", "Acme", ("store.example",), "/products/"),
+        ScaffoldRequest("migration", "Acme", ("store.example",), "/products/"),
+        ScaffoldRequest("reminder", "Acme", ("store.example",), "/products/"),
+        ScaffoldRequest("acme", " ", ("store.example",), "/products/"),
+        ScaffoldRequest("acme", "Acme", ("https://store.example",), "/products/"),
+        ScaffoldRequest("acme", "Acme", ("store.example",), "products/"),
+        ScaffoldRequest("acme", "Acme", ("store.example",), "/products/?q=x"),
     ],
 )
 def test_scaffold_rejects_invalid_identity_and_url_inputs(scaffold_request):
@@ -88,7 +95,7 @@ def test_scaffold_rejects_invalid_identity_and_url_inputs(scaffold_request):
 
 @pytest.mark.parametrize("target", ["ping", "status"])
 def test_scaffold_accepts_command_names_as_targets(target):
-    request = ScaffoldRequest(target, target.title(), f"{target}.example", "/products/")
+    request = ScaffoldRequest(target, target.title(), (f"{target}.example",), "/products/")
 
     assert validate_request(request) == request
 
@@ -136,6 +143,13 @@ def test_scaffold_cli_reports_success_and_collision(tmp_path, capsys):
         "store.example",
         "--url-prefix",
         "/products/",
+        "--result-type",
+        "price",
+        "--default-interval",
+        "1h",
+        "--transport",
+        "bare",
+        "--with-tests",
         "--repo-root",
         str(tmp_path),
     ]
@@ -156,6 +170,13 @@ def test_scaffold_cli_shell_output_is_structured_and_hidden_from_help(tmp_path, 
         "store.example",
         "--url-prefix",
         "/products/",
+        "--result-type",
+        "price",
+        "--default-interval",
+        "1h",
+        "--transport",
+        "bare",
+        "--with-tests",
         "--repo-root",
         str(tmp_path),
         "--shell-output",
@@ -163,7 +184,7 @@ def test_scaffold_cli_shell_output_is_structured_and_hidden_from_help(tmp_path, 
 
     assert main(args) == 0
     captured = capsys.readouterr()
-    assert captured.out == "scaffold\t1\tacme_store\n"
+    assert captured.out == "scaffold\t1\tacme_store\t1\n"
     assert captured.err == ""
 
     with pytest.raises(SystemExit, match="0"):
@@ -180,10 +201,46 @@ def test_scaffold_cli_shell_output_uses_validated_target(tmp_path, capsys):
         "store.example",
         "--url-prefix",
         "/products/",
+        "--result-type",
+        "price",
+        "--default-interval",
+        "1h",
+        "--transport",
+        "bare",
+        "--with-tests",
         "--repo-root",
         str(tmp_path),
         "--shell-output",
     ]
 
     assert main(args) == 0
-    assert capsys.readouterr().out == "scaffold\t1\tacme_store\n"
+    assert capsys.readouterr().out == "scaffold\t1\tacme_store\t1\n"
+
+
+def test_scaffold_generates_listing_http_custom_contract_without_tests(tmp_path):
+    request = ScaffoldRequest(
+        "market_watch",
+        "Market Watch",
+        ("market.example", "shop.example"),
+        "/listings/",
+        result_type="listing",
+        transport="http",
+        item_fields=(CustomValueSpec("title_terms", "text-list", ("Pixel",), ()),),
+        settings=(CustomValueSpec("api_token", "text", "example-token", sensitive=True),),
+        dependencies=("beautifulsoup4",),
+        include_tests=False,
+    )
+
+    result = create_plugin(tmp_path, request)
+
+    assert result.tests is None
+    assert not (tmp_path / "tests/plugins/market_watch").exists()
+    descriptor = (result.source / "plugin.py").read_text(encoding="utf-8")
+    client = (result.source / "client.py").read_text(encoding="utf-8")
+    requirements = (result.source / "requirements.txt").read_text(encoding="utf-8")
+    assert "ListingResult" in client
+    assert "HttpScraperClient" in client
+    assert "ITEM_TITLE_TERMS" in descriptor
+    assert "SETTING_API_TOKEN" in descriptor
+    assert "sensitive=True" in descriptor
+    assert requirements.splitlines() == ["tls-client", "beautifulsoup4"]

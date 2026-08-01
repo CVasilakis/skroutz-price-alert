@@ -3,7 +3,8 @@
 
 Usage: ./scripts/dev/plugin-check.sh [-h] [--debug] --<target>
 
-Verify one target against its source, tests, and private dependencies.
+Verify one target against its source, optional tests, and private dependencies.
+Missing tests produce a warning; existing test failures still block.
 
 Required arguments:
   --<target>        target to verify (for example, --skroutz)
