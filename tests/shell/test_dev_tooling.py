@@ -1,5 +1,6 @@
 import os
 import pty
+import re
 import select
 import shutil
 import signal
@@ -12,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from core.scrapers.framework.catalog import PluginCatalog
+from core.scrapers.tooling.scaffold import _parser as scaffold_parser
 from shell.assertions import assert_task_status
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -56,13 +58,27 @@ def test_plugin_create_help_needs_no_venv_and_has_required_inputs():
     assert "--debug" in result.stdout
 
 
+def test_plugin_create_shell_help_matches_public_backend_options():
+    result = _run("scripts/dev/plugin-create.sh", "--help")
+    documented = set(re.findall(r"--[a-z][a-z-]*", result.stdout))
+    backend = {
+        option
+        for action in scaffold_parser()._actions
+        if action.dest not in {"interactive", "shell_output"}
+        for option in action.option_strings
+        if option.startswith("--")
+    }
+
+    assert documented == backend | {"--debug"}
+
+
 def test_plugin_create_interactive_output_is_owned_by_rich_panels():
     env = os.environ.copy()
     env["SCROOGE_PLUGIN_CREATE_PYTHON"] = sys.executable
 
     result = _run("scripts/dev/plugin-create.sh", env=env)
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 1, result.stdout + result.stderr
     assert result.stderr == ""
     assert "[+] Plugin scaffold wizard" not in result.stdout
     assert result.stdout.startswith("\n╭")
@@ -105,21 +121,84 @@ def _read_pty_until(master: int, needle: bytes, timeout: float = 10) -> bytes:
     return bytes(output)
 
 
+def _read_pty_available(master: int, timeout: float = 0.5) -> bytes:
+    output = bytearray()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ready, _, _ = select.select([master], [], [], 0.05)
+        if not ready:
+            continue
+        try:
+            output.extend(os.read(master, 4096))
+        except OSError:
+            break
+    return bytes(output)
+
+
 def _stop_process(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
         process.kill()
         process.wait(timeout=5)
 
 
-def test_plugin_create_sigterm_restores_exact_terminal_settings():
+@pytest.mark.parametrize(
+    "signum",
+    [
+        getattr(signal, name)
+        for name in ("SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT")
+        if hasattr(signal, name)
+    ],
+)
+def test_plugin_create_catchable_signal_restores_exact_terminal_settings(signum):
+    process, master, slave, original = _interactive_plugin_create_process()
+    try:
+        output = _read_pty_until(master, b"Target name")
+        assert termios.tcgetattr(slave) != original
+
+        process.send_signal(signum)
+
+        assert process.wait(timeout=10) == 130
+        assert termios.tcgetattr(slave) == original
+        output += _read_pty_available(master)
+        normalized = output.replace(b"\r\n", b"\n")
+        assert b"Scaffold cancelled" in normalized
+        assert b"No plugin was created" in normalized
+        assert normalized.endswith(b"\n\n")
+    finally:
+        _stop_process(process)
+        os.close(master)
+        os.close(slave)
+
+
+@pytest.mark.parametrize("cancel_key", [b"\x04", b"\x1b"], ids=("ctrl-d", "escape"))
+def test_plugin_create_keyboard_cancel_restores_terminal_settings(cancel_key):
+    process, master, slave, original = _interactive_plugin_create_process()
+    try:
+        output = _read_pty_until(master, b"Target name")
+        os.write(master, cancel_key)
+
+        assert process.wait(timeout=10) == 0
+        assert termios.tcgetattr(slave) == original
+        output += _read_pty_available(master)
+        normalized = output.replace(b"\r\n", b"\n")
+        assert b"Scaffold cancelled" in normalized
+        assert b"No plugin was created" in normalized
+        assert normalized.endswith(b"\n\n")
+    finally:
+        _stop_process(process)
+        os.close(master)
+        os.close(slave)
+
+
+def test_plugin_create_incomplete_utf8_cannot_trap_the_wizard():
     process, master, slave, original = _interactive_plugin_create_process()
     try:
         _read_pty_until(master, b"Target name")
-        assert termios.tcgetattr(slave) != original
+        os.write(master, b"\xce")
+        time.sleep(0.3)
+        os.write(master, b"\x1b")
 
-        process.send_signal(signal.SIGTERM)
-
-        assert process.wait(timeout=10) == 130
+        assert process.wait(timeout=10) == 0
         assert termios.tcgetattr(slave) == original
     finally:
         _stop_process(process)
@@ -172,7 +251,30 @@ def test_plugin_create_suspend_and_resume_preserve_terminal_mode():
         os.close(slave)
 
 
-def _plugin_create_args(repo_root: Path, target: str = "acme_store") -> list[str]:
+@pytest.fixture
+def plugin_create_checkout(tmp_path: Path) -> Path:
+    checkout = tmp_path / "checkout"
+    shutil.copytree(ROOT / "src", checkout / "src")
+    shutil.copytree(ROOT / "scripts/lib", checkout / "scripts/lib")
+    (checkout / "scripts/dev").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts/dev/plugin-create.sh", checkout / "scripts/dev/plugin-create.sh")
+    (checkout / "tests/plugins").mkdir(parents=True)
+    return checkout
+
+
+def _run_plugin_create(
+    checkout: Path, *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["sh", str(checkout / "scripts/dev/plugin-create.sh"), *args],
+        cwd=checkout,
+        text=True,
+        capture_output=True,
+        env=env or os.environ.copy(),
+    )
+
+
+def _plugin_create_args(target: str = "acme_store") -> list[str]:
     return [
         target,
         "--display-name",
@@ -188,13 +290,13 @@ def _plugin_create_args(repo_root: Path, target: str = "acme_store") -> list[str
         "--transport",
         "bare",
         "--with-tests",
-        "--repo-root",
-        str(repo_root),
     ]
 
 
-def test_plugin_create_success_uses_sectioned_tui_and_preserves_spaced_values(tmp_path):
-    result = _run("scripts/dev/plugin-create.sh", *_plugin_create_args(tmp_path))
+def test_plugin_create_success_uses_sectioned_tui_and_preserves_spaced_values(
+    plugin_create_checkout,
+):
+    result = _run_plugin_create(plugin_create_checkout, *_plugin_create_args())
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stderr == ""
@@ -214,16 +316,18 @@ def test_plugin_create_success_uses_sectioned_tui_and_preserves_spaced_values(tm
         "    [v] [acme_store] Target scaffold created.\n"
         "\n"
     )
-    plugin = tmp_path / "src/core/scrapers/plugins/acme_store/plugin.py"
+    plugin = plugin_create_checkout / "src/core/scrapers/plugins/acme_store/plugin.py"
     assert "Acme Store With Spaces" in plugin.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("debug_index", [0, 1, 3, 5, 7, 9])
-def test_plugin_create_accepts_debug_between_complete_arguments(tmp_path, debug_index):
-    args = _plugin_create_args(tmp_path / str(debug_index), target=f"acme_{debug_index}")
+def test_plugin_create_accepts_debug_between_complete_arguments(
+    plugin_create_checkout, debug_index
+):
+    args = _plugin_create_args(target=f"acme_{debug_index}")
     args.insert(debug_index, "--debug")
 
-    result = _run("scripts/dev/plugin-create.sh", *args)
+    result = _run_plugin_create(plugin_create_checkout, *args)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert_task_status(result.stdout, "v", f"[acme_{debug_index}] Target scaffold created.")
@@ -238,6 +342,15 @@ def test_plugin_create_debug_alone_preserves_parser_status_and_exposes_diagnosti
     assert_task_status(result.stdout, "x", "Target scaffold could not be created.")
     assert result.stdout.startswith("\n")
     assert result.stdout.endswith("\n\n")
+
+
+def test_plugin_create_normal_diagnostics_strip_terminal_control_characters():
+    result = _run("scripts/dev/plugin-create.sh", "--unknown-\x1b[31m")
+
+    assert result.returncode == 2
+    assert "\x1b" not in result.stdout
+    assert "\x1b" not in result.stderr
+    assert_task_status(result.stdout, "x", "Target scaffold could not be created.")
 
 
 @pytest.mark.parametrize(
@@ -258,11 +371,11 @@ def test_plugin_create_help_has_precedence_in_every_position(args):
     assert result.stdout.endswith("\n\n")
 
 
-def test_plugin_create_accepts_duplicate_debug_without_forwarding_it(tmp_path):
-    result = _run(
-        "scripts/dev/plugin-create.sh",
+def test_plugin_create_accepts_duplicate_debug_without_forwarding_it(plugin_create_checkout):
+    result = _run_plugin_create(
+        plugin_create_checkout,
         "--debug",
-        *_plugin_create_args(tmp_path),
+        *_plugin_create_args(),
         "--debug",
     )
 
@@ -270,22 +383,24 @@ def test_plugin_create_accepts_duplicate_debug_without_forwarding_it(tmp_path):
     assert result.stderr.count("scaffold\t1\tacme_store\t1") == 1
 
 
-def test_plugin_create_preserves_duplicate_option_and_invalid_argument_semantics(tmp_path):
-    duplicate_option = _run(
-        "scripts/dev/plugin-create.sh",
-        *_plugin_create_args(tmp_path),
+def test_plugin_create_preserves_duplicate_option_and_invalid_argument_semantics(
+    plugin_create_checkout,
+):
+    duplicate_option = _run_plugin_create(
+        plugin_create_checkout,
+        *_plugin_create_args(),
         "--display-name",
         "Last Store Name",
     )
     invalid = _run("scripts/dev/plugin-create.sh", "--unknown")
     duplicate_target = _run(
         "scripts/dev/plugin-create.sh",
-        *_plugin_create_args(tmp_path / "duplicate"),
+        *_plugin_create_args(),
         "second_target",
     )
 
     assert duplicate_option.returncode == 0
-    plugin = tmp_path / "src/core/scrapers/plugins/acme_store/plugin.py"
+    plugin = plugin_create_checkout / "src/core/scrapers/plugins/acme_store/plugin.py"
     assert "Last Store Name" in plugin.read_text(encoding="utf-8")
     assert invalid.returncode == 2
     assert duplicate_target.returncode == 2
@@ -358,7 +473,7 @@ def _protocol_python(tmp_path: Path, output: str) -> dict[str, str]:
 def test_plugin_create_rejects_malformed_backend_protocol(tmp_path, output):
     result = _run(
         "scripts/dev/plugin-create.sh",
-        *_plugin_create_args(tmp_path / "output"),
+        *_plugin_create_args(),
         env=_protocol_python(tmp_path, output),
     )
 
@@ -366,10 +481,10 @@ def test_plugin_create_rejects_malformed_backend_protocol(tmp_path, output):
     assert_task_status(result.stdout, "x", "Target scaffold returned an invalid result.")
 
 
-def test_plugin_create_normal_hides_subprocess_noise(tmp_path):
-    result = _run(
-        "scripts/dev/plugin-create.sh",
-        *_plugin_create_args(tmp_path / "output"),
+def test_plugin_create_normal_hides_subprocess_noise(tmp_path, plugin_create_checkout):
+    result = _run_plugin_create(
+        plugin_create_checkout,
+        *_plugin_create_args(),
         env=_noisy_python(tmp_path),
     )
 
@@ -381,7 +496,7 @@ def test_plugin_create_normal_hides_subprocess_noise(tmp_path):
 def test_plugin_create_normal_failure_hides_raw_noise_and_preserves_status(tmp_path):
     result = _run(
         "scripts/dev/plugin-create.sh",
-        *_plugin_create_args(tmp_path / "output"),
+        *_plugin_create_args(),
         env=_noisy_python(tmp_path, scaffold_status=23),
     )
 
@@ -402,7 +517,7 @@ def test_plugin_create_debug_exposes_noise_and_preserves_command_failure(tmp_pat
     result = _run(
         "scripts/dev/plugin-create.sh",
         "--debug",
-        *_plugin_create_args(tmp_path / "output"),
+        *_plugin_create_args(),
         env=_noisy_python(tmp_path, scaffold_status=23),
     )
 

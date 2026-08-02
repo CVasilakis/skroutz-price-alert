@@ -20,21 +20,21 @@ from core.scrapers.domain import normalize_domain
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS
 from core.scrapers.framework.naming import FRAMEWORK_ITEM_KEYS, SNAKE_CASE_KEY
 from core.scrapers.framework.settings import framework_setting_specs
-from core.scrapers.tooling.scaffold import (
+from core.scrapers.tooling.scaffold_contracts import (
     VALUE_TYPES,
     CustomValueSpec,
     ResultType,
     ScaffoldRequest,
     ScaffoldResult,
     Transport,
-    _decode_value,
-    _parse_strict_json,
-    _safe_display_name,
-    _scaffold_collisions,
-    _target_name,
-    _url_prefix,
+    decode_value,
+    parse_strict_json,
+    safe_display_name,
+    target_name,
+    url_prefix,
     validate_request,
 )
+from core.scrapers.tooling.scaffold_storage import scaffold_collisions
 from core.scrapers.tooling.scaffold_terminal import (
     ABORT as _ABORT,
 )
@@ -132,8 +132,8 @@ def _domains(raw: str) -> tuple[str, ...]:
 
 def _wizard_target_parser(repo_root: Path) -> Parser:
     def parse(raw: str) -> str:
-        target = _target_name(raw)
-        if _scaffold_collisions(repo_root, target):
+        target = target_name(raw)
+        if scaffold_collisions(repo_root, target):
             raise ValueError(
                 f"target name {target!r} is already used by a checked-in plugin; "
                 "choose another name"
@@ -155,10 +155,10 @@ def _dependencies(raw: str) -> tuple[str, ...]:
 def _json_parser(value_type: str) -> Parser:
     def parse(raw: str) -> object:
         try:
-            decoded = _parse_strict_json(raw)
+            decoded = parse_strict_json(raw)
         except ValueError as exc:
             raise ValueError(f"enter valid JSON ({exc})") from exc
-        return _decode_value(value_type, decoded)
+        return decode_value(value_type, decoded)
 
     return parse
 
@@ -393,7 +393,7 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
             expected="It becomes ScraperPlugin.display_name and appears in user-facing status, scraping "
             "output, errors, and notifications. It does not affect paths or command flags.",
             example="Skroutz, Insomnia, or Acme Store",
-            parser=_safe_display_name,
+            parser=safe_display_name,
         ),
         _Question(
             key="domains",
@@ -428,7 +428,7 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
             "out of the plugin.",
             example="Skroutz uses /s/: https://skroutz.gr/s/<sample>. Insomnia uses /classifieds/: "
             "https://insomnia.gr/classifieds/<sample>.",
-            parser=_url_prefix,
+            parser=url_prefix,
         ),
         _Question(
             key="result_type",
@@ -752,7 +752,9 @@ def _edit_question(
             )
 
 
-def _cancel(console: Console) -> None:
+def render_cancellation(console: Console | None = None) -> None:
+    """Render the shared interactive cancellation result after terminal cleanup."""
+    console = console or Console()
     console.print(
         Panel(
             "[yellow]Plugin creation aborted.[/yellow] No plugin was created.",
@@ -803,14 +805,7 @@ def collect_request(
                     try:
                         request = _request(answers)
                     except (KeyError, TypeError, ValueError) as exc:
-                        console.print(
-                            Panel(
-                                f"[red]The collected scaffold is invalid:[/red] {escape(str(exc))}",
-                                title="[bold]Invalid scaffold[/bold]",
-                                border_style="red",
-                            )
-                        )
-                        return None
+                        raise RuntimeError(f"the collected scaffold is invalid: {exc}") from exc
                     with Live(
                         _review_panel(request, position=total, total=total),
                         console=console,
@@ -819,7 +814,7 @@ def collect_request(
                     ):
                         key = keys()
                     if key == _ABORT:
-                        _cancel(console)
+                        render_cancellation(console)
                         return None
                     if key == _BACK:
                         index = max(0, index - 1)
@@ -838,7 +833,7 @@ def collect_request(
                     total=total,
                 )
                 if action == _ABORT:
-                    _cancel(console)
+                    render_cancellation(console)
                     return None
                 if action == _BACK:
                     index = max(0, index - 1)
@@ -856,7 +851,7 @@ def collect_request(
             )
         )
         console.print()
-        return None
+        raise
 
 
 def render_completion(
@@ -891,4 +886,4 @@ def render_completion(
     console.print()
 
 
-__all__ = ["collect_request", "render_completion"]
+__all__ = ["collect_request", "render_cancellation", "render_completion"]

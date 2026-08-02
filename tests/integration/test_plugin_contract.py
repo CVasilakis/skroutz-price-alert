@@ -74,6 +74,8 @@ def test_scaffolded_plugin_runs_end_to_end_without_framework_edits(tmp_path):
     """The contributor scaffold reaches persistence through production bindings."""
     import core.scrapers.plugins as plugin_package
 
+    (tmp_path / "src/core/scrapers/plugins").mkdir(parents=True)
+    (tmp_path / "tests/plugins").mkdir(parents=True)
     scaffold = create_plugin(
         tmp_path,
         ScaffoldRequest("template_store", "Template Store", ("store.example",), "/items/"),

@@ -377,9 +377,15 @@ def test_terminal_reader_maps_arrow_and_standalone_escape():
 
 def test_terminal_reader_preserves_utf8_text_input():
     encoded = "Σ".encode()
-    with mock.patch(
-        "core.scrapers.tooling.scaffold_terminal.os.read",
-        side_effect=tuple(bytes((byte,)) for byte in encoded),
+    with (
+        mock.patch(
+            "core.scrapers.tooling.scaffold_terminal.os.read",
+            side_effect=tuple(bytes((byte,)) for byte in encoded),
+        ),
+        mock.patch(
+            "core.scrapers.tooling.scaffold_terminal.select.select",
+            return_value=([object()], [], []),
+        ),
     ):
         assert _read_terminal_key(7) == "Σ"
 

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import select
 import signal
 import sys
 import termios
+import time
 import tty
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -25,7 +27,11 @@ BACKSPACE = "backspace"
 REFRESH = "refresh"
 
 KeyReader = Callable[[], str]
-SignalHandler = Callable[[int, FrameType | None], None]
+_SEQUENCE_TIMEOUT = 0.2
+
+
+class _SequenceTimeout(Exception):
+    """A partial terminal sequence did not complete within its bounded window."""
 
 
 class ScaffoldInterrupted(BaseException):
@@ -49,6 +55,24 @@ def _handled_interrupt_signals() -> tuple[signal.Signals, ...]:
     return tuple(getattr(signal, name) for name in names if hasattr(signal, name))
 
 
+def _handled_job_signals() -> tuple[signal.Signals, ...]:
+    names = ("SIGTSTP", "SIGCONT")
+    return tuple(getattr(signal, name) for name in names if hasattr(signal, name))
+
+
+@contextmanager
+def _blocked_signals(signals: tuple[signal.Signals, ...]) -> Iterator[None]:
+    """Defer lifecycle signals across short terminal transition windows."""
+    if not signals or not hasattr(signal, "pthread_sigmask"):
+        yield
+        return
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
+
+
 @contextmanager
 def interruption_guard() -> Iterator[None]:
     """Turn catchable termination signals into stack-unwinding interruptions."""
@@ -57,24 +81,44 @@ def interruption_guard() -> Iterator[None]:
     def interrupt(signum: int, _frame: FrameType | None) -> None:
         raise ScaffoldInterrupted(signum)
 
+    installed: list[signal.Signals] = []
     try:
-        for signum in previous:
-            signal.signal(signum, interrupt)
+        with _blocked_signals(tuple(previous)):
+            for signum in previous:
+                signal.signal(signum, interrupt)
+                installed.append(signum)
         yield
     finally:
-        for signum, handler in previous.items():
-            signal.signal(signum, handler)
+        with _blocked_signals(tuple(previous)):
+            for signum in installed:
+                signal.signal(signum, previous[signum])
 
 
-def _read_byte(descriptor: int) -> bytes:
+def _wait_for_byte(descriptor: int, deadline: float) -> None:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise _SequenceTimeout
+        try:
+            ready = select.select([descriptor], [], [], remaining)[0]
+        except InterruptedError:
+            continue
+        if not ready:
+            raise _SequenceTimeout
+        return
+
+
+def _read_byte(descriptor: int, deadline: float | None = None) -> bytes:
+    if deadline is not None:
+        _wait_for_byte(descriptor, deadline)
     value = os.read(descriptor, 1)
     if not value:
         raise EOFError("terminal input closed")
     return value
 
 
-def _read_character(descriptor: int) -> str:
-    first = _read_byte(descriptor)
+def _read_character(descriptor: int, deadline: float | None = None) -> str:
+    first = _read_byte(descriptor, deadline)
     leading = first[0]
     if leading < 0x80:
         return first.decode()
@@ -86,7 +130,13 @@ def _read_character(descriptor: int) -> str:
         remaining = 3
     else:
         return ""
-    encoded = first + b"".join(_read_byte(descriptor) for _ in range(remaining))
+    continuation_deadline = deadline or (time.monotonic() + _SEQUENCE_TIMEOUT)
+    try:
+        encoded = first + b"".join(
+            _read_byte(descriptor, continuation_deadline) for _ in range(remaining)
+        )
+    except _SequenceTimeout:
+        return ""
     try:
         return encoded.decode("utf-8")
     except UnicodeDecodeError:
@@ -94,16 +144,19 @@ def _read_character(descriptor: int) -> str:
 
 
 def _read_escape_sequence(descriptor: int) -> str:
-    if not select.select([descriptor], [], [], 0.2)[0]:
+    deadline = time.monotonic() + _SEQUENCE_TIMEOUT
+    try:
+        second = _read_character(descriptor, deadline)
+    except _SequenceTimeout:
         return ABORT
-    second = _read_character(descriptor)
     if second not in {"[", "O"}:
         return ""
     sequence = ""
     for _ in range(8):
-        if not select.select([descriptor], [], [], 0.2)[0]:
+        try:
+            character = _read_character(descriptor, deadline)
+        except _SequenceTimeout:
             return ""
-        character = _read_character(descriptor)
         sequence += character
         if character.isalpha() or character == "~":
             break
@@ -140,12 +193,14 @@ class _TerminalSession:
         self._descriptor = descriptor
         self._original: Any | None = None
         self._active = False
+        self._restore_required = False
         self._resumed = False
         self._previous_job_handlers: dict[signal.Signals, Any] = {}
 
     def _enable(self) -> None:
         if self._active:
             return
+        self._restore_required = True
         try:
             tty.setcbreak(self._descriptor)
         except (OSError, termios.error) as exc:
@@ -153,13 +208,21 @@ class _TerminalSession:
         self._active = True
 
     def _restore(self) -> None:
-        if not self._active or self._original is None:
+        if (not self._active and not self._restore_required) or self._original is None:
             return
-        try:
-            termios.tcsetattr(self._descriptor, termios.TCSANOW, self._original)
-        except (OSError, termios.error) as exc:
-            raise TerminalStateError(f"could not restore terminal settings: {exc}") from exc
+        for attempt in range(2):
+            try:
+                termios.tcsetattr(self._descriptor, termios.TCSANOW, self._original)
+                break
+            except (OSError, termios.error) as exc:
+                error_number = getattr(exc, "errno", None)
+                if error_number is None and exc.args and isinstance(exc.args[0], int):
+                    error_number = exc.args[0]
+                if error_number == errno.EINTR and attempt == 0:
+                    continue
+                raise TerminalStateError(f"could not restore terminal settings: {exc}") from exc
         self._active = False
+        self._restore_required = False
 
     def _continued(self, _signum: int, _frame: FrameType | None) -> None:
         self._enable()
@@ -183,20 +246,23 @@ class _TerminalSession:
             self._original = termios.tcgetattr(self._descriptor)
         except (OSError, termios.error) as exc:
             raise TerminalStateError(f"could not read terminal settings: {exc}") from exc
+        transition_signals = _handled_interrupt_signals() + _handled_job_signals()
         try:
-            for signum, handler in (
-                (getattr(signal, "SIGTSTP", None), self._suspend),
-                (getattr(signal, "SIGCONT", None), self._continued),
-            ):
-                if signum is not None:
-                    self._previous_job_handlers[signum] = signal.getsignal(signum)
-                    signal.signal(signum, handler)
-            self._enable()
+            with _blocked_signals(transition_signals):
+                for signum, handler in (
+                    (getattr(signal, "SIGTSTP", None), self._suspend),
+                    (getattr(signal, "SIGCONT", None), self._continued),
+                ):
+                    if signum is not None:
+                        self._previous_job_handlers[signum] = signal.getsignal(signum)
+                        signal.signal(signum, handler)
+                self._enable()
         except BaseException:
-            try:
-                self._restore()
-            finally:
-                self._restore_job_handlers()
+            with _blocked_signals(transition_signals):
+                try:
+                    self._restore()
+                finally:
+                    self._restore_job_handlers()
             raise
         return self
 
@@ -206,10 +272,12 @@ class _TerminalSession:
         self._previous_job_handlers.clear()
 
     def __exit__(self, _type: object, _value: object, _traceback: object) -> None:
-        try:
-            self._restore()
-        finally:
-            self._restore_job_handlers()
+        transition_signals = _handled_interrupt_signals() + _handled_job_signals()
+        with _blocked_signals(transition_signals):
+            try:
+                self._restore()
+            finally:
+                self._restore_job_handlers()
 
     def read_key(self) -> str:
         if self._resumed:

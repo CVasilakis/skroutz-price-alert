@@ -1,3 +1,5 @@
+import errno
+import io
 import os
 import pty
 import signal
@@ -9,6 +11,7 @@ import pytest
 from core.scrapers.tooling import scaffold_terminal
 from core.scrapers.tooling.scaffold_terminal import (
     REFRESH,
+    InteractiveTerminalUnavailable,
     ScaffoldInterrupted,
     TerminalStateError,
     interruption_guard,
@@ -43,6 +46,48 @@ def test_terminal_reader_restores_exact_settings_after_failures(failure):
         os.close(slave)
 
 
+def test_terminal_reader_restores_exact_settings_after_normal_completion():
+    master, slave, stdin, stdout = _terminal_streams()
+    original = termios.tcgetattr(slave)
+    try:
+        with terminal_reader(stdin, stdout):
+            assert termios.tcgetattr(slave) != original
+        assert termios.tcgetattr(slave) == original
+    finally:
+        stdin.close()
+        stdout.close()
+        os.close(master)
+        os.close(slave)
+
+
+def test_terminal_reader_restores_after_partial_cbreak_failure():
+    master, slave, stdin, stdout = _terminal_streams()
+    original = termios.tcgetattr(slave)
+    real_setcbreak = scaffold_terminal.tty.setcbreak
+
+    def fail_after_change(descriptor: int) -> None:
+        real_setcbreak(descriptor)
+        raise termios.error(errno.EIO, "injected failure")
+
+    try:
+        with mock.patch.object(scaffold_terminal.tty, "setcbreak", side_effect=fail_after_change):
+            with pytest.raises(TerminalStateError, match="could not enter"):
+                with terminal_reader(stdin, stdout):
+                    pass
+        assert termios.tcgetattr(slave) == original
+    finally:
+        stdin.close()
+        stdout.close()
+        os.close(master)
+        os.close(slave)
+
+
+def test_terminal_reader_rejects_non_tty_streams_without_mutation():
+    with pytest.raises(InteractiveTerminalUnavailable, match="interactive terminal"):
+        with terminal_reader(io.StringIO(), io.StringIO()):
+            pass
+
+
 def test_terminal_reader_restores_handlers_and_reports_restore_failure():
     master, slave, stdin, stdout = _terminal_streams()
     previous_tstp = signal.getsignal(signal.SIGTSTP)
@@ -65,17 +110,39 @@ def test_terminal_reader_restores_handlers_and_reports_restore_failure():
         os.close(slave)
 
 
-def test_interruption_guard_raises_typed_interrupt_and_restores_handlers():
-    previous = signal.getsignal(signal.SIGTERM)
+@pytest.mark.parametrize(
+    "signum",
+    [
+        getattr(signal, name)
+        for name in ("SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT")
+        if hasattr(signal, name)
+    ],
+)
+def test_interruption_guard_raises_typed_interrupt_and_restores_handlers(signum):
+    previous = signal.getsignal(signum)
 
     with pytest.raises(ScaffoldInterrupted) as raised:
         with interruption_guard():
-            handler = signal.getsignal(signal.SIGTERM)
+            handler = signal.getsignal(signum)
             assert callable(handler)
-            handler(signal.SIGTERM, None)
+            handler(signum, None)
 
-    assert raised.value.signum == signal.SIGTERM
-    assert signal.getsignal(signal.SIGTERM) is previous
+    assert raised.value.signum == signum
+    assert signal.getsignal(signum) is previous
+
+
+def test_terminal_restore_retries_one_interrupted_system_call():
+    session = scaffold_terminal._TerminalSession(7)
+    session._original = [object()]
+    session._restore_required = True
+    with mock.patch(
+        "core.scrapers.tooling.scaffold_terminal.termios.tcsetattr",
+        side_effect=(InterruptedError(errno.EINTR, "interrupted"), None),
+    ) as restore:
+        session._restore()
+
+    assert restore.call_count == 2
+    assert not session._restore_required
 
 
 def test_terminal_session_restores_before_suspend_and_refreshes_after_continue():
@@ -114,9 +181,26 @@ def test_terminal_key_reader_treats_closed_input_as_eof():
 
 
 def test_terminal_key_reader_treats_incomplete_utf8_as_eof():
-    with mock.patch(
-        "core.scrapers.tooling.scaffold_terminal.os.read",
-        side_effect=(b"\xce", b""),
+    with (
+        mock.patch(
+            "core.scrapers.tooling.scaffold_terminal.os.read",
+            side_effect=(b"\xce", b""),
+        ),
+        mock.patch(
+            "core.scrapers.tooling.scaffold_terminal.select.select",
+            return_value=([object()], [], []),
+        ),
     ):
         with pytest.raises(EOFError, match="terminal input closed"):
             read_terminal_key(7)
+
+
+def test_terminal_key_reader_bounds_incomplete_utf8_wait():
+    with (
+        mock.patch("core.scrapers.tooling.scaffold_terminal.os.read", return_value=b"\xce"),
+        mock.patch(
+            "core.scrapers.tooling.scaffold_terminal.select.select",
+            return_value=([], [], []),
+        ),
+    ):
+        assert read_terminal_key(7) == ""

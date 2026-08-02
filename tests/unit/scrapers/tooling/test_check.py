@@ -173,6 +173,8 @@ def test_declaration_imports_reject_absolute_third_party_modules(tmp_path):
 def test_verifier_rejects_an_empty_example_config(tmp_path):
     import core.scrapers.plugins as plugin_package
 
+    (tmp_path / "src/core/scrapers/plugins").mkdir(parents=True)
+    (tmp_path / "tests/plugins").mkdir(parents=True)
     target_dir = create_plugin(
         tmp_path,
         ScaffoldRequest("empty_store", "Empty Store", ("store.example",), "/items/"),

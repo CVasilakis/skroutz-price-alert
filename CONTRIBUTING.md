@@ -31,6 +31,14 @@ framework-owned fields and settings, single-price versus listing results, shared
 versus bare clients, custom typed declarations, private dependencies, and starter
 tests.
 
+The wizard requires interactive input and output; invoking it through redirected
+streams is an error rather than a successful cancellation. Escape or Ctrl-D cancels
+cleanly before any files are created. Catchable interrupts and job-control suspension
+restore the terminal's exact prior settings while the wizard unwinds. An uncatchable
+termination such as `SIGKILL`, a kernel failure, or loss of the controlling terminal
+cannot run process cleanup; if the terminal is left in an unusual mode after such an
+event, run `stty sane` in that terminal before retrying.
+
 For automation or an experienced contributor, provide every required choice in one
 strict non-interactive invocation:
 

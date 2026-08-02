@@ -23,6 +23,12 @@ from core.scrapers.tooling.scaffold import (
 REQUEST = ScaffoldRequest("acme_store", "Acme Store", ("Store.Example",), "/products")
 
 
+@pytest.fixture(autouse=True)
+def _scaffold_parent_layout(tmp_path):
+    (tmp_path / "src/core/scrapers/plugins").mkdir(parents=True)
+    (tmp_path / "tests/plugins").mkdir(parents=True)
+
+
 def test_scaffold_reserved_command_names_match_the_root_dispatcher():
     root = Path(__file__).resolve().parents[4]
     script = (root / "scrooge-alert").read_text(encoding="utf-8")
@@ -256,11 +262,9 @@ def test_scaffold_cli_rejects_nonfinite_json_before_creating_files(tmp_path, cap
         "score",
         "number",
         "NaN",
-        "--repo-root",
-        str(tmp_path),
     ]
 
-    assert main(args) == 1
+    assert main(args, repo_root=tmp_path) == 1
     assert "NaN is not permitted by strict JSON" in capsys.readouterr().err
     assert not (tmp_path / "src/core/scrapers/plugins/acme").exists()
 
@@ -347,7 +351,7 @@ def test_scaffold_refuses_broken_destination_symlinks(tmp_path, destination):
     source = tmp_path / "src/core/scrapers/plugins/acme_store"
     tests = tmp_path / "tests/plugins/acme_store"
     selected = source if destination == "source" else tests
-    selected.parent.mkdir(parents=True)
+    selected.parent.mkdir(parents=True, exist_ok=True)
     selected.symlink_to(tmp_path / "missing-target", target_is_directory=True)
 
     with pytest.raises(FileExistsError):
@@ -358,19 +362,19 @@ def test_scaffold_refuses_broken_destination_symlinks(tmp_path, destination):
 
 
 def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path):
-    from core.scrapers.tooling import scaffold
+    from core.scrapers.tooling import scaffold_storage
 
-    real_write = scaffold._write_tree
+    real_write = scaffold_storage._write_files
     calls = 0
 
-    def failing_second_write(root: Path, files: dict[str, str]) -> None:
+    def failing_second_write(tree, files) -> None:
         nonlocal calls
         calls += 1
-        real_write(root, files)
+        real_write(tree, files)
         if calls == 2:
             raise OSError("disk full")
 
-    with mock.patch.object(scaffold, "_write_tree", side_effect=failing_second_write):
+    with mock.patch.object(scaffold_storage, "_write_files", side_effect=failing_second_write):
         with pytest.raises(OSError, match="disk full"):
             create_plugin(tmp_path, REQUEST)
 
@@ -381,7 +385,7 @@ def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path
 @pytest.mark.parametrize("interruption", [KeyboardInterrupt(), SystemExit(130)])
 def test_scaffold_rolls_back_after_base_exception(tmp_path, interruption):
     with mock.patch(
-        "core.scrapers.tooling.scaffold._write_tree",
+        "core.scrapers.tooling.scaffold_storage._write_files",
         side_effect=interruption,
     ):
         with pytest.raises(type(interruption)):
@@ -394,8 +398,11 @@ def test_scaffold_rolls_back_after_base_exception(tmp_path, interruption):
 def test_scaffold_reports_incomplete_rollback_with_exact_recovery_path(tmp_path):
     source = tmp_path / "src/core/scrapers/plugins/acme_store"
     with (
-        mock.patch("core.scrapers.tooling.scaffold._write_tree", side_effect=OSError("disk full")),
-        mock.patch("core.scrapers.tooling.scaffold.shutil.rmtree", side_effect=OSError("busy")),
+        mock.patch(
+            "core.scrapers.tooling.scaffold_storage._write_files",
+            side_effect=OSError("disk full"),
+        ),
+        mock.patch("core.scrapers.tooling.scaffold_storage.os.rmdir", side_effect=OSError("busy")),
     ):
         with pytest.raises(ScaffoldRollbackError, match="rollback was incomplete") as raised:
             create_plugin(tmp_path, REQUEST)
@@ -420,14 +427,12 @@ def test_scaffold_cli_reports_success_and_collision(tmp_path, capsys):
         "--transport",
         "bare",
         "--with-tests",
-        "--repo-root",
-        str(tmp_path),
     ]
-    assert main(args) == 0
+    assert main(args, repo_root=tmp_path) == 0
     output = capsys.readouterr().out
     assert "./scripts/dev/plugin-check.sh --acme_store" in output
     assert "./scripts/dev/check.sh --debug" in output
-    assert main(args) == 1
+    assert main(args, repo_root=tmp_path) == 1
     assert "refusing to overwrite" in capsys.readouterr().err
 
 
@@ -447,12 +452,10 @@ def test_scaffold_cli_shell_output_is_structured_and_hidden_from_help(tmp_path, 
         "--transport",
         "bare",
         "--with-tests",
-        "--repo-root",
-        str(tmp_path),
         "--shell-output",
     ]
 
-    assert main(args) == 0
+    assert main(args, repo_root=tmp_path) == 0
     captured = capsys.readouterr()
     assert captured.out == "scaffold\t1\tacme_store\t1\n"
     assert captured.err == ""
@@ -460,6 +463,11 @@ def test_scaffold_cli_shell_output_is_structured_and_hidden_from_help(tmp_path, 
     with pytest.raises(SystemExit, match="0"):
         main(["--help"])
     assert "--shell-output" not in capsys.readouterr().out
+
+
+def test_scaffold_cli_rejects_an_arbitrary_repository_root(tmp_path):
+    with pytest.raises(SystemExit, match="2"):
+        main(["--repo-root", str(tmp_path)])
 
 
 def test_scaffold_cli_shell_output_uses_validated_target(tmp_path, capsys):
@@ -478,12 +486,10 @@ def test_scaffold_cli_shell_output_uses_validated_target(tmp_path, capsys):
         "--transport",
         "bare",
         "--with-tests",
-        "--repo-root",
-        str(tmp_path),
         "--shell-output",
     ]
 
-    assert main(args) == 0
+    assert main(args, repo_root=tmp_path) == 0
     assert capsys.readouterr().out == "scaffold\t1\tacme_store\t1\n"
 
 
