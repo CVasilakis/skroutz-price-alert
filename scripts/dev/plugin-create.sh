@@ -86,9 +86,9 @@ if [ "$ORIGINAL_ARGUMENT_COUNT" -eq 0 ]; then
         task_status info "Run ./scripts/dev/setup.sh --debug, then retry."
         exit 1
     fi
-    PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
-        "$wizard_python" -m core.scrapers.tooling.scaffold --interactive
-    exit $?
+    PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+    export PYTHONPATH
+    exec "$wizard_python" -m core.scrapers.tooling.scaffold --interactive
 fi
 
 scaffold_finish() {
@@ -122,6 +122,21 @@ scaffold_detail() {
     fi
 }
 
+# Stable private protocol: scaffold<TAB>1<TAB><validated-target><TAB><0|1>.
+parse_scaffold_result() {
+    _psr_result="$1"
+    _psr_tab="$(printf '\t')"
+    SCAFFOLD_TESTS="${_psr_result##*"$_psr_tab"}"
+    _psr_without_tests="${_psr_result%"$_psr_tab"*}"
+    SCAFFOLD_TARGET="${_psr_without_tests##*"$_psr_tab"}"
+    _psr_expected="scaffold${_psr_tab}1${_psr_tab}${SCAFFOLD_TARGET}${_psr_tab}${SCAFFOLD_TESTS}"
+    if [ "$_psr_result" != "$_psr_expected" ] ||
+       ! is_valid_target "$SCAFFOLD_TARGET" ||
+       { [ "$SCAFFOLD_TESTS" != "0" ] && [ "$SCAFFOLD_TESTS" != "1" ]; }; then
+        return 1
+    fi
+}
+
 begin_operational_output
 section_heading success "Target scaffold"
 if ! run_action require_python_310 python3 "./scripts/dev/setup.sh"; then
@@ -144,31 +159,24 @@ if [ "$scaffold_status" -ne 0 ]; then
     scaffold_finish "$scaffold_status"
 fi
 
-tab="$(printf '\t')"
-scaffold_tests="${CAPTURED_COMMAND_OUTPUT##*"$tab"}"
-scaffold_without_tests="${CAPTURED_COMMAND_OUTPUT%"$tab"*}"
-scaffold_target="${scaffold_without_tests##*"$tab"}"
-expected_result="scaffold${tab}1${tab}${scaffold_target}${tab}${scaffold_tests}"
-if [ "$CAPTURED_COMMAND_OUTPUT" != "$expected_result" ] ||
-   ! is_valid_target "$scaffold_target" ||
-   { [ "$scaffold_tests" != "0" ] && [ "$scaffold_tests" != "1" ]; }; then
+if ! parse_scaffold_result "$CAPTURED_COMMAND_OUTPUT"; then
     task_status failure "Target scaffold returned an invalid result."
     task_status info "Run ./scripts/dev/plugin-create.sh --debug to inspect the failure."
     scaffold_finish 1
 fi
 
-task_status success "[$scaffold_target] Created the target source package."
-if [ "$scaffold_tests" -eq 1 ]; then
-    task_status success "[$scaffold_target] Created the target test package."
+task_status success "[$SCAFFOLD_TARGET] Created the target source package."
+if [ "$SCAFFOLD_TESTS" -eq 1 ]; then
+    task_status success "[$SCAFFOLD_TARGET] Created the target test package."
 else
-    task_status warning "[$scaffold_target] Example tests were skipped."
+    task_status warning "[$SCAFFOLD_TARGET] Example tests were skipped."
 fi
 printf '\n'
 section_heading success "Next steps"
-task_status info "Run ./scripts/dev/setup.sh --$scaffold_target."
-task_status info "Run ./scripts/dev/plugin-check.sh --$scaffold_target."
+task_status info "Run ./scripts/dev/setup.sh --$SCAFFOLD_TARGET."
+task_status info "Run ./scripts/dev/plugin-check.sh --$SCAFFOLD_TARGET."
 task_status info "Run ./scripts/dev/check.sh --debug before submitting."
 printf '\n'
 section_heading success "Scaffold result"
-task_status success "[$scaffold_target] Target scaffold created."
+task_status success "[$SCAFFOLD_TARGET] Target scaffold created."
 scaffold_finish 0

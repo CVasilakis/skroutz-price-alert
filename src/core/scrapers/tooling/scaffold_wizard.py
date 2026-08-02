@@ -3,11 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import select
-import sys
-import termios
-import tty
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -35,28 +30,55 @@ from core.scrapers.tooling.scaffold import (
     _decode_value,
     _parse_strict_json,
     _safe_display_name,
+    _scaffold_collisions,
     _target_name,
     _url_prefix,
     validate_request,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    ABORT as _ABORT,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    ACCEPT as _ACCEPT,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    BACK as _BACK,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    BACKSPACE as _BACKSPACE,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    DELETE as _DELETE,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    END as _END,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    HOME as _HOME,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    LEFT as _LEFT,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    REFRESH as _REFRESH,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    RIGHT as _RIGHT,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    InteractiveTerminalUnavailable,
+    KeyReader,
+)
+from core.scrapers.tooling.scaffold_terminal import (
+    terminal_reader as _terminal_reader,
 )
 
 Answer = object
 Answers = dict[str, Answer]
 Parser = Callable[[str], Answer]
-KeyReader = Callable[[], str]
-
-_ABORT = "abort"
-_BACK = "back"
-_ACCEPT = "accept"
-_LEFT = "left"
-_RIGHT = "right"
-_HOME = "home"
-_END = "end"
-_DELETE = "delete"
-_BACKSPACE = "backspace"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class _Question:
     key: str
     title: str
@@ -108,14 +130,17 @@ def _domains(raw: str) -> tuple[str, ...]:
     return tuple(result)
 
 
-def _wizard_target_name(raw: str) -> str:
-    target = _target_name(raw)
-    plugin_path = Path(__file__).resolve().parents[1] / "plugins" / target
-    if plugin_path.exists() or plugin_path.is_symlink():
-        raise ValueError(
-            f"target name {target!r} is already used by a checked-in plugin; choose another name"
-        )
-    return target
+def _wizard_target_parser(repo_root: Path) -> Parser:
+    def parse(raw: str) -> str:
+        target = _target_name(raw)
+        if _scaffold_collisions(repo_root, target):
+            raise ValueError(
+                f"target name {target!r} is already used by a checked-in plugin; "
+                "choose another name"
+            )
+        return target
+
+    return parse
 
 
 def _dependencies(raw: str) -> tuple[str, ...]:
@@ -213,12 +238,12 @@ def _field_questions(
             )
         questions.append(
             _Question(
-                add_key,
-                f"Add custom {noun} {index + 1}?",
-                guidance,
-                expected,
-                example,
-                _yes_no,
+                key=add_key,
+                title=f"Add custom {noun} {index + 1}?",
+                guidance=guidance,
+                expected=expected,
+                example=example,
+                parser=_yes_no,
                 default="no",
                 choices=("yes", "no"),
             )
@@ -229,38 +254,38 @@ def _field_questions(
         key_key = f"{prefix}.{index}.key"
         questions.append(
             _Question(
-                key_key,
-                f"Custom {noun} key",
-                "This is the stable machine-readable JSON key. Use lowercase letters, digits, "
+                key=key_key,
+                title=f"Custom {noun} key",
+                guidance="This is the stable machine-readable JSON key. Use lowercase letters, digits, "
                 "and underscores; begin with a letter. Framework-owned names and duplicate keys "
                 "are rejected. Renaming it later is a configuration migration.",
-                f"The scaffold declares {('SETTING' if setting else 'ITEM')}_<KEY> in plugin.py "
+                expected=f"The scaffold declares {('SETTING' if setting else 'ITEM')}_<KEY> in plugin.py "
                 f"and writes <key> into the config.example.json "
                 f"{'settings object' if setting else 'item row'}.",
-                (
+                example=(
                     "api_token or minimum_listing_price"
                     if setting
                     else "Insomnia uses title_include and title_exclude"
                 ),
-                _spec_key_parser(kind=noun, reserved=reserved, existing=prior_keys),
+                parser=_spec_key_parser(kind=noun, reserved=reserved, existing=prior_keys),
             )
         )
         type_key = f"{prefix}.{index}.type"
         questions.append(
             _Question(
-                type_key,
-                f"Custom {noun} value type",
-                "The type controls strict JSON decoding: text is a nonblank string; integer "
+                key=type_key,
+                title=f"Custom {noun} value type",
+                guidance="The type controls strict JSON decoding: text is a nonblank string; integer "
                 "rejects booleans; number must be finite; nonnegative-number also rejects values "
                 "below zero; boolean accepts true/false; text-list is an array of nonblank strings.",
-                "The generated descriptor receives the matching decoder and both the default and "
+                expected="The generated descriptor receives the matching decoder and both the default and "
                 "example values must satisfy it.",
-                (
+                example=(
                     'text for "eu" or nonnegative-number for 25.0'
                     if setting
                     else 'Insomnia title filters use text-list, such as ["laptop", "ThinkPad"]'
                 ),
-                _choice(*VALUE_TYPES),
+                parser=_choice(*VALUE_TYPES),
                 default="text",
                 choices=tuple(VALUE_TYPES),
             )
@@ -268,19 +293,19 @@ def _field_questions(
         required_key = f"{prefix}.{index}.required"
         questions.append(
             _Question(
-                required_key,
-                f"Require this {noun}?",
-                "A required value must appear in every applicable configuration object. An "
+                key=required_key,
+                title=f"Require this {noun}?",
+                guidance="A required value must appear in every applicable configuration object. An "
                 "optional value receives the default you choose next when it is omitted.",
-                "Required values make missing configuration invalid. Optional values keep older "
+                expected="Required values make missing configuration invalid. Optional values keep older "
                 "or shorter item rows usable with an explicit generated default.",
-                (
+                example=(
                     "API tokens are often required; a numeric filter can be optional."
                     if setting
                     else "Insomnia makes title_include and title_exclude optional so each can "
                     "default to []."
                 ),
-                _yes_no,
+                parser=_yes_no,
                 default="no",
                 choices=("yes", "no"),
             )
@@ -289,50 +314,50 @@ def _field_questions(
         if answers.get(required_key) is False:
             questions.append(
                 _Question(
-                    f"{prefix}.{index}.default",
-                    f"Default {noun} value",
-                    "Type the value exactly as it should appear in config.example.json, not as "
+                    key=f"{prefix}.{index}.default",
+                    title=f"Default {noun} value",
+                    guidance="Type the value exactly as it should appear in config.example.json, not as "
                     "Python source. Strings need double quotes, booleans are true or false, and "
                     "lists use JSON brackets.",
-                    "The generated declaration uses this value whenever the key is omitted from "
+                    expected="The generated declaration uses this value whenever the key is omitted from "
                     "a configuration object.",
-                    (
+                    example=(
                         '"global", 0, or false depending on the selected type'
                         if setting
                         else "Insomnia uses [] for both optional title-filter lists"
                     ),
-                    _json_parser(value_type),
+                    parser=_json_parser(value_type),
                 )
             )
         questions.append(
             _Question(
-                f"{prefix}.{index}.example",
-                f"Example {noun} value",
-                "Type a realistic valid JSON value exactly as it should appear in "
+                key=f"{prefix}.{index}.example",
+                title=f"Example {noun} value",
+                guidance="Type a realistic valid JSON value exactly as it should appear in "
                 "config.example.json. It may equal the default, but a representative value is "
                 "usually more helpful.",
-                f"The value is written into config.example.json under the "
+                expected=f"The value is written into config.example.json under the "
                 f"{'settings object' if setting else 'sample item row'}.",
-                (
+                example=(
                     '"replace-me", 25.0, or true depending on the selected type'
                     if setting
                     else 'Insomnia could show ["laptop", "ThinkPad"] for title_include'
                 ),
-                _json_parser(value_type),
+                parser=_json_parser(value_type),
             )
         )
         if setting:
             questions.append(
                 _Question(
-                    f"{prefix}.{index}.sensitive",
-                    "Sensitive setting?",
-                    "Mark secrets such as API tokens sensitive. This records the setting's "
+                    key=f"{prefix}.{index}.sensitive",
+                    title="Sensitive setting?",
+                    guidance="Mark secrets such as API tokens sensitive. This records the setting's "
                     "presentation policy so tooling can avoid exposing its value. Do not mark "
                     "ordinary filters or numeric thresholds sensitive.",
-                    "Choosing yes emits sensitive=True on the SettingSpec declaration; the "
+                    expected="Choosing yes emits sensitive=True on the SettingSpec declaration; the "
                     "example still contains only the non-secret placeholder you provided.",
-                    "yes for api_token; no for minimum_listing_price",
-                    _yes_no,
+                    example="yes for api_token; no for minimum_listing_price",
+                    parser=_yes_no,
                     default="no",
                     choices=("yes", "no"),
                 )
@@ -341,95 +366,95 @@ def _field_questions(
     return questions
 
 
-def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
+def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question]:
     target = cast(str, answers.get("target", "<target>"))
     default_interval = cast(str, answers.get("default_interval", "1h"))
     questions = [
         _Question(
-            "target",
-            "Target name",
-            "The target name is the plugin's unique identifier. It may be one word, such as "
+            key="target",
+            title="Target name",
+            guidance="The target name is the plugin's unique identifier. It may be one word, such as "
             "skroutz or insomnia, or multiple snake_case words, such as acme_store. Use only "
             "lowercase letters, digits, and underscores, begin with a letter, and avoid reserved "
             "framework names and Scrooge Alert command names such as status. Do not reuse the name "
             "of another checked-in plugin, such as insomnia. Treat it as permanent once published.",
-            "It names src/core/scrapers/plugins/<target>/, tests/plugins/<target>/, "
+            expected="It names src/core/scrapers/plugins/<target>/, tests/plugins/<target>/, "
             "config/<target>.json, state/<target>.json, --<target> command flags, logs, locks, "
             "and systemd units.",
-            "skroutz, insomnia, or acme_store",
-            _wizard_target_name,
+            example="skroutz, insomnia, or acme_store",
+            parser=_wizard_target_parser(repo_root),
         ),
         _Question(
-            "display_name",
-            "Store display name",
-            "This is the human-readable store or service name. Capitalization and spaces are "
+            key="display_name",
+            title="Store display name",
+            guidance="This is the human-readable store or service name. Capitalization and spaces are "
             "welcome. Keep it short and recognizable; it is presentation text, not a Python or "
             "filesystem identifier.",
-            "It becomes ScraperPlugin.display_name and appears in user-facing status, scraping "
+            expected="It becomes ScraperPlugin.display_name and appears in user-facing status, scraping "
             "output, errors, and notifications. It does not affect paths or command flags.",
-            "Skroutz, Insomnia, or Acme Store",
-            _safe_display_name,
+            example="Skroutz, Insomnia, or Acme Store",
+            parser=_safe_display_name,
         ),
         _Question(
-            "domains",
-            "Supported domains",
-            "List every hostname or IP address this plugin accepts, separated by commas. Enter "
+            key="domains",
+            title="Supported domains",
+            guidance="List every hostname or IP address this plugin accepts, separated by commas. Enter "
             "hostnames only: no scheme, port, path, query, credentials, or wildcard. Subdomains "
             "must be listed separately when users can paste them into a working tracked URL "
             "(for example, enter both example.com and shop.example.com if product pages work on "
             "both hosts). The wizard checks every entry and will keep this panel open if it is not "
             "a valid host-only value.",
-            "Each tracked item in config/<target>.json has a url value for the page to check. "
+            expected="Each tracked item in config/<target>.json has a url value for the page to check. "
             "Scrooge Alert compares that URL's hostname with this list so it can reject unsupported "
             "URLs and route supported ones to this plugin. The scaffold also builds the example "
             "tracked URL in config.example.json from the first hostname you enter here and the "
             "path prefix requested next.",
-            "Skroutz supports skroutz.gr, skroutz.cy, skroutz.ro, skroutz.bg, skroutz.de. "
+            example="Skroutz supports skroutz.gr, skroutz.cy, skroutz.ro, skroutz.bg, skroutz.de. "
             "Insomnia uses the single domain insomnia.gr.",
-            _domains,
+            parser=_domains,
         ),
         _Question(
-            "url_prefix",
-            "Accepted URL path prefix",
-            "Enter the path portion that comes immediately after the domain and identifies the "
+            key="url_prefix",
+            title="Accepted URL path prefix",
+            guidance="Enter the path portion that comes immediately after the domain and identifies the "
             "kind of page this plugin accepts. It must start with / and contain no whitespace, "
             "query, or fragment; the wizard checks these rules before continuing. The scaffold "
             "adds a trailing slash when omitted. An answer is required: enter / explicitly only "
             "when the plugin should accept nearly every path on the domain.",
-            "The scaffold combines the first domain and prefix to create its example URL, then "
+            expected="The scaffold combines the first domain and prefix to create its example URL, then "
             "uses <sample> to represent the page-specific part that follows it. When a user adds "
             "a URL to the configuration, the plugin accepts it only when the part after the "
             "domain begins with this prefix. This keeps unrelated pages from the same website "
             "out of the plugin.",
-            "Skroutz uses /s/: https://skroutz.gr/s/<sample>. Insomnia uses /classifieds/: "
+            example="Skroutz uses /s/: https://skroutz.gr/s/<sample>. Insomnia uses /classifieds/: "
             "https://insomnia.gr/classifieds/<sample>.",
-            _url_prefix,
+            parser=_url_prefix,
         ),
         _Question(
-            "result_type",
-            "Scrape result shape",
-            "The result shape describes what the plugin returns after successfully checking one "
+            key="result_type",
+            title="Scrape result shape",
+            guidance="The result shape describes what the plugin returns after successfully checking one "
             "configured URL. Choose price when one page represents one tracked product and "
             "produces one price. Choose listing when a search or category page produces multiple "
             "independently alertable offers with their own titles, prices, and canonical URLs.",
-            "The generated client returns PriceResult for price or ListingResult containing "
+            expected="The generated client returns PriceResult for price or ListingResult containing "
             "Offer values for listing; this determines alert-history behavior and starter code.",
-            "Skroutz uses price because one product page yields one price. Insomnia uses listing "
+            example="Skroutz uses price because one product page yields one price. Insomnia uses listing "
             "because one classifieds search page yields multiple offers.",
-            _choice("price", "listing"),
+            parser=_choice("price", "listing"),
             default="price",
             choices=("price", "listing"),
         ),
         _Question(
-            "default_interval",
-            "Canonical default interval",
-            "Choose the normal background check interval. Users may override it in their target "
+            key="default_interval",
+            title="Canonical default interval",
+            guidance="Choose the normal background check interval. Users may override it in their target "
             "configuration. Prefer a respectful interval for the remote service; the framework "
             "still applies sequential request pacing within a run.",
-            "The value becomes ScraperPlugin.default_interval, the example execution_interval, "
+            expected="The value becomes ScraperPlugin.default_interval, the example execution_interval, "
             "and the default systemd timer schedule when no valid user configuration override exists.",
-            "1h for hourly checks; supported values: " + ", ".join(SUPPORTED_INTERVALS),
-            _choice(*SUPPORTED_INTERVALS),
+            example="1h for hourly checks; supported values: " + ", ".join(SUPPORTED_INTERVALS),
+            parser=_choice(*SUPPORTED_INTERVALS),
             default="1h",
             choices=tuple(SUPPORTED_INTERVALS),
         ),
@@ -451,52 +476,52 @@ def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
     questions.extend(
         [
             _Question(
-                "transport",
-                "Client transport",
-                "Client transport means how the generated scraper client will retrieve page or API "
+                key="transport",
+                title="Client transport",
+                guidance="Client transport means how the generated scraper client will retrieve page or API "
                 "data from the site. The shared HTTP transport provides bounded GET requests, "
                 "standard HTTP status mapping, retry identity rotation, and clean shutdown. The "
                 "bare client leaves the scraping approach entirely up to you. If you are unsure "
                 "which approach the site needs, choose bare now and decide how to fetch and parse "
                 "its pages later.",
-                "http subclasses HttpScraperClient and automatically adds tls-client. bare "
+                expected="http subclasses HttpScraperClient and automatically adds tls-client. bare "
                 "subclasses ScraperClient and performs no network request until you implement it.",
-                "Choose bare when you have not chosen a scraping approach yet; http when you know the "
+                example="Choose bare when you have not chosen a scraping approach yet; http when you know the "
                 "shared HTTP client fits the site you want to scrape.",
-                _choice("http", "bare"),
+                parser=_choice("http", "bare"),
                 default="bare",
                 choices=("http", "bare"),
             ),
             _Question(
-                "dependencies",
-                "Additional private dependencies",
-                "Enter comma-separated Python requirement strings needed only by this plugin, or "
+                key="dependencies",
+                title="Additional private dependencies",
+                guidance="Enter comma-separated Python requirement strings needed only by this plugin, or "
                 "leave the answer empty. Project-wide packages are listed in the repository-root "
                 "requirements.txt; do not repeat them here. If you are unsure, leave this empty "
                 f"and later create or edit src/core/scrapers/plugins/{target}/requirements.txt "
                 "manually.",
-                f"Nonempty values are written one per line to "
+                expected=f"Nonempty values are written one per line to "
                 f"src/core/scrapers/plugins/{target}/requirements.txt. Setup installs them for "
                 "this plugin, and the project checks that the plugin declares every extra package "
                 "it imports.",
-                "beautifulsoup4, lxml; leave empty when the standard library and transport suffice",
-                _dependencies,
+                example="beautifulsoup4, lxml; leave empty when the standard library and transport suffice",
+                parser=_dependencies,
                 default="",
             ),
             _Question(
-                "include_tests",
-                "Generate example tests?",
-                "The example tests demonstrate strict configuration decoding. They also contain "
+                key="include_tests",
+                title="Generate example tests?",
+                guidance="The example tests demonstrate strict configuration decoding. They also contain "
                 "one deliberately skipped placeholder test marked TODO. After implementing the "
                 "client, replace that placeholder with tests that use mocked responses to cover "
                 "successful scraping and parsing failures. You may omit the entire test package; "
                 "the verifier will show a non-blocking warning because plugin behavior is then "
                 "untested.",
-                f"yes creates tests/plugins/{target}/ with a passing configuration test and a "
+                expected=f"yes creates tests/plugins/{target}/ with a passing configuration test and a "
                 "skipped placeholder for the behavior tests you still need to write. no creates "
                 "only the source package. Either choice passes the initial scaffold checks.",
-                "yes is recommended, even for a small plugin",
-                _yes_no,
+                example="yes is recommended, even for a small plugin",
+                parser=_yes_no,
                 default="yes",
                 choices=("yes", "no"),
             ),
@@ -659,92 +684,6 @@ def _review_panel(request: ScaffoldRequest, *, position: int, total: int) -> Pan
     )
 
 
-def _read_byte(descriptor: int) -> bytes:
-    return os.read(descriptor, 1)
-
-
-def _read_character(descriptor: int) -> str:
-    first = _read_byte(descriptor)
-    if not first:
-        return ""
-    leading = first[0]
-    if leading < 0x80:
-        return first.decode()
-    if leading & 0xE0 == 0xC0:
-        remaining = 1
-    elif leading & 0xF0 == 0xE0:
-        remaining = 2
-    elif leading & 0xF8 == 0xF0:
-        remaining = 3
-    else:
-        return ""
-    encoded = first + b"".join(_read_byte(descriptor) for _ in range(remaining))
-    try:
-        return encoded.decode("utf-8")
-    except UnicodeDecodeError:
-        return ""
-
-
-def _read_escape_sequence(descriptor: int) -> str:
-    if not select.select([descriptor], [], [], 0.2)[0]:
-        return _ABORT
-    second = _read_character(descriptor)
-    if second not in {"[", "O"}:
-        return ""
-    sequence = ""
-    for _ in range(8):
-        if not select.select([descriptor], [], [], 0.2)[0]:
-            return ""
-        character = _read_character(descriptor)
-        sequence += character
-        if character.isalpha() or character == "~":
-            break
-    if sequence == "A":
-        return _BACK
-    if sequence == "B":
-        return _ACCEPT
-    if sequence == "C":
-        return _RIGHT
-    if sequence == "D":
-        return _LEFT
-    if sequence == "H":
-        return _HOME
-    if sequence == "F":
-        return _END
-    if sequence == "3~":
-        return _DELETE
-    return ""
-
-
-def _read_terminal_key(descriptor: int | None = None) -> str:
-    resolved_descriptor = sys.stdin.fileno() if descriptor is None else descriptor
-    character = _read_character(resolved_descriptor)
-    if character == "\x1b":
-        return _read_escape_sequence(resolved_descriptor)
-    if character in {"\r", "\n"}:
-        return _ACCEPT
-    if character in {"\x7f", "\b"}:
-        return _BACKSPACE
-    if character == "\x03":
-        raise KeyboardInterrupt
-    if character == "\x04":
-        return _ABORT
-    return character if character.isprintable() else ""
-
-
-@contextmanager
-def _terminal_reader() -> Iterator[KeyReader]:
-    if not sys.stdin.isatty() or not sys.stdout.isatty():
-        raise RuntimeError("the guided wizard requires an interactive terminal")
-    descriptor = sys.stdin.fileno()
-    original = termios.tcgetattr(descriptor)
-    try:
-        tty.setcbreak(descriptor)
-        yield lambda: _read_terminal_key(descriptor)
-    finally:
-        termios.tcsetattr(descriptor, termios.TCSADRAIN, original)
-
-
 def _edit_question(
     console: Console,
     question: _Question,
@@ -794,6 +733,8 @@ def _edit_question(
             elif key == _DELETE and cursor < len(value):
                 value = value[:cursor] + value[cursor + 1 :]
                 error = None
+            elif key == _REFRESH:
+                pass
             elif len(key) == 1 and key.isprintable():
                 value = value[:cursor] + key + value[cursor:]
                 cursor += 1
@@ -834,7 +775,10 @@ def _welcome_panel() -> Panel:
 
 
 def collect_request(
-    console: Console | None = None, *, read_key: KeyReader | None = None
+    repo_root: Path,
+    console: Console | None = None,
+    *,
+    read_key: KeyReader | None = None,
 ) -> ScaffoldRequest | None:
     """Collect and confirm one complete scaffold request."""
     console = console or Console()
@@ -853,7 +797,7 @@ def collect_request(
         with reader_context as keys:
             console.print()
             while True:
-                questions = _questions(answers)
+                questions = _questions(answers, repo_root)
                 total = len(questions) + 1
                 if index == len(questions):
                     try:
@@ -902,7 +846,7 @@ def collect_request(
                 assert answer is not None
                 answers[question.key] = answer
                 index += 1
-    except RuntimeError as exc:
+    except InteractiveTerminalUnavailable as exc:
         console.print()
         console.print(
             Panel(

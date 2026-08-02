@@ -7,6 +7,7 @@ import json
 import math
 import re
 import shutil
+import stat
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -82,6 +83,23 @@ class ScaffoldRequest:
 class ScaffoldResult:
     source: Path
     tests: Path | None
+
+
+@dataclass(frozen=True)
+class _ScaffoldDestinations:
+    source: Path
+    tests: Path
+
+
+@dataclass(frozen=True)
+class _CreatedDirectory:
+    path: Path
+    device: int
+    inode: int
+
+
+class ScaffoldRollbackError(RuntimeError):
+    """A scaffold failed and one or more new directories could not be removed."""
 
 
 def _safe_display_name(value: str) -> str:
@@ -235,6 +253,25 @@ def validate_request(request: ScaffoldRequest) -> ScaffoldRequest:
         ),
         dependencies=_safe_dependencies(request.dependencies),
         include_tests=request.include_tests,
+    )
+
+
+def _scaffold_destinations(repo_root: Path, target: str) -> _ScaffoldDestinations:
+    root = repo_root.resolve()
+    return _ScaffoldDestinations(
+        source=root / "src" / "core" / "scrapers" / "plugins" / target,
+        tests=root / "tests" / "plugins" / target,
+    )
+
+
+def _path_entry_exists(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
+
+
+def _scaffold_collisions(repo_root: Path, target: str) -> tuple[Path, ...]:
+    destinations = _scaffold_destinations(repo_root, target)
+    return tuple(
+        path for path in (destinations.source, destinations.tests) if _path_entry_exists(path)
     )
 
 
@@ -553,11 +590,11 @@ def _test_files(request: ScaffoldRequest) -> dict[str, str]:
     raw_settings = {spec.key: spec.example for spec in request.settings}
     assertions = [f"    assert values.items[0][URL] == {_python_literal(item['url'])}"]
     assertions.extend(
-        f"    assert values.items[0][ITEM_{spec.key.upper()}] == {_python_literal(spec.example)}"
+        _example_assertion(f"values.items[0][ITEM_{spec.key.upper()}]", spec.example)
         for spec in request.item_fields
     )
     assertions.extend(
-        f"    assert values.settings[SETTING_{spec.key.upper()}] == {_python_literal(spec.example)}"
+        _example_assertion(f"values.settings[SETTING_{spec.key.upper()}]", spec.example)
         for spec in request.settings
     )
     declaration_imports = ",\n    ".join(imports)
@@ -612,35 +649,72 @@ def test_replace_placeholder_with_mocked_client_scrape_behavior() -> None:
     }
 
 
+def _example_assertion(expression: str, expected: object) -> str:
+    operator = "is" if isinstance(expected, bool) else "=="
+    return f"    assert {expression} {operator} {_python_literal(expected)}"
+
+
 def _write_tree(root: Path, files: dict[str, str]) -> None:
     for relative, contents in files.items():
-        (root / relative).write_text(contents, encoding="utf-8")
+        with (root / relative).open("x", encoding="utf-8") as output:
+            output.write(contents)
+
+
+def _record_created_directory(path: Path) -> _CreatedDirectory:
+    details = path.stat(follow_symlinks=False)
+    return _CreatedDirectory(path, details.st_dev, details.st_ino)
+
+
+def _rollback_created_directories(created: list[_CreatedDirectory]) -> tuple[str, ...]:
+    failures: list[str] = []
+    for entry in reversed(created):
+        try:
+            details = entry.path.stat(follow_symlinks=False)
+            if (
+                not stat.S_ISDIR(details.st_mode)
+                or details.st_dev != entry.device
+                or details.st_ino != entry.inode
+            ):
+                raise OSError("path was replaced after creation; refusing recursive cleanup")
+            shutil.rmtree(entry.path)
+        except FileNotFoundError:
+            # Another cleanup path may already have removed this exact entry.
+            # The rollback invariant is satisfied when nothing remains there.
+            continue
+        except OSError as exc:
+            failures.append(f"{entry.path}: {exc}")
+    return tuple(failures)
 
 
 def create_plugin(repo_root: Path, request: ScaffoldRequest) -> ScaffoldResult:
     """Create only new plugin-owned paths, rolling back partial output."""
     request = validate_request(request)
-    repo_root = repo_root.resolve()
-    source = repo_root / "src" / "core" / "scrapers" / "plugins" / request.target
-    tests = repo_root / "tests" / "plugins" / request.target if request.include_tests else None
-    destinations = (source,) if tests is None else (source, tests)
-    collisions = [path for path in destinations if path.exists()]
+    destinations = _scaffold_destinations(repo_root, request.target)
+    source = destinations.source
+    tests = destinations.tests if request.include_tests else None
+    collisions = _scaffold_collisions(repo_root, request.target)
     if collisions:
         joined = ", ".join(str(path) for path in collisions)
         raise FileExistsError(f"refusing to overwrite existing path(s): {joined}")
 
-    created: list[Path] = []
+    source_files = _source_files(request)
+    test_files = _test_files(request) if tests is not None else None
+    created: list[_CreatedDirectory] = []
     try:
         source.mkdir(parents=True)
-        created.append(source)
-        _write_tree(source, _source_files(request))
-        if tests is not None:
+        created.append(_record_created_directory(source))
+        _write_tree(source, source_files)
+        if tests is not None and test_files is not None:
             tests.mkdir(parents=True)
-            created.append(tests)
-            _write_tree(tests, _test_files(request))
-    except Exception:
-        for path in reversed(created):
-            shutil.rmtree(path)
+            created.append(_record_created_directory(tests))
+            _write_tree(tests, test_files)
+    except BaseException as exc:
+        rollback_failures = _rollback_created_directories(created)
+        if rollback_failures:
+            detail = "; ".join(rollback_failures)
+            raise ScaffoldRollbackError(
+                f"scaffold failed and rollback was incomplete; recovery paths: {detail}"
+            ) from exc
         raise
     return ScaffoldResult(source, tests)
 
@@ -784,34 +858,50 @@ def _request_from_args(
 
 
 def main(argv: list[str] | None = None) -> int:
+    from core.scrapers.tooling.scaffold_terminal import (
+        ScaffoldInterrupted,
+        interruption_guard,
+    )
+
     parser = _parser()
     args = parser.parse_args(argv)
+    result: ScaffoldResult | None = None
     try:
-        if args.interactive:
-            from core.scrapers.tooling.scaffold_wizard import collect_request
+        with interruption_guard():
+            repo_root = Path(args.repo_root)
+            if args.interactive:
+                from core.scrapers.tooling.scaffold_wizard import collect_request
 
-            request = collect_request()
-            if request is None:
-                if args.shell_output:
-                    print("scaffold\t0\t\t0")
+                request = collect_request(repo_root)
+                if request is None:
+                    if args.shell_output:
+                        print("scaffold\t0\t\t0")
+                    return 0
+            else:
+                request = _request_from_args(parser, args)
+            result = create_plugin(repo_root, request)
+            if args.interactive:
+                from core.scrapers.tooling.scaffold_wizard import render_completion
+
+                render_completion(request, result)
                 return 0
+    except (KeyboardInterrupt, ScaffoldInterrupted):
+        if result is None:
+            detail = "no new scaffold was confirmed"
         else:
-            request = _request_from_args(parser, args)
-        result = create_plugin(Path(args.repo_root), request)
-        if args.interactive:
-            from core.scrapers.tooling.scaffold_wizard import render_completion
-
-            render_completion(request, result)
-            return 0
-    except KeyboardInterrupt:
-        print("\nTarget scaffold interrupted; no new scaffold was confirmed.", file=sys.stderr)
+            detail = (
+                f"the scaffold was created at {result.source}, but final output was interrupted"
+            )
+        print(f"\nTarget scaffold interrupted; {detail}.", file=sys.stderr)
         return 130
-    except (OSError, ValueError) as exc:
+    except (EOFError, OSError, RuntimeError, ValueError) as exc:
         print(f"Target scaffold failed: {exc}", file=sys.stderr)
         return 1
     if args.shell_output:
+        assert result is not None
         print(f"scaffold\t1\t{result.source.name}\t{int(result.tests is not None)}")
     else:
+        assert result is not None
         print(f"Created {result.source}")
         if result.tests is not None:
             print(f"Created {result.tests}")

@@ -1,11 +1,13 @@
 import io
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from unittest import mock
 
 import pytest
 from rich.console import Console
 
 from core.scrapers.tooling.scaffold import ScaffoldRequest, ScaffoldResult
+from core.scrapers.tooling.scaffold_terminal import read_terminal_key as _read_terminal_key
 from core.scrapers.tooling.scaffold_wizard import (
     _ABORT,
     _ACCEPT,
@@ -13,10 +15,11 @@ from core.scrapers.tooling.scaffold_wizard import (
     _BACKSPACE,
     _json_parser,
     _questions,
-    _read_terminal_key,
     collect_request,
     render_completion,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class _SilentLive:
@@ -64,7 +67,7 @@ def test_wizard_guides_reviews_and_confirms_a_common_bare_plugin():
     console = Console(file=stream, width=100, color_system=None, force_terminal=True)
     read_key, _ = _key_reader(*_common_answers())
 
-    request = collect_request(console, read_key=read_key)
+    request = collect_request(REPO_ROOT, console, read_key=read_key)
 
     assert request == ScaffoldRequest(
         "acme_store",
@@ -91,7 +94,7 @@ def test_wizard_guides_reviews_and_confirms_a_common_bare_plugin():
 
 
 def test_question_guidance_uses_real_plugins_and_configuration_paths():
-    base = {question.key: question for question in _questions({})}
+    base = {question.key: question for question in _questions({}, REPO_ROOT)}
 
     assert (
         base["domains"].example
@@ -124,7 +127,8 @@ def test_question_guidance_uses_real_plugins_and_configuration_paths():
                 "field.0.add": True,
                 "field.0.type": "text-list",
                 "field.0.required": False,
-            }
+            },
+            REPO_ROOT,
         )
     }
     assert "Insomnia adds title_include and title_exclude" in item_questions["field.0.add"].example
@@ -144,7 +148,7 @@ def test_wizard_navigation_does_not_accumulate_blank_rows_between_panels():
         mock.patch("core.scrapers.tooling.scaffold_wizard.Live", _SilentLive),
         mock.patch.object(console, "print", wraps=console.print) as print_spy,
     ):
-        assert collect_request(console, read_key=keys.__next__) is None
+        assert collect_request(REPO_ROOT, console, read_key=keys.__next__) is None
 
     blank_writes = [call for call in print_spy.call_args_list if not call.args]
     assert len(blank_writes) == 3  # before welcome, after welcome, after cancellation
@@ -160,7 +164,7 @@ def test_wizard_up_revisits_and_preserves_previous_answers():
         keys.extend(entry)
         keys.append(_ACCEPT)
 
-    request = collect_request(console, read_key=iter(keys).__next__)
+    request = collect_request(REPO_ROOT, console, read_key=iter(keys).__next__)
 
     assert request is not None
     assert request.target == "acme"
@@ -197,7 +201,7 @@ def test_wizard_explains_and_collects_custom_fields_settings_and_dependencies():
         "",
     )
 
-    request = collect_request(console, read_key=read_key)
+    request = collect_request(REPO_ROOT, console, read_key=read_key)
 
     assert request is not None
     assert request.result_type == "listing"
@@ -226,7 +230,7 @@ def test_wizard_explains_uppercase_target_error_and_accepts_the_correction():
         keys.extend(entry)
         keys.append(_ACCEPT)
 
-    request = collect_request(console, read_key=iter(keys).__next__)
+    request = collect_request(REPO_ROOT, console, read_key=iter(keys).__next__)
 
     assert request is not None
     assert request.target == "haha"
@@ -235,7 +239,7 @@ def test_wizard_explains_uppercase_target_error_and_accepts_the_correction():
 
 @pytest.mark.parametrize("target", ["status", "insomnia"])
 def test_wizard_rejects_command_and_existing_plugin_target_names(target):
-    target_question = _questions({})[0]
+    target_question = _questions({}, REPO_ROOT)[0]
 
     with pytest.raises(ValueError):
         target_question.parser(target)
@@ -266,7 +270,7 @@ def test_wizard_rejects_a_boolean_example_string_and_accepts_valid_json_boolean(
         keys.extend(entry)
         keys.append(_ACCEPT)
 
-    request = collect_request(console, read_key=iter(keys).__next__)
+    request = collect_request(REPO_ROOT, console, read_key=iter(keys).__next__)
 
     assert request is not None
     assert request.item_fields[0].example is True
@@ -277,7 +281,7 @@ def test_wizard_escape_aborts_from_the_first_question():
     stream = io.StringIO()
     console = Console(file=stream, width=76, color_system=None, force_terminal=True)
 
-    assert collect_request(console, read_key=iter([_ABORT]).__next__) is None
+    assert collect_request(REPO_ROOT, console, read_key=iter([_ABORT]).__next__) is None
 
     output = stream.getvalue()
     assert "Scaffold cancelled" in output
@@ -289,7 +293,7 @@ def test_wizard_escape_aborts_from_a_later_question():
     console = Console(file=stream, width=76, color_system=None, force_terminal=True)
     keys = iter([*"acme", _ACCEPT, _ABORT])
 
-    assert collect_request(console, read_key=keys.__next__) is None
+    assert collect_request(REPO_ROOT, console, read_key=keys.__next__) is None
 
     output = stream.getvalue()
     assert "Store display name" in output
@@ -301,7 +305,7 @@ def test_wizard_first_question_ignores_irrelevant_special_keys():
     console = Console(file=stream, width=76, color_system=None, force_terminal=True)
     keys = iter(["", "left", "right", "home", "end", _ABORT])
 
-    assert collect_request(console, read_key=keys.__next__) is None
+    assert collect_request(REPO_ROOT, console, read_key=keys.__next__) is None
 
     output = stream.getvalue()
     assert "Target name" in output
@@ -328,11 +332,11 @@ def test_wizard_rejects_values_outside_strict_json(value_type, raw):
 def test_terminal_reader_maps_arrow_and_standalone_escape():
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_wizard.os.read",
+            "core.scrapers.tooling.scaffold_terminal.os.read",
             side_effect=(b"\x1b", b"[", b"A"),
         ),
         mock.patch(
-            "core.scrapers.tooling.scaffold_wizard.select.select",
+            "core.scrapers.tooling.scaffold_terminal.select.select",
             return_value=([object()], [], []),
         ),
     ):
@@ -340,11 +344,11 @@ def test_terminal_reader_maps_arrow_and_standalone_escape():
 
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_wizard.os.read",
+            "core.scrapers.tooling.scaffold_terminal.os.read",
             side_effect=(b"\x1b", b"[", b"B"),
         ),
         mock.patch(
-            "core.scrapers.tooling.scaffold_wizard.select.select",
+            "core.scrapers.tooling.scaffold_terminal.select.select",
             return_value=([object()], [], []),
         ),
     ):
@@ -352,20 +356,20 @@ def test_terminal_reader_maps_arrow_and_standalone_escape():
 
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_wizard.os.read",
+            "core.scrapers.tooling.scaffold_terminal.os.read",
             side_effect=(b"\x1b", b"O", b"P"),
         ),
         mock.patch(
-            "core.scrapers.tooling.scaffold_wizard.select.select",
+            "core.scrapers.tooling.scaffold_terminal.select.select",
             return_value=([object()], [], []),
         ),
     ):
         assert _read_terminal_key(7) == ""
 
     with (
-        mock.patch("core.scrapers.tooling.scaffold_wizard.os.read", return_value=b"\x1b"),
+        mock.patch("core.scrapers.tooling.scaffold_terminal.os.read", return_value=b"\x1b"),
         mock.patch(
-            "core.scrapers.tooling.scaffold_wizard.select.select", return_value=([], [], [])
+            "core.scrapers.tooling.scaffold_terminal.select.select", return_value=([], [], [])
         ),
     ):
         assert _read_terminal_key(7) == _ABORT
@@ -374,7 +378,7 @@ def test_terminal_reader_maps_arrow_and_standalone_escape():
 def test_terminal_reader_preserves_utf8_text_input():
     encoded = "Σ".encode()
     with mock.patch(
-        "core.scrapers.tooling.scaffold_wizard.os.read",
+        "core.scrapers.tooling.scaffold_terminal.os.read",
         side_effect=tuple(bytes((byte,)) for byte in encoded),
     ):
         assert _read_terminal_key(7) == "Σ"

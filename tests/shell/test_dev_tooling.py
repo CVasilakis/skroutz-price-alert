@@ -1,7 +1,12 @@
 import os
+import pty
+import select
 import shutil
+import signal
 import subprocess
 import sys
+import termios
+import time
 from pathlib import Path
 
 import pytest
@@ -65,6 +70,106 @@ def test_plugin_create_interactive_output_is_owned_by_rich_panels():
     assert "Interactive terminal required" in result.stdout
     assert "╯\n\n╭" in result.stdout
     assert result.stdout.endswith("\n\n")
+
+
+def _interactive_plugin_create_process():
+    master, slave = pty.openpty()
+    original = termios.tcgetattr(slave)
+    env = os.environ.copy()
+    env["SCROOGE_PLUGIN_CREATE_PYTHON"] = sys.executable
+    env["NO_COLOR"] = "1"
+    process = subprocess.Popen(
+        ["sh", str(ROOT / "scripts/dev/plugin-create.sh")],
+        cwd=ROOT,
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        env=env,
+        close_fds=True,
+    )
+    return process, master, slave, original
+
+
+def _read_pty_until(master: int, needle: bytes, timeout: float = 10) -> bytes:
+    output = bytearray()
+    deadline = time.monotonic() + timeout
+    while needle not in output and time.monotonic() < deadline:
+        ready, _, _ = select.select([master], [], [], 0.1)
+        if not ready:
+            continue
+        try:
+            output.extend(os.read(master, 4096))
+        except OSError:
+            break
+    assert needle in output, bytes(output)
+    return bytes(output)
+
+
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def test_plugin_create_sigterm_restores_exact_terminal_settings():
+    process, master, slave, original = _interactive_plugin_create_process()
+    try:
+        _read_pty_until(master, b"Target name")
+        assert termios.tcgetattr(slave) != original
+
+        process.send_signal(signal.SIGTERM)
+
+        assert process.wait(timeout=10) == 130
+        assert termios.tcgetattr(slave) == original
+    finally:
+        _stop_process(process)
+        os.close(master)
+        os.close(slave)
+
+
+def test_plugin_create_suspend_and_resume_preserve_terminal_mode():
+    process, master, slave, original = _interactive_plugin_create_process()
+    try:
+        _read_pty_until(master, b"Target name")
+        process.send_signal(signal.SIGTSTP)
+
+        deadline = time.monotonic() + 1
+        stopped = False
+        while time.monotonic() < deadline:
+            waited, status = os.waitpid(process.pid, os.WNOHANG | os.WUNTRACED)
+            if waited == process.pid and os.WIFSTOPPED(status):
+                stopped = True
+                break
+            if waited == process.pid and not os.WIFSTOPPED(status):
+                raise AssertionError(f"wizard exited during suspension: {status}")
+            time.sleep(0.05)
+
+        if stopped:
+            assert termios.tcgetattr(slave) == original
+        else:
+            # POSIX permits an orphaned process group to ignore SIGTSTP. The
+            # wizard must then keep running in cbreak mode, not canonical mode.
+            current = termios.tcgetattr(slave)
+            assert current != original
+            assert current[3] & termios.ICANON == 0
+
+        process.send_signal(signal.SIGCONT)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            resumed = termios.tcgetattr(slave)
+            if resumed != original and resumed[3] & termios.ICANON == 0:
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("wizard did not restore cbreak mode after SIGCONT")
+
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(timeout=10) == 130
+        assert termios.tcgetattr(slave) == original
+    finally:
+        _stop_process(process)
+        os.close(master)
+        os.close(slave)
 
 
 def _plugin_create_args(repo_root: Path, target: str = "acme_store") -> list[str]:
@@ -215,6 +320,50 @@ def _noisy_python(tmp_path: Path, scaffold_status: int | None = None) -> dict[st
     env = os.environ.copy()
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     return env
+
+
+def _protocol_python(tmp_path: Path, output: str) -> dict[str, str]:
+    bin_dir = tmp_path / "protocol-bin"
+    bin_dir.mkdir(parents=True)
+    fake_python = bin_dir / "python3"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in\n'
+        '  *"core.scrapers.tooling.scaffold"*)\n'
+        "    printf '%s' \"$SCAFFOLD_PROTOCOL_OUTPUT\"\n"
+        "    exit 0\n"
+        "    ;;\n"
+        "esac\n"
+        f'exec "{sys.executable}" "$@"\n',
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["SCAFFOLD_PROTOCOL_OUTPUT"] = output
+    return env
+
+
+@pytest.mark.parametrize(
+    "output",
+    (
+        "scaffold\t1\tacme_store",
+        "scaffold\t1\tacme_store\t2",
+        "scaffold\t2\tacme_store\t1",
+        "scaffold\t1\tbad-target\t1",
+        "scaffold\t1\tacme_store\t1\textra",
+        "noise\nscaffold\t1\tacme_store\t1",
+    ),
+)
+def test_plugin_create_rejects_malformed_backend_protocol(tmp_path, output):
+    result = _run(
+        "scripts/dev/plugin-create.sh",
+        *_plugin_create_args(tmp_path / "output"),
+        env=_protocol_python(tmp_path, output),
+    )
+
+    assert result.returncode == 1
+    assert_task_status(result.stdout, "x", "Target scaffold returned an invalid result.")
 
 
 def test_plugin_create_normal_hides_subprocess_noise(tmp_path):

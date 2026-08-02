@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -9,8 +10,10 @@ import pytest
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.tooling.scaffold import (
+    _PUBLIC_COMMAND_NAMES,
     CustomValueSpec,
     ScaffoldRequest,
+    ScaffoldRollbackError,
     _json_value,
     create_plugin,
     main,
@@ -18,6 +21,15 @@ from core.scrapers.tooling.scaffold import (
 )
 
 REQUEST = ScaffoldRequest("acme_store", "Acme Store", ("Store.Example",), "/products")
+
+
+def test_scaffold_reserved_command_names_match_the_root_dispatcher():
+    root = Path(__file__).resolve().parents[4]
+    script = (root / "scrooge-alert").read_text(encoding="utf-8")
+    command_branches = re.findall(r"^    ([a-z]+(?:\|[a-z]+)*)\)$", script, re.MULTILINE)
+    dispatched = {command for branch in command_branches for command in branch.split("|")}
+
+    assert dispatched == set(_PUBLIC_COMMAND_NAMES)
 
 
 def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
@@ -30,6 +42,7 @@ def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
     assert sentinel.read_text(encoding="utf-8") == "untouched"
     assert source == tmp_path / "src/core/scrapers/plugins/acme_store"
     assert tests == tmp_path / "tests/plugins/acme_store"
+    assert tests is not None
     assert {path.name for path in source.iterdir()} == {
         "__init__.py",
         "plugin.py",
@@ -306,6 +319,44 @@ def test_scaffold_refuses_collisions_without_touching_other_destination(tmp_path
     assert not (tmp_path / "tests/plugins/acme_store").exists()
 
 
+@pytest.mark.parametrize("include_tests", [False, True])
+def test_scaffold_refuses_orphan_test_destination_even_when_tests_are_omitted(
+    tmp_path, include_tests
+):
+    tests = tmp_path / "tests/plugins/acme_store"
+    tests.mkdir(parents=True)
+    marker = tests / "keep.txt"
+    marker.write_text("untouched", encoding="utf-8")
+    request = ScaffoldRequest(
+        "acme_store",
+        "Acme Store",
+        ("store.example",),
+        "/products/",
+        include_tests=include_tests,
+    )
+
+    with pytest.raises(FileExistsError, match="tests/plugins/acme_store"):
+        create_plugin(tmp_path, request)
+
+    assert marker.read_text(encoding="utf-8") == "untouched"
+    assert not (tmp_path / "src/core/scrapers/plugins/acme_store").exists()
+
+
+@pytest.mark.parametrize("destination", ["source", "tests"])
+def test_scaffold_refuses_broken_destination_symlinks(tmp_path, destination):
+    source = tmp_path / "src/core/scrapers/plugins/acme_store"
+    tests = tmp_path / "tests/plugins/acme_store"
+    selected = source if destination == "source" else tests
+    selected.parent.mkdir(parents=True)
+    selected.symlink_to(tmp_path / "missing-target", target_is_directory=True)
+
+    with pytest.raises(FileExistsError):
+        create_plugin(tmp_path, REQUEST)
+
+    assert selected.is_symlink()
+    assert not (tests if destination == "source" else source).exists()
+
+
 def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path):
     from core.scrapers.tooling import scaffold
 
@@ -325,6 +376,32 @@ def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path
 
     assert not (tmp_path / "src/core/scrapers/plugins/acme_store").exists()
     assert not (tmp_path / "tests/plugins/acme_store").exists()
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt(), SystemExit(130)])
+def test_scaffold_rolls_back_after_base_exception(tmp_path, interruption):
+    with mock.patch(
+        "core.scrapers.tooling.scaffold._write_tree",
+        side_effect=interruption,
+    ):
+        with pytest.raises(type(interruption)):
+            create_plugin(tmp_path, REQUEST)
+
+    assert not (tmp_path / "src/core/scrapers/plugins/acme_store").exists()
+    assert not (tmp_path / "tests/plugins/acme_store").exists()
+
+
+def test_scaffold_reports_incomplete_rollback_with_exact_recovery_path(tmp_path):
+    source = tmp_path / "src/core/scrapers/plugins/acme_store"
+    with (
+        mock.patch("core.scrapers.tooling.scaffold._write_tree", side_effect=OSError("disk full")),
+        mock.patch("core.scrapers.tooling.scaffold.shutil.rmtree", side_effect=OSError("busy")),
+    ):
+        with pytest.raises(ScaffoldRollbackError, match="rollback was incomplete") as raised:
+            create_plugin(tmp_path, REQUEST)
+
+    assert str(source) in str(raised.value)
+    assert source.exists()
 
 
 def test_scaffold_cli_reports_success_and_collision(tmp_path, capsys):
@@ -439,8 +516,36 @@ def test_scaffold_generates_listing_http_custom_contract_without_tests(tmp_path)
     assert requirements.splitlines() == ["tls-client", "beautifulsoup4"]
 
 
-def test_fresh_scaffold_passes_ruff_and_basedpyright(tmp_path):
-    result = create_plugin(tmp_path, REQUEST)
+@pytest.mark.parametrize(
+    "scaffold_request",
+    (
+        REQUEST,
+        ScaffoldRequest(
+            "maximal_store",
+            "Maximal Store",
+            ("store.example", "shop.example"),
+            "/listings/",
+            result_type="listing",
+            transport="http",
+            item_fields=(
+                CustomValueSpec("label", "text", "sample"),
+                CustomValueSpec("count", "integer", 3, 0),
+                CustomValueSpec("ratio", "number", 1.5, 1.0),
+                CustomValueSpec("floor", "nonnegative-number", 10.0, 0.0),
+                CustomValueSpec("enabled", "boolean", True, False),
+                CustomValueSpec("terms", "text-list", ("sample",), ()),
+            ),
+            settings=(
+                CustomValueSpec("api_token", "text", "replace-me", sensitive=True),
+                CustomValueSpec("page_limit", "integer", 2, 1),
+            ),
+            dependencies=("beautifulsoup4",),
+        ),
+    ),
+    ids=("minimal", "maximal"),
+)
+def test_fresh_scaffold_passes_ruff_and_basedpyright(tmp_path, scaffold_request):
+    result = create_plugin(tmp_path, scaffold_request)
     assert result.tests is not None
     paths = (str(result.source), str(result.tests))
 
