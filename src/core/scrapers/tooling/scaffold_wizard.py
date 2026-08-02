@@ -11,6 +11,7 @@ import tty
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import cast
 
 from rich.console import Console, Group, RenderableType
@@ -107,6 +108,16 @@ def _domains(raw: str) -> tuple[str, ...]:
     return tuple(result)
 
 
+def _wizard_target_name(raw: str) -> str:
+    target = _target_name(raw)
+    plugin_path = Path(__file__).resolve().parents[1] / "plugins" / target
+    if plugin_path.exists() or plugin_path.is_symlink():
+        raise ValueError(
+            f"target name {target!r} is already used by a checked-in plugin; choose another name"
+        )
+    return target
+
+
 def _dependencies(raw: str) -> tuple[str, ...]:
     values = tuple(value.strip() for value in raw.split(",") if value.strip())
     for value in values:
@@ -172,19 +183,22 @@ def _field_questions(
         )
         if setting:
             guidance = (
-                "Add a plugin-wide value only when the standard settings are insufficient. "
+                "Add a plugin-wide custom setting only when the standard settings are insufficient. "
                 "Every plugin already receives execution_interval, log_retention_days, "
                 "notify_scraping_errors, and suppress_repeated_price_alerts. Custom settings "
-                "belong in the settings object and are shared by every tracked item."
+                "belong in the settings object and are shared by every tracked item of the plugin."
             )
             expected = (
                 "Choosing yes adds a typed declaration and example settings entry. Choosing "
                 "no continues to client transport without adding framework behavior."
             )
-            example = "api_token or minimum_listing_price; choose no if the standard four suffice."
+            example = (
+                "Insomnia uses min_advert_price to suppress offers below a user-defined threshold "
+                "because they may be too good to be true; choose no if the standard four suffice."
+            )
         else:
             guidance = (
-                "Add a per-item input only when URL, id, name, target_price, and optional skip "
+                "Add a per-item custom field only when URL, id, name, target_price, and optional skip "
                 "do not fully describe one tracked item. Each custom field is decoded from every "
                 "item row and is available to Client.scrape through its generated declaration."
             )
@@ -334,15 +348,16 @@ def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
         _Question(
             "target",
             "Target name",
-            "The target is the plugin's stable machine identifier. It may be one word, such as "
+            "The target name is the plugin's unique identifier. It may be one word, such as "
             "skroutz or insomnia, or multiple snake_case words, such as acme_store. Use only "
             "lowercase letters, digits, and underscores, begin with a letter, and avoid reserved "
-            "command names. Treat it as permanent once users have configuration and state.",
+            "framework names and Scrooge Alert command names such as status. Do not reuse the name "
+            "of another checked-in plugin, such as insomnia. Treat it as permanent once published.",
             "It names src/core/scrapers/plugins/<target>/, tests/plugins/<target>/, "
             "config/<target>.json, state/<target>.json, --<target> command flags, logs, locks, "
             "and systemd units.",
             "skroutz, insomnia, or acme_store",
-            _target_name,
+            _wizard_target_name,
         ),
         _Question(
             "display_name",
@@ -358,11 +373,17 @@ def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
         _Question(
             "domains",
             "Supported domains",
-            "List every hostname or IP address this adapter accepts, separated by commas. Enter "
+            "List every hostname or IP address this plugin accepts, separated by commas. Enter "
             "hostnames only: no scheme, port, path, query, credentials, or wildcard. Subdomains "
-            "must be listed when they are independently valid.",
-            "The URL field uses these host-only values to validate configuration and select this "
-            "plugin. The first domain is used in the generated sample URL.",
+            "must be listed separately when users can paste them into a working tracked URL "
+            "(for example, enter both example.com and shop.example.com if product pages work on "
+            "both hosts). The wizard checks every entry and will keep this panel open if it is not "
+            "a valid host-only value.",
+            "Each tracked item in config/<target>.json has a url value for the page to check. "
+            "Scrooge Alert compares that URL's hostname with this list so it can reject unsupported "
+            "URLs and route supported ones to this plugin. The scaffold also builds the example "
+            "tracked URL in config.example.json from the first hostname you enter here and the "
+            "path prefix requested next.",
             "Skroutz supports skroutz.gr, skroutz.cy, skroutz.ro, skroutz.bg, skroutz.de. "
             "Insomnia uses the single domain insomnia.gr.",
             _domains,
@@ -372,7 +393,9 @@ def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
             "Accepted URL path prefix",
             "Enter the path portion that comes immediately after the domain and identifies the "
             "kind of page this plugin accepts. It must start with / and contain no whitespace, "
-            "query, or fragment. The scaffold adds a trailing slash when omitted.",
+            "query, or fragment; the wizard checks these rules before continuing. The scaffold "
+            "adds a trailing slash when omitted. An answer is required: enter / explicitly only "
+            "when the plugin should accept nearly every path on the domain.",
             "The scaffold combines the first domain and prefix to create its example URL, then "
             "uses <sample> to represent the page-specific part that follows it. When a user adds "
             "a URL to the configuration, the plugin accepts it only when the part after the "
@@ -385,9 +408,10 @@ def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
         _Question(
             "result_type",
             "Scrape result shape",
-            "Choose price when one page represents one tracked product and produces one price. "
-            "Choose listing when a search or category page produces multiple independently "
-            "alertable offers with their own titles, prices, and canonical URLs.",
+            "The result shape describes what the plugin returns after successfully checking one "
+            "configured URL. Choose price when one page represents one tracked product and "
+            "produces one price. Choose listing when a search or category page produces multiple "
+            "independently alertable offers with their own titles, prices, and canonical URLs.",
             "The generated client returns PriceResult for price or ListingResult containing "
             "Offer values for listing; this determines alert-history behavior and starter code.",
             "Skroutz uses price because one product page yields one price. Insomnia uses listing "
@@ -399,11 +423,11 @@ def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
         _Question(
             "default_interval",
             "Canonical default interval",
-            "Choose the normal background check cadence. Users may override it in their target "
+            "Choose the normal background check interval. Users may override it in their target "
             "configuration. Prefer a respectful interval for the remote service; the framework "
             "still applies sequential request pacing within a run.",
             "The value becomes ScraperPlugin.default_interval, the example execution_interval, "
-            "and the default systemd timer schedule when no valid override exists.",
+            "and the default systemd timer schedule when no valid user configuration override exists.",
             "1h for hourly checks; supported values: " + ", ".join(SUPPORTED_INTERVALS),
             _choice(*SUPPORTED_INTERVALS),
             default="1h",
@@ -429,39 +453,48 @@ def _questions(answers: Mapping[str, Answer]) -> list[_Question]:
             _Question(
                 "transport",
                 "Client transport",
-                "The shared HTTP transport provides bounded GET requests, standard HTTP status "
-                "mapping, retry identity rotation, and clean shutdown. Choose bare only when the "
-                "plugin must own another SDK or transport and implement equivalent lifecycle and "
-                "modeled-error behavior itself.",
+                "Client transport means how the generated scraper client will retrieve page or API "
+                "data from the site. The shared HTTP transport provides bounded GET requests, "
+                "standard HTTP status mapping, retry identity rotation, and clean shutdown. The "
+                "bare client leaves the scraping approach entirely up to you. If you are unsure "
+                "which approach the site needs, choose bare now and decide how to fetch and parse "
+                "its pages later.",
                 "http subclasses HttpScraperClient and automatically adds tls-client. bare "
                 "subclasses ScraperClient and performs no network request until you implement it.",
-                "http for ordinary HTML/API scraping; bare for a specialized vendor SDK",
+                "Choose bare when you have not chosen a scraping approach yet; http when you know the "
+                "shared HTTP client fits the site you want to scrape.",
                 _choice("http", "bare"),
-                default="http",
+                default="bare",
                 choices=("http", "bare"),
             ),
             _Question(
                 "dependencies",
                 "Additional private dependencies",
                 "Enter comma-separated Python requirement strings needed only by this plugin, or "
-                "leave the answer empty. Do not repeat project-wide dependencies. The HTTP "
-                "transport adds tls-client automatically.",
+                "leave the answer empty. Project-wide packages are listed in the repository-root "
+                "requirements.txt; do not repeat them here. If you are unsure, leave this empty "
+                f"and later create or edit src/core/scrapers/plugins/{target}/requirements.txt "
+                "manually.",
                 f"Nonempty values are written one per line to "
-                f"src/core/scrapers/plugins/{target}/requirements.txt and are installed and "
-                "validated in plugin isolation.",
+                f"src/core/scrapers/plugins/{target}/requirements.txt. Setup installs them for "
+                "this plugin, and the project checks that the plugin declares every extra package "
+                "it imports.",
                 "beautifulsoup4, lxml; leave empty when the standard library and transport suffice",
                 _dependencies,
                 default="",
             ),
             _Question(
                 "include_tests",
-                "Generate starter tests?",
-                "Starter tests demonstrate strict configuration decoding and include a skipped "
-                "behavior TODO for you to replace with mocked parser and response coverage. You "
-                "may omit tests, but verification will warn that behavior is unverified.",
+                "Generate example tests?",
+                "The example tests demonstrate strict configuration decoding. They also contain "
+                "one deliberately skipped placeholder test marked TODO. After implementing the "
+                "client, replace that placeholder with tests that use mocked responses to cover "
+                "successful scraping and parsing failures. You may omit the entire test package; "
+                "the verifier will show a non-blocking warning because plugin behavior is then "
+                "untested.",
                 f"yes creates tests/plugins/{target}/ with a passing configuration test and a "
-                "skipped TODO. no creates only the source package; neither choice blocks the "
-                "initial scaffold checks.",
+                "skipped placeholder for the behavior tests you still need to write. no creates "
+                "only the source package. Either choice passes the initial scaffold checks.",
                 "yes is recommended, even for a small plugin",
                 _yes_no,
                 default="yes",
@@ -538,7 +571,7 @@ def _summary(request: ScaffoldRequest) -> Table:
         dependencies.insert(0, "tls-client (automatic)")
     table.add_row("Dependencies", ", ".join(dependencies) or "none")
     table.add_row(
-        "Starter tests", "generated" if request.include_tests else "skipped (warning only)"
+        "Example tests", "generated" if request.include_tests else "skipped (warning only)"
     )
     return table
 
@@ -793,10 +826,9 @@ def _welcome_panel() -> Panel:
     return Panel(
         "This wizard creates only a new plugin source package and, optionally, a matching "
         "test package. It does not edit runtime framework code.\n\n"
-        "Every answer is entered inside its own guide panel. The first question opens "
-        "immediately. Press [bold]Enter[/bold] or [bold]↓[/bold] to continue, [bold]↑[/bold] "
+        "Press [bold]Enter[/bold] or [bold]↓[/bold] to continue, [bold]↑[/bold] "
         "to revisit an earlier answer, or [bold]Esc[/bold] to abort at any time.",
-        title="[bold]New scrooge-alert plugin wizard[/bold]",
+        title="[bold]Scrooge-Alert Plugin Wizard[/bold]",
         border_style="cyan",
     )
 

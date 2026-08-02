@@ -18,7 +18,7 @@ Required arguments:
   --result-type <type>      price or listing result scaffold
   --default-interval <time> canonical framework execution interval
   --transport <type>        shared http transport or bare client
-  --with-tests/--without-tests  explicitly choose starter tests
+  --with-tests/--without-tests  explicitly choose example tests
 
 Optional arguments:
   --required-item-field KEY TYPE EXAMPLE_JSON

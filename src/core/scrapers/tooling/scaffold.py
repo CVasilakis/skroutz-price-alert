@@ -34,6 +34,20 @@ VALUE_TYPES = (
     "text-list",
 )
 _REQUIRED = object()
+_PUBLIC_COMMAND_NAMES = frozenset(
+    {
+        "run",
+        "ping",
+        "status",
+        "install",
+        "enable",
+        "disable",
+        "stop",
+        "schedule",
+        "update",
+        "uninstall",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -95,6 +109,11 @@ def _target_name(value: str) -> str:
         )
     if result in RESERVED_PLUGIN_NAMES:
         raise ValueError(f"target name {result!r} is reserved; choose a store-specific name")
+    if result in _PUBLIC_COMMAND_NAMES:
+        raise ValueError(
+            f"target name {result!r} matches a Scrooge Alert command; "
+            "choose the store or service name instead"
+        )
     return result
 
 
@@ -466,7 +485,8 @@ def _readme_source(request: ScaffoldRequest) -> str:
     fields = ", ".join(f"`{spec.key}`" for spec in request.item_fields) or "none"
     settings = ", ".join(f"`{spec.key}`" for spec in request.settings) or "none"
     test_text = (
-        "Replace the generated skipped behavior TODO with mocked response and parser coverage."
+        "Delete the generated skipped placeholder and add mocked Client.scrape response and "
+        "parser coverage."
         if request.include_tests
         else "No tests were generated. Add mocked target-owned tests when practical; the verifier will warn but will not block solely because they are absent."
     )
@@ -581,11 +601,12 @@ def test_example_values_decode_through_the_runtime_contract() -> None:
 {assertion_source}
 
 
-def test_replace_scaffold_with_mocked_scraper_behavior() -> None:
-    # {SCAFFOLD_TEST_TODO}: replace this skipped placeholder with mocked scraper behavior.
+def test_replace_placeholder_with_mocked_client_scrape_behavior() -> None:
+    # {SCAFFOLD_TEST_TODO}: delete this placeholder after adding mocked Client.scrape tests.
     pytest.skip(
-        "replace the generated scaffold with success, malformed-response, unavailable/no-match, "
-        "relevant HTTP-status, URL-shape, codec, and clean-shutdown coverage"
+        "add mocked Client.scrape tests for successful and malformed responses, unavailable or "
+        "unmatched pages, relevant HTTP statuses, URL validation, codecs, and clean shutdown; "
+        "then delete this placeholder"
     )
 ''',
     }

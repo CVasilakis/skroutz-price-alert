@@ -26,7 +26,7 @@ print_help() {
     printf '%s\n' "  --result-type <type>      price or listing result scaffold"
     printf '%s\n' "  --default-interval <time> canonical framework execution interval"
     printf '%s\n' "  --transport <type>        shared http transport or bare client"
-    printf '%s\n\n' "  --with-tests/--without-tests  explicitly choose starter tests"
+    printf '%s\n\n' "  --with-tests/--without-tests  explicitly choose example tests"
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  --required-item-field KEY TYPE EXAMPLE_JSON"
     printf '%s\n' "  --optional-item-field KEY TYPE DEFAULT_JSON EXAMPLE_JSON"
@@ -161,7 +161,7 @@ task_status success "[$scaffold_target] Created the target source package."
 if [ "$scaffold_tests" -eq 1 ]; then
     task_status success "[$scaffold_target] Created the target test package."
 else
-    task_status warning "[$scaffold_target] Starter tests were skipped."
+    task_status warning "[$scaffold_target] Example tests were skipped."
 fi
 printf '\n'
 section_heading success "Next steps"

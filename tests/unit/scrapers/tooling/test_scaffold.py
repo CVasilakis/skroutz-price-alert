@@ -88,8 +88,15 @@ def test_scaffold_output_is_discoverable_and_example_loads(tmp_path):
         ScaffoldRequest("reminder", "Acme", ("store.example",), "/products/"),
         ScaffoldRequest("acme", " ", ("store.example",), "/products/"),
         ScaffoldRequest("acme", "Acme", ("https://store.example",), "/products/"),
+        ScaffoldRequest("acme", "Acme", ("store.example:443",), "/products/"),
+        ScaffoldRequest("acme", "Acme", ("user@store.example",), "/products/"),
+        ScaffoldRequest("acme", "Acme", ("*.store.example",), "/products/"),
+        ScaffoldRequest("acme", "Acme", ("store.example/path",), "/products/"),
+        ScaffoldRequest("acme", "Acme", ("store.example?q=x",), "/products/"),
         ScaffoldRequest("acme", "Acme", ("store.example",), "products/"),
+        ScaffoldRequest("acme", "Acme", ("store.example",), "/product pages/"),
         ScaffoldRequest("acme", "Acme", ("store.example",), "/products/?q=x"),
+        ScaffoldRequest("acme", "Acme", ("store.example",), "/products/#details"),
     ],
 )
 def test_scaffold_rejects_invalid_identity_and_url_inputs(scaffold_request):
@@ -104,6 +111,7 @@ def test_scaffold_rejects_invalid_identity_and_url_inputs(scaffold_request):
         ("1store", "must begin with a lowercase letter"),
         ("acme-store", "use underscores between words"),
         ("help", "is reserved; choose a store-specific name"),
+        ("status", "matches a Scrooge Alert command"),
     ],
 )
 def test_scaffold_target_errors_explain_how_to_correct_the_name(target, message):
@@ -278,10 +286,11 @@ def test_scaffold_rejects_reserved_and_duplicate_custom_keys(item_fields, settin
 
 
 @pytest.mark.parametrize("target", ["ping", "status"])
-def test_scaffold_accepts_command_names_as_targets(target):
+def test_scaffold_rejects_command_names_as_targets(target):
     request = ScaffoldRequest(target, target.title(), (f"{target}.example",), "/products/")
 
-    assert validate_request(request) == request
+    with pytest.raises(ValueError, match="matches a Scrooge Alert command"):
+        validate_request(request)
 
 
 def test_scaffold_refuses_collisions_without_touching_other_destination(tmp_path):

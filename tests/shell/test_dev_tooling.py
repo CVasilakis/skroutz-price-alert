@@ -61,7 +61,7 @@ def test_plugin_create_interactive_output_is_owned_by_rich_panels():
     assert result.stderr == ""
     assert "[+] Plugin scaffold wizard" not in result.stdout
     assert result.stdout.startswith("\n╭")
-    assert "New scrooge-alert plugin wizard" in result.stdout
+    assert "Scrooge-Alert Plugin Wizard" in result.stdout
     assert "Interactive terminal required" in result.stdout
     assert "╯\n\n╭" in result.stdout
     assert result.stdout.endswith("\n\n")

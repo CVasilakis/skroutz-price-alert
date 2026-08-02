@@ -53,10 +53,10 @@ Advanced URL-less and multi-URL plugins remain manual because their input and
 reference-link design is plugin-specific.
 
 The scaffold refuses existing destinations. Its descriptor and example configuration
-are valid, but its client deliberately raises `NotImplementedError`. When starter
+are valid, but its client deliberately raises `NotImplementedError`. When example
 tests are selected, they include a useful configuration-decoding example and a skipped
-behavior TODO so a fresh scaffold remains mechanically clean. The focused verifier
-warns while that TODO remains. Implement the client, replace the placeholder, complete
+behavior placeholder so a fresh scaffold remains mechanically clean. The focused verifier
+warns while that placeholder remains. Implement the client, replace the placeholder, complete
 the package-local guide, and run the one-target acceptance command:
 
 ```sh
@@ -131,7 +131,7 @@ For a normal URL-based plugin, this is the complete path:
    client accepts.
 3. Implement `Client.scrape()` to fetch one URL and return
    `PriceResult(price, currency, url=None)`.
-4. If starter tests were generated, replace the skipped TODO with mocked
+4. If example tests were generated, replace the skipped behavior placeholder with mocked
    success, malformed-response, unavailable-resource, relevant-status, URL-shape, and
    cleanup cases. If tests were skipped, the focused verifier will warn but continue.
    Keep the generated config runnable with at least one tracked item.

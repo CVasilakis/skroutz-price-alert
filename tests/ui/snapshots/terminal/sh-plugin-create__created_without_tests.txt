@@ -4,7 +4,7 @@
 [+] Target scaffold
     [i] Creating the target scaffold...
     [v] [acme] Created the target source package.
-    [!] [acme] Starter tests were skipped.
+    [!] [acme] Example tests were skipped.
 
 [+] Next steps
     [i] Run ./scripts/dev/setup.sh --acme.

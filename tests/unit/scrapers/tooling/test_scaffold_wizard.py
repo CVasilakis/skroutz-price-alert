@@ -52,14 +52,14 @@ def _common_answers(*, target: str = "acme_store") -> tuple[str, ...]:
         "",  # default 1h interval
         "",  # no custom item fields
         "",  # no custom settings
-        "",  # default shared HTTP transport
+        "",  # default bare client
         "",  # no extra dependencies
         "",  # generate tests
         "",  # confirm review
     )
 
 
-def test_wizard_guides_reviews_and_confirms_a_common_http_plugin():
+def test_wizard_guides_reviews_and_confirms_a_common_bare_plugin():
     stream = io.StringIO()
     console = Console(file=stream, width=100, color_system=None, force_terminal=True)
     read_key, _ = _key_reader(*_common_answers())
@@ -71,12 +71,11 @@ def test_wizard_guides_reviews_and_confirms_a_common_http_plugin():
         "Acme Store",
         ("store.example",),
         "/products/",
-        transport="http",
+        transport="bare",
     )
     output = stream.getvalue()
-    assert "New scrooge-alert plugin wizard" in output
+    assert "Scrooge-Alert Plugin Wizard" in output
     assert output.startswith("\n╭")
-    assert "first question opens immediately" in output
     assert "asks for JSON" not in output
     assert "Target name" in output
     assert "src/core/scrapers/plugins/<target>/" in output
@@ -104,6 +103,19 @@ def test_question_guidance_uses_real_plugins_and_configuration_paths():
     assert "accepts it only when the part after the domain begins" in base["url_prefix"].expected
     assert "Skroutz uses price" in base["result_type"].example
     assert "Insomnia uses listing" in base["result_type"].example
+    assert "config/<target>.json has a url value" in base["domains"].expected
+    assert "config.example.json" in base["domains"].expected
+    assert "wizard checks every entry" in base["domains"].guidance
+    assert "wizard checks these rules" in base["url_prefix"].guidance
+    assert "enter / explicitly" in base["url_prefix"].guidance
+    assert "describes what the plugin returns" in base["result_type"].guidance
+    assert "min_advert_price" in base["setting.0.add"].example
+    assert base["transport"].default == "bare"
+    assert "means how the generated scraper client will retrieve" in base["transport"].guidance
+    assert "repository-root requirements.txt" in base["dependencies"].guidance
+    assert "project checks that the plugin declares" in base["dependencies"].expected
+    assert base["include_tests"].title == "Generate example tests?"
+    assert "non-blocking warning" in base["include_tests"].guidance
 
     item_questions = {
         question.key: question
@@ -201,7 +213,7 @@ def test_wizard_explains_and_collects_custom_fields_settings_and_dependencies():
     assert "execution_interval" in output
     assert "strict JSON decoding" in output
     assert "sensitive=True" in output
-    assert "plugin isolation" in output
+    assert "declares every extra package" in output
 
 
 def test_wizard_explains_uppercase_target_error_and_accepts_the_correction():
@@ -219,6 +231,14 @@ def test_wizard_explains_uppercase_target_error_and_accepts_the_correction():
     assert request is not None
     assert request.target == "haha"
     assert "must use lowercase letters; try 'haha' instead of 'HAHA'" in stream.getvalue()
+
+
+@pytest.mark.parametrize("target", ["status", "insomnia"])
+def test_wizard_rejects_command_and_existing_plugin_target_names(target):
+    target_question = _questions({})[0]
+
+    with pytest.raises(ValueError):
+        target_question.parser(target)
 
 
 def test_wizard_rejects_a_boolean_example_string_and_accepts_valid_json_boolean():
