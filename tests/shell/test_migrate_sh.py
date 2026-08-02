@@ -11,12 +11,14 @@ ROOT = Path(__file__).resolve().parents[2]
 def _sandboxed_migrate_script(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     scripts = project / "scripts"
+    development = scripts / "dev"
     libraries = scripts / "lib"
     python = project / "venv" / "bin" / "python3"
     libraries.mkdir(parents=True)
+    development.mkdir()
     python.parent.mkdir(parents=True)
     (project / "src").mkdir()
-    shutil.copy(ROOT / "scripts" / "migrate.sh", scripts / "migrate.sh")
+    shutil.copy(ROOT / "scripts" / "dev" / "migrate.sh", development / "migrate.sh")
     shutil.copy(ROOT / "scripts" / "lib" / "common.sh", libraries / "common.sh")
     shutil.copy(ROOT / "scripts" / "lib" / "preflight.sh", libraries / "preflight.sh")
     python.write_text(
@@ -39,7 +41,7 @@ exit 1
         encoding="utf-8",
     )
     python.chmod(0o755)
-    return scripts / "migrate.sh"
+    return development / "migrate.sh"
 
 
 def _run(script: Path, *args: str, **env_overrides: str):
@@ -47,7 +49,7 @@ def _run(script: Path, *args: str, **env_overrides: str):
     env.update(env_overrides)
     return subprocess.run(
         [str(script), *args],
-        cwd=script.parents[1],
+        cwd=script.parents[2],
         text=True,
         capture_output=True,
         env=env,
@@ -109,7 +111,7 @@ def test_machine_mode_preserves_every_document_family_exit_code(tmp_path, status
 
 def test_migrate_help_is_shell_rendered_and_needs_no_venv(tmp_path):
     script = _sandboxed_migrate_script(tmp_path)
-    (script.parents[1] / "venv" / "bin" / "python3").unlink()
+    (script.parents[2] / "venv" / "bin" / "python3").unlink()
 
     result = _run(script, "--help")
 
@@ -222,7 +224,7 @@ def test_invalid_machine_argument_has_no_stdout_decoration(tmp_path, args):
 
 def test_missing_python_preflight_is_quiet_actionable_and_padded(tmp_path):
     script = _sandboxed_migrate_script(tmp_path)
-    (script.parents[1] / "venv" / "bin" / "python3").unlink()
+    (script.parents[2] / "venv" / "bin" / "python3").unlink()
 
     result = _run(script)
 

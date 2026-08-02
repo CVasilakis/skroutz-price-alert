@@ -231,7 +231,7 @@ def unsupported_config_keys(path: str) -> str:
 def config_schema_version_invalid(path: str, expected: int) -> str:
     return (
         f"`{path}` requires schema version {expected}; "
-        "use `./scripts/migrate.sh` only for supported same-major upgrades, "
+        "use `./scripts/dev/migrate.sh` only for supported same-major upgrades, "
         "or recreate an earlier-major document from the current example."
     )
 

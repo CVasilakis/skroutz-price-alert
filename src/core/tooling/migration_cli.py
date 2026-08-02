@@ -52,7 +52,7 @@ def _print_machine(outcomes: tuple[MigrationOutcome, ...], recovery: Path | None
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="./scripts/migrate.sh",
+        prog="./scripts/dev/migrate.sh",
         description="Validate and migrate every known Scrooge Alert JSON document.",
     )
     parser.add_argument(

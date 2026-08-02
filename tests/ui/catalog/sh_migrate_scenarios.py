@@ -3,7 +3,7 @@
 from ui.catalog._base import Surface
 from ui.catalog.shell_inputs import ShellWorld, shell_case
 
-_case = shell_case(Surface.SH_MIGRATE, "scripts/migrate.sh")
+_case = shell_case(Surface.SH_MIGRATE, "scripts/dev/migrate.sh")
 
 _case("help", "Migration usage, check mode, and debug documentation.", "--help", tags=("help",))
 

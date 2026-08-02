@@ -2,12 +2,12 @@
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
-BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
+BASE_DIR="$(dirname -- "$(dirname -- "$SCRIPT_DIR")")"
 
 # shellcheck source=scripts/lib/common.sh
-. "$SCRIPT_DIR/lib/common.sh"
+. "$BASE_DIR/scripts/lib/common.sh"
 # shellcheck source=scripts/lib/preflight.sh
-. "$SCRIPT_DIR/lib/preflight.sh"
+. "$BASE_DIR/scripts/lib/preflight.sh"
 
 print_help() {
     printf '\n%s\n\n' "Usage: migrate.sh [-h] [--check] [--debug]"
@@ -68,7 +68,7 @@ show_shell_failure() {
     shift
     section_heading success "JSON migration"
     migration_task failure "$@"
-    migration_task info "Run ./scripts/migrate.sh --help for usage."
+    migration_task info "Run ./scripts/dev/migrate.sh --help for usage."
     end_operational_output
     exit "$_ssf_status"
 }
@@ -206,7 +206,7 @@ if [ "$VISIBLE_SECTION_COUNT" -eq 0 ]; then
         migration_task info "No existing managed JSON documents were found."
     else
         migration_task failure "Migration could not start."
-        migration_task info "Retry with ./scripts/migrate.sh --debug for underlying diagnostics."
+        migration_task info "Retry with ./scripts/dev/migrate.sh --debug for underlying diagnostics."
     fi
 fi
 

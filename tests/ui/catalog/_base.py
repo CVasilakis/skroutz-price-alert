@@ -44,7 +44,7 @@ class Surface(Enum):
     SH_RUN = "sh-run"  # scripts/run.sh
     SH_PING = "sh-ping"  # scripts/ping.sh
     SH_STATUS = "sh-status"  # scripts/status.sh
-    SH_MIGRATE = "sh-migrate"  # scripts/migrate.sh
+    SH_MIGRATE = "sh-migrate"  # scripts/dev/migrate.sh
     SH_SCHEDULE = "sh-schedule"  # scripts/schedule.sh
     SH_ENABLE = "sh-enable"  # scripts/enable.sh
     SH_DISABLE = "sh-disable"  # scripts/disable.sh

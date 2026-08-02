@@ -428,7 +428,7 @@ main() {
         ! run_update_helper update_require_revision_paths origin/main \
             scrooge-alert \
             scripts/install.sh \
-            scripts/migrate.sh \
+            scripts/dev/migrate.sh \
             scripts/lib/common.sh \
             scripts/lib/preflight.sh \
             scripts/lib/systemd.sh \
@@ -527,7 +527,7 @@ main() {
     UPDATE_PHASE="migrating"
     update_section success "JSON migration"
     if run_with_progress "Migrating managed JSON documents..." \
-        run_captured "$SCRIPT_DIR/migrate.sh" --machine; then
+        run_captured "$SCRIPT_DIR/dev/migrate.sh" --machine; then
         MIGRATION_STATUS=0
     else
         MIGRATION_STATUS=$?

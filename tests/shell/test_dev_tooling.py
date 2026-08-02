@@ -30,7 +30,7 @@ HELP_SCRIPTS = (
     "scripts/enable.sh",
     "scripts/schedule.sh",
     "scripts/uninstall.sh",
-    "scripts/migrate.sh",
+    "scripts/dev/migrate.sh",
     "scripts/dev/setup.sh",
     "scripts/dev/install-hooks.sh",
     "scripts/dev/check.sh",

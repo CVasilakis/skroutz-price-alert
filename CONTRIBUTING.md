@@ -427,8 +427,8 @@ configuration, target configuration, scraper state, and reminder state have inde
 version sequences. Target configs also carry `plugin_schema_version`: the shared
 framework sequence and each plugin's private sequence advance independently.
 
-Runtime loaders never migrate files. `./scrooge-alert update` invokes `./scripts/migrate.sh`, and
-contributors can use `./scripts/migrate.sh --check` to validate and report without
+Runtime loaders never migrate files. `./scrooge-alert update` invokes `./scripts/dev/migrate.sh`, and
+contributors can use `./scripts/dev/migrate.sh --check` to validate and report without
 modifying managed JSON documents. Check mode still acquires cooperative locks, so it
 may create `state/locks/` and its metadata. Target locks use
 `state/locks/<target>.lock`; the framework also owns `reminder.lock` and

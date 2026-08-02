@@ -125,7 +125,7 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
 ## ⚙️ Configuration
 
 All user parameters live in strict, schema-versioned JSON files under `config/`.
-Runtime never modifies them; update-time changes are handled by `./scripts/migrate.sh`.
+Runtime never modifies them; update-time changes are handled by `./scripts/dev/migrate.sh`.
 Machine-owned data is stored separately under `state/`.
 
 > [!IMPORTANT]
@@ -209,7 +209,7 @@ ending in `Z`. Cooperative runtime and migration locks are machine-managed under
 > [!IMPORTANT]
 > Scraper state and target configuration have independent schema sequences. Both begin
 > at version 1. `./scrooge-alert update` migrates known documents before reactivating timers; use
-> `./scripts/migrate.sh --check` to validate and report without modifying managed JSON
+> `./scripts/dev/migrate.sh --check` to validate and report without modifying managed JSON
 > documents. Check mode still takes the cooperative locks, so `state/locks/` and its
 > lock metadata may be created. Add `--debug` to expose the underlying migration output
 > when diagnosing a failure.

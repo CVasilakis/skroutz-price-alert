@@ -48,7 +48,7 @@ _SCRIPT_FILES = (
     "scripts/run.sh",
     "scripts/ping.sh",
     "scripts/status.sh",
-    "scripts/migrate.sh",
+    "scripts/dev/migrate.sh",
     "scripts/schedule.sh",
     "scripts/enable.sh",
     "scripts/disable.sh",
