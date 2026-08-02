@@ -20,7 +20,7 @@ from core.scrapers.domain import normalize_domain
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS
 from core.scrapers.framework.naming import FRAMEWORK_ITEM_KEYS, SNAKE_CASE_KEY
 from core.scrapers.framework.settings import framework_setting_specs
-from core.scrapers.tooling.scaffold_contracts import (
+from core.scrapers.tooling.scaffold.contracts import (
     VALUE_TYPES,
     CustomValueSpec,
     ResultType,
@@ -34,42 +34,42 @@ from core.scrapers.tooling.scaffold_contracts import (
     url_prefix,
     validate_request,
 )
-from core.scrapers.tooling.scaffold_storage import scaffold_collisions
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.storage import scaffold_collisions
+from core.scrapers.tooling.scaffold.terminal import (
     ABORT as _ABORT,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     ACCEPT as _ACCEPT,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     BACK as _BACK,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     BACKSPACE as _BACKSPACE,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     DELETE as _DELETE,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     END as _END,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     HOME as _HOME,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     LEFT as _LEFT,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     REFRESH as _REFRESH,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     RIGHT as _RIGHT,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     InteractiveTerminalUnavailable,
     KeyReader,
 )
-from core.scrapers.tooling.scaffold_terminal import (
+from core.scrapers.tooling.scaffold.terminal import (
     terminal_reader as _terminal_reader,
 )
 

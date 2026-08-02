@@ -15,7 +15,8 @@ from core.scrapers.tooling.check import (
     _check_self_contained,
     check_plugin,
 )
-from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
+from core.scrapers.tooling.scaffold.api import create_plugin
+from core.scrapers.tooling.scaffold.contracts import ScaffoldRequest
 from core.tooling.migration import STATUS_MIGRATED, MigrationRunner
 
 

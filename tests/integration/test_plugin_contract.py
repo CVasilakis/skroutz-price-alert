@@ -15,7 +15,8 @@ from core.scrapers.api import PriceResult, ScraperClient
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.tooling.check import check_plugin
-from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
+from core.scrapers.tooling.scaffold.api import create_plugin
+from core.scrapers.tooling.scaffold.contracts import ScaffoldRequest
 
 CATALOG = PluginCatalog.discover()
 

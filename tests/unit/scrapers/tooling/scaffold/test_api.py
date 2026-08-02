@@ -9,16 +9,16 @@ import pytest
 
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
-from core.scrapers.tooling.scaffold import (
-    _PUBLIC_COMMAND_NAMES,
+from core.scrapers.tooling.scaffold.api import create_plugin
+from core.scrapers.tooling.scaffold.cli import main
+from core.scrapers.tooling.scaffold.contracts import (
+    PUBLIC_COMMAND_NAMES,
     CustomValueSpec,
     ScaffoldRequest,
-    ScaffoldRollbackError,
-    _json_value,
-    create_plugin,
-    main,
+    json_value,
     validate_request,
 )
+from core.scrapers.tooling.scaffold.storage import ScaffoldRollbackError
 
 REQUEST = ScaffoldRequest("acme_store", "Acme Store", ("Store.Example",), "/products")
 
@@ -30,12 +30,12 @@ def _scaffold_parent_layout(tmp_path):
 
 
 def test_scaffold_reserved_command_names_match_the_root_dispatcher():
-    root = Path(__file__).resolve().parents[4]
+    root = Path(__file__).resolve().parents[5]
     script = (root / "scrooge-alert").read_text(encoding="utf-8")
     command_branches = re.findall(r"^    ([a-z]+(?:\|[a-z]+)*)\)$", script, re.MULTILINE)
     dispatched = {command for branch in command_branches for command in branch.split("|")}
 
-    assert dispatched == set(_PUBLIC_COMMAND_NAMES)
+    assert dispatched == set(PUBLIC_COMMAND_NAMES)
 
 
 def test_scaffold_creates_only_additive_source_and_test_packages(tmp_path):
@@ -224,7 +224,7 @@ def test_scaffold_rejects_invalid_optional_defaults_for_every_declared_type(
 )
 def test_automation_arguments_reject_values_outside_strict_json(raw):
     with pytest.raises(ValueError, match="field example must be valid JSON"):
-        _json_value(raw, context="field example")
+        json_value(raw, context="field example")
 
 
 @pytest.mark.parametrize(
@@ -239,7 +239,7 @@ def test_automation_arguments_reject_values_outside_strict_json(raw):
     ],
 )
 def test_automation_arguments_accept_standard_json_values(raw, expected):
-    assert _json_value(raw, context="field example") == expected
+    assert json_value(raw, context="field example") == expected
 
 
 def test_scaffold_cli_rejects_nonfinite_json_before_creating_files(tmp_path, capsys):
@@ -362,9 +362,9 @@ def test_scaffold_refuses_broken_destination_symlinks(tmp_path, destination):
 
 
 def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path):
-    from core.scrapers.tooling import scaffold_storage
+    from core.scrapers.tooling.scaffold import storage
 
-    real_write = scaffold_storage._write_files
+    real_write = storage._write_files
     calls = 0
 
     def failing_second_write(tree, files) -> None:
@@ -374,7 +374,7 @@ def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path
         if calls == 2:
             raise OSError("disk full")
 
-    with mock.patch.object(scaffold_storage, "_write_files", side_effect=failing_second_write):
+    with mock.patch.object(storage, "_write_files", side_effect=failing_second_write):
         with pytest.raises(OSError, match="disk full"):
             create_plugin(tmp_path, REQUEST)
 
@@ -385,7 +385,7 @@ def test_scaffold_rolls_back_both_new_directories_after_partial_failure(tmp_path
 @pytest.mark.parametrize("interruption", [KeyboardInterrupt(), SystemExit(130)])
 def test_scaffold_rolls_back_after_base_exception(tmp_path, interruption):
     with mock.patch(
-        "core.scrapers.tooling.scaffold_storage._write_files",
+        "core.scrapers.tooling.scaffold.storage._write_files",
         side_effect=interruption,
     ):
         with pytest.raises(type(interruption)):
@@ -399,10 +399,10 @@ def test_scaffold_reports_incomplete_rollback_with_exact_recovery_path(tmp_path)
     source = tmp_path / "src/core/scrapers/plugins/acme_store"
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_storage._write_files",
+            "core.scrapers.tooling.scaffold.storage._write_files",
             side_effect=OSError("disk full"),
         ),
-        mock.patch("core.scrapers.tooling.scaffold_storage.os.rmdir", side_effect=OSError("busy")),
+        mock.patch("core.scrapers.tooling.scaffold.storage.os.rmdir", side_effect=OSError("busy")),
     ):
         with pytest.raises(ScaffoldRollbackError, match="rollback was incomplete") as raised:
             create_plugin(tmp_path, REQUEST)
@@ -576,7 +576,7 @@ def test_fresh_scaffold_passes_ruff_and_basedpyright(tmp_path, scaffold_request)
         text=True,
     )
 
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = Path(__file__).resolve().parents[5]
     pyright_config = tmp_path / "pyrightconfig.json"
     pyright_config.write_text(
         json.dumps(

@@ -4,10 +4,11 @@ from unittest import mock
 
 import pytest
 
-from core.scrapers.tooling import scaffold_storage
-from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
-from core.scrapers.tooling.scaffold_generation import GeneratedFile, ScaffoldFiles
-from core.scrapers.tooling.scaffold_storage import ScaffoldRollbackError
+from core.scrapers.tooling.scaffold import storage
+from core.scrapers.tooling.scaffold.api import create_plugin
+from core.scrapers.tooling.scaffold.contracts import ScaffoldRequest
+from core.scrapers.tooling.scaffold.generation import GeneratedFile, ScaffoldFiles
+from core.scrapers.tooling.scaffold.storage import ScaffoldRollbackError
 
 REQUEST = ScaffoldRequest("acme_store", "Acme Store", ("store.example",), "/products/")
 
@@ -38,14 +39,14 @@ def test_scaffold_rejects_symlinked_parent_component(tmp_path):
 
 def test_scaffold_removes_empty_directory_when_safe_open_fails(tmp_path):
     _layout(tmp_path)
-    real_open = scaffold_storage.os.open
+    real_open = storage.os.open
 
     def fail_new_directory_open(path, flags, *args, **kwargs):
         if path == "acme_store" and kwargs.get("dir_fd") is not None:
             raise OSError("injected directory-open failure")
         return real_open(path, flags, *args, **kwargs)
 
-    with mock.patch.object(scaffold_storage.os, "open", side_effect=fail_new_directory_open):
+    with mock.patch.object(storage.os, "open", side_effect=fail_new_directory_open):
         with pytest.raises(OSError, match="directory-open failure"):
             create_plugin(tmp_path, REQUEST)
 
@@ -60,9 +61,7 @@ def test_scaffold_never_removes_unexpected_rollback_entries(tmp_path):
         (tree.path / "unowned.txt").write_text("keep", encoding="utf-8")
         raise OSError("injected write failure")
 
-    with mock.patch.object(
-        scaffold_storage, "_write_files", side_effect=add_unowned_entry_then_fail
-    ):
+    with mock.patch.object(storage, "_write_files", side_effect=add_unowned_entry_then_fail):
         with pytest.raises(ScaffoldRollbackError, match="unexpected entries remain") as raised:
             create_plugin(tmp_path, REQUEST)
 
@@ -74,7 +73,7 @@ def test_scaffold_rejects_generated_paths_outside_the_owned_leaf(tmp_path):
     _layout(tmp_path)
     files = ScaffoldFiles((GeneratedFile("../escape.py", "unsafe"),), None)
 
-    with mock.patch.object(scaffold_storage, "render_scaffold", return_value=files):
+    with mock.patch.object(storage, "render_scaffold", return_value=files):
         with pytest.raises(ValueError, match="one safe filename"):
             create_plugin(tmp_path, REQUEST)
 
@@ -91,7 +90,7 @@ def test_scaffold_writes_files_exclusively_relative_to_owned_directory(tmp_path)
         calls.append((path, kwargs.get("dir_fd")))
         return real_open(path, flags, *args, **kwargs)
 
-    with mock.patch.object(scaffold_storage.os, "open", side_effect=recording_open):
+    with mock.patch.object(storage.os, "open", side_effect=recording_open):
         result = create_plugin(tmp_path, REQUEST)
 
     generated_names = {path.name for path in result.source.iterdir()}

@@ -6,9 +6,9 @@ from unittest import mock
 import pytest
 from rich.console import Console
 
-from core.scrapers.tooling.scaffold import ScaffoldRequest, ScaffoldResult
-from core.scrapers.tooling.scaffold_terminal import read_terminal_key as _read_terminal_key
-from core.scrapers.tooling.scaffold_wizard import (
+from core.scrapers.tooling.scaffold.contracts import ScaffoldRequest, ScaffoldResult
+from core.scrapers.tooling.scaffold.terminal import read_terminal_key as _read_terminal_key
+from core.scrapers.tooling.scaffold.wizard import (
     _ABORT,
     _ACCEPT,
     _BACK,
@@ -19,7 +19,7 @@ from core.scrapers.tooling.scaffold_wizard import (
     render_completion,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
 class _SilentLive:
@@ -145,7 +145,7 @@ def test_wizard_navigation_does_not_accumulate_blank_rows_between_panels():
     keys = iter([*"acme", _ACCEPT, *"Acme", _BACK, _ACCEPT, _BACK, _ABORT])
 
     with (
-        mock.patch("core.scrapers.tooling.scaffold_wizard.Live", _SilentLive),
+        mock.patch("core.scrapers.tooling.scaffold.wizard.Live", _SilentLive),
         mock.patch.object(console, "print", wraps=console.print) as print_spy,
     ):
         assert collect_request(REPO_ROOT, console, read_key=keys.__next__) is None
@@ -332,11 +332,11 @@ def test_wizard_rejects_values_outside_strict_json(value_type, raw):
 def test_terminal_reader_maps_arrow_and_standalone_escape():
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.os.read",
+            "core.scrapers.tooling.scaffold.terminal.os.read",
             side_effect=(b"\x1b", b"[", b"A"),
         ),
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.select.select",
+            "core.scrapers.tooling.scaffold.terminal.select.select",
             return_value=([object()], [], []),
         ),
     ):
@@ -344,11 +344,11 @@ def test_terminal_reader_maps_arrow_and_standalone_escape():
 
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.os.read",
+            "core.scrapers.tooling.scaffold.terminal.os.read",
             side_effect=(b"\x1b", b"[", b"B"),
         ),
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.select.select",
+            "core.scrapers.tooling.scaffold.terminal.select.select",
             return_value=([object()], [], []),
         ),
     ):
@@ -356,20 +356,20 @@ def test_terminal_reader_maps_arrow_and_standalone_escape():
 
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.os.read",
+            "core.scrapers.tooling.scaffold.terminal.os.read",
             side_effect=(b"\x1b", b"O", b"P"),
         ),
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.select.select",
+            "core.scrapers.tooling.scaffold.terminal.select.select",
             return_value=([object()], [], []),
         ),
     ):
         assert _read_terminal_key(7) == ""
 
     with (
-        mock.patch("core.scrapers.tooling.scaffold_terminal.os.read", return_value=b"\x1b"),
+        mock.patch("core.scrapers.tooling.scaffold.terminal.os.read", return_value=b"\x1b"),
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.select.select", return_value=([], [], [])
+            "core.scrapers.tooling.scaffold.terminal.select.select", return_value=([], [], [])
         ),
     ):
         assert _read_terminal_key(7) == _ABORT
@@ -379,11 +379,11 @@ def test_terminal_reader_preserves_utf8_text_input():
     encoded = "Σ".encode()
     with (
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.os.read",
+            "core.scrapers.tooling.scaffold.terminal.os.read",
             side_effect=tuple(bytes((byte,)) for byte in encoded),
         ),
         mock.patch(
-            "core.scrapers.tooling.scaffold_terminal.select.select",
+            "core.scrapers.tooling.scaffold.terminal.select.select",
             return_value=([object()], [], []),
         ),
     ):

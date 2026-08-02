@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from core.scrapers.framework.configuration import SCHEMA_VERSION
 from core.scrapers.tooling import SCAFFOLD_TEST_TODO
-from core.scrapers.tooling.scaffold_contracts import CustomValueSpec, ScaffoldRequest
+from core.scrapers.tooling.scaffold.contracts import CustomValueSpec, ScaffoldRequest
 
 
 @dataclass(frozen=True)

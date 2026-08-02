@@ -1,7 +1,8 @@
 import subprocess
 from pathlib import Path
 
-from core.scrapers.tooling.scaffold import ScaffoldRequest, create_plugin
+from core.scrapers.tooling.scaffold.api import create_plugin
+from core.scrapers.tooling.scaffold.contracts import ScaffoldRequest
 
 ROOT = Path(__file__).resolve().parents[2]
 FULL_GATE = "./scripts/dev/check.sh --debug"

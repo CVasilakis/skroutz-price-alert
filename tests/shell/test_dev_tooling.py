@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from core.scrapers.framework.catalog import PluginCatalog
-from core.scrapers.tooling.scaffold import _parser as scaffold_parser
+from core.scrapers.tooling.scaffold.cli import _parser as scaffold_parser
 from shell.assertions import assert_task_status
 
 ROOT = Path(__file__).resolve().parents[2]

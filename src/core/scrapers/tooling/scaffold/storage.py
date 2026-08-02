@@ -8,8 +8,8 @@ import stat
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 
-from core.scrapers.tooling.scaffold_contracts import ScaffoldRequest, ScaffoldResult
-from core.scrapers.tooling.scaffold_generation import GeneratedFile, render_scaffold
+from core.scrapers.tooling.scaffold.contracts import ScaffoldRequest, ScaffoldResult
+from core.scrapers.tooling.scaffold.generation import GeneratedFile, render_scaffold
 
 
 @dataclass(frozen=True)

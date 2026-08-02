@@ -8,43 +8,13 @@ from pathlib import Path
 from typing import NoReturn
 
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS
-from core.scrapers.tooling.scaffold_contracts import (
-    PUBLIC_COMMAND_NAMES,
-    VALUE_TYPES,
+from core.scrapers.tooling.scaffold.api import create_plugin
+from core.scrapers.tooling.scaffold.contracts import (
     CustomValueSpec,
-    ResultType,
     ScaffoldRequest,
     ScaffoldResult,
-    Transport,
-    decode_value,
     json_value,
-    parse_strict_json,
-    safe_display_name,
-    target_name,
-    url_prefix,
-    validate_request,
 )
-from core.scrapers.tooling.scaffold_storage import (
-    ScaffoldRollbackError,
-    scaffold_collisions,
-)
-from core.scrapers.tooling.scaffold_storage import create_plugin as _commit_plugin
-
-# Compatibility aliases for existing repository-owned callers. New tooling code
-# imports the named contracts directly from their owning modules.
-_PUBLIC_COMMAND_NAMES = PUBLIC_COMMAND_NAMES
-_decode_value = decode_value
-_json_value = json_value
-_parse_strict_json = parse_strict_json
-_safe_display_name = safe_display_name
-_scaffold_collisions = scaffold_collisions
-_target_name = target_name
-_url_prefix = url_prefix
-
-
-def create_plugin(repo_root: Path, request: ScaffoldRequest) -> ScaffoldResult:
-    """Validate, render, and commit one additive plugin scaffold."""
-    return _commit_plugin(repo_root, validate_request(request))
 
 
 def _argument_specs(
@@ -174,11 +144,11 @@ def _request_from_args(
 
 
 def _repository_root() -> Path:
-    return Path(__file__).resolve().parents[4]
+    return Path(__file__).resolve().parents[5]
 
 
 def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int:
-    from core.scrapers.tooling.scaffold_terminal import (
+    from core.scrapers.tooling.scaffold.terminal import (
         InteractiveTerminalUnavailable,
         ScaffoldInterrupted,
         TerminalStateError,
@@ -192,7 +162,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         with interruption_guard():
             resolved_root = (repo_root or _repository_root()).resolve()
             if args.interactive:
-                from core.scrapers.tooling.scaffold_wizard import collect_request
+                from core.scrapers.tooling.scaffold.wizard import collect_request
 
                 request = collect_request(resolved_root)
                 if request is None:
@@ -201,13 +171,13 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
                 request = _request_from_args(parser, args)
             result = create_plugin(resolved_root, request)
             if args.interactive:
-                from core.scrapers.tooling.scaffold_wizard import render_completion
+                from core.scrapers.tooling.scaffold.wizard import render_completion
 
                 render_completion(request, result)
                 return 0
     except (KeyboardInterrupt, ScaffoldInterrupted):
         if args.interactive and result is None:
-            from core.scrapers.tooling.scaffold_wizard import render_cancellation
+            from core.scrapers.tooling.scaffold.wizard import render_cancellation
 
             render_cancellation()
             return 130
@@ -248,19 +218,4 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
     return 0
 
 
-__all__ = [
-    "CustomValueSpec",
-    "ResultType",
-    "ScaffoldRequest",
-    "ScaffoldResult",
-    "ScaffoldRollbackError",
-    "Transport",
-    "VALUE_TYPES",
-    "create_plugin",
-    "main",
-    "validate_request",
-]
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+__all__ = ["main"]
