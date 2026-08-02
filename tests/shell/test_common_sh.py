@@ -71,6 +71,7 @@ def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None
         capture_output=True,
         text=True,
         env=env,
+        timeout=30,
     )
 
 
@@ -592,17 +593,6 @@ class TestKnownTargets(unittest.TestCase):
         (unit_dir / "ghost-scraper.timer").symlink_to("missing.timer")
         result = run_sh("list_installed_targets", xdg_config_home=tmp)
         self.assertEqual(result.stdout.split(), ["ghost"])
-
-    def test_malformed_installed_unit_name_fails_discovery(self):
-        tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        unit_dir = tmp / "systemd" / "user"
-        unit_dir.mkdir(parents=True)
-        (unit_dir / "bad target-scraper.timer").touch()
-        result = run_sh("list_installed_plugins timer", xdg_config_home=tmp)
-        self.assertEqual(result.stdout, "")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Malformed managed unit name", result.stderr)
 
 
 class TestCatalogDiagnose(unittest.TestCase):

@@ -1,5 +1,6 @@
 """Real filesystem and process-level coverage for state-root-bound locks."""
 
+import select
 import shutil
 import subprocess
 import sys
@@ -137,6 +138,14 @@ with StateLockManager(sys.argv[1]).acquire("skroutz"):
         )
         self.addCleanup(self._stop_process, process)
         assert process.stdout is not None
+        ready, _, _ = select.select([process.stdout], [], [], 10)
+        if not ready:
+            status = process.poll()
+            detail = ""
+            if status is not None:
+                assert process.stderr is not None
+                detail = process.stderr.read().strip()
+            self.fail(f"lock holder did not become ready (status={status}, stderr={detail!r})")
         self.assertEqual("locked\n", process.stdout.readline())
         return process
 

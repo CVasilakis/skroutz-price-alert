@@ -90,3 +90,5 @@ def fake_store_server(routes):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+        if thread.is_alive():
+            raise RuntimeError("fake store server did not stop within 5 seconds")

@@ -342,8 +342,8 @@ def _field_questions(
                 expected="Required values make missing configuration invalid. Optional values keep older "
                 "or shorter item rows usable with an explicit generated default.",
                 example=(
-                    "Choose `no` for Insomnia's `min_advert_price`: omitting it safely uses the "
-                    "disabled default"
+                    "Insomnia does not require `min_advert_price` because omitting it safely uses "
+                    "the disabled default"
                     if setting
                     else "Insomnia makes `title_include` and `title_exclude` optional so each can "
                     "default to `[]`."
@@ -399,9 +399,9 @@ def _field_questions(
                     "ordinary filters or numeric thresholds sensitive.",
                     expected="Choosing `yes` emits `sensitive=True` on the `SettingSpec` declaration; the "
                     "example still contains only the non-secret placeholder you provided.",
-                    example="Choose `no` for Insomnia's `min_advert_price` because an ordinary numeric "
-                    "filter is not secret. Choose `yes` for an `api_token` because credentials must not "
-                    "be exposed.",
+                    example="Insomnia's `min_advert_price` is not sensitive because an ordinary numeric "
+                    "filter is not secret. An `api_token` should be sensitive because credentials must "
+                    "not be exposed.",
                     parser=_yes_no,
                     default="no",
                     choices=("yes", "no"),
@@ -642,7 +642,8 @@ def _summary(request: ScaffoldRequest) -> Table:
         dependencies.insert(0, "tls-client (automatic)")
     table.add_row("Dependencies", ", ".join(dependencies) or "none")
     table.add_row(
-        "Example tests", "generated" if request.include_tests else "skipped (warning only)"
+        "Example tests",
+        "generated" if request.include_tests else "skipped (non-blocking warning)",
     )
     return table
 
@@ -701,16 +702,102 @@ def _review_panel(request: ScaffoldRequest, *, position: int, total: int) -> Pan
         Group(
             Text.from_markup(
                 "Review the generated paths and contracts below. Press [bold]Enter[/bold] or "
-                "[bold]↓[/bold] to create them, [bold]↑[/bold] to revise the previous answer, or "
+                "[bold]↓[/bold] to create them, [bold]↑[/bold] to revisit the advanced guidance, or "
                 "[bold]Esc[/bold] to abort without creating any plugin."
             ),
             Text(""),
             _summary(request),
             Text.from_markup(
-                f"\n[dim]Step {position} of {total}  •  Enter/↓ create  •  ↑ revise  •  Esc abort[/dim]"
+                f"\n[dim]Step {position} of {total}  •  Enter/↓ create  •  ↑ guidance  •  Esc abort[/dim]"
             ),
         ),
         title="[bold]Review scaffold[/bold]",
+        border_style="cyan",
+    )
+
+
+def _remaining_work(request: ScaffoldRequest) -> str:
+    if request.transport == "http":
+        transport = (
+            "The generated `HttpScraperClient` already performs a bounded `GET` and standard status "
+            "mapping; parse `_response`"
+        )
+    else:
+        transport = (
+            "The generated bare `ScraperClient` does not fetch anything; choose and implement the "
+            "transport, then parse its response"
+        )
+
+    if request.result_type == "price":
+        result = "return a validated `PriceResult` with the real price and currency"
+    else:
+        result = "build one `Offer` per alertable result and return a validated `ListingResult`"
+
+    selected = [
+        *(f"item field `{spec.key}`" for spec in request.item_fields),
+        *(f"setting `{spec.key}`" for spec in request.settings),
+    ]
+    selected_work = (
+        " Use the generated " + ", ".join(selected) + " where the request or filtering needs them."
+        if selected
+        else ""
+    )
+    steps = [
+        "Confirm the generated `UrlField`, path predicate, and sample URL match pages the real "
+        "client can handle.",
+        f"Finish `Client.scrape()`. {transport}, then {result}. Raise the modeled scraper "
+        f"exceptions for expected failures.{selected_work}",
+    ]
+    if request.include_tests:
+        steps.append(
+            "In the generated test file, replace the deliberately skipped `TODO` behavior test "
+            "with mocked success, failure, URL-shape, and cleanup tests."
+        )
+        verification = (
+            "Complete the package `README.md`, then run `./scripts/dev/setup.sh --<target>`, "
+            "`./scripts/dev/plugin-check.sh --<target>`, and `./scripts/dev/check.sh --debug`."
+        )
+    else:
+        verification = (
+            "Complete the package `README.md`, then run `./scripts/dev/setup.sh --<target>`, "
+            "`./scripts/dev/plugin-check.sh --<target>`, and `./scripts/dev/check.sh --debug`. "
+            "The missing-tests warning from plugin-check is non-blocking."
+        )
+    steps.append(verification)
+    return "\n".join(f"{index}. {step}" for index, step in enumerate(steps, start=1))
+
+
+def _advanced_panel(request: ScaffoldRequest, *, position: int, total: int) -> Panel:
+    return Panel(
+        Group(
+            _inline_code_text(
+                "The wizard intentionally creates the common one-URL plugin shape. The framework also "
+                "supports these advanced designs when a source genuinely needs them:"
+            ),
+            _section(
+                "Advanced designs",
+                "• URL-less or multi-URL items — useful when an item is identified by values such as `sku` "
+                "and `region` instead of a page, or when scraping uses a product page together with an API "
+                "endpoint or regional page.\n"
+                "• Configuration migrations — when a published field or setting changes shape; increment "
+                "`config_schema_version` and add pure transforms in `migrations.py` so updates convert user "
+                "configuration atomically. New version-1 plugins need no migration.\n"
+                "• Client hooks — use `prepare_retry()` to rotate sessions, `diagnostic_context()` for "
+                "non-secret troubleshooting details, and `close()` to release browsers or sessions.\n"
+                "• Setting presentation — add a custom display or warning when raw values need friendlier "
+                "words, such as showing numeric `0` as `disabled`; keep secrets `sensitive=True`.",
+            ),
+            _section("What remains for this scaffold", _remaining_work(request)),
+            Text(""),
+            _inline_code_text(
+                "Refer to `CONTRIBUTING.md` before implementing any advanced path; it contains the full "
+                "contracts, examples, safety rules, and required tests."
+            ),
+            Text.from_markup(
+                f"\n[dim]Step {position} of {total}  •  Enter/↓ continue  •  ↑ previous  •  Esc abort[/dim]"
+            ),
+        ),
+        title="[bold]Beyond the scaffold[/bold]",
         border_style="cyan",
     )
 
@@ -831,12 +918,29 @@ def collect_request(
             console.print()
             while True:
                 questions = _questions(answers, repo_root)
-                total = len(questions) + 1
-                if index == len(questions):
+                total = len(questions) + 2
+                if index >= len(questions):
                     try:
                         request = _request(answers)
                     except (KeyError, TypeError, ValueError) as exc:
                         raise RuntimeError(f"the collected scaffold is invalid: {exc}") from exc
+                    if index == len(questions):
+                        with Live(
+                            _advanced_panel(request, position=index + 1, total=total),
+                            console=console,
+                            auto_refresh=False,
+                            transient=True,
+                        ):
+                            key = keys()
+                        if key == _ABORT:
+                            render_cancellation(console)
+                            return None
+                        if key == _BACK:
+                            index = max(0, index - 1)
+                            continue
+                        if key == _ACCEPT:
+                            index += 1
+                        continue
                     with Live(
                         _review_panel(request, position=total, total=total),
                         console=console,
@@ -901,7 +1005,7 @@ def render_completion(
         body.append(str(result.tests), style=_CODE_STYLE)
     else:
         body.append("\nTests skipped:", style="yellow")
-        body.append(" plugin-check will allow the plugin with a warning.")
+        body.append(" plugin-check will report a non-blocking warning.")
     body.append("\n\n1. ")
     body.append(f"./scripts/dev/setup.sh --{request.target}", style=_CODE_STYLE)
     body.append("\n2. ")

@@ -269,8 +269,7 @@ def _readme_source(request: ScaffoldRequest) -> str:
         "Delete the generated skipped placeholder and add mocked Client.scrape response and "
         "parser coverage."
         if request.include_tests
-        else "No tests were generated. Add mocked target-owned tests when practical; the verifier "
-        "will warn but will not block solely because they are absent."
+        else "No tests were generated. The verifier reports their absence as a non-blocking warning."
     )
     return f"""# {request.display_name} plugin
 

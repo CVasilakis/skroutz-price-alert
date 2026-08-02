@@ -211,7 +211,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         if result.tests is not None:
             print(f"Created {result.tests}")
         else:
-            print("Tests were not generated; plugin-check will report a warning.")
+            print("Tests were not generated; plugin-check will report a non-blocking warning.")
         print(f"Next: ./scripts/dev/setup.sh --{result.source.name}")
         print(f"Then: ./scripts/dev/plugin-check.sh --{result.source.name}")
         print("Finally: ./scripts/dev/check.sh --debug")

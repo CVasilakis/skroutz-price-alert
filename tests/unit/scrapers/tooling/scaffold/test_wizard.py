@@ -14,10 +14,12 @@ from core.scrapers.tooling.scaffold.wizard import (
     _ACCEPT,
     _BACK,
     _BACKSPACE,
+    _advanced_panel,
     _inline_code_text,
     _json_parser,
     _question_content,
     _questions,
+    _remaining_work,
     _summary,
     collect_request,
     render_completion,
@@ -62,6 +64,7 @@ def _common_answers(*, target: str = "acme_store") -> tuple[str, ...]:
         "",  # default bare client
         "",  # no extra dependencies
         "",  # generate tests
+        "",  # continue through advanced guidance
         "",  # confirm review
     )
 
@@ -94,6 +97,8 @@ def test_wizard_guides_reviews_and_confirms_a_common_bare_plugin():
     assert "Your answer" in output
     assert "acme_store" in output
     assert "Enter/↓ accept" in output
+    assert "Beyond the scaffold" in output
+    assert "CONTRIBUTING.md" in output
     assert "Review scaffold" in output
 
 
@@ -194,11 +199,11 @@ def test_question_guidance_uses_real_plugins_and_configuration_paths():
     }
     assert "Insomnia uses min_advert_price" in setting_examples["setting.0.key"]
     assert "Insomnia uses nonnegative-number" in setting_examples["setting.0.type"]
-    assert "Choose no for Insomnia's min_advert_price" in setting_examples["setting.0.required"]
+    assert "Insomnia does not require min_advert_price" in setting_examples["setting.0.required"]
     assert "Insomnia uses 0" in setting_examples["setting.0.default"]
     assert "Insomnia uses 30" in setting_examples["setting.0.example"]
-    assert "Choose no for Insomnia's min_advert_price" in setting_examples["setting.0.sensitive"]
-    assert "Choose yes for an api_token" in setting_examples["setting.0.sensitive"]
+    assert "Insomnia's min_advert_price is not sensitive" in setting_examples["setting.0.sensitive"]
+    assert "An api_token should be sensitive" in setting_examples["setting.0.sensitive"]
 
 
 def test_inline_code_text_styles_only_paired_tokens_and_treats_markup_as_literal():
@@ -252,6 +257,68 @@ def test_question_answers_choices_and_review_values_remain_unaccented():
 
     summary = _summary(ScaffoldRequest("acme_store", "Acme Store", ("store.example",), "/items/"))
     assert summary.columns[1].style == ""
+
+
+def test_advanced_panel_explains_manual_paths_and_selected_remaining_work():
+    stream = io.StringIO()
+    console = Console(file=stream, width=110, color_system=None)
+    request = ScaffoldRequest(
+        "market_watch",
+        "Market Watch",
+        ("market.example",),
+        "/search/",
+        result_type="listing",
+        transport="http",
+    )
+
+    console.print(_advanced_panel(request, position=12, total=13))
+
+    output = stream.getvalue()
+    normalized = " ".join(output.split())
+    assert "Beyond the scaffold" in normalized
+    assert "URL-less or multi-URL items" in normalized
+    assert "Configuration migrations" in normalized
+    assert "Client hooks" in normalized
+    assert "Setting presentation" in normalized
+    assert "HttpScraperClient already performs a bounded GET" in normalized
+    assert "return a validated" in normalized
+    assert "ListingResult" in normalized
+    assert "generated test file" in normalized
+    assert "deliberately skipped TODO behavior test" in normalized
+    assert "CONTRIBUTING.md" in normalized
+    assert "Your answer" not in normalized
+    assert "Enter/↓ continue" in normalized
+
+    bare_work = _inline_code_text(
+        _remaining_work(
+            ScaffoldRequest(
+                "acme",
+                "Acme",
+                ("store.example",),
+                "/items/",
+                transport="bare",
+                include_tests=False,
+            )
+        )
+    ).plain
+    assert "bare ScraperClient does not fetch anything" in bare_work
+    assert "return a validated PriceResult" in bare_work
+    assert "test implementation" not in bare_work
+    assert "missing-tests warning from plugin-check is non-blocking" in bare_work
+
+
+def test_advanced_panel_uses_normal_forward_and_back_controls():
+    read_key, keys = _key_reader(*_common_answers()[:-2])
+    keys.extend([_BACK, _ACCEPT, _ACCEPT, _ACCEPT])
+
+    request = collect_request(
+        REPO_ROOT,
+        Console(file=io.StringIO(), width=100, color_system=None),
+        read_key=read_key,
+    )
+
+    assert request is not None
+    assert request.include_tests
 
 
 def test_wizard_navigation_does_not_accumulate_blank_rows_between_panels():
@@ -313,6 +380,7 @@ def test_wizard_explains_and_collects_custom_fields_settings_and_dependencies():
         "bare",
         "beautifulsoup4",
         "no",
+        "",
         "",
     )
 
@@ -381,7 +449,7 @@ def test_wizard_rejects_a_boolean_example_string_and_accepts_valid_json_boolean(
     keys.extend([*'"haha"', _ACCEPT])
     keys.extend([_BACKSPACE] * len('"haha"'))
     keys.extend([*"true", _ACCEPT])
-    for entry in ("no", "no", "", "", "", ""):
+    for entry in ("no", "no", "", "", "", "", ""):
         keys.extend(entry)
         keys.append(_ACCEPT)
 

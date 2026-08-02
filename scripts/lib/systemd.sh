@@ -46,11 +46,6 @@ list_installed_units() {
     [ "$_liu_failed" -eq 0 ]
 }
 
-# Compatibility alias for callers outside the management scripts.
-list_installed_plugins() {
-    list_installed_units "$@"
-}
-
 list_installed_targets() {
     _lit_timers="$(list_installed_units timer)" || return 1
     _lit_services="$(list_installed_units service)" || return 1

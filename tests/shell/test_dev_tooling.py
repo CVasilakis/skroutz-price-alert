@@ -195,7 +195,7 @@ def test_plugin_create_incomplete_utf8_cannot_trap_the_wizard():
     try:
         _read_pty_until(master, b"Target name")
         os.write(master, b"\xce")
-        time.sleep(0.3)
+        _read_pty_until(master, b"Target name")
         os.write(master, b"\x1b")
 
         assert process.wait(timeout=10) == 0
@@ -241,6 +241,12 @@ def test_plugin_create_suspend_and_resume_preserve_terminal_mode():
             time.sleep(0.05)
         else:
             raise AssertionError("wizard did not restore cbreak mode after SIGCONT")
+
+        # Cbreak mode is restored inside the SIGCONT handler, so observing it
+        # does not prove that control has returned to the wizard's input loop.
+        # Complete one input/redraw cycle before testing a second signal.
+        os.write(master, b"qzv")
+        _read_pty_until(master, b"qzv")
 
         process.send_signal(signal.SIGTERM)
         assert process.wait(timeout=10) == 130
