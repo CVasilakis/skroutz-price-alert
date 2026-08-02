@@ -4,7 +4,8 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from rich.console import Console
+from rich.console import Console, Group
+from rich.text import Text
 
 from core.scrapers.tooling.scaffold.contracts import ScaffoldRequest, ScaffoldResult
 from core.scrapers.tooling.scaffold.terminal import read_terminal_key as _read_terminal_key
@@ -13,8 +14,11 @@ from core.scrapers.tooling.scaffold.wizard import (
     _ACCEPT,
     _BACK,
     _BACKSPACE,
+    _inline_code_text,
     _json_parser,
+    _question_content,
     _questions,
+    _summary,
     collect_request,
     render_completion,
 )
@@ -97,28 +101,50 @@ def test_question_guidance_uses_real_plugins_and_configuration_paths():
     base = {question.key: question for question in _questions({}, REPO_ROOT)}
 
     assert (
-        base["domains"].example
-        == "Skroutz supports skroutz.gr, skroutz.cy, skroutz.ro, skroutz.bg, skroutz.de. "
-        "Insomnia uses the single domain insomnia.gr."
+        _inline_code_text(base["domains"].example).plain
+        == "Skroutz supports skroutz.gr, skroutz.cy, skroutz.ro, skroutz.bg, skroutz.de."
+        "\nInsomnia uses the single domain insomnia.gr."
     )
-    assert "https://skroutz.gr/s/<sample>" in base["url_prefix"].example
-    assert "https://insomnia.gr/classifieds/<sample>" in base["url_prefix"].example
-    assert "accepts it only when the part after the domain begins" in base["url_prefix"].expected
-    assert "Skroutz uses price" in base["result_type"].example
-    assert "Insomnia uses listing" in base["result_type"].example
-    assert "config/<target>.json has a url value" in base["domains"].expected
-    assert "config.example.json" in base["domains"].expected
-    assert "wizard checks every entry" in base["domains"].guidance
-    assert "wizard checks these rules" in base["url_prefix"].guidance
-    assert "enter / explicitly" in base["url_prefix"].guidance
-    assert "describes what the plugin returns" in base["result_type"].guidance
-    assert "min_advert_price" in base["setting.0.add"].example
+    assert "https://skroutz.gr/s/<sample>" in _inline_code_text(base["url_prefix"].example).plain
+    assert (
+        "https://insomnia.gr/classifieds/<sample>"
+        in _inline_code_text(base["url_prefix"].example).plain
+    )
+    assert ".\nInsomnia uses" in _inline_code_text(base["url_prefix"].example).plain
+    assert (
+        "accepts it only when the part after the domain begins"
+        in _inline_code_text(base["url_prefix"].expected).plain
+    )
+    assert "Skroutz uses price" in _inline_code_text(base["result_type"].example).plain
+    assert "Insomnia uses listing" in _inline_code_text(base["result_type"].example).plain
+    assert ".\nInsomnia uses" in _inline_code_text(base["result_type"].example).plain
+    assert (
+        "config/<target>.json has a url value" in _inline_code_text(base["domains"].expected).plain
+    )
+    assert "config.example.json" in _inline_code_text(base["domains"].expected).plain
+    assert "wizard checks every entry" in _inline_code_text(base["domains"].guidance).plain
+    assert "wizard checks these rules" in _inline_code_text(base["url_prefix"].guidance).plain
+    assert "enter / explicitly" in _inline_code_text(base["url_prefix"].guidance).plain
+    assert (
+        "describes what the plugin returns" in _inline_code_text(base["result_type"].guidance).plain
+    )
+    assert "min_advert_price" in _inline_code_text(base["setting.0.add"].example).plain
+    assert "`yes`" in base["setting.0.add"].expected
+    assert "`no`" in base["setting.0.add"].expected
+    assert "`snake_case`" not in base["target"].guidance
     assert base["transport"].default == "bare"
     assert "means how the generated scraper client will retrieve" in base["transport"].guidance
-    assert "repository-root requirements.txt" in base["dependencies"].guidance
-    assert "project checks that the plugin declares" in base["dependencies"].expected
+    assert (
+        "repository-root requirements.txt" in _inline_code_text(base["dependencies"].guidance).plain
+    )
+    assert (
+        "project checks that the plugin declares"
+        in _inline_code_text(base["dependencies"].expected).plain
+    )
     assert base["include_tests"].title == "Generate example tests?"
     assert "non-blocking warning" in base["include_tests"].guidance
+    assert "If you are unsure" not in base["transport"].guidance
+    assert "when you have not chosen a scraping approach yet" in base["transport"].example
 
     item_questions = {
         question.key: question
@@ -131,12 +157,101 @@ def test_question_guidance_uses_real_plugins_and_configuration_paths():
             REPO_ROOT,
         )
     }
-    assert "Insomnia adds title_include and title_exclude" in item_questions["field.0.add"].example
-    assert "config.example.json item row" in item_questions["field.0.key"].expected
+    assert (
+        "Insomnia adds title_include and title_exclude"
+        in _inline_code_text(item_questions["field.0.add"].example).plain
+    )
+    assert (
+        "config.example.json item row"
+        in _inline_code_text(item_questions["field.0.key"].expected).plain
+    )
     assert (
         "exactly as it should appear in config.example.json"
-        in item_questions["field.0.default"].guidance
+        in _inline_code_text(item_questions["field.0.default"].guidance).plain
     )
+
+    setting_questions = {
+        question.key: question
+        for question in _questions(
+            {
+                "setting.0.add": True,
+                "setting.0.type": "nonnegative-number",
+                "setting.0.required": False,
+            },
+            REPO_ROOT,
+        )
+    }
+    setting_examples = {
+        key: _inline_code_text(setting_questions[key].example).plain
+        for key in (
+            "setting.0.key",
+            "setting.0.type",
+            "setting.0.required",
+            "setting.0.default",
+            "setting.0.example",
+            "setting.0.sensitive",
+        )
+    }
+    assert "Insomnia uses min_advert_price" in setting_examples["setting.0.key"]
+    assert "Insomnia uses nonnegative-number" in setting_examples["setting.0.type"]
+    assert "Choose no for Insomnia's min_advert_price" in setting_examples["setting.0.required"]
+    assert "Insomnia uses 0" in setting_examples["setting.0.default"]
+    assert "Insomnia uses 30" in setting_examples["setting.0.example"]
+    assert "Choose no for Insomnia's min_advert_price" in setting_examples["setting.0.sensitive"]
+    assert "Choose yes for an api_token" in setting_examples["setting.0.sensitive"]
+
+
+def test_inline_code_text_styles_only_paired_tokens_and_treats_markup_as_literal():
+    text = _inline_code_text("Open `config/<target>.json`; show [red]literally[/red].")
+
+    assert text.plain == "Open config/<target>.json; show [red]literally[/red]."
+    assert [(span.start, span.end, span.style) for span in text.spans] == [(5, 25, "cyan")]
+
+    unmatched = _inline_code_text("Keep `this visible")
+    assert unmatched.plain == "Keep `this visible"
+    assert unmatched.spans == []
+
+
+def test_question_answers_choices_and_review_values_remain_unaccented():
+    questions = {question.key: question for question in _questions({}, REPO_ROOT)}
+    target_question = questions["target"]
+    content = _question_content(
+        target_question,
+        "acme_store",
+        len("acme_store"),
+        error=None,
+        position=1,
+        total=2,
+    )
+
+    assert isinstance(content, Group)
+    answer = content.renderables[-2]
+    assert isinstance(answer, Text)
+    assert [(span.start, span.end, span.style) for span in answer.spans] == [
+        (0, 13, "bold cyan"),
+        (13, 15, "bold"),
+        (25, 26, "reverse"),
+    ]
+
+    choice_content = _question_content(
+        questions["result_type"],
+        "",
+        0,
+        error=None,
+        position=1,
+        total=2,
+    )
+    assert isinstance(choice_content, Group)
+    choices = choice_content.renderables[-3]
+    assert isinstance(choices, Text)
+    assert choices.plain == "\nChoices\nprice, listing"
+    assert [(span.start, span.end, span.style) for span in choices.spans] == [(0, 9, "bold cyan")]
+    default_answer = choice_content.renderables[-2]
+    assert isinstance(default_answer, Text)
+    assert all("cyan" not in str(span.style) for span in default_answer.spans if span.start >= 13)
+
+    summary = _summary(ScaffoldRequest("acme_store", "Acme Store", ("store.example",), "/items/"))
+    assert summary.columns[1].style == ""
 
 
 def test_wizard_navigation_does_not_accumulate_blank_rows_between_panels():
@@ -407,3 +522,22 @@ def test_completion_panel_warns_when_tests_were_skipped(tmp_path):
     assert "plugin-check.sh --acme" in output
     assert output.startswith("\n╭")
     assert output.endswith("\n\n")
+
+
+def test_completion_panel_styles_generated_paths_and_commands_cyan(tmp_path):
+    stream = io.StringIO()
+    console = Console(
+        file=stream,
+        width=120,
+        color_system="standard",
+        force_terminal=True,
+        no_color=False,
+    )
+    request = ScaffoldRequest("acme", "Acme", ("store.example",), "/items/")
+    source = tmp_path / "src/acme"
+
+    render_completion(request, ScaffoldResult(source, None), console)
+
+    output = stream.getvalue()
+    assert f"\x1b[36m{source}\x1b[0m" in output
+    assert "\x1b[36m./scripts/dev/setup.sh --acme\x1b[0m" in output

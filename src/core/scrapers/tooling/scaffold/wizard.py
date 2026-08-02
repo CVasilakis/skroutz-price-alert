@@ -77,6 +77,8 @@ Answer = object
 Answers = dict[str, Answer]
 Parser = Callable[[str], Answer]
 
+_CODE_STYLE = "cyan"
+
 
 @dataclass(frozen=True, kw_only=True)
 class _Question:
@@ -88,6 +90,43 @@ class _Question:
     parser: Parser
     default: str | None = None
     choices: tuple[str, ...] = ()
+
+
+def _inline_code_text(value: str, *, style: str = "") -> Text:
+    """Render paired backtick spans as code-like text without parsing Rich markup."""
+    body = Text(style=style)
+    if value.count("`") % 2:
+        body.append(value)
+        return body
+
+    for index, part in enumerate(value.split("`")):
+        body.append(part, style=_CODE_STYLE if index % 2 else style)
+    return body
+
+
+def _section(title: str, value: str) -> Text:
+    body = Text()
+    body.append(f"\n{title}\n", style="bold cyan")
+    body.append_text(_inline_code_text(value))
+    return body
+
+
+def _answer_line(question: _Question, value: str, cursor: int) -> Text:
+    body = Text()
+    body.append("\nYour answer\n", style="bold cyan")
+    body.append("> ", style="bold")
+    if not value and question.default is not None:
+        body.append(question.default or "empty", style="dim")
+        body.append(" ")
+        body.append(" ", style="reverse")
+        body.append(" (default)", style="dim")
+        return body
+
+    body.append(value[:cursor])
+    current = value[cursor : cursor + 1]
+    body.append(current or " ", style="reverse")
+    body.append(value[cursor + 1 :])
+    return body
 
 
 def _nonblank(value: str) -> str:
@@ -209,30 +248,31 @@ def _field_questions(
         if setting:
             guidance = (
                 "Add a plugin-wide custom setting only when the standard settings are insufficient. "
-                "Every plugin already receives execution_interval, log_retention_days, "
-                "notify_scraping_errors, and suppress_repeated_price_alerts. Custom settings "
-                "belong in the settings object and are shared by every tracked item of the plugin."
+                "Every plugin already receives `execution_interval`, `log_retention_days`, "
+                "`notify_scraping_errors`, and `suppress_repeated_price_alerts`. Custom settings "
+                "belong in the `settings` object and are shared by every tracked item of the plugin."
             )
             expected = (
-                "Choosing yes adds a typed declaration and example settings entry. Choosing "
-                "no continues to client transport without adding framework behavior."
+                "Choosing `yes` adds a typed declaration and example settings entry. Choosing "
+                "`no` continues to client transport without adding framework behavior."
             )
             example = (
-                "Insomnia uses min_advert_price to suppress offers below a user-defined threshold "
-                "because they may be too good to be true; choose no if the standard four suffice."
+                "Insomnia uses `min_advert_price` to suppress offers below a user-defined threshold "
+                "because they may be too good to be true; choose `no` if the standard four suffice."
             )
         else:
             guidance = (
-                "Add a per-item custom field only when URL, id, name, target_price, and optional skip "
+                "Add a per-item custom field only when `URL`, `id`, `name`, `target_price`, and "
+                "optional `skip` "
                 "do not fully describe one tracked item. Each custom field is decoded from every "
-                "item row and is available to Client.scrape through its generated declaration."
+                "item row and is available to `Client.scrape` through its generated declaration."
             )
             expected = (
-                "Choosing yes adds a typed field to plugin.py and config.example.json. Choosing "
-                "no continues without adding configuration that contributors must maintain."
+                "Choosing `yes` adds a typed field to `plugin.py` and `config.example.json`. "
+                "Choosing `no` continues without adding configuration that contributors must maintain."
             )
             example = (
-                "Insomnia adds title_include and title_exclude lists because each tracked "
+                "Insomnia adds `title_include` and `title_exclude` lists because each tracked "
                 "classifieds search needs its own title filters. Skroutz needs no custom item "
                 "fields because its product URL is sufficient."
             )
@@ -259,13 +299,13 @@ def _field_questions(
                 guidance="This is the stable machine-readable JSON key. Use lowercase letters, digits, "
                 "and underscores; begin with a letter. Framework-owned names and duplicate keys "
                 "are rejected. Renaming it later is a configuration migration.",
-                expected=f"The scaffold declares {('SETTING' if setting else 'ITEM')}_<KEY> in plugin.py "
-                f"and writes <key> into the config.example.json "
+                expected=f"The scaffold declares `{('SETTING' if setting else 'ITEM')}_<KEY>` in "
+                f"`plugin.py` and writes `<key>` into the `config.example.json` "
                 f"{'settings object' if setting else 'item row'}.",
                 example=(
-                    "api_token or minimum_listing_price"
+                    "Insomnia uses `min_advert_price` for its minimum plausible advert price"
                     if setting
-                    else "Insomnia uses title_include and title_exclude"
+                    else "Insomnia uses `title_include` and `title_exclude`"
                 ),
                 parser=_spec_key_parser(kind=noun, reserved=reserved, existing=prior_keys),
             )
@@ -275,15 +315,17 @@ def _field_questions(
             _Question(
                 key=type_key,
                 title=f"Custom {noun} value type",
-                guidance="The type controls strict JSON decoding: text is a nonblank string; integer "
-                "rejects booleans; number must be finite; nonnegative-number also rejects values "
-                "below zero; boolean accepts true/false; text-list is an array of nonblank strings.",
+                guidance="The type controls strict JSON decoding: `text` is a nonblank string; "
+                "`integer` rejects booleans; `number` must be finite; `nonnegative-number` also "
+                "rejects values below zero; `boolean` accepts `true`/`false`; `text-list` is an "
+                "array of nonblank strings.",
                 expected="The generated descriptor receives the matching decoder and both the default and "
                 "example values must satisfy it.",
                 example=(
-                    'text for "eu" or nonnegative-number for 25.0'
+                    "Insomnia uses `nonnegative-number` for `min_advert_price` because a negative "
+                    "price floor is invalid"
                     if setting
-                    else 'Insomnia title filters use text-list, such as ["laptop", "ThinkPad"]'
+                    else 'Insomnia title filters use `text-list`, such as `["laptop", "ThinkPad"]`'
                 ),
                 parser=_choice(*VALUE_TYPES),
                 default="text",
@@ -300,10 +342,11 @@ def _field_questions(
                 expected="Required values make missing configuration invalid. Optional values keep older "
                 "or shorter item rows usable with an explicit generated default.",
                 example=(
-                    "API tokens are often required; a numeric filter can be optional."
+                    "Choose `no` for Insomnia's `min_advert_price`: omitting it safely uses the "
+                    "disabled default"
                     if setting
-                    else "Insomnia makes title_include and title_exclude optional so each can "
-                    "default to []."
+                    else "Insomnia makes `title_include` and `title_exclude` optional so each can "
+                    "default to `[]`."
                 ),
                 parser=_yes_no,
                 default="no",
@@ -316,15 +359,15 @@ def _field_questions(
                 _Question(
                     key=f"{prefix}.{index}.default",
                     title=f"Default {noun} value",
-                    guidance="Type the value exactly as it should appear in config.example.json, not as "
-                    "Python source. Strings need double quotes, booleans are true or false, and "
-                    "lists use JSON brackets.",
+                    guidance="Type the value exactly as it should appear in `config.example.json`, not "
+                    "as Python source. Strings need double quotes, booleans are `true` or `false`, "
+                    "and lists use JSON brackets.",
                     expected="The generated declaration uses this value whenever the key is omitted from "
                     "a configuration object.",
                     example=(
-                        '"global", 0, or false depending on the selected type'
+                        "Insomnia uses `0` so omitting `min_advert_price` disables the filter"
                         if setting
-                        else "Insomnia uses [] for both optional title-filter lists"
+                        else "Insomnia uses `[]` for both optional title-filter lists"
                     ),
                     parser=_json_parser(value_type),
                 )
@@ -334,14 +377,14 @@ def _field_questions(
                 key=f"{prefix}.{index}.example",
                 title=f"Example {noun} value",
                 guidance="Type a realistic valid JSON value exactly as it should appear in "
-                "config.example.json. It may equal the default, but a representative value is "
+                "`config.example.json`. It may equal the default, but a representative value is "
                 "usually more helpful.",
-                expected=f"The value is written into config.example.json under the "
+                expected=f"The value is written into `config.example.json` under the "
                 f"{'settings object' if setting else 'sample item row'}.",
                 example=(
-                    '"replace-me", 25.0, or true depending on the selected type'
+                    "Insomnia uses `30` to demonstrate a realistic `min_advert_price` threshold"
                     if setting
-                    else 'Insomnia could show ["laptop", "ThinkPad"] for title_include'
+                    else 'Insomnia could show `["laptop", "ThinkPad"]` for `title_include`'
                 ),
                 parser=_json_parser(value_type),
             )
@@ -354,9 +397,11 @@ def _field_questions(
                     guidance="Mark secrets such as API tokens sensitive. This records the setting's "
                     "presentation policy so tooling can avoid exposing its value. Do not mark "
                     "ordinary filters or numeric thresholds sensitive.",
-                    expected="Choosing yes emits sensitive=True on the SettingSpec declaration; the "
+                    expected="Choosing `yes` emits `sensitive=True` on the `SettingSpec` declaration; the "
                     "example still contains only the non-secret placeholder you provided.",
-                    example="yes for api_token; no for minimum_listing_price",
+                    example="Choose `no` for Insomnia's `min_advert_price` because an ordinary numeric "
+                    "filter is not secret. Choose `yes` for an `api_token` because credentials must not "
+                    "be exposed.",
                     parser=_yes_no,
                     default="no",
                     choices=("yes", "no"),
@@ -374,14 +419,14 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
             key="target",
             title="Target name",
             guidance="The target name is the plugin's unique identifier. It may be one word, such as "
-            "skroutz or insomnia, or multiple snake_case words, such as acme_store. Use only "
+            "`skroutz` or `insomnia`, or multiple snake_case words, such as `acme_store`. Use only "
             "lowercase letters, digits, and underscores, begin with a letter, and avoid reserved "
-            "framework names and Scrooge Alert command names such as status. Do not reuse the name "
-            "of another checked-in plugin, such as insomnia. Treat it as permanent once published.",
-            expected="It names src/core/scrapers/plugins/<target>/, tests/plugins/<target>/, "
-            "config/<target>.json, state/<target>.json, --<target> command flags, logs, locks, "
+            "framework names and Scrooge Alert command names such as `status`. Do not reuse the name "
+            "of another checked-in plugin, such as `insomnia`. Treat it as permanent once published.",
+            expected="It names `src/core/scrapers/plugins/<target>/`, `tests/plugins/<target>/`, "
+            "`config/<target>.json`, `state/<target>.json`, `--<target>` command flags, logs, locks, "
             "and systemd units.",
-            example="skroutz, insomnia, or acme_store",
+            example="`skroutz`, `insomnia`, or `acme_store`",
             parser=_wizard_target_parser(repo_root),
         ),
         _Question(
@@ -390,7 +435,7 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
             guidance="This is the human-readable store or service name. Capitalization and spaces are "
             "welcome. Keep it short and recognizable; it is presentation text, not a Python or "
             "filesystem identifier.",
-            expected="It becomes ScraperPlugin.display_name and appears in user-facing status, scraping "
+            expected="It becomes `ScraperPlugin.display_name` and appears in user-facing status, scraping "
             "output, errors, and notifications. It does not affect paths or command flags.",
             example="Skroutz, Insomnia, or Acme Store",
             parser=safe_display_name,
@@ -401,46 +446,46 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
             guidance="List every hostname or IP address this plugin accepts, separated by commas. Enter "
             "hostnames only: no scheme, port, path, query, credentials, or wildcard. Subdomains "
             "must be listed separately when users can paste them into a working tracked URL "
-            "(for example, enter both example.com and shop.example.com if product pages work on "
+            "(for example, enter both `example.com` and `shop.example.com` if product pages work on "
             "both hosts). The wizard checks every entry and will keep this panel open if it is not "
             "a valid host-only value.",
-            expected="Each tracked item in config/<target>.json has a url value for the page to check. "
+            expected="Each tracked item in `config/<target>.json` has a `url` value for the page to check. "
             "Scrooge Alert compares that URL's hostname with this list so it can reject unsupported "
             "URLs and route supported ones to this plugin. The scaffold also builds the example "
-            "tracked URL in config.example.json from the first hostname you enter here and the "
+            "tracked URL in `config.example.json` from the first hostname you enter here and the "
             "path prefix requested next.",
-            example="Skroutz supports skroutz.gr, skroutz.cy, skroutz.ro, skroutz.bg, skroutz.de. "
-            "Insomnia uses the single domain insomnia.gr.",
+            example="Skroutz supports `skroutz.gr`, `skroutz.cy`, `skroutz.ro`, `skroutz.bg`, "
+            "`skroutz.de`.\nInsomnia uses the single domain `insomnia.gr`.",
             parser=_domains,
         ),
         _Question(
             key="url_prefix",
             title="Accepted URL path prefix",
             guidance="Enter the path portion that comes immediately after the domain and identifies the "
-            "kind of page this plugin accepts. It must start with / and contain no whitespace, "
+            "kind of page this plugin accepts. It must start with `/` and contain no whitespace, "
             "query, or fragment; the wizard checks these rules before continuing. The scaffold "
-            "adds a trailing slash when omitted. An answer is required: enter / explicitly only "
+            "adds a trailing slash when omitted. An answer is required: enter `/` explicitly only "
             "when the plugin should accept nearly every path on the domain.",
             expected="The scaffold combines the first domain and prefix to create its example URL, then "
-            "uses <sample> to represent the page-specific part that follows it. When a user adds "
+            "uses `<sample>` to represent the page-specific part that follows it. When a user adds "
             "a URL to the configuration, the plugin accepts it only when the part after the "
             "domain begins with this prefix. This keeps unrelated pages from the same website "
             "out of the plugin.",
-            example="Skroutz uses /s/: https://skroutz.gr/s/<sample>. Insomnia uses /classifieds/: "
-            "https://insomnia.gr/classifieds/<sample>.",
+            example="Skroutz uses `/s/`: `https://skroutz.gr/s/<sample>`.\nInsomnia uses "
+            "`/classifieds/`: `https://insomnia.gr/classifieds/<sample>`.",
             parser=url_prefix,
         ),
         _Question(
             key="result_type",
             title="Scrape result shape",
             guidance="The result shape describes what the plugin returns after successfully checking one "
-            "configured URL. Choose price when one page represents one tracked product and "
-            "produces one price. Choose listing when a search or category page produces multiple "
+            "configured URL. Choose `price` when one page represents one tracked product and "
+            "produces one price. Choose `listing` when a search or category page produces multiple "
             "independently alertable offers with their own titles, prices, and canonical URLs.",
-            expected="The generated client returns PriceResult for price or ListingResult containing "
-            "Offer values for listing; this determines alert-history behavior and starter code.",
-            example="Skroutz uses price because one product page yields one price. Insomnia uses listing "
-            "because one classifieds search page yields multiple offers.",
+            expected="The generated client returns `PriceResult` for `price` or `ListingResult` containing "
+            "`Offer` values for `listing`; this determines alert-history behavior and starter code.",
+            example="Skroutz uses `price` because one product page yields one price.\nInsomnia uses "
+            "`listing` because one classifieds search page yields multiple offers.",
             parser=_choice("price", "listing"),
             default="price",
             choices=("price", "listing"),
@@ -451,9 +496,12 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
             guidance="Choose the normal background check interval. Users may override it in their target "
             "configuration. Prefer a respectful interval for the remote service; the framework "
             "still applies sequential request pacing within a run.",
-            expected="The value becomes ScraperPlugin.default_interval, the example execution_interval, "
+            expected="The value becomes `ScraperPlugin.default_interval`, the example "
+            "`execution_interval`, "
             "and the default systemd timer schedule when no valid user configuration override exists.",
-            example="1h for hourly checks; supported values: " + ", ".join(SUPPORTED_INTERVALS),
+            example="`1h` for hourly checks; supported values: `"
+            + "`, `".join(SUPPORTED_INTERVALS)
+            + "`",
             parser=_choice(*SUPPORTED_INTERVALS),
             default="1h",
             choices=tuple(SUPPORTED_INTERVALS),
@@ -479,15 +527,13 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
                 key="transport",
                 title="Client transport",
                 guidance="Client transport means how the generated scraper client will retrieve page or API "
-                "data from the site. The shared HTTP transport provides bounded GET requests, "
+                "data from the site. The shared HTTP transport provides bounded `GET` requests, "
                 "standard HTTP status mapping, retry identity rotation, and clean shutdown. The "
-                "bare client leaves the scraping approach entirely up to you. If you are unsure "
-                "which approach the site needs, choose bare now and decide how to fetch and parse "
-                "its pages later.",
-                expected="http subclasses HttpScraperClient and automatically adds tls-client. bare "
-                "subclasses ScraperClient and performs no network request until you implement it.",
-                example="Choose bare when you have not chosen a scraping approach yet; http when you know the "
-                "shared HTTP client fits the site you want to scrape.",
+                "`bare` client leaves the scraping approach entirely up to you.",
+                expected="`http` subclasses `HttpScraperClient` and automatically adds `tls-client`. "
+                "`bare` subclasses `ScraperClient` and performs no network request until you implement it.",
+                example="Choose `bare` when you have not chosen a scraping approach yet; `http` when you "
+                "know the shared HTTP client fits the site you want to scrape.",
                 parser=_choice("http", "bare"),
                 default="bare",
                 choices=("http", "bare"),
@@ -497,14 +543,14 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
                 title="Additional private dependencies",
                 guidance="Enter comma-separated Python requirement strings needed only by this plugin, or "
                 "leave the answer empty. Project-wide packages are listed in the repository-root "
-                "requirements.txt; do not repeat them here. If you are unsure, leave this empty "
-                f"and later create or edit src/core/scrapers/plugins/{target}/requirements.txt "
+                "`requirements.txt`; do not repeat them here. If you are unsure, leave this empty "
+                f"and later create or edit `src/core/scrapers/plugins/{target}/requirements.txt` "
                 "manually.",
                 expected=f"Nonempty values are written one per line to "
-                f"src/core/scrapers/plugins/{target}/requirements.txt. Setup installs them for "
+                f"`src/core/scrapers/plugins/{target}/requirements.txt`. Setup installs them for "
                 "this plugin, and the project checks that the plugin declares every extra package "
                 "it imports.",
-                example="beautifulsoup4, lxml; leave empty when the standard library and transport suffice",
+                example="`beautifulsoup4`, `lxml`; leave empty when the standard library and transport suffice",
                 parser=_dependencies,
                 default="",
             ),
@@ -512,15 +558,15 @@ def _questions(answers: Mapping[str, Answer], repo_root: Path) -> list[_Question
                 key="include_tests",
                 title="Generate example tests?",
                 guidance="The example tests demonstrate strict configuration decoding. They also contain "
-                "one deliberately skipped placeholder test marked TODO. After implementing the "
+                "one deliberately skipped placeholder test marked `TODO`. After implementing the "
                 "client, replace that placeholder with tests that use mocked responses to cover "
                 "successful scraping and parsing failures. You may omit the entire test package; "
                 "the verifier will show a non-blocking warning because plugin behavior is then "
                 "untested.",
-                expected=f"yes creates tests/plugins/{target}/ with a passing configuration test and a "
-                "skipped placeholder for the behavior tests you still need to write. no creates "
+                expected=f"`yes` creates `tests/plugins/{target}/` with a passing configuration test and a "
+                "skipped placeholder for the behavior tests you still need to write. `no` creates "
                 "only the source package. Either choice passes the initial scaffold checks.",
-                example="yes is recommended, even for a small plugin",
+                example="`yes` is recommended, even for a small plugin",
                 parser=_yes_no,
                 default="yes",
                 choices=("yes", "no"),
@@ -610,36 +656,21 @@ def _question_content(
     position: int,
     total: int,
 ) -> RenderableType:
-    left = escape(value[:cursor])
-    current = escape(value[cursor : cursor + 1])
-    right = escape(value[cursor + 1 :])
-    if not value and question.default is not None:
-        default = escape(question.default) or "empty"
-        answer = f"[dim]{default}[/dim] [reverse] [/reverse] [dim](default)[/dim]"
-    elif current:
-        answer = f"{left}[reverse]{current}[/reverse]{right}"
-    else:
-        answer = f"{left}[reverse] [/reverse]"
     sections: list[RenderableType] = [
-        Text.from_markup(escape(question.guidance)),
-        Text.from_markup(f"\n[bold cyan]Expected result[/bold cyan]\n{escape(question.expected)}"),
-        Text.from_markup(
-            f"\n[bold cyan]Representative example[/bold cyan]\n{escape(question.example)}"
-        ),
+        _inline_code_text(question.guidance),
+        _section("Expected result", question.expected),
+        _section("Representative example", question.example),
     ]
     if question.choices:
-        sections.append(
-            Text.from_markup(
-                "\n[bold cyan]Choices[/bold cyan]\n" + escape(", ".join(question.choices))
-            )
-        )
-    sections.append(
-        Text.from_markup(f"\n[bold cyan]Your answer[/bold cyan]\n[bold]>[/bold] {answer}")
-    )
+        choices = Text()
+        choices.append("\nChoices\n", style="bold cyan")
+        choices.append(", ".join(question.choices))
+        sections.append(choices)
+    sections.append(_answer_line(question, value, cursor))
     if error:
-        sections.append(
-            Text.from_markup(f"\n[bold red]Please try again:[/bold red] {escape(error)}")
-        )
+        error_text = Text("\nPlease try again:", style="bold red")
+        error_text.append(f" {error}")
+        sections.append(error_text)
     sections.append(
         Text.from_markup(
             f"\n[dim]Step {position} of {total}  •  Enter/↓ accept  •  ↑ previous  •  "
@@ -660,7 +691,7 @@ def _question_panel(
 ) -> Panel:
     return Panel(
         _question_content(question, value, cursor, error=error, position=position, total=total),
-        title=f"[bold]{escape(question.title)}[/bold]",
+        title=Text(question.title, style="bold"),
         border_style="cyan",
     )
 
@@ -860,25 +891,27 @@ def render_completion(
     console: Console | None = None,
 ) -> None:
     console = console or Console()
-    lines = [f"[green]Created[/green] {escape(str(result.source))}"]
+    body = Text()
+    body.append("Created", style="green")
+    body.append(" ")
+    body.append(str(result.source), style=_CODE_STYLE)
     if result.tests is not None:
-        lines.append(f"[green]Created[/green] {escape(str(result.tests))}")
+        body.append("\nCreated", style="green")
+        body.append(" ")
+        body.append(str(result.tests), style=_CODE_STYLE)
     else:
-        lines.append(
-            "[yellow]Tests skipped:[/yellow] plugin-check will allow the plugin with a warning."
-        )
-    lines.extend(
-        [
-            "",
-            f"1. [cyan]./scripts/dev/setup.sh --{escape(request.target)}[/cyan]",
-            f"2. [cyan]./scripts/dev/plugin-check.sh --{escape(request.target)}[/cyan]",
-            "3. [cyan]./scripts/dev/check.sh --debug[/cyan]",
-        ]
-    )
+        body.append("\nTests skipped:", style="yellow")
+        body.append(" plugin-check will allow the plugin with a warning.")
+    body.append("\n\n1. ")
+    body.append(f"./scripts/dev/setup.sh --{request.target}", style=_CODE_STYLE)
+    body.append("\n2. ")
+    body.append(f"./scripts/dev/plugin-check.sh --{request.target}", style=_CODE_STYLE)
+    body.append("\n3. ")
+    body.append("./scripts/dev/check.sh --debug", style=_CODE_STYLE)
     console.print()
     console.print(
         Panel(
-            "\n".join(lines),
+            body,
             title="[bold]Scaffold created[/bold]",
             border_style="green" if result.tests is not None else "yellow",
         )
