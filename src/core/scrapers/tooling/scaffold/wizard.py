@@ -68,6 +68,7 @@ from core.scrapers.tooling.scaffold.terminal import (
 from core.scrapers.tooling.scaffold.terminal import (
     InteractiveTerminalUnavailable,
     KeyReader,
+    UnsupportedTerminalError,
 )
 from core.scrapers.tooling.scaffold.terminal import (
     terminal_reader as _terminal_reader,
@@ -981,7 +982,11 @@ def collect_request(
         console.print(
             Panel(
                 f"[red]Cannot start the guided wizard:[/red] {escape(str(exc))}",
-                title="[bold]Interactive terminal required[/bold]",
+                title=(
+                    "[bold]Unsupported terminal[/bold]"
+                    if isinstance(exc, UnsupportedTerminalError)
+                    else "[bold]Interactive terminal required[/bold]"
+                ),
                 border_style="red",
             )
         )

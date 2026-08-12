@@ -14,6 +14,7 @@ from core.scrapers.tooling.scaffold.terminal import (
     InteractiveTerminalUnavailable,
     ScaffoldInterrupted,
     TerminalStateError,
+    UnsupportedTerminalError,
     interruption_guard,
     read_terminal_key,
     terminal_reader,
@@ -86,6 +87,26 @@ def test_terminal_reader_rejects_non_tty_streams_without_mutation():
     with pytest.raises(InteractiveTerminalUnavailable, match="interactive terminal"):
         with terminal_reader(io.StringIO(), io.StringIO()):
             pass
+
+
+@pytest.mark.parametrize("terminal_type", (None, "dumb", "unknown"))
+def test_terminal_reader_rejects_unsupported_terminal_without_mutation(monkeypatch, terminal_type):
+    master, slave, stdin, stdout = _terminal_streams()
+    original = termios.tcgetattr(slave)
+    if terminal_type is None:
+        monkeypatch.delenv("TERM")
+    else:
+        monkeypatch.setenv("TERM", terminal_type)
+    try:
+        with pytest.raises(UnsupportedTerminalError, match="ANSI cursor support"):
+            with terminal_reader(stdin, stdout):
+                pass
+        assert termios.tcgetattr(slave) == original
+    finally:
+        stdin.close()
+        stdout.close()
+        os.close(master)
+        os.close(slave)
 
 
 def test_terminal_reader_restores_handlers_and_reports_restore_failure():

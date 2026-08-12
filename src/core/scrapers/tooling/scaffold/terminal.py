@@ -46,6 +46,10 @@ class InteractiveTerminalUnavailable(RuntimeError):
     """The wizard cannot start because its streams are not interactive."""
 
 
+class UnsupportedTerminalError(InteractiveTerminalUnavailable):
+    """The wizard cannot safely render its transient interface on this terminal."""
+
+
 class TerminalStateError(RuntimeError):
     """The wizard could not safely change or restore terminal state."""
 
@@ -296,6 +300,16 @@ def terminal_reader(
     output_stream = stdout or sys.stdout
     if not input_stream.isatty() or not output_stream.isatty():
         raise InteractiveTerminalUnavailable("the guided wizard requires an interactive terminal")
+    terminal_type = os.environ.get("TERM", "").strip().lower()
+    if not terminal_type:
+        raise UnsupportedTerminalError(
+            "the guided wizard requires TERM to identify a terminal with ANSI cursor support"
+        )
+    if terminal_type in {"dumb", "unknown"}:
+        raise UnsupportedTerminalError(
+            f"the guided wizard does not support TERM={terminal_type}; "
+            "use a terminal with ANSI cursor support"
+        )
     with _TerminalSession(input_stream.fileno()) as session:
         yield session.read_key
 
@@ -315,6 +329,7 @@ __all__ = [
     "RIGHT",
     "ScaffoldInterrupted",
     "TerminalStateError",
+    "UnsupportedTerminalError",
     "interruption_guard",
     "read_terminal_key",
     "terminal_reader",

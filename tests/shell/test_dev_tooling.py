@@ -88,12 +88,13 @@ def test_plugin_create_interactive_output_is_owned_by_rich_panels():
     assert result.stdout.endswith("\n\n")
 
 
-def _interactive_plugin_create_process():
+def _interactive_plugin_create_process(*, terminal_type: str = "xterm-256color"):
     master, slave = pty.openpty()
     original = termios.tcgetattr(slave)
     env = os.environ.copy()
     env["SCROOGE_PLUGIN_CREATE_PYTHON"] = sys.executable
     env["NO_COLOR"] = "1"
+    env["TERM"] = terminal_type
     process = subprocess.Popen(
         ["sh", str(ROOT / "scripts/dev/plugin-create.sh")],
         cwd=ROOT,
@@ -104,6 +105,24 @@ def _interactive_plugin_create_process():
         close_fds=True,
     )
     return process, master, slave, original
+
+
+@pytest.mark.parametrize("terminal_type", ("dumb", "unknown"))
+def test_plugin_create_rejects_unsupported_terminal_without_changing_settings(terminal_type):
+    process, master, slave, original = _interactive_plugin_create_process(
+        terminal_type=terminal_type
+    )
+    try:
+        assert process.wait(timeout=10) == 1
+        assert termios.tcgetattr(slave) == original
+        output = _read_pty_available(master)
+        assert b"Unsupported terminal" in output
+        assert f"TERM={terminal_type}".encode() in output
+        assert b"ANSI cursor support" in output
+    finally:
+        _stop_process(process)
+        os.close(master)
+        os.close(slave)
 
 
 def _read_pty_until(master: int, needle: bytes, timeout: float = 10) -> bytes:
