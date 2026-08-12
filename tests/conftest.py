@@ -30,6 +30,7 @@ def _isolate_process_environment(monkeypatch, tmp_path):
 
     stable_environment = {
         "COLUMNS": "100",
+        "TERM": "xterm-256color",
         "NO_COLOR": "1",
         "LC_ALL": "C",
         "LANG": "C",
