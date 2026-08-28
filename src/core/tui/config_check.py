@@ -110,7 +110,11 @@ def add_setting_row(panel: StatusPanelBuilder, view: SettingView) -> None:
 def _append_version_row(panel: StatusPanelBuilder, status: SoftwareVersionStatus) -> None:
     """Append the already-collected software update result."""
     current = escape(status.current_version or "Unknown")
-    if status.update_available is None:
+    if status.non_release_branch is not None:
+        branch = escape(status.non_release_branch)
+        ref = panel.add_note_ref("You are currently not on the `main` branch.")
+        panel.add_row("🟡", "Software Version", f"{current} ({branch} branch){ref}")
+    elif status.update_available is None:
         ref = panel.add_note_ref("Check your internet connection and retry shortly.")
         value = f"{current} (Could not check for updates){ref}"
         panel.add_row("🟡", "Software Version", value)

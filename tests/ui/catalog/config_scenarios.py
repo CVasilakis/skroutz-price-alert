@@ -36,6 +36,15 @@ def _():
 
 
 @scenario(
+    Surface.CONFIG,
+    "non_release_branch",
+    "The checkout is not on the release branch",
+)
+def _():
+    return drive_config("branch", valid_count=2)
+
+
+@scenario(
     Surface.CONFIG, "reminder_set", "An explicitly configured reminder cadence", tags=("reminder",)
 )
 def _():

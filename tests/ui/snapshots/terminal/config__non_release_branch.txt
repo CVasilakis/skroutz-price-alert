@@ -1,0 +1,11 @@
+# border: yellow
+
+╭────────────────────────── Configuration Check ──────────────────────────╮
+│   🟡    Software Version        1.7.0 (beta branch) [1]                 │
+│   ✅    Notifications           2 valid URL(s)                          │
+│   ✅    Reminder                Every 1 month (default)                 │
+│   ✅    Reminder Day            Saturday (default)                      │
+│   ✅    Reminder Time           13:00 (default)                         │
+│                                                                         │
+│   [1] You are currently not on the main branch.                         │
+╰─────────────────────────────────────────────────────────────────────────╯

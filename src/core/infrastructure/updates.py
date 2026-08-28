@@ -12,17 +12,28 @@ from core.exceptions import UpdateCheckError
 # Upper bound for each git subprocess, including the networked ``ls-remote`` call.
 UPDATE_CHECK_TIMEOUT = 10
 
+# The only branch updates advance. Comparing any other checkout against remote HEAD
+# answers a question the updater will refuse to act on, so this module decides here
+# whether an update verdict is meaningful at all rather than leaving it to callers.
+RELEASE_BRANCH = "main"
+
 _VERSION_TAG = re.compile(r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _Version = tuple[int, int, int]
 
 
 @dataclass(frozen=True)
 class SoftwareVersionStatus:
-    """Installed release version and the already-collected remote update outcome."""
+    """Installed release version and the already-collected remote update outcome.
+
+    ``non_release_branch`` names the checked-out branch only when it is not the release
+    branch, so a consumer never has to know which branch that is: an update verdict was
+    deliberately not sought, and the branch is the reason.
+    """
 
     current_version: str | None
     update_available: bool | None
     available_version: str | None = None
+    non_release_branch: str | None = None
 
 
 def _git_output(*args: str) -> str:
@@ -70,6 +81,21 @@ def _remote_refs(output: str) -> tuple[str, list[str]]:
     return remote_head, tags
 
 
+def _non_release_branch() -> str | None:
+    """Return the checked-out branch when it is not the release branch.
+
+    A detached HEAD has no branch to name, so it reads as ``None`` and keeps the
+    ordinary remote comparison rather than gaining a state of its own.
+    """
+    try:
+        branch = _git_output("rev-parse", "--abbrev-ref", "HEAD")
+    except Exception:
+        return None
+    if not branch or branch == "HEAD" or branch == RELEASE_BRANCH:
+        return None
+    return branch
+
+
 def local_software_version() -> str | None:
     """Return the highest stable release tag reachable from ``HEAD``."""
     try:
@@ -86,10 +112,17 @@ def inspect_software_version() -> SoftwareVersionStatus:
     The current version is the highest stable semantic-version tag reachable from the
     installed ``HEAD``. Remote inspection remains a comparison with remote ``HEAD``;
     advertised tags only enrich an available update with its release version.
+
+    Off the release branch the remote comparison is skipped rather than answered, since
+    remote ``HEAD`` tracks a branch this checkout is not on: reporting it would advertise
+    an update the updater refuses to install. That also spares a network call.
     """
     current_display = local_software_version()
     if current_display is None:
         return SoftwareVersionStatus(None, None)
+    branch = _non_release_branch()
+    if branch is not None:
+        return SoftwareVersionStatus(current_display, None, non_release_branch=branch)
     major, minor, patch = current_display.split(".")
     current_parsed: _Version = int(major), int(minor), int(patch)
     try:

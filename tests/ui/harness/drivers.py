@@ -373,6 +373,7 @@ def drive_config(
         "available": SoftwareVersionStatus("1.7.0", True, "1.8.0"),
         "fixes": SoftwareVersionStatus("1.7.0", True),
         "error": SoftwareVersionStatus("1.7.0", None),
+        "branch": SoftwareVersionStatus("1.7.0", None, non_release_branch="beta"),
     }[version_state]
     panel = config_check.build_config_panel(general, version_status)
 
