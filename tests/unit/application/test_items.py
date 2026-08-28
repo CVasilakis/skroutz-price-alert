@@ -4,6 +4,7 @@ from unittest import mock
 from core.application.contracts import RunReporter
 from core.application.items import ItemExecutor
 from core.application.pacing import Pacer
+from core.constants import MIN_DELAY_SECONDS
 from core.exceptions import RateLimitError, ScraperParseError, ServerError
 from core.exit_status import ExitStatus
 from core.scrapers.api import PriceResult, ScraperClient, TrackedItem, UrlField
@@ -63,7 +64,7 @@ def test_retry_prepares_transport_then_succeeds():
     assert outcome.reported_error is None
     assert executor.client.scrape.call_count == 2
     executor.client.prepare_retry.assert_called_once()
-    assert pacer.sleep.call_count == 2
+    assert pacer.sleep.call_count == 1
     reporter.log_attempt.assert_called_once()
     state.record_priced_check.assert_called_once_with(
         "one",
@@ -109,9 +110,28 @@ def test_rate_limit_exhaustion_aborts_target_and_sets_rate_status(monkeypatch):
     assert outcome.statuses == frozenset({ExitStatus.RATE_LIMIT_ERROR})
 
 
-def test_interruption_after_pacing_does_not_start_scrape():
+def test_first_request_starts_without_pacing_and_later_ones_wait():
+    executor, _, _, pacer = _executor()
+    executor.client.scrape.return_value = PriceResult(12, "EUR")
+    executor.process(_item())
+    pacer.sleep.assert_not_called()
+    executor.process(_item(id="two", name="Two"))
+    pacer.sleep.assert_called_once_with(MIN_DELAY_SECONDS)
+
+
+def test_skipped_first_item_leaves_the_next_request_unpaced():
+    executor, _, _, pacer = _executor()
+    executor.client.scrape.return_value = PriceResult(12, "EUR")
+    executor.process(_item(skip=True))
+    executor.process(_item(id="two", name="Two"))
+    pacer.sleep.assert_not_called()
+
+
+def test_interruption_during_pacing_does_not_start_scrape():
     executor, _, _, _ = _executor()
+    executor.client.scrape.return_value = PriceResult(12, "EUR")
+    executor.process(_item())
     executor.interrupted = lambda: True
-    outcome = executor.process(_item())
+    outcome = executor.process(_item(id="two", name="Two"))
     assert outcome.reported_error is None
-    executor.client.scrape.assert_not_called()
+    assert executor.client.scrape.call_count == 1

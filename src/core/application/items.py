@@ -46,6 +46,7 @@ class ItemExecutor:
         self.interrupted = interrupted
         self.reference_url = reference_url or (lambda _item: None)
         self.pacer = pacer or Pacer(reporter, interrupted)
+        self._request_started = False
         self.results = ResultHandler(
             target=target,
             display_name=display_name,
@@ -76,9 +77,13 @@ class ItemExecutor:
         if item.skip:
             self.reporter.log_result("✅", item.name, "Skipped", messages.NOTE_SKIP_FIELD)
             return ItemRunOutcome(item)
-        self.pacer.sleep(MIN_DELAY_SECONDS)
-        if self.interrupted():
-            return ItemRunOutcome(item)
+        # Pacing separates consecutive requests, so this target's first request starts
+        # immediately; run start is already spread out by the timer's randomized delay.
+        if self._request_started:
+            self.pacer.sleep(MIN_DELAY_SECONDS)
+            if self.interrupted():
+                return ItemRunOutcome(item)
+        self._request_started = True
 
         attempt_notes: list[str] = []
         for attempt in range(MAX_RETRIES):
