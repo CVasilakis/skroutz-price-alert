@@ -63,7 +63,10 @@ def get_systemd_properties(unit: str, properties: str) -> dict[str, str]:
         if not output:
             return {}
         return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
+    except (subprocess.SubprocessError, OSError, ValueError):
+        # OSError also covers a missing or unexecutable systemctl, which is reachable
+        # when unit files outlive the systemd that installed them: inspection stays
+        # best-effort rather than aborting the caller's report.
         return {}
 
 

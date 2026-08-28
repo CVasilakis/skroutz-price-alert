@@ -55,10 +55,36 @@ def parse_url(value: object) -> SplitResult:
     return parsed
 
 
+def _canonical_netloc(parsed: SplitResult) -> str:
+    """Rebuild the authority from its normalized host, preserving any explicit port.
+
+    Hosts are case-insensitive, so the raw authority would otherwise let one address
+    take several canonical forms and, through them, several persisted identities. The
+    host is normalized by the same function domain matching uses, which keeps the form
+    a URL is stored under identical to the form it is matched against.
+    """
+    host = normalize_domain(parsed.hostname)
+    if ":" in host:  # urlsplit strips the brackets IPv6 literals need in an authority
+        host = f"[{host}]"
+    return host if parsed.port is None else f"{host}:{parsed.port}"
+
+
 def canonicalize_url(value: object) -> str:
-    """Trim and remove only the fragment; queries remain semantically significant."""
+    """Trim, normalize the authority, and remove only the fragment.
+
+    Queries remain semantically significant, and an explicit port is preserved: a URL
+    only ever loses the parts that cannot change which resource it addresses.
+    """
     parsed = parse_url(value)
-    return urlunsplit((parsed.scheme.casefold(), parsed.netloc, parsed.path, parsed.query, ""))
+    return urlunsplit(
+        (
+            parsed.scheme.casefold(),
+            _canonical_netloc(parsed),
+            parsed.path,
+            parsed.query,
+            "",
+        )
+    )
 
 
 def host_matches_domain(host: str, domain: str) -> bool:

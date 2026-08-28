@@ -49,7 +49,9 @@ def test_decode_test_config_uses_runtime_codecs_defaults_and_url_canonicalizatio
 
     assert values.settings[REGION] == "eu"
     assert values.settings[TOKEN] == "secret"
-    assert values.items[0][URL] == "https://STORE.EXAMPLE/items/one?variant=blue"
+    # The helper canonicalizes exactly as runtime does: host normalized, fragment
+    # dropped, case-sensitive path and query untouched.
+    assert values.items[0][URL] == "https://store.example/items/one?variant=blue"
     assert values.items[0][TAGS] == ()
 
 

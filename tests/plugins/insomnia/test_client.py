@@ -7,10 +7,16 @@ from core.scrapers.api import RateLimitError, ScraperParseError, TrackedItem
 from core.scrapers.plugins.insomnia.client import Client
 from core.scrapers.plugins.insomnia.plugin import PLUGIN
 
+# Prices mirror the markup insomnia.gr actually emits: comma thousands grouping, a
+# period decimal separator, always two fractional digits, and an "EUR" suffix (the
+# listing currency itself is the plugin's fixed "€"). The four-digit advert keeps that
+# grouping under test, so a change to the shared price normalizer that reads the comma
+# as a decimal separator fails here instead of silently misreading real adverts.
 HTML = """
-<li class="insAdvertsList"><h4><a href="/classifieds/ad/1/">Pixel 9 128GB</a></h4><p class="cFilePrice">450,00 €</p></li>
-<li class="insAdvertsList"><h4><a href="/classifieds/ad/2/">Pixel 9a 128GB</a></h4><p class="cFilePrice">350,00 €</p></li>
-<li class="insAdvertsList"><span class="insRequest">wanted</span><h4><a href="/x">Pixel 9</a></h4><p class="cFilePrice">1 €</p></li>
+<li class="insAdvertsList"><h4><a href="/classifieds/ad/1/">Pixel 9 128GB</a></h4><p class="cFilePrice">450.00 EUR</p></li>
+<li class="insAdvertsList"><h4><a href="/classifieds/ad/2/">Pixel 9a 128GB</a></h4><p class="cFilePrice">350.00 EUR</p></li>
+<li class="insAdvertsList"><h4><a href="/classifieds/ad/3/">Pixel 9 Pro 128GB</a></h4><p class="cFilePrice">1,400.00 EUR</p></li>
+<li class="insAdvertsList"><span class="insRequest">wanted</span><h4><a href="/x">Pixel 9</a></h4><p class="cFilePrice">1.00 EUR</p></li>
 <li class="insAdvertsList"><h4><a href="/x">Pixel swap</a></h4><p class="cFilePrice">Επικοινωνία</p></li>
 """
 
@@ -54,7 +60,9 @@ def _search(include=(), exclude=()) -> TrackedItem:
 def test_filters_offers_and_returns_an_empty_listing_for_no_match():
     client = _client()
     result = client.scrape(_search(("pixel", "128"), ("9a",)))
-    assert [offer.title for offer in result.offers] == ["Pixel 9 128GB"]
+    assert [offer.title for offer in result.offers] == ["Pixel 9 128GB", "Pixel 9 Pro 128GB"]
+    # Grouped thousands stay whole: 1,400.00 EUR is 1400.0, never 1.4.
+    assert [offer.price for offer in result.offers] == [450.0, 1400.0]
     assert result.offers[0].url == "https://www.insomnia.gr/classifieds/ad/1/"
     assert tuple(client.scrape(_search(("iphone",))).offers) == ()
 
@@ -63,7 +71,7 @@ def test_absolute_advert_link_is_preserved():
     html = """
     <li class="insAdvertsList">
       <h4><a href="https://cdn.example/classifieds/ad/1?x=1#fragment">Pixel</a></h4>
-      <p class="cFilePrice">100 €</p>
+      <p class="cFilePrice">100.00 EUR</p>
     </li>
     """
     result = _client(html).scrape(_search())
@@ -82,7 +90,8 @@ def test_absolute_advert_link_is_preserved():
     ],
 )
 def test_invalid_advert_links_are_parse_failures(anchor):
-    html = '<li class="insAdvertsList"><h4>' + anchor + '</h4><p class="cFilePrice">100 €</p></li>'
+    price = '<p class="cFilePrice">100.00 EUR</p>'
+    html = '<li class="insAdvertsList"><h4>' + anchor + "</h4>" + price + "</li>"
     with pytest.raises(ScraperParseError, match="URL|link"):
         _client(html).scrape(_search())
 
@@ -91,7 +100,7 @@ def test_blank_advert_title_is_a_title_specific_parse_failure():
     html = """
     <li class="insAdvertsList">
       <h4><a href="/classifieds/ad/1/">   </a></h4>
-      <p class="cFilePrice">100 €</p>
+      <p class="cFilePrice">100.00 EUR</p>
     </li>
     """
     with pytest.raises(ScraperParseError) as raised:
@@ -103,9 +112,9 @@ def test_blank_advert_title_is_a_title_specific_parse_failure():
 
 def test_minimum_price_floor_filters_only_implausibly_cheap_adverts():
     result = _client(floor=400).scrape(_search())
-    assert [offer.price for offer in result.offers] == [450.0]
+    assert [offer.price for offer in result.offers] == [450.0, 1400.0]
     result_without_floor = _client(floor=0).scrape(_search())
-    assert [offer.price for offer in result_without_floor.offers] == [350.0, 450.0]
+    assert [offer.price for offer in result_without_floor.offers] == [350.0, 450.0, 1400.0]
 
 
 def test_modeled_remote_and_parse_failures():

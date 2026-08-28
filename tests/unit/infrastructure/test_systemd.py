@@ -143,6 +143,17 @@ class TestGetSystemdProperties(_UnitDirCase):
         ):
             self.assertEqual(self._props(), {})
 
+    def test_absent_systemctl_degrades_to_empty(self):
+        # Unit files can outlive the systemd that installed them; a missing systemctl
+        # must read as "nothing to report", not abort the caller's whole report.
+        self._write_unit("skroutz-scraper.timer", "[Timer]\n")
+        with mock.patch.object(
+            subprocess,
+            "check_output",
+            side_effect=FileNotFoundError(2, "No such file or directory", "systemctl"),
+        ):
+            self.assertEqual(self._props(), {})
+
     def test_empty_output_degrades_to_empty(self):
         self._write_unit("skroutz-scraper.timer", "[Timer]\n")
         with mock.patch.object(subprocess, "check_output", return_value=b"\n"):

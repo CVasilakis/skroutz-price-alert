@@ -209,7 +209,10 @@ declared DNS domain accepts that exact host and its
 subdomains; an IP declaration matches only that IP. Multiple adapters may support
 different page shapes on the same domain. The framework validates and canonicalizes
 an item's absolute credential-free HTTP(S) URL, verifies its host against this plugin's domains,
-then calls `accepts_url`. Queries are preserved; fragments are removed. The URL
+then calls `accepts_url`. Canonicalization normalizes the host to the same form
+domain matching uses—lower-cased, IDNA-encoded, no trailing root dot, IPv6
+compressed—and removes the fragment. An explicit port, the path, and the query are
+preserved, so anything that can change which resource a URL addresses survives. The URL
 predicate must return a real `bool` and should inspect only the parsed page shape
 the client understands.
 
