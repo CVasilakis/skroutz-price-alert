@@ -7,7 +7,7 @@ from core.scrapers.domain import (
     parsed_matches_domains,
 )
 from core.scrapers.framework.intervals import normalize_interval, oncalendar_for
-from core.settings.normalizers import normalize_bool, normalize_retention_days
+from core.settings import normalize_bool, normalize_retention_days
 
 
 @pytest.mark.parametrize(

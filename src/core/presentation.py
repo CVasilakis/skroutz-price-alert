@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.settings.model import MISSING, ResolvedSettings, SettingStatus
+from core.settings import MISSING, ResolvedSettings, SettingStatus
 
 
 @dataclass(frozen=True)

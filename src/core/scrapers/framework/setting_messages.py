@@ -6,11 +6,11 @@ rather than a mix of behavior and prose. Each message states the accepted values
 and the fallback, since it is shown precisely when a user got the value wrong.
 """
 
-from core.settings import unsupported_value_message
-from core.settings.normalizers import (
+from core.settings import (
     DEFAULT_LOG_RETENTION_DAYS,
     MAX_LOG_RETENTION_DAYS,
     MIN_LOG_RETENTION_DAYS,
+    unsupported_value_message,
 )
 
 

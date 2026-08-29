@@ -2,7 +2,7 @@
 
 import re
 
-from core.settings.normalizers import alias_form, fold_token
+from core.settings import alias_form, fold_token
 
 SUPPORTED_INTERVALS: dict[str, str] = {
     "15m": "*:0/15",

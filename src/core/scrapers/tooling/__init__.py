@@ -11,8 +11,8 @@ a whole install there. Neither imports the other.
 Import-light contract: consumers import the specific tooling submodule they need.
 """
 
-"""Contributor-tooling contracts shared by generation and verification."""
-
 SCAFFOLD_TEST_TODO = "SCROOGE_SCAFFOLD_TODO"
+"""Marker the scaffold leaves in its placeholder test, shared by the generator that
+writes it and the verifier that warns while it is still there."""
 
 __all__ = ["SCAFFOLD_TEST_TODO"]

@@ -56,6 +56,10 @@ from core.exceptions import (
 )
 from core.schema_migrations.contracts import ConfigMigration, JsonObject
 from core.scrapers.domain import canonicalize_url
+
+# Imported from the defining module rather than the core.settings facade, which is
+# the one exception to routing through it: the required/optional distinction needs
+# the private _MissingDefault sentinel, which the facade deliberately does not expose.
 from core.settings.model import MISSING, ResolvedSettings, SettingSpec, _MissingDefault
 
 # The canonical value type an ItemField decoder produces; ``item[FIELD]`` is

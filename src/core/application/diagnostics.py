@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from core.application.preflight import TargetConfigLoad
-from core.general.configuration import GeneralConfigLoad
+from core.general import GeneralConfigLoad
 from core.infrastructure.logging import try_save_diagnostic
 
 

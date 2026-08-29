@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from core import messages
 from core.exceptions import ConfigFileError
 from core.exit_status import ExitStatus
-from core.general.configuration import GeneralConfigLoad
+from core.general import GeneralConfigLoad
 from core.infrastructure.logging import get_target_logger
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.configuration import RowIssue, TargetConfigLoader

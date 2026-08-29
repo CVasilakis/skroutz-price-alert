@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core import messages
-from core.general.configuration import GeneralConfigLoad
+from core.general import GeneralConfigLoad
 from core.infrastructure.updates import SoftwareVersionStatus
 from core.presentation import SettingView, resolved_setting_views
 from core.settings import SettingStatus

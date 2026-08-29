@@ -18,7 +18,7 @@ Import-light: stdlib plus the shared token-folding helpers only.
 
 import re
 
-from core.settings.normalizers import alias_form, fold_token
+from core.settings import alias_form, fold_token
 
 DEFAULT_REMINDER = "1m"
 

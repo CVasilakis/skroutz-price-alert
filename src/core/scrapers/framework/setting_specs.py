@@ -1,13 +1,14 @@
-"""Framework-owned scraper settings and systemd schedule vocabulary."""
+"""The four settings the framework contributes to every scraper target.
+
+Declarations only. The interval vocabulary they build on lives in
+:mod:`core.scrapers.framework.intervals`, and is imported from there rather than
+re-exported here, so each name has exactly one place it comes from.
+"""
 
 from typing import Any
 
 from core.scrapers.api import SettingSpec
-from core.scrapers.framework.intervals import (
-    SUPPORTED_INTERVALS,
-    normalize_interval,
-    oncalendar_for,
-)
+from core.scrapers.framework.intervals import normalize_interval
 from core.scrapers.framework.setting_messages import (
     interval_warning_message,
     notify_errors_warning_message,
@@ -77,7 +78,5 @@ __all__ = [
     "KEY_RETENTION",
     "KEY_NOTIFY",
     "KEY_SUPPRESS_REPEATED_PRICE_ALERTS",
-    "SUPPORTED_INTERVALS",
-    "oncalendar_for",
     "framework_setting_specs",
 ]

@@ -22,8 +22,10 @@ Layout:
     * :mod:`~core.general.reminder` - reminder policy, recovery, and dispatch orchestration.
     * :mod:`~core.general.reminder_state` - schema-versioned reminder persistence.
 
-This package re-exports only the small **production** surface consumers need. Tests and
-tooling that reach for implementation details import them from the owning submodule
+This package re-exports only the small **production** surface consumers need, and
+production code imports that surface from here rather than from the owning submodule,
+so each of these names has one path. Tests and tooling that reach for implementation
+details beyond the surface do import them from the owning submodule
 (``core.general.vocab``, ``core.general.settings``, ``core.general.reminder_schedule``,
 ``core.general.reminder``, or ``core.general.reminder_state``).
 """

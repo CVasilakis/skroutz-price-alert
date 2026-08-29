@@ -18,13 +18,14 @@ from core.scrapers.domain import (
     parse_url,
     parsed_matches_domains,
 )
+from core.scrapers.framework.intervals import SUPPORTED_INTERVALS
 from core.scrapers.framework.model import RegisteredPlugin
 from core.scrapers.framework.naming import (
     FRAMEWORK_ITEM_KEYS,
     RESERVED_PLUGIN_NAMES,
     SNAKE_CASE_KEY,
 )
-from core.scrapers.framework.setting_specs import SUPPORTED_INTERVALS, framework_setting_specs
+from core.scrapers.framework.setting_specs import framework_setting_specs
 from core.settings import SettingSpec
 
 RUNTIME_PLUGIN_FILES = ("__init__.py", "plugin.py", "client.py")
