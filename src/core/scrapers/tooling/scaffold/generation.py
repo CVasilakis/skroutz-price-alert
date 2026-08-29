@@ -12,14 +12,28 @@ from core.scrapers.tooling.scaffold.contracts import CustomValueSpec, ScaffoldRe
 
 @dataclass(frozen=True)
 class GeneratedFile:
+    """One rendered file, addressed relative to its package root.
+
+    Rendering produces values rather than writing directly, so generation stays
+    pure and testable and every file is known before anything touches the disk.
+    """
+
     relative_path: str
+    """Path within the generated package."""
+
     contents: str
+    """Complete file text, already formatted as it will be written."""
 
 
 @dataclass(frozen=True)
 class ScaffoldFiles:
+    """Every file one scaffold will write, split by destination package."""
+
     source: tuple[GeneratedFile, ...]
+    """The plugin package's files: descriptor, client, README, example config."""
+
     tests: tuple[GeneratedFile, ...] | None
+    """The test package's files, or ``None`` when tests were declined."""
 
 
 _DECODER_NAMES = {
@@ -404,6 +418,12 @@ def test_replace_placeholder_with_mocked_client_scrape_behavior() -> None:
 
 
 def render_scaffold(request: ScaffoldRequest) -> ScaffoldFiles:
+    """Render every file for one validated request, without touching the disk.
+
+    The generated client deliberately raises ``NotImplementedError``: a scaffold
+    that appeared to work would be worse than one that visibly does not, since the
+    store-specific fetch and parse are the whole point of the contribution.
+    """
     source = tuple(
         GeneratedFile(path, contents) for path, contents in _source_files(request).items()
     )

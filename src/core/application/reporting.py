@@ -1,4 +1,20 @@
-"""Non-interactive file-logging reporter."""
+"""Non-interactive file-logging reporter.
+
+The ``RunReporter`` used for background runs, where nobody is watching a terminal.
+It writes one line per event to the target's rotating log, so the record can be
+read afterwards and by ``journalctl``.
+
+Its counterpart, ``tui.run_reporter.InteractiveRunReporter``, repaints a live
+panel. The two differ in what they can express, and the differences are
+deliberate: this reporter drops the spinner and sleep events, which have no
+meaning in a log file, and logs a failed attempt when it happens rather than
+collecting it into a footnote, because a log is read top to bottom while a panel
+settles in place.
+
+Rich markup never reaches here. Note text may carry paired backticks for
+code-like fragments, which are rewritten to quotes so a log line stays readable
+in a plain file.
+"""
 
 from __future__ import annotations
 
@@ -18,10 +34,24 @@ def _plain_text(value: str | None) -> str:
 
 
 class SilentRunReporter(RunReporter):
-    """Report a run exclusively through its target logger."""
+    """Report a run exclusively through its target logger.
+
+    Holds no state beyond the current target's logger: everything it is told is
+    written out immediately, so a run that is killed mid-flight still leaves every
+    line it had already produced.
+
+    Only the protocol methods carry behavior; the ones this frontend has no use
+    for are implemented as no-ops. See ``application.contracts.RunReporter`` for
+    what each call means and the order they arrive in.
+    """
 
     def __init__(self) -> None:
         self.target_logger: logging.Logger | None = None
+
+    # The protocol methods below carry no docstrings on purpose: their meaning,
+    # arguments, and call order are defined once by RunReporter, and repeating that
+    # per implementation would create two descriptions of one contract that can
+    # drift apart. Only behavior specific to *this* frontend is commented here.
 
     @staticmethod
     def _format_notes_suffix(notes_list: list[str]) -> str:

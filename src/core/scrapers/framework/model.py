@@ -33,6 +33,12 @@ class RegisteredPlugin:
 
     @property
     def config_filename(self) -> str:
+        """This target's config filename; the target name is the stem everywhere.
+
+        The same stem names the state file, the log directory, the lock, the CLI
+        flag, and the systemd units, so one package directory name determines every
+        managed path a plugin owns.
+        """
         return f"{self.target}.json"
 
     def canonicalize_url(self, field: UrlField | object, value: object = MISSING) -> str:

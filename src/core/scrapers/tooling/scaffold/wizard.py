@@ -999,6 +999,11 @@ def render_completion(
     result: ScaffoldResult,
     console: Console | None = None,
 ) -> None:
+    """Show what was created and the exact next steps for the new plugin.
+
+    The scaffold is deliberately incomplete — its client raises — so the closing
+    panel names the acceptance commands rather than implying the work is done.
+    """
     console = console or Console()
     body = Text()
     body.append("Created", style="green")

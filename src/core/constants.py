@@ -1,3 +1,14 @@
+"""Fixed runtime constants: paths and the tuned execution-policy numbers.
+
+Values that are the same for every install and are not user-configurable. Anything
+a user may change is a setting resolved from ``config/`` instead, so a number
+appearing here is a deliberate statement that it is not theirs to tune.
+
+The pacing constants below are the project's politeness contract with the stores
+it reads and are not performance parameters — see the scraping-practices section
+of ``CLAUDE.md`` before changing any of them.
+"""
+
 import os
 
 # --- Base Directory Paths ---

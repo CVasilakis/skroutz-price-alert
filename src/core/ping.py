@@ -1,3 +1,11 @@
+"""Entry point for the notification check (``./scrooge-alert ping``).
+
+Sends one test payload to every configured Apprise endpoint and reports each
+result separately, so a user can tell *which* URL is wrong rather than only that
+something is. Reads ``config/general.json`` and touches no scraper, no state, and
+no systemd unit.
+"""
+
 import os
 import signal
 import sys

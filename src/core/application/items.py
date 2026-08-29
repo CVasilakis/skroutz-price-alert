@@ -61,6 +61,7 @@ class ItemExecutor:
 
     @property
     def stale_items(self) -> list[TrackedItem]:
+        """Items found unchecked for too long, collected for one summary alert."""
         return self.results.stale_items
 
     @staticmethod
@@ -89,6 +90,17 @@ class ItemExecutor:
             attempt_notes.append(messages.retry_preparation_note(attempt + 1, type(exc).__name__))
 
     def process(self, item: TrackedItem) -> ItemRunOutcome:
+        """Execute one item to completion: pace, attempt, retry, report, stage state.
+
+        The loop applies policy, it does not decide it: which failures retry, abort,
+        alert, or raise a status all comes from ``retry.py``. Interruption is polled
+        between every step so a signal stops the run promptly without abandoning a
+        request mid-flight.
+
+        Returns:
+            What this item contributed to the run; never raises for a scrape
+            failure, which is reported as an outcome instead.
+        """
         if item.skip:
             self.reporter.log_result("✅", item.name, "Skipped", messages.NOTE_SKIP_FIELD)
             return ItemRunOutcome(item)

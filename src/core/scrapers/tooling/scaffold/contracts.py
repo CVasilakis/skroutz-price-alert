@@ -47,39 +47,93 @@ PUBLIC_COMMAND_NAMES = frozenset(
 
 @dataclass(frozen=True)
 class CustomValueSpec:
+    """One custom item field or setting the contributor asked the scaffold to declare.
+
+    A request for generated source, not a runtime declaration: it carries what the
+    generator needs to emit a typed :class:`~core.scrapers.api.ItemField` or
+    ``SettingSpec`` plus a matching example-config entry.
+    """
+
     key: str
+    """The snake_case key, validated against the same rules the compiler enforces."""
+
     value_type: str
+    """Which decoder to generate, from the wizard's supported vocabulary."""
+
     example: object
+    """The value written into ``config.example.json``, so the example is runnable."""
+
     default: object = _REQUIRED
+    """The generated default; the sentinel makes the declaration required instead."""
+
     sensitive: bool = False
+    """Settings only: generate ``sensitive=True`` so panels redact the value."""
 
     @property
     def required(self) -> bool:
+        """Whether the generated declaration will omit a default."""
         return self.default is _REQUIRED
 
 
 @dataclass(frozen=True)
 class ScaffoldRequest:
+    """Everything needed to generate one plugin package, fully validated.
+
+    The single value both entry points produce — the guided wizard and the
+    non-interactive CLI — so the two cannot drift into generating different
+    packages from equivalent input. Nothing is written until a request validates.
+    """
+
     target: str
+    """The package directory name, which becomes every managed path and the CLI flag."""
+
     display_name: str
+    """The store's human-readable name for panels and notifications."""
+
     domains: tuple[str, ...]
+    """Hosts the generated ``UrlField`` will accept."""
+
     url_prefix: str
+    """Path prefix the generated URL predicate will require."""
     result_type: ResultType = "price"
+    """Whether the generated client returns a single price or a listing."""
+
     default_interval: str = "1h"
+    """The plugin's canonical cadence; must already be a supported interval."""
+
     transport: Transport = "bare"
+    """Subclass the shared HTTP helper, or a bare client with no transport."""
+
     item_fields: tuple[CustomValueSpec, ...] = ()
+    """Custom item fields to declare, beyond the framework's own and the URL."""
+
     settings: tuple[CustomValueSpec, ...] = ()
+    """Custom settings to declare, beyond the framework's own."""
+
     dependencies: tuple[str, ...] = ()
+    """Private requirements written to the package's own ``requirements.txt``."""
+
     include_tests: bool = True
+    """Also generate ``tests/plugins/<target>/``; optional but recommended."""
 
 
 @dataclass(frozen=True)
 class ScaffoldResult:
+    """Where a successful scaffold wrote, for reporting back to the contributor."""
+
     source: Path
+    """The created plugin package."""
+
     tests: Path | None
+    """The created test package, or ``None`` when tests were declined."""
 
 
 def safe_display_name(value: str) -> str:
+    """Validate a display name against the same rules compilation will apply.
+
+    Rejecting control characters here rather than at compile time means the
+    contributor is told while answering, not after a package exists.
+    """
     result = value.strip()
     if not result or any(ord(char) < 32 or ord(char) == 127 for char in result):
         raise ValueError("display name must be nonblank and contain no control characters")
@@ -87,6 +141,12 @@ def safe_display_name(value: str) -> str:
 
 
 def target_name(value: str) -> str:
+    """Validate a target name, explaining the fix rather than only refusing.
+
+    The name determines the package, CLI flag, config, state, logs, and unit names,
+    so it is checked against the framework's snake_case rule and its reserved names
+    before anything is generated.
+    """
     result = value.strip()
     if not result:
         raise ValueError("target name must not be empty")
@@ -113,6 +173,12 @@ def target_name(value: str) -> str:
 
 
 def url_prefix(value: str) -> str:
+    """Validate the path prefix the generated URL predicate will require.
+
+    A path only: a query or fragment here would generate a predicate that can never
+    match, since the framework hands the predicate a parsed URL whose path is
+    separate from both.
+    """
     result = value.strip()
     if not result.startswith("/") or any(char in result for char in "?#"):
         raise ValueError("URL prefix must start with '/' and contain no query or fragment")
@@ -122,6 +188,11 @@ def url_prefix(value: str) -> str:
 
 
 def decode_value(value_type: str, raw: object) -> object:
+    """Decode one answer using the same rules the generated decoder will enforce.
+
+    Deliberately mirrors the generated code so the wizard cannot accept an example
+    or default that the finished plugin would then reject at compile time.
+    """
     if value_type == "text":
         if not isinstance(raw, str) or not raw.strip():
             raise ValueError("must be a nonblank string")
@@ -193,6 +264,19 @@ def _safe_dependencies(values: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def validate_request(request: ScaffoldRequest) -> ScaffoldRequest:
+    """Validate and normalize one scaffold request, or raise before anything is written.
+
+    The single gate both entry points pass through. It applies the framework's own
+    rules — snake_case keys, reserved names, host-only domains, supported intervals,
+    canonical defaults — so a generated package is valid by construction rather than
+    only being found invalid later by the compiler.
+
+    Returns:
+        The normalized request to generate from.
+
+    Raises:
+        ValueError: Any answer is unusable, with wording that names the fix.
+    """
     target = target_name(request.target)
     if not request.domains:
         raise ValueError("at least one domain is required")
@@ -234,6 +318,10 @@ def validate_request(request: ScaffoldRequest) -> ScaffoldRequest:
 
 
 def reject_json_constant(value: str) -> object:
+    """Reject ``NaN`` and infinities, which Python accepts but strict JSON does not.
+
+    Generated examples must be loadable by any JSON parser, not only Python's.
+    """
     raise ValueError(f"{value} is not permitted by strict JSON")
 
 
@@ -246,6 +334,12 @@ def parse_strict_json(raw: str) -> object:
 
 
 def json_value(raw: str, *, context: str) -> object:
+    """Parse one typed answer as strict JSON, naming the field in any failure.
+
+    Args:
+        raw: The literal the contributor typed.
+        context: Which answer this is, so the error points at the right question.
+    """
     try:
         return parse_strict_json(raw)
     except ValueError as exc:

@@ -1,3 +1,18 @@
+"""Cooperative file locks colocated with one machine-state root.
+
+Locks prevent two processes from scraping the same target at once, which would
+double the request rate a store sees and race two writers onto one state file.
+They are advisory and cooperative: every writer of a managed document takes the
+relevant lock first, which is also what lets the atomic writer use a predictable
+temporary filename.
+
+Acquisition never waits (``LOCK_TIMEOUT`` is 0). A blocked run would still be
+holding the lock when the next timer fires, so queueing would pile up overlapping
+runs; failing immediately lets the caller report a skip and let the schedule
+catch up. Storage faults are separated from contention — a held lock is a normal
+condition, an unusable lock directory is a failure the user must fix.
+"""
+
 import os
 import stat
 from contextlib import contextmanager

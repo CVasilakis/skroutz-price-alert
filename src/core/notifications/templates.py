@@ -1,4 +1,13 @@
-"""Pure construction of notification titles and bodies."""
+"""Pure construction of notification titles and bodies.
+
+Message wording lives here, apart from any transport, so what a user receives can
+be tested without a network and reworded without touching delivery. Nothing in
+this module knows an endpoint exists.
+
+Summaries list a few items and then count the rest: a push notification is read on
+a lock screen, and an unbounded body would be truncated by the transport at an
+arbitrary point rather than at a sentence the reader can act on.
+"""
 
 from __future__ import annotations
 
@@ -17,8 +26,17 @@ TITLE_TEST = "Scrooge Alert - Test Notification"
 
 @dataclass(frozen=True)
 class NotificationMessage:
+    """One composed notification, ready for any transport.
+
+    ``None`` in place of a message means there is nothing worth sending, which is
+    how the summary templates report an empty subject.
+    """
+
     title: str
+    """The notification title, which most services show on its own."""
+
     body: str
+    """Plain text; no markup, since transports render it differently or not at all."""
 
 
 def price_drop_message(
@@ -30,6 +48,7 @@ def price_drop_message(
     currency: str,
     advert_title: str | None,
 ) -> NotificationMessage:
+    """Compose the alert for one price below its target."""
     advert_line = f"\nAdvert: {advert_title}" if advert_title else ""
     link_line = f"\nView it here: {url}" if url else ""
     return NotificationMessage(
@@ -62,6 +81,10 @@ def stale_items_message(
     hours: int,
     reference_url: Callable[[TrackedItem], str | None] | None,
 ) -> NotificationMessage | None:
+    """Compose the warning for items unchecked past the staleness threshold.
+
+    Returns ``None`` when nothing is stale, so callers never send an empty summary.
+    """
     if not stale_items:
         return None
 
@@ -84,6 +107,10 @@ def stale_items_message(
 def scraping_errors_message(
     site: str, failed_items: Sequence[tuple[TrackedItem, Exception]]
 ) -> NotificationMessage | None:
+    """Compose the summary of items whose failures the user should act on.
+
+    Returns ``None`` when nothing failed.
+    """
     if not failed_items:
         return None
     return _summary_message(
@@ -102,6 +129,11 @@ def scraping_errors_message(
 def reminder_message(
     update_available: bool | None, interval_display: str, next_due: str
 ) -> NotificationMessage:
+    """Compose the periodic still-running reminder, including update availability.
+
+    ``update_available`` is tri-state: ``None`` means the check itself failed, which
+    is reported as unknown rather than silently as "up to date".
+    """
     if update_available is True:
         update_line = 'A project update is available — run "./scrooge-alert update" to install it.'
     elif update_available is False:
@@ -118,6 +150,7 @@ def reminder_message(
 
 
 def crash_message() -> NotificationMessage:
+    """Compose the notice that the run failed outright."""
     return NotificationMessage(
         TITLE_CRASH,
         "The script failed unexpectedly. Please review the error logs for more details on the crash.",
@@ -125,6 +158,7 @@ def crash_message() -> NotificationMessage:
 
 
 def test_message() -> NotificationMessage:
+    """Compose the ``ping`` payload used to verify notification delivery."""
     return NotificationMessage(
         TITLE_TEST,
         "This is a test message to confirm that your Scrooge Alert notifications are configured correctly!",

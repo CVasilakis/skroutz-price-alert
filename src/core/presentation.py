@@ -18,11 +18,24 @@ class SettingView:
 
     @property
     def has_warning(self) -> bool:
+        """Whether the configured value was unusable and needs the user's attention."""
         return self.status in (SettingStatus.INVALID, SettingStatus.MISSING)
 
     @property
     def is_default(self) -> bool:
-        return self.status not in (SettingStatus.OK, SettingStatus.INVALID)
+        """Whether the shown value came from the declaration's default.
+
+        The two ways that happens: the key was absent from a settings block
+        (``DEFAULT``), or there was no block to read (``NO_CONFIG``).
+
+        Stated positively so the answer holds on its own rather than only inside
+        a caller that tests :attr:`has_warning` first. A required setting has no
+        default to fall back to, and an invalid one is reported as a problem
+        rather than labelled a default even though it does display one. The
+        enumeration also forces any status added later to be classified
+        deliberately instead of being absorbed here.
+        """
+        return self.status in (SettingStatus.DEFAULT, SettingStatus.NO_CONFIG)
 
 
 def resolved_setting_views(settings: ResolvedSettings) -> tuple[SettingView, ...]:

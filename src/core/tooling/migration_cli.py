@@ -51,6 +51,11 @@ def _print_machine(outcomes: tuple[MigrationOutcome, ...], recovery: Path | None
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run or check every schema migration and report one line per document.
+
+    Invoked by ``./scrooge-alert update`` before timers are reactivated, and by
+    contributors as ``--check`` to validate without modifying anything.
+    """
     parser = argparse.ArgumentParser(
         prog="./scripts/dev/migrate.sh",
         description="Validate and migrate every known Scrooge Alert JSON document.",

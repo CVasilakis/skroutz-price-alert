@@ -1,3 +1,15 @@
+"""Skroutz client: the reference single-price plugin.
+
+Reads the JSON endpoint behind a product page rather than parsing the rendered
+HTML, because the endpoint returns the aggregated minimum price directly and is far
+more stable than the page's markup.
+
+The smaller of the two checked-in plugins, and the one to read first when writing
+a ``PriceResult`` adapter: it subclasses the shared HTTP helper, maps status codes
+through the inherited ``raise_for_status``, and adds only the request shaping and
+price extraction that are specific to this store.
+"""
+
 import json
 import re
 from urllib.parse import urlparse

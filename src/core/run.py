@@ -1,3 +1,16 @@
+"""Entry point for a scraping run (``./scrooge-alert run``, and systemd's target).
+
+Collects everything a run needs — catalog, target selection, configuration,
+notifications, state root — composes the application, infrastructure, and TUI
+layers, and returns one exit status. It owns no scraping policy itself: target
+execution belongs to ``ScrapingOrchestrator`` and rendering to the reporters.
+
+Invoked two ways. Interactively it draws the live Rich panel; under systemd it
+runs quiet, logging to file. A background invocation always selects exactly one
+target, because the installer generates one timer per plugin — an assumption the
+exit-status policy relies on (see ``RunOutcome.exit_status``).
+"""
+
 import argparse
 import logging
 import os

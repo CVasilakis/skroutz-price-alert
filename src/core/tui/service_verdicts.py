@@ -1,3 +1,11 @@
+"""Mapping from a finished run's exit status to how ``status`` presents it.
+
+The single source of truth for exit-code presentation. A new exit status is one
+entry in the table below rather than another branch in ``status.py``, which is
+what keeps the process vocabulary (``core.exit_status``) free of icons, colors,
+and wording.
+"""
+
 from dataclasses import dataclass, replace
 
 from core.exit_status import ExitStatus

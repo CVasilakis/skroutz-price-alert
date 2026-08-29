@@ -1,3 +1,15 @@
+"""Builders for the Configuration Check panel and the shared 'Config' row.
+
+Two related surfaces. The panel carries the checks that are global to the install
+— notification endpoints, general settings, permissions, software version. The
+``Config`` row carries one target's own configuration health and is reused atop
+each Service Status panel and each Scraping panel, so a user reads the same row in
+the same shape wherever a target appears.
+
+Presentation only: it receives already-collected inputs and performs no
+configuration, filesystem, network, or systemd access.
+"""
+
 from collections.abc import Sequence
 from dataclasses import dataclass
 

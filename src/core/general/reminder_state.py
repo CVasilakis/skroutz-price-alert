@@ -1,4 +1,14 @@
-"""Schema-v1 machine state for periodic reminders."""
+"""Schema-v1 machine state for periodic reminders.
+
+Remembers only when the last reminder was sent, which is enough to decide whether
+one is due. Versioned independently of scraper state and target configuration, so
+a change to the reminder's own format never forces a migration of anything else.
+
+Malformed or unreadable existing state is preserved rather than replaced: the
+stored timestamp is the only thing preventing a reminder from being re-sent, so
+overwriting a file that could not be understood would spam the user. Such a run
+declines to write and says so.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +28,8 @@ STATE_KEYS = frozenset({"schema_version", LAST_REMINDER_FIELD})
 
 
 class ReminderStateProblem(str, Enum):
+    """Why an existing reminder state could not be used, and must be preserved."""
+
     UNREADABLE = "unreadable"
     MALFORMED = "malformed"
     INVALID_TIMESTAMP = "invalid_timestamp"
@@ -33,6 +45,11 @@ class ReminderStateSnapshot:
 
     @property
     def writable(self) -> bool:
+        """Whether this state may be rewritten.
+
+        False whenever the existing file could not be understood, which is what
+        keeps a bad read from destroying the timestamp it failed to parse.
+        """
         return self.document is not None
 
 
@@ -56,6 +73,12 @@ class ReminderStateRepository:
         self.path = str(path)
 
     def load(self) -> ReminderStateSnapshot:
+        """Read the stored timestamp, reporting problems instead of raising.
+
+        A missing file is a normal first run and yields an empty, writable
+        snapshot. Anything unreadable or malformed yields a non-writable snapshot
+        carrying the reason, so the caller can report it without losing the file.
+        """
         path = Path(self.path)
         if not path.exists():
             return ReminderStateSnapshot({}, None)
@@ -86,6 +109,17 @@ class ReminderStateRepository:
         return ReminderStateSnapshot(loaded, local_naive)
 
     def save(self, snapshot: ReminderStateSnapshot, slot: datetime) -> None:
+        """Persist the reminder slot atomically, refusing to clobber bad state.
+
+        Takes the snapshot it is updating rather than re-reading, so the decision
+        that the file was safe to replace is made once, from the same bytes being
+        written over.
+
+        Raises:
+            ReminderStatePreservationError: The existing state was unreadable or
+                malformed and must be kept.
+            ReminderStateWriteError: The write itself failed.
+        """
         if not snapshot.writable:
             raise ReminderStatePreservationError("existing reminder state is not safe to replace")
         document = dict(snapshot.document or {})

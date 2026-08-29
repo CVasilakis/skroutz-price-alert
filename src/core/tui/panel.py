@@ -1,3 +1,15 @@
+"""Shared Rich panel primitives: fixed width, content-aware three-column layout.
+
+Every panel the project draws is built here, so status, ping, configuration, and
+the live run all line up rather than each choosing its own geometry.
+
+The width is fixed rather than adapting to the terminal. A predictable panel is
+what makes the snapshot suite able to pin wrapping and truncation at all, and it
+keeps output readable when it is copied into an issue or scrolled back in a
+narrow window. Column widths are then allocated from the actual row content, so a
+long value borrows space from a short label instead of forcing the panel wider.
+"""
+
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 

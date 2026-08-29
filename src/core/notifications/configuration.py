@@ -81,6 +81,12 @@ class NotificationConfig:
 
     @property
     def usable(self) -> bool:
+        """Whether the run can actually deliver a notification.
+
+        Requires both no structural error and at least one URL that survived
+        validation: a section that parsed cleanly but contains only unusable URLs
+        cannot notify anyone, and must not be treated as configured.
+        """
         return self.error is None and bool(self.valid_urls)
 
 

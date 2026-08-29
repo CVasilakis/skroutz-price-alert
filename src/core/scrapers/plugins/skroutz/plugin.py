@@ -7,6 +7,12 @@ from core.scrapers.api import ScraperPlugin, UrlField
 
 
 def is_product_url(url: SplitResult) -> bool:
+    """Accept only Skroutz product pages, whose path carries a numeric ``/s/<id>``.
+
+    Deliberately narrow: the client derives that ID to build its API request, so a
+    category or search URL would decode fine and then fail at scrape time. Rejecting
+    it here reports the row as misconfigured instead.
+    """
     return re.search(r"/s/\d+(?:/|$)", url.path) is not None
 
 

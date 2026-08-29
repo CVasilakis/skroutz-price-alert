@@ -78,18 +78,42 @@ print(json.dumps({"unsafe": unsafe}))
 
 @dataclass(frozen=True)
 class ContributorFiles:
+    """The contributor-owned files found beside one plugin package.
+
+    Their absence is graded, not uniform: a missing README or example config blocks
+    a contribution, while missing tests only warn, so an incomplete package stays
+    visible in review without being rejected outright.
+    """
+
     readme: str
+    """The package README's text, checked for the documented required sections."""
+
     warnings: tuple[str, ...]
+    """Non-blocking findings, such as a scaffold placeholder left in place."""
+
     has_tests: bool
+    """Whether a target-owned test package exists; recommended, never required."""
 
 
 @dataclass(frozen=True)
 class PluginCheckReport:
+    """What the focused verifier checked and what it wants the contributor to see.
+
+    Names the checks that *passed* as well as the warnings, so a contributor can
+    confirm a contract was actually exercised rather than silently skipped.
+    """
+
     checks: tuple[str, ...]
+    """Labels of the contracts verified, in the order they ran."""
+
     warnings: tuple[str, ...]
+    """Non-blocking findings; a report with warnings still passes."""
+
     has_tests: bool
+    """Whether target-owned tests were found and run."""
 
     def __contains__(self, label: object) -> bool:
+        """Support ``label in report`` so tests assert on a check by name."""
         return label in self.checks
 
 

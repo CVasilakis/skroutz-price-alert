@@ -1,3 +1,16 @@
+"""The interactive Rich frontend for a scraping run.
+
+Implements ``RunReporter`` by accumulating rows and footnotes and repainting one
+live panel, so a run reads as a single settling table rather than a scroll of
+lines. Its silent counterpart, ``application.reporting.SilentRunReporter``,
+implements the same protocol for background runs.
+
+Presentation only: it decides icons, colors, wrapping, and footnote numbering
+from the outcomes it is handed, and never inspects configuration, state, or the
+filesystem to do so. Every state it can draw is pinned by the snapshot suite in
+``tests/ui``.
+"""
+
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass

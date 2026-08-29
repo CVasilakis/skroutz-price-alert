@@ -58,6 +58,13 @@ class ScrapingOrchestrator:
         self._current_logger: logging.Logger | None = None
 
     def signal_handler(self, signum: int, _frame: FrameType | None) -> None:
+        """Record an interruption without unwinding the run.
+
+        Sets a flag rather than raising, because a signal can arrive mid-request
+        or mid-write: the loops poll this between steps so the run stops at a point
+        where the lock is released and staged state is either committed or
+        deliberately discarded.
+        """
         self._interrupt_message = f"Received signal {describe_signal(signum)}"
         self.interrupted = True
 
@@ -85,6 +92,16 @@ class ScrapingOrchestrator:
         return logger
 
     def run(self) -> int:
+        """Execute every selected target in turn and return one process exit status.
+
+        Targets are independent: one failing, being lock-skipped, or having an
+        unusable config never stops the others, and each contributes its
+        conditions to the shared outcome. Nothing here classifies a failure — the
+        conditions are merged and reduced by ``RunOutcome.exit_status``.
+
+        Returns:
+            The exit status for the whole run.
+        """
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
         outcome = RunOutcome()

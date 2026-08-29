@@ -1,4 +1,19 @@
-"""Framework-owned schema-v1 JSON state for scraper targets."""
+"""Framework-owned schema-v1 JSON state for scraper targets.
+
+Everything the framework remembers between runs: each item's last price, when it
+was last checked, and which alerts were already delivered. Plugins never see it,
+which is what keeps a client a pure function of its inputs.
+
+Two safety rules shape the whole module. Missing state is empty state, so a first
+run and a deleted file both start clean rather than failing. Malformed existing
+state is *never* overwritten: it is reported and left in place, because silently
+replacing it would destroy the alert history that stops a user being notified
+about the same deal repeatedly.
+
+Mutations accumulate in memory and are written once, under the target's lock, at
+the end of that target's run — so a run either records its work or leaves the
+previous document untouched.
+"""
 
 from __future__ import annotations
 
@@ -59,7 +74,15 @@ def _state_offer_urls(value: object) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class StateEntry:
-    """Historical state for one explicit item ID."""
+    """Historical state for one explicit item ID.
+
+    The two alert-history fields are mutually exclusive by construction, because
+    they describe the two result shapes an item can have: a single price tracks
+    one continuous below-target episode as a flag, while a listing tracks which
+    canonical offer URLs were successfully alerted. An entry holding both would
+    mean the item changed result type, which the constructor rejects rather than
+    guessing which history still applies.
+    """
 
     last_price: float | None = None
     last_checked: datetime | None = None
@@ -76,7 +99,12 @@ class StateEntry:
 
 
 class JsonStateRepository:
-    """Loaded state plus pending ID-based mutations; missing state is empty."""
+    """Loaded state plus pending ID-based mutations; missing state is empty.
+
+    One instance per target per run. Reads happen through :meth:`get`, which sees
+    pending mutations first, so an item's own run observes what it just recorded.
+    Nothing reaches disk until :meth:`save`.
+    """
 
     def __init__(
         self,
@@ -90,6 +118,12 @@ class JsonStateRepository:
         self._pending: dict[str, StateEntry] = {}
 
     def load(self) -> None:
+        """Read existing state, treating absence as empty.
+
+        Raises:
+            StateFileError: The file exists but cannot be read or is malformed. It
+                is left untouched so the user can recover or delete it knowingly.
+        """
         path = Path(self.path)
         try:
             with path.open(encoding="utf-8") as file:
@@ -112,6 +146,12 @@ class JsonStateRepository:
 
     @staticmethod
     def validate_document(document: object) -> dict[str, StateEntry]:
+        """Strictly decode one state document, rejecting anything unrecognized.
+
+        As strict as configuration validation, and for the same reason: an unknown
+        key or an out-of-range value means this file was written by a different
+        version or edited by hand, and guessing at it risks a wrong alert.
+        """
         if not isinstance(document, dict):
             raise ValueError("top level must be an object")
         unknown = set(document) - STATE_TOP_KEYS
@@ -148,6 +188,7 @@ class JsonStateRepository:
         return result
 
     def get(self, item_id: str) -> StateEntry:
+        """Return one item's state, pending mutations first; unknown IDs are empty."""
         return self._pending.get(item_id, self._items.get(item_id, StateEntry()))
 
     def record_priced_check(
@@ -159,6 +200,11 @@ class JsonStateRepository:
         price_alert_delivered: bool = False,
         notified_offer_urls: Iterable[str] = (),
     ) -> None:
+        """Stage a successful check that produced a price.
+
+        Replaces the item's entry outright rather than merging, so alert history
+        that no longer applies cannot survive into the new episode.
+        """
         if not isinstance(price_alert_delivered, bool):
             raise TypeError("price_alert_delivered must be a boolean")
         offer_urls = _state_offer_urls(list(notified_offer_urls))
@@ -170,14 +216,27 @@ class JsonStateRepository:
         )
 
     def record_no_price_check(self, item_id: str, checked_at: datetime) -> None:
+        """Stage a successful check that produced no price (an empty listing).
+
+        Refreshes the timestamp so the item is not flagged stale, keeps the last
+        known price for display, and clears alert history because nothing is
+        currently below target.
+        """
         current = self._pending.get(item_id, self._items.get(item_id, StateEntry()))
         self._pending[item_id] = StateEntry(current.last_price, parse_utc(format_utc(checked_at)))
 
     @property
     def has_pending(self) -> bool:
+        """Whether anything is staged. Callers skip :meth:`save` entirely when not."""
         return bool(self._pending)
 
     def save(self) -> None:
+        """Merge pending mutations over the loaded document and write it atomically.
+
+        Merging rather than replacing preserves entries for items that were not
+        checked this run — a skipped row, or one the run never reached — so their
+        history is not lost by omission.
+        """
         if not self._pending:
             return
         merged = {**self._items, **self._pending}

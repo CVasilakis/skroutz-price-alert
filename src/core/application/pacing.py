@@ -34,6 +34,18 @@ class Pacer:
         self.jitter_fn = jitter_fn
 
     def sleep(self, base_delay: float, attempt: int = 0, *, is_retry: bool = False) -> None:
+        """Wait, in short interruptible slices, reporting progress throughout.
+
+        Sleeps in fractions rather than one long call so a Ctrl+C is noticed within
+        milliseconds instead of at the end of a 20-second delay. Jitter is always
+        added: identical gaps between requests are themselves a fingerprint.
+
+        Args:
+            base_delay: The floor for this wait, before backoff and jitter.
+            attempt: Zero-based retry number; each one lengthens the wait.
+            is_retry: Whether this is retry backoff rather than ordinary pacing,
+                which only changes how the wait is reported.
+        """
         jitter = self.jitter_fn(RANDOM_DELAY_MIN, RANDOM_DELAY_MAX)
         total_delay = base_delay + RETRY_DELAY_MULTIPLIER * attempt + jitter
         start_time = self.monotonic_fn()

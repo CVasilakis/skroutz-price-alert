@@ -1,3 +1,14 @@
+"""Entry point for the health check (``./scrooge-alert status``).
+
+Answers "is this install working?" by collecting four independent things — global
+configuration health, each target's configuration and stored state, the software
+version against the release branch, and the systemd timer/service state — and
+handing them to the presentation-only builders in ``core.tui``.
+
+Strictly read-only: it inspects units without touching them and reads state
+without writing it, so running it can never change what a scheduled run will do.
+"""
+
 import os
 import signal
 import sys

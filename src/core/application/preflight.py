@@ -1,4 +1,14 @@
-"""The run's single target-configuration loading phase."""
+"""The run's single target-configuration loading phase.
+
+Every target's config is read exactly once per command, here, and the decoded
+result is passed down. That is what lets ``status`` and ``run`` report identical
+configuration health, and it removes any chance of a file changing between two
+reads within one run.
+
+A failure is data, not an exception: an unreadable config becomes a
+:class:`TargetConfigLoad` carrying a failure, so the caller still has a record for
+that target to report and count. Only the target that failed is affected.
+"""
 
 from __future__ import annotations
 
@@ -18,8 +28,18 @@ from core.settings import DEFAULT_LOG_RETENTION_DAYS, ResolvedSettings, resolve_
 
 @dataclass(frozen=True)
 class TargetConfigFailure:
+    """Why one target's configuration could not be loaded at all.
+
+    The two fields are separated by audience: :attr:`detail` is shown to the user
+    in a panel, while :attr:`diagnostic` holds technical context for the error log
+    and must never reach the terminal.
+    """
+
     detail: str
+    """Concise, presentation-safe reason, safe to show in a panel."""
+
     diagnostic: str | None = None
+    """Full technical context for ``errors.txt``; never rendered to the user."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.detail, str) or not self.detail.strip():
@@ -32,12 +52,32 @@ class TargetConfigFailure:
 
 @dataclass(frozen=True)
 class TargetConfigLoad:
+    """One target's configuration outcome, whether it loaded or failed.
+
+    Enforces the invariant that a whole-file failure and decoded rows are mutually
+    exclusive: a target either produced items or produced a failure. Individual bad
+    *rows* are the separate, softer case — they are reported in
+    :attr:`row_issues` while the remaining rows still run.
+    """
+
     plugin: RegisteredPlugin
+    """The compiled plugin this configuration belongs to."""
+
     settings: ResolvedSettings
+    """Resolved settings; declaration defaults when the file could not be read, so
+    reporting and logging still have usable values."""
+
     items: tuple[TrackedItem, ...] = ()
+    """Successfully decoded rows, in file order. Empty when the file failed."""
+
     row_issues: tuple[RowIssue, ...] = ()
+    """Rows that failed to decode, each with its position and reason."""
+
     row_diagnostic: str | None = None
+    """Combined technical detail for the bad rows, destined for the error log."""
+
     failure: TargetConfigFailure | None = None
+    """Set when the whole file was unusable, which excludes any decoded items."""
 
     def __post_init__(self) -> None:
         if self.failure is not None and (self.items or self.row_issues):
@@ -45,14 +85,17 @@ class TargetConfigLoad:
 
     @property
     def target(self) -> str:
+        """The target name, for logs, locks, and state paths."""
         return self.plugin.target
 
     @property
     def count(self) -> int:
+        """How many rows will actually be checked."""
         return len(self.items)
 
     @property
     def faulty_indices(self) -> list[int]:
+        """1-based positions of the rows that were skipped."""
         return [issue.index for issue in self.row_issues]
 
 

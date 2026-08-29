@@ -1,4 +1,15 @@
-"""Strict target configuration loading and item decoding."""
+"""Strict target configuration loading and item decoding.
+
+Validation is strict on purpose. Unknown keys, wrong schema versions, and
+malformed values are rejected rather than ignored, because silently skipping a key
+a user believed was doing something is worse than telling them it is wrong.
+
+Failures are graded by blast radius. A document-level problem (missing file, bad
+JSON, wrong schema, unknown top-level key, invalid settings block) fails the whole
+target, since nothing below it can be trusted. A bad *item row* fails only itself
+and is reported structurally, so one typo cannot stop the other rows from being
+checked.
+"""
 
 from __future__ import annotations
 
@@ -28,8 +39,17 @@ TOP_LEVEL_KEYS = frozenset({"schema_version", "plugin_schema_version", "settings
 
 @dataclass(frozen=True)
 class RowIssue:
+    """One rejected item row: its 1-based position and why it was rejected.
+
+    Positional rather than keyed by ``id``, because the ``id`` itself may be what
+    is missing or malformed. The position is what lets a user find the row.
+    """
+
     index: int
+    """1-based position in the ``items`` array, matching how the row is reported."""
+
     message: str
+    """Why the row was rejected, naming the offending field."""
 
 
 @dataclass(frozen=True)
@@ -187,6 +207,11 @@ class TargetConfigLoader:
         return document
 
     def read_document(self) -> dict[str, Any]:
+        """Read and document-validate the config without decoding any rows.
+
+        For callers that need the raw document (schedule rendering, migration
+        checks) and must not fail over an individual bad row.
+        """
         document = self._read_document()
         self.validate_document(document)
         return document
@@ -230,6 +255,12 @@ class TargetConfigLoader:
         )
 
     def load(self) -> LoadedTargetConfig:
+        """Read and fully decode this target's configuration.
+
+        Raises:
+            ConfigFileError: The document itself is unusable. Bad individual rows
+                do not raise; they are reported on the returned value.
+        """
         return self._decode_document(self._read_document())
 
     def load_document(self, document: dict[str, Any]) -> LoadedTargetConfig:

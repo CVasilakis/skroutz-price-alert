@@ -199,6 +199,12 @@ def lock_storage_unavailable(lock_name: str) -> str:
 
 
 # --- Configuration and persistence failures ------------------------------------------
+#
+# These builders are intentionally undocumented individually: each is a single
+# interpolation whose name states exactly what it produces, and a docstring
+# restating the name would be noise in a catalog meant to be skimmed as a list of
+# wordings. The builders above carry docstrings because their arguments need
+# explaining (which attempt, which threshold, whose log). Read the returned string.
 
 
 def missing_config(path: str) -> str:

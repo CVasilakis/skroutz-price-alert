@@ -44,6 +44,12 @@ class ResultHandler:
         self.stale_items: list[TrackedItem] = []
 
     def stale_note(self, item: TrackedItem) -> str | None:
+        """Note and record an item unchecked for too long, or ``None`` if recent.
+
+        Called on failure paths only. It is the safety net for failures that are
+        individually quiet: an item that keeps failing eventually surfaces here
+        even when nothing else alerts.
+        """
         last_checked = self.state.get(item.id).last_checked
         if last_checked is None:
             return None
@@ -127,6 +133,20 @@ class ResultHandler:
         retries_used: int,
         attempt_notes: list[str],
     ) -> bool:
+        """Evaluate one successful result, notify if warranted, and stage its state.
+
+        The only place a price is compared against a target. Both result shapes end
+        the same way — reported to the frontend and staged for the single state
+        commit — but they differ in what "below target" means: a single price is
+        one continuous episode, while a listing alerts per offer and remembers
+        offers by canonical URL.
+
+        State is staged whatever the comparison found, because a check that
+        completed is worth recording even when it alerts nothing.
+
+        Returns:
+            Whether any notification failed to deliver.
+        """
         notes = (
             [messages.succeeded_on_attempt(retries_used + 1, MAX_RETRIES)] if retries_used else []
         )

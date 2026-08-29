@@ -96,6 +96,23 @@ class TargetRunner:
         logger: logging.Logger,
         interrupted: Callable[[], bool],
     ) -> RunOutcome:
+        """Run one target under its lock, owning the client and state lifecycle.
+
+        The whole target is one bracket: acquire the lock, load state, build the
+        client, execute every item, commit state once, then close the client in a
+        ``finally`` and release the lock. Ordering matters — state is committed
+        before the client is closed, so a shutdown fault cannot cost a run its
+        results, and the client is closed even when the run failed or was
+        interrupted.
+
+        Every failure is converted to a condition on the returned outcome rather
+        than propagated, so one target can never end the run: contention becomes a
+        skip, storage and dependency faults become their own statuses, and an
+        unexpected fault is logged with a traceback as a lifecycle failure.
+
+        Returns:
+            This target's conditions, for the run to merge.
+        """
         plugin = load.plugin
         result = RunOutcome()
         failed_items: list[tuple[TrackedItem, Exception]] = []

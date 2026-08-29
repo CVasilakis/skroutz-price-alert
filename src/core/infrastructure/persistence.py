@@ -1,4 +1,18 @@
-"""Generic JSON and timestamp persistence primitives."""
+"""Generic JSON and timestamp persistence primitives.
+
+Every managed JSON document in the project is written through
+:func:`write_json_atomically` and read through :func:`read_json_object`, so
+durability and failure wording are decided once rather than per caller.
+
+The write path is a deliberate three-step sequence — fsync the temporary file,
+``os.replace`` it over the destination, then fsync the destination's directory.
+Each step guards a different failure: the first ensures the new bytes are on disk
+before anything points at them, the replace makes the swap atomic so a reader
+never sees a half-written document, and the third makes the *rename itself*
+durable, since a directory entry can otherwise be lost in a crash even though the
+file's contents survived. Removing any step leaves a window where a power loss
+destroys the old document without committing the new one.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +28,14 @@ from core.exceptions import ConfigFileError
 
 
 class AtomicReplacementError(OSError):
-    """A durable replacement failure that records whether replacement occurred."""
+    """A durable replacement failure that records whether replacement occurred.
+
+    The distinction matters to recovery: a failure *before* the replace leaves the
+    old document intact and the operation can simply be retried, while a failure
+    *after* it means the new content is already live and only its directory entry
+    is not yet durable. Migration reads :attr:`destination_replaced` to decide
+    whether it may still roll back.
+    """
 
     def __init__(
         self,
@@ -182,7 +203,21 @@ def commit_atomic_replacement(
 
 
 def write_json_atomically(path: str | os.PathLike[str], data: object) -> None:
-    """Serialize JSON through a sibling temporary file and atomic replace."""
+    """Serialize JSON through a sibling temporary file and atomic replace.
+
+    The temporary file is a fixed ``<path>.tmp`` sibling rather than a unique
+    ``mkstemp`` name, and both halves of that are load-bearing. It must be a
+    sibling because ``os.replace`` is only atomic within one filesystem, and a
+    temporary directory can be on another. The fixed name is safe because every
+    writer of a managed document holds that document's cooperative lock first, so
+    two writers never race on one path; in exchange a crashed write leaves one
+    predictable artifact that the next write overwrites, instead of accumulating
+    unique orphans nobody cleans up.
+
+    Raises:
+        AtomicReplacementError: Serialization succeeded but the durable
+            replacement did not; the partial temporary file is removed.
+    """
     destination = os.fspath(path)
     temporary = destination + ".tmp"
     try:

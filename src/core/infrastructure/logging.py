@@ -1,3 +1,19 @@
+"""Console and per-target file logging, plus traceback and diagnostic capture.
+
+Two destinations for two audiences. An interactive run prints through Rich to a
+person watching; a background run writes ``logs/<target>/output.log`` for someone
+reading it afterwards, which is why ``quiet`` also detaches the target logger from
+the root logger rather than only lowering a level.
+
+File timestamps and the daily rollover are both in UTC so a log line can be lined
+up with the ``last_checked`` written to state, and so a host's timezone or a DST
+shift never reorders or duplicates a day's file.
+
+This module deliberately knows nothing about plugins or settings: retention is
+passed in by the caller that resolved it, keeping a low-level utility free of any
+dependency on the scraper system.
+"""
+
 import datetime
 import logging
 import os

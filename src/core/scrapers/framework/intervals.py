@@ -34,6 +34,15 @@ _UNITS = (
 
 
 def normalize_interval(raw: object) -> str | None:
+    """Fold a user's interval to one canonical key, or ``None`` if unsupported.
+
+    Tolerant of how the value is written but not of which cadences exist. Word
+    aliases (``"hourly"``, ``"daily"``), spacing, and case all normalize, and any
+    unit that resolves to a supported number of minutes is accepted — ``"60m"`` and
+    ``"1 hour"`` are both ``"1h"``. Anything landing between the supported cadences
+    is rejected rather than rounded, because the result becomes a systemd
+    ``OnCalendar`` expression that must divide the clock evenly.
+    """
     token = fold_token(raw)
     if token is None:
         return None
@@ -51,4 +60,11 @@ def normalize_interval(raw: object) -> str | None:
 
 
 def oncalendar_for(canonical: str) -> str:
+    """Translate one already-canonical interval into its systemd ``OnCalendar`` value.
+
+    Raises:
+        KeyError: The key is not canonical. Deliberately unguarded: callers pass a
+            value that settings resolution already validated, so a miss is a
+            framework bug rather than bad user input.
+    """
     return SUPPORTED_INTERVALS[canonical]

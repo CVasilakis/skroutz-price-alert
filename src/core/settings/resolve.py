@@ -45,6 +45,14 @@ class SettingsValidationError(ValueError):
 def resolve_spec(
     spec: SettingSpec[Any], block: Mapping[str, object] | None
 ) -> ResolvedSetting[Any]:
+    """Resolve one declaration against a settings block, recording its provenance.
+
+    Never raises: an optional setting always yields a usable value, falling back to
+    its default whether the key was absent or its value rejected. The difference is
+    preserved in the status, so only a genuinely bad value produces a warning while
+    an omission stays silent. A required setting that cannot be resolved yields
+    ``MISSING``, which the strict block validator turns into a failure.
+    """
     if block is None:
         if spec.required:
             return ResolvedSetting(cast(Any, MISSING), SettingStatus.MISSING)
@@ -66,6 +74,7 @@ def resolve_spec(
 def resolve_settings(
     specs: Sequence[SettingSpec[Any]], block: Mapping[str, object] | None
 ) -> ResolvedSettings:
+    """Resolve every declaration in order, tolerating a missing block entirely."""
     pairs = [(spec, resolve_spec(spec, block)) for spec in specs]
     return ResolvedSettings(pairs)
 

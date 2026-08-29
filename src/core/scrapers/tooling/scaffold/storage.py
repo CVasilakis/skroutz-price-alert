@@ -1,4 +1,15 @@
-"""Fail-closed additive storage for generated plugin scaffolds."""
+"""Fail-closed additive storage for generated plugin scaffolds.
+
+Writing a scaffold is strictly additive: it creates new directories or it creates
+nothing. An existing destination is a refusal rather than a merge, because a
+contributor pointing at an occupied path has made a mistake, and overwriting it
+would destroy work the tool cannot recover.
+
+A partial failure is rolled back, so an interrupted scaffold never leaves a
+half-written package that later looks like a broken plugin to the catalog. Paths
+are re-checked as they are created rather than only up front, which is what closes
+the window between deciding a name is free and writing to it.
+"""
 
 from __future__ import annotations
 
@@ -14,8 +25,13 @@ from core.scrapers.tooling.scaffold.generation import GeneratedFile, render_scaf
 
 @dataclass(frozen=True)
 class ScaffoldDestinations:
+    """The two directories one scaffold may create, derived from the target name."""
+
     source: Path
+    """``src/core/scrapers/plugins/<target>/``."""
+
     tests: Path
+    """``tests/plugins/<target>/``, created only when tests were requested."""
 
 
 @dataclass
@@ -35,6 +51,7 @@ class ScaffoldRollbackError(RuntimeError):
 
 
 def scaffold_destinations(repo_root: Path, target: str) -> ScaffoldDestinations:
+    """Resolve where one target's generated packages belong."""
     root = repo_root.resolve()
     return ScaffoldDestinations(
         source=root / "src" / "core" / "scrapers" / "plugins" / target,
@@ -43,10 +60,16 @@ def scaffold_destinations(repo_root: Path, target: str) -> ScaffoldDestinations:
 
 
 def path_entry_exists(path: Path) -> bool:
+    """Whether anything occupies this path, a broken symlink included.
+
+    ``exists()`` alone follows links and so reports ``False`` for a dangling one,
+    which would let the scaffold try to write through it.
+    """
     return path.exists() or path.is_symlink()
 
 
 def scaffold_collisions(repo_root: Path, target: str) -> tuple[Path, ...]:
+    """Return the destinations already occupied, for an early, complete refusal."""
     destinations = scaffold_destinations(repo_root, target)
     return tuple(
         path for path in (destinations.source, destinations.tests) if path_entry_exists(path)

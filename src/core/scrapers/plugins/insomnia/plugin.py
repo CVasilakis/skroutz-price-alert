@@ -7,6 +7,13 @@ from core.scrapers.api import ItemField, ScraperPlugin, SettingSpec, UrlField
 
 
 def decode_string_tuple(raw: object) -> tuple[str, ...]:
+    """Decode a JSON array of strings into a canonical tuple, dropping blanks.
+
+    A worked example of the item-field codec contract: raise ``ValueError`` for
+    anything unusable, and return a value already in canonical form — immutable and
+    stripped — so the declared default ``()`` satisfies ``decode(default) ==
+    default``.
+    """
     if not isinstance(raw, (list, tuple)):
         raise ValueError("must be an array of strings")
     if any(not isinstance(value, str) for value in raw):
@@ -27,6 +34,12 @@ TITLE_EXCLUDE = ItemField[tuple[str, ...]](
 
 
 def decode_min_advert_price(raw: object) -> float:
+    """Decode a non-negative price floor from a number or a euro-suffixed string.
+
+    Tolerant about how the value is written because it is typed by hand into a
+    config, and strict about what it means: negative, infinite, and boolean values
+    are rejected rather than coerced.
+    """
     if isinstance(raw, bool):
         raise ValueError("must be a non-negative number")
     if isinstance(raw, str):
@@ -52,6 +65,12 @@ MIN_ADVERT_PRICE = SettingSpec[float](
 
 
 def is_classifieds_url(url: SplitResult) -> bool:
+    """Accept any Insomnia classifieds listing page.
+
+    Broader than the Skroutz predicate because this plugin scrapes whole listing
+    pages rather than one identified resource, so every path below
+    ``/classifieds/`` is usable.
+    """
     return url.path.startswith("/classifieds/")
 
 

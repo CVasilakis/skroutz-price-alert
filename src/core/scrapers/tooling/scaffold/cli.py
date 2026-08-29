@@ -148,6 +148,13 @@ def _repository_root() -> Path:
 
 
 def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int:
+    """Create one plugin scaffold, guided or fully specified on the command line.
+
+    Any argument selects strict non-interactive mode, where a missing required
+    choice is an error rather than a prompt or a silent default — so automation can
+    never produce a differently-shaped package than it asked for. With no
+    arguments the guided wizard runs, which requires a real terminal.
+    """
     from core.scrapers.tooling.scaffold.terminal import (
         InteractiveTerminalUnavailable,
         ScaffoldInterrupted,

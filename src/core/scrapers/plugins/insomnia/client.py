@@ -1,3 +1,16 @@
+"""Insomnia client: the reference listing plugin.
+
+Parses a classifieds page into one :class:`~core.scrapers.api.Offer` per advert,
+so each advert can be alerted and de-duplicated on its own. Read it when writing a
+``ListingResult`` adapter, and read the Skroutz client first for the simpler
+single-price shape.
+
+It also demonstrates the optional declaration surfaces the framework offers:
+custom item fields for per-row title filters and a custom setting for a store-wide
+price floor. All such filtering happens here, before the result is constructed —
+the framework only compares what it is given against ``target_price``.
+"""
+
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup

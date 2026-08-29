@@ -50,11 +50,27 @@ STATUS_FAILED = "failed"
 
 @dataclass(frozen=True)
 class MigrationOutcome:
+    """What happened to one managed document, reported whether or not it changed.
+
+    Every document is reported, including the ones already current, so a run's
+    output is a complete inventory rather than a list of changes — which is what
+    makes ``--check`` usable as an audit.
+    """
+
     family: str
+    """Which independently versioned sequence this document belongs to."""
+
     target: str
+    """The owning target, or the framework name for a shared document."""
+
     path: str
+    """The document's path, for the contributor to inspect."""
+
     status: str
+    """One of ``current``, ``migrated``, ``missing``, or ``failed``."""
+
     detail: str = ""
+    """Why it failed, or which transitions ran; empty when unremarkable."""
 
 
 @dataclass(frozen=True)
@@ -147,6 +163,12 @@ class MigrationRunner:
 
     @property
     def recovery_path(self) -> Path | None:
+        """The directory holding pre-migration copies, once one has been created.
+
+        Created lazily on first write and reported to the user, so a migration that
+        fails part way through leaves the originals findable rather than only
+        described.
+        """
         return self._recovery
 
     def _ensure_recovery(self) -> Path:
@@ -391,6 +413,20 @@ class MigrationRunner:
         )
 
     def run(self, *, check: bool = False) -> tuple[MigrationOutcome, ...]:
+        """Migrate, or in check mode validate, every managed document under one lock.
+
+        The whole sweep holds the migration lock so no run can start mid-migration
+        and read a document that is between versions. Each document is transformed
+        entirely in memory and committed with one atomic replacement, so a document
+        is either fully at the old version or fully at the new one.
+
+        Args:
+            check: Validate and report without modifying anything. The lock is
+                still taken, so check mode may create ``state/locks/``.
+
+        Returns:
+            One outcome per managed document, in a stable order.
+        """
         outcomes: list[MigrationOutcome] = []
         with _held_lock(self.lock_manager, "migration"):
             outcomes.append(

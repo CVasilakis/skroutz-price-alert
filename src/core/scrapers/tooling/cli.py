@@ -20,8 +20,18 @@ from core.settings import ResolvedSetting, SettingStatus
 
 @dataclass(frozen=True)
 class ScheduleResolution:
+    """One target's effective timer cadence and where that value came from.
+
+    The status travels with the value because the shell scripts must distinguish a
+    configured cadence from a fallback: an invalid ``execution_interval`` still
+    produces a working timer, and the user is warned rather than left unscheduled.
+    """
+
     on_calendar: str
+    """The rendered systemd ``OnCalendar`` expression."""
+
     status: SettingStatus
+    """Whether the interval was configured, defaulted, or invalid."""
 
 
 def _tsv_row(*fields: str) -> str:
@@ -106,6 +116,18 @@ def _plugin_check_failure(exc: Exception) -> str:
 
 
 def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None) -> int:
+    """Emit the TSV snapshots the shell scripts read, or a per-target schedule report.
+
+    The bridge between the Python catalog and the POSIX scripts: the shell never
+    imports plugin code or parses config itself, it reads these rows. Fields are
+    validated to be single-line and tab-free, since one stray separator would
+    silently misalign a downstream column.
+
+    The two snapshots are deliberately separate. The catalog snapshot is
+    config-independent, so identity and static paths stay available even when a
+    target's configuration is broken; only the schedule report can carry a
+    per-target configuration error.
+    """
     parser = argparse.ArgumentParser(prog="python -m core.scrapers.tooling.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("catalog")
