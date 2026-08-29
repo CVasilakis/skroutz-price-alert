@@ -6,7 +6,11 @@ from core.infrastructure.updates import SoftwareVersionStatus
 from core.settings import SettingStatus
 
 
-def test_status_main_renders_installed_missing_and_orphan_panels():
+# Patched as a decorator rather than inside the `with` block below: CPython caps a
+# function at 20 statically nested blocks, and the context-manager group is already
+# at that limit.
+@mock.patch("core.status.inspect_user_lingering", return_value=True)
+def test_status_main_renders_installed_missing_and_orphan_panels(_lingering):
     version_status = SoftwareVersionStatus("1.7.0", False)
     console = mock.MagicMock()
     catalog = mock.MagicMock()
@@ -83,7 +87,7 @@ def test_status_main_renders_installed_missing_and_orphan_panels():
     oncalendar.assert_called_once_with("1h")
     state_repository.return_value.load.assert_called_once()
     load_general.assert_called_once_with(core.status.CONFIG_DIR)
-    render_config.assert_called_once_with(console, load_general.return_value, version_status)
+    render_config.assert_called_once_with(console, load_general.return_value, version_status, True)
     build_service.assert_called_once()
     service_panel.render.assert_called_once_with(console)
     build_missing.assert_called_once_with("beta", "Beta")

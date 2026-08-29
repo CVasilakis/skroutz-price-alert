@@ -18,6 +18,7 @@ from core.infrastructure.systemd import (
     get_installed_plugin_units,
     get_systemd_properties,
     get_systemd_user_dir,
+    inspect_user_lingering,
     read_timer_oncalendar,
     scraper_unit_name,
 )
@@ -158,6 +159,63 @@ class TestGetSystemdProperties(_UnitDirCase):
         self._write_unit("skroutz-scraper.timer", "[Timer]\n")
         with mock.patch.object(subprocess, "check_output", return_value=b"\n"):
             self.assertEqual(self._props(), {})
+
+
+class TestInspectUserLingering(unittest.TestCase):
+    """The linger probe answers yes/no, or ``None`` when the host cannot say.
+
+    ``None`` is a distinct answer, not a synonym for "disabled": the Configuration Check
+    panel omits the row entirely rather than warning about a concept the host lacks.
+    """
+
+    def _lingering(self, **patch_kwargs):
+        with (
+            mock.patch("getpass.getuser", return_value="tester"),
+            mock.patch.object(subprocess, "check_output", **patch_kwargs) as check,
+        ):
+            return inspect_user_lingering(), check
+
+    def test_enabled_linger_is_reported(self):
+        result, check = self._lingering(return_value=b"Linger=yes\n")
+        self.assertIs(result, True)
+        check.assert_called_once_with(
+            ["loginctl", "show-user", "tester", "--property=Linger"],
+            stderr=subprocess.DEVNULL,
+            timeout=SYSTEMCTL_QUERY_TIMEOUT_SECONDS,
+        )
+
+    def test_disabled_linger_is_reported(self):
+        result, _ = self._lingering(return_value=b"Linger=no\n")
+        self.assertIs(result, False)
+
+    def test_absent_loginctl_is_undeterminable(self):
+        result, _ = self._lingering(
+            side_effect=FileNotFoundError(2, "No such file or directory", "loginctl")
+        )
+        self.assertIsNone(result)
+
+    def test_query_failure_is_undeterminable(self):
+        # `loginctl show-user` exits non-zero when logind has no record of the user.
+        result, _ = self._lingering(side_effect=subprocess.CalledProcessError(1, "loginctl"))
+        self.assertIsNone(result)
+
+    def test_timeout_is_undeterminable(self):
+        result, _ = self._lingering(side_effect=subprocess.TimeoutExpired("loginctl", 10))
+        self.assertIsNone(result)
+
+    def test_unrecognized_output_is_undeterminable(self):
+        for output in (b"\n", b"Linger=maybe\n", b"Failed to get user: no such user\n"):
+            with self.subTest(output=output):
+                result, _ = self._lingering(return_value=output)
+                self.assertIsNone(result)
+
+    def test_unresolvable_user_is_undeterminable(self):
+        with (
+            mock.patch("getpass.getuser", side_effect=KeyError("uid")),
+            mock.patch.object(subprocess, "check_output") as check,
+        ):
+            self.assertIsNone(inspect_user_lingering())
+            check.assert_not_called()
 
 
 if __name__ == "__main__":

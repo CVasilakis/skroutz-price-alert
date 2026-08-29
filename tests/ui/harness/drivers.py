@@ -334,6 +334,7 @@ def drive_config(
     reminder_raw: object = None,
     reminder_day_raw: object = None,
     reminder_time_raw: object = None,
+    lingering: bool | None = True,
 ) -> BuildResult:
     """Build the Configuration Check panel from synthetic collected inputs.
 
@@ -354,6 +355,9 @@ def drive_config(
             value renders the invalid-value row.
         reminder_day_raw (object): the raw ``reminder_day`` value (same semantics).
         reminder_time_raw (object): the raw ``reminder_time`` value (same semantics).
+        lingering (bool | None): the collected systemd user-lingering state; ``None``
+            (host could not answer) omits the row entirely. Defaults to the healthy
+            answer so every other scenario pins the row a real install shows.
     """
     from core.settings import resolve_settings
 
@@ -384,7 +388,7 @@ def drive_config(
         "error": SoftwareVersionStatus("1.7.0", None),
         "branch": SoftwareVersionStatus("1.7.0", None, non_release_branch="beta"),
     }[version_state]
-    panel = config_check.build_config_panel(general, version_status)
+    panel = config_check.build_config_panel(general, version_status, lingering)
 
     return BuildResult(panel, panel.get_panel_color())
 

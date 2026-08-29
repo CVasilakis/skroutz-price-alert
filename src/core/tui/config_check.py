@@ -1,10 +1,10 @@
 """Builders for the Configuration Check panel and the shared 'Config' row.
 
 Two related surfaces. The panel carries the checks that are global to the install
-— notification endpoints, general settings, permissions, software version. The
-``Config`` row carries one target's own configuration health and is reused atop
-each Service Status panel and each Scraping panel, so a user reads the same row in
-the same shape wherever a target appears.
+— software version, systemd user lingering, notification endpoints, general settings,
+and permissions. The ``Config`` row carries one target's own configuration health and
+is reused atop each Service Status panel and each Scraping panel, so a user reads the
+same row in the same shape wherever a target appears.
 
 Presentation only: it receives already-collected inputs and performs no
 configuration, filesystem, network, or systemd access.
@@ -142,6 +142,25 @@ def _append_version_row(panel: StatusPanelBuilder, status: SoftwareVersionStatus
         panel.add_row("✅", "Software Version", f"{current} (Up to date)")
 
 
+def _append_lingering_row(panel: StatusPanelBuilder, lingering: bool | None) -> None:
+    """Append the already-collected systemd user-lingering state.
+
+    ``None`` means the host could not answer (no ``loginctl``, no logind), so the row is
+    omitted entirely rather than shown as a warning: on such a host lingering is not a
+    concept, and ``install.sh`` skips its own lingering step for the same reason.
+    """
+    if lingering is None:
+        return
+    if lingering:
+        panel.add_row("✅", "Lingering", "Enabled")
+        return
+    ref = panel.add_note_ref(
+        "Scheduled runs may not happen while you are logged out; "
+        "enable with `loginctl enable-linger $USER`."
+    )
+    panel.add_row("🟡", "Lingering", f"Disabled{ref}")
+
+
 def _append_general_rows(panel: StatusPanelBuilder, general: GeneralConfigLoad) -> None:
     """Append already-resolved project-wide settings from ``config/general.json``.
 
@@ -203,18 +222,24 @@ def _append_notifications_row(panel: StatusPanelBuilder, general: GeneralConfigL
 
 
 def build_config_panel(
-    general: GeneralConfigLoad, version_status: SoftwareVersionStatus
+    general: GeneralConfigLoad,
+    version_status: SoftwareVersionStatus,
+    lingering: bool | None,
 ) -> StatusPanelBuilder:
     """Build the global configuration panel from already-collected inputs."""
     panel = StatusPanelBuilder("Configuration Check")
     _append_version_row(panel, version_status)
+    _append_lingering_row(panel, lingering)
     _append_notifications_row(panel, general)
     _append_general_rows(panel, general)
     return panel
 
 
 def render_config_panel(
-    console: Console, general: GeneralConfigLoad, version_status: SoftwareVersionStatus
+    console: Console,
+    general: GeneralConfigLoad,
+    version_status: SoftwareVersionStatus,
+    lingering: bool | None,
 ) -> None:
     """Builds and renders the shared 'Configuration Check' panel (global checks only).
 
@@ -226,8 +251,12 @@ def render_config_panel(
 
     Args:
         console (Console): The Rich console to render to.
+        general (GeneralConfigLoad): The one read of ``config/general.json``.
+        version_status (SoftwareVersionStatus): The already-collected update outcome.
+        lingering (bool | None): The collected systemd user-lingering state, or ``None``
+            when the host could not answer (the row is then omitted).
     """
-    build_config_panel(general, version_status).render(console)
+    build_config_panel(general, version_status, lingering).render(console)
 
 
 __all__ = [

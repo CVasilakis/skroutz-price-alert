@@ -54,6 +54,8 @@ EXPECTED_COLORS = {
     "config__all_good": "green",
     "config__update_available": "yellow",
     "config__notifications_mixed": "yellow",
+    "config__lingering_disabled": "yellow",
+    "config__lingering_unavailable": "green",
     "config__notifications_not_configured": "red",
     "config__worst_case": "red",
     # SHELL (border derives from the exit code: 0 -> green, else red)

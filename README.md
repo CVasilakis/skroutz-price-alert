@@ -332,6 +332,14 @@ following background execution details:
 - **Last Execution Status:** Indicates last execution results and if any errors happened.
 - **Next Scheduled Execution:** Displays the next scheduled run or if it's currently running.
 
+The **Configuration Check** panel additionally reports whether systemd user
+lingering is enabled (see the FAQ entry below). Lingering is what lets the timers keep
+firing while you are logged out, so a `Lingering  Disabled` row warns that scheduled runs
+may not happen — remedy it with `loginctl enable-linger $USER`, or ask your system
+administrator if that requires elevated rights. Like the permission warning, this row is
+advisory and never blocks a run or changes an exit code. A host with no `loginctl` at all
+omits the row instead of warning about a feature it does not have.
+
 Background runs expose precise exit statuses through **Last Execution Status**:
 
 | Code | Meaning |

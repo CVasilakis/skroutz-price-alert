@@ -85,7 +85,7 @@ SURFACE_INFO: dict[Surface, SurfaceInfo] = {
     ),
     Surface.CONFIG: SurfaceInfo(
         "Configuration Check panel",
-        "The global checks: software version, notifications, general settings.",
+        "The global checks: software version, lingering, notifications, general settings.",
     ),
     Surface.STARTUP: SurfaceInfo(
         "Full startup transcript",

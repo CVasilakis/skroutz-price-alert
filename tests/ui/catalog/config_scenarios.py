@@ -160,3 +160,22 @@ def _():
 )
 def _():
     return drive_config("error", valid_count=0, invalid_count=0, config_error=NOTIFICATIONS_NONE)
+
+
+@scenario(
+    Surface.CONFIG,
+    "lingering_disabled",
+    "User lingering is off, so timers stop at logout",
+    tags=("error",),
+)
+def _():
+    return drive_config("uptodate", valid_count=2, lingering=False)
+
+
+@scenario(
+    Surface.CONFIG,
+    "lingering_unavailable",
+    "The host cannot answer the lingering question, so the row is omitted",
+)
+def _():
+    return drive_config("uptodate", valid_count=2, lingering=None)

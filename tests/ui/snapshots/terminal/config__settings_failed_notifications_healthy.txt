@@ -2,6 +2,7 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   ✅    Software Version        1.7.0 (Up to date)                      │
+│   ✅    Lingering               Enabled                                 │
 │   ✅    Notifications           2 valid URL(s)                          │
 │   ❗    General Config          Failed [1]                              │
 │                                                                         │

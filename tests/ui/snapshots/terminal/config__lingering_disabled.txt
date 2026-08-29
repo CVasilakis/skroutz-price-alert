@@ -1,14 +1,13 @@
-# border: red
+# border: yellow
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   🟡    Software Version        1.7.0 (Could not check for updates)     │
-│                                 [1]                                     │
-│   ✅    Lingering               Enabled                                 │
-│   ❗    Notifications           Not configured [2]                      │
+│   ✅    Software Version        1.7.0 (Up to date)                      │
+│   🟡    Lingering               Disabled [1]                            │
+│   ✅    Notifications           2 valid URL(s)                          │
 │   ✅    Reminder                Every 1 month (default)                 │
 │   ✅    Reminder Day            Saturday (default)                      │
 │   ✅    Reminder Time           13:00 (default)                         │
 │                                                                         │
-│   [1] Check your internet connection and retry shortly.                 │
-│   [2] No notification URLs found in config/general.json.                │
+│   [1] Scheduled runs may not happen while you are logged out; enable    │
+│       with loginctl enable-linger $USER.                                │
 ╰─────────────────────────────────────────────────────────────────────────╯

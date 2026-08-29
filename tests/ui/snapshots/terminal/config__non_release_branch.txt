@@ -2,6 +2,7 @@
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
 │   🟡    Software Version        1.7.0 (beta branch) [1]                 │
+│   ✅    Lingering               Enabled                                 │
 │   ✅    Notifications           2 valid URL(s)                          │
 │   ✅    Reminder                Every 1 month (default)                 │
 │   ✅    Reminder Day            Saturday (default)                      │

@@ -1,9 +1,10 @@
 """Entry point for the health check (``./scrooge-alert status``).
 
-Answers "is this install working?" by collecting four independent things — global
+Answers "is this install working?" by collecting five independent things — global
 configuration health, each target's configuration and stored state, the software
-version against the release branch, and the systemd timer/service state — and
-handing them to the presentation-only builders in ``core.tui``.
+version against the release branch, whether systemd user lingering lets the timers run
+while logged out, and the systemd timer/service state — and handing them to the
+presentation-only builders in ``core.tui``.
 
 Strictly read-only: it inspects units without touching them and reads state
 without writing it, so running it can never change what a scheduled run will do.
@@ -32,6 +33,7 @@ from core.infrastructure.signals import install_interrupt_handler
 from core.infrastructure.systemd import (
     get_installed_plugin_units,
     get_systemd_properties,
+    inspect_user_lingering,
     read_timer_oncalendar,
     scraper_unit_name,
 )
@@ -63,7 +65,8 @@ def main() -> None:
     general = record_general_diagnostic(load_general_config(CONFIG_DIR))
     with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
         version_status = _check_for_updates()
-    render_config_panel(console, general, version_status)
+        lingering = inspect_user_lingering()
+    render_config_panel(console, general, version_status, lingering)
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     signal.signal(signal.SIGTERM, signal.SIG_DFL)

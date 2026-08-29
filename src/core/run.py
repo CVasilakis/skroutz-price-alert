@@ -37,6 +37,7 @@ from core.general.reminder_state import ReminderStateRepository, general_state_p
 from core.infrastructure.locking import StateLockManager
 from core.infrastructure.logging import save_traceback, setup_global_logging
 from core.infrastructure.signals import install_interrupt_handler
+from core.infrastructure.systemd import inspect_user_lingering
 from core.infrastructure.updates import inspect_software_version
 from core.notifications.apprise import AppriseNotifier
 from core.scrapers.framework.catalog import PluginCatalog
@@ -91,7 +92,8 @@ def _run() -> None:
 
         with console.status("[bold green]Checking for updates...[/bold green]", spinner="dots"):
             version_status = inspect_software_version()
-        render_config_panel(console, general, version_status)
+            lingering = inspect_user_lingering()
+        render_config_panel(console, general, version_status, lingering)
         init_fatal_error = None
 
         # Restore default handlers immediately after the spinner vanishes

@@ -1,5 +1,6 @@
-"""Read-only inspection of installed systemd user units."""
+"""Read-only inspection of installed systemd user units and the host's linger state."""
 
+import getpass
 import glob
 import os
 import subprocess
@@ -70,11 +71,46 @@ def get_systemd_properties(unit: str, properties: str) -> dict[str, str]:
         return {}
 
 
+def inspect_user_lingering() -> bool | None:
+    """Return whether systemd user lingering is enabled for the invoking user.
+
+    Lingering is what lets the per-plugin timers keep firing while the user is logged
+    out; ``install.sh`` enables it best-effort, and nothing re-checks it afterwards.
+
+    ``None`` means the question could not be answered — no ``loginctl``, no running
+    logind, or an unparsable answer — and is deliberately distinct from ``False``: on a
+    host that has no concept of user lingering there is nothing to report, so callers
+    must not read a missing answer as "disabled".
+    """
+    try:
+        user = getpass.getuser()
+        output = (
+            subprocess.check_output(
+                ["loginctl", "show-user", user, "--property=Linger"],
+                stderr=subprocess.DEVNULL,
+                timeout=SYSTEMCTL_QUERY_TIMEOUT_SECONDS,
+            )
+            .decode("utf-8")
+            .strip()
+        )
+    except (subprocess.SubprocessError, OSError, ValueError, KeyError):
+        # As in get_systemd_properties, every host-side failure degrades to "unknown"
+        # rather than aborting the caller's report. KeyError covers getpass.getuser()
+        # on an environment with neither the usual variables nor a passwd entry.
+        return None
+    if output == "Linger=yes":
+        return True
+    if output == "Linger=no":
+        return False
+    return None
+
+
 __all__ = [
     "SYSTEMCTL_QUERY_TIMEOUT_SECONDS",
     "get_installed_plugin_units",
     "get_systemd_properties",
     "get_systemd_user_dir",
+    "inspect_user_lingering",
     "read_timer_oncalendar",
     "scraper_unit_name",
 ]

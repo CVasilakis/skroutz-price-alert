@@ -123,6 +123,7 @@ class TestRunWiring(unittest.TestCase):
             ),
             mock.patch("core.run.install_interrupt_handler") as install_handler,
             mock.patch("core.run.inspect_software_version", return_value=version_status),
+            mock.patch("core.run.inspect_user_lingering", return_value=True),
             mock.patch("core.run.render_config_panel") as render_config,
             mock.patch("core.run.Console") as Console,
             mock.patch("core.run.signal.signal"),
@@ -144,7 +145,7 @@ class TestRunWiring(unittest.TestCase):
         self.assertEqual(caught.exception.code, 0)
         load_target_configs.assert_called_once_with([plugin], core.run.CONFIG_DIR)
         render_config.assert_called_once_with(
-            Console.return_value, load_general.return_value, version_status
+            Console.return_value, load_general.return_value, version_status, True
         )
         install_handler.assert_called_once()
         Orchestrator.assert_called_once_with(
