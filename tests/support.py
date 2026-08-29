@@ -1,4 +1,11 @@
-"""Shared test helpers for the current plugin architecture."""
+"""Shared test helpers for the current plugin architecture.
+
+This module is also the single test-only adapter a plugin's own tests may use
+for framework details. Target-owned tests import :func:`decode_test_config` from
+here and everything else from ``core.scrapers.api``; they must not import
+``core.settings``, ``core.exceptions``, or ``core.scrapers.framework``, and must
+not build the private ``TrackedItem._custom`` mapping themselves.
+"""
 
 import contextlib
 import json
@@ -83,7 +90,30 @@ def decode_test_config(
     settings: Mapping[str, object] | None = None,
     items: Sequence[Mapping[str, object]] = (),
 ) -> PluginTestConfig:
-    """Decode raw plugin test values through the production configuration contract."""
+    """Decode raw plugin test values through the production configuration contract.
+
+    The recommended way for a plugin's tests to build a client's inputs: it runs
+    the real strict decoder, so a test exercises the same validation, defaults,
+    and URL canonicalization a user's config would, without discovering sibling
+    packages or constructing framework-owned values by hand.
+
+    Args:
+        definition: The plugin's ``PLUGIN`` descriptor.
+        target: The package name, which is also the target name.
+        settings: A raw ``settings`` block as it would appear in JSON; ``None``
+            means an empty block, so every optional setting takes its default.
+        items: Raw item rows as they would appear in JSON.
+
+    Returns:
+        The resolved settings and decoded :class:`TrackedItem` values, in the
+        order the rows were given.
+
+    Raises:
+        ValueError: A row failed to decode. Production reports such a row and
+            continues; here it fails the test loudly, since a fixture is meant to
+            be valid. Assert on rejected input through the plugin's own decoders
+            instead.
+    """
     plugin = compile_test_plugin(definition, target)
     decoded = decode_target_document(
         plugin,

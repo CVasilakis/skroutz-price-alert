@@ -142,6 +142,7 @@ def drive_orchestrated_run(
     *,
     has_services: bool = False,
     delivery_ok: bool = True,
+    prepare_retry_error: Exception | None = None,
 ) -> BuildResult:
     """Runs the *real* ``ScrapingOrchestrator`` over a scripted store and captures the
     finished interactive panel and quiet file log.
@@ -160,6 +161,10 @@ def drive_orchestrated_run(
             consume the list and the last entry repeats.
         has_services / delivery_ok: The notifier double's gates (see
             ``support.mock_notifier``), controlling which notification note appears.
+        prepare_retry_error: Raised by the client's ``prepare_retry`` on every
+            between-attempt reset, for the footnote a client that cannot reset
+            itself produces. The application contains the fault, so the item keeps
+            its remaining attempts.
 
     Returns:
         BuildResult: the finished panel and its settled border color.
@@ -187,6 +192,10 @@ def drive_orchestrated_run(
                 if isinstance(outcome, Exception):
                     raise outcome
                 return outcome
+
+            def prepare_retry(self):
+                if prepare_retry_error is not None:
+                    raise prepare_retry_error
 
         cfg_dir = tempfile.mkdtemp()
         canonical_items = []

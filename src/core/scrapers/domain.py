@@ -1,4 +1,13 @@
-"""Strict URL and domain validation shared across the scraper domain."""
+"""Strict URL and domain validation shared across the scraper domain.
+
+One implementation backs three uses that must agree: validating a declared
+:class:`~core.scrapers.api.UrlField` domain, canonicalizing a configured or
+returned URL, and matching a URL's host against a plugin's domains. Because the
+canonical form is also a persisted identity (offer alert history), any drift
+between those three would let one address take several identities.
+
+Plugins do not import this module; they receive its results through the API.
+"""
 
 import ipaddress
 from collections.abc import Iterable
@@ -6,6 +15,14 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 
 def normalize_domain(value: object) -> str:
+    """Return one host in its single canonical form, or raise :class:`ValueError`.
+
+    Accepts a hostname or IP literal only -- no scheme, credentials, port, path,
+    query, or fragment, and IPv6 without brackets. IPs are compressed and
+    case-folded; DNS names lose a trailing root dot, are IDNA-encoded,
+    case-folded, and length- and label-checked. The same function normalizes a
+    declared domain and the host of a URL being matched against it.
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError("domain must be a nonblank host")
     candidate = value.strip().removesuffix(".")
@@ -88,6 +105,11 @@ def canonicalize_url(value: object) -> str:
 
 
 def host_matches_domain(host: str, domain: str) -> bool:
+    """Match one normalized host against one normalized domain.
+
+    A DNS domain covers itself and its subdomains; an IP literal matches only
+    itself, since it has no subdomain hierarchy to delegate.
+    """
     try:
         ipaddress.ip_address(domain)
     except ValueError:
@@ -96,5 +118,6 @@ def host_matches_domain(host: str, domain: str) -> bool:
 
 
 def parsed_matches_domains(parsed: SplitResult, domains: Iterable[str]) -> bool:
+    """Whether a parsed URL's host is covered by any of these normalized domains."""
     host = normalize_domain(parsed.hostname)
     return any(host_matches_domain(host, domain) for domain in domains)

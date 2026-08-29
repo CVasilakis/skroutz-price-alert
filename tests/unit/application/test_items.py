@@ -89,6 +89,25 @@ def test_unexpected_fault_exhausts_retries_and_affects_exit_status(monkeypatch):
     traceback.assert_called_once()
 
 
+def test_failed_retry_preparation_is_contained_in_its_attempt(monkeypatch):
+    """A client that cannot reset must not end the target and discard unsaved checks."""
+    executor, reporter, state, _ = _executor()
+    executor.client.scrape.side_effect = [ScraperParseError("bad page"), PriceResult(12, "EUR")]
+    executor.client.prepare_retry.side_effect = OSError("no file descriptors")
+    traceback = mock.Mock()
+    monkeypatch.setattr("core.application.items.save_traceback", traceback)
+
+    outcome = executor.process(_item())
+
+    assert outcome.reported_error is None
+    assert not outcome.statuses
+    assert executor.client.scrape.call_count == 2
+    traceback.assert_called_once()
+    state.record_priced_check.assert_called_once()
+    notes = reporter.log_price_result.call_args.kwargs["attempt_notes"]
+    assert any("Retry preparation failed" in note for note in notes)
+
+
 def test_server_error_exhaustion_is_modeled_success_without_retry_preparation():
     executor, reporter, _, _ = _executor()
     executor.client.scrape.side_effect = ServerError("remote failure")

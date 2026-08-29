@@ -93,6 +93,7 @@ class TestMessageCatalog(unittest.TestCase):
             "notification_url_string_required": ("config/general.json",),
             "notifications_invalid": ("config/general.json",),
             "misconfigured_items": ("config/skroutz.json",),
+            "retry_preparation_note": (2, "OSError"),
             "not_found_detail": (404,),
             "rate_limited_detail": (429,),
             "server_error_detail": (503,),

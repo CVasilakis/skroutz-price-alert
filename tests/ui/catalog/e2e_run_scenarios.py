@@ -78,6 +78,25 @@ def _():
     )
 
 
+@scenario(
+    Surface.E2E_RUN,
+    "retry_preparation_failed",
+    "Client reset fails between attempts, item still recovers",
+    tags=("retry",),
+)
+def _():
+    return drive_orchestrated_run(
+        items=[{"name": "Sony WH-1000XM5", "url": _URL.format(1), "target_price": 300.0}],
+        results_by_url={
+            _URL.format(1): [
+                ScraperParseError("No price element found"),
+                PriceResult(price=320.0, currency="€"),
+            ]
+        },
+        prepare_retry_error=OSError("Too many open files"),
+    )
+
+
 @scenario(Surface.E2E_RUN, "failure_all_parse", "Every attempt fails to parse", tags=("error",))
 def _():
     return drive_orchestrated_run(

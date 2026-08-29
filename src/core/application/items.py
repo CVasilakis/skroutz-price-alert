@@ -73,6 +73,21 @@ class ItemExecutor:
                 flattened.extend(note)
         return flattened or None
 
+    def _prepare_retry(self, attempt: int, attempt_notes: list[str]) -> None:
+        """Reset transport state, folding a preparation fault into the failed attempt.
+
+        A client that cannot reset itself is not a separate failure mode: the next
+        attempt runs with whatever transport state remains and is classified by the
+        normal policy. Containing the fault here keeps one item's reset from ending
+        the target and discarding the run's still-unsaved checks, while the quiet
+        traceback preserves the diagnostic an escaping exception used to leave.
+        """
+        try:
+            self.client.prepare_retry()
+        except Exception as exc:
+            save_traceback(self.logger, target_name=self.target, log_to_console=False)
+            attempt_notes.append(messages.retry_preparation_note(attempt + 1, type(exc).__name__))
+
     def process(self, item: TrackedItem) -> ItemRunOutcome:
         if item.skip:
             self.reporter.log_result("✅", item.name, "Skipped", messages.NOTE_SKIP_FIELD)
@@ -154,7 +169,7 @@ class ItemExecutor:
                         abort_target=policy.abort,
                     )
                 if policy.prepare_before_retry:
-                    self.client.prepare_retry()
+                    self._prepare_retry(attempt, attempt_notes)
                 self.pacer.sleep(MIN_DELAY_SECONDS, attempt, is_retry=True)
         return ItemRunOutcome(item)
 

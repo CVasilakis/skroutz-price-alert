@@ -136,6 +136,19 @@ def attempt_note(attempt: int, error_type: str) -> str:
     return f"Attempt {attempt}: {error_type}"
 
 
+def retry_preparation_note(attempt: int, error_type: str) -> str:
+    """The footnote for a client that could not reset itself before a retry.
+
+    Args:
+        attempt (int): The 1-based attempt number whose retry preparation failed.
+        error_type (str): The exception type name raised by the client.
+
+    Returns:
+        str: The footnote wording.
+    """
+    return f"Attempt {attempt}: Retry preparation failed ({error_type})"
+
+
 def errors_log_pointer(target: str) -> str:
     """The footnote pointing at a target's error log.
 
