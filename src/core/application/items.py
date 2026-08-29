@@ -97,9 +97,15 @@ class ItemExecutor:
         between every step so a signal stops the run promptly without abandoning a
         request mid-flight.
 
+        Only the scrape itself is classified. Evaluation and reporting run after the
+        classifying block deliberately, so a defect on this side can never be
+        answered by re-requesting a page that was already read; see the comment on
+        that boundary before moving anything across it.
+
         Returns:
             What this item contributed to the run; never raises for a scrape
-            failure, which is reported as an outcome instead.
+            failure, which is reported as an outcome instead. A fault in the
+            post-success work does propagate, ending the target.
         """
         if item.skip:
             self.reporter.log_result("✅", item.name, "Skipped", messages.NOTE_SKIP_FIELD)
@@ -122,15 +128,6 @@ class ItemExecutor:
                     result = validate_scrape_result(self.client.scrape(item))
                 finally:
                     self.reporter.complete_scraping()
-                if self.interrupted():
-                    break
-                notification_failed = self.results.handle(item, result, attempt, attempt_notes)
-                statuses = (
-                    frozenset({ExitStatus.NOTIFICATION_ERROR})
-                    if notification_failed
-                    else frozenset()
-                )
-                return ItemRunOutcome(item, statuses=statuses)
             except SKIP_ERRORS as exc:
                 self.reporter.log_error(
                     item.name,
@@ -183,6 +180,31 @@ class ItemExecutor:
                 if policy.prepare_before_retry:
                     self._prepare_retry(attempt, attempt_notes)
                 self.pacer.sleep(MIN_DELAY_SECONDS, attempt, is_retry=True)
+                continue
+
+            # The scrape succeeded; everything below is post-success work and sits
+            # outside the classifier above on purpose. A fault here is a defect in
+            # our own evaluation or reporting, not a scraping failure, and the
+            # classifier would answer it by re-requesting a page that was already
+            # read correctly — tripling load on a third-party store to work around
+            # a bug on this side.
+            #
+            # Do not wrap this in its own handler to keep the run's staged results.
+            # Nothing here can fail for an environmental reason: deliveries are
+            # already contained by ResultHandler, its diagnostic write by
+            # try_save_traceback, state recording is in-memory over pre-validated
+            # values, and both reporters absorb their own faults. What is left is
+            # only a programming error, and letting it reach TargetRunner's
+            # lifecycle handler keeps it loud and costs one cycle of state that the
+            # next timer firing rebuilds. Catching it here would dress a defect up
+            # as an ordinary handled outcome and it would stop being investigated.
+            if self.interrupted():
+                break
+            notification_failed = self.results.handle(item, result, attempt, attempt_notes)
+            statuses = (
+                frozenset({ExitStatus.NOTIFICATION_ERROR}) if notification_failed else frozenset()
+            )
+            return ItemRunOutcome(item, statuses=statuses)
         return ItemRunOutcome(item)
 
 

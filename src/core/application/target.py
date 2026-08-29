@@ -22,7 +22,7 @@ from core.exceptions import (
     StorageFileError,
 )
 from core.exit_status import ExitStatus
-from core.infrastructure.logging import save_traceback, try_save_diagnostic
+from core.infrastructure.logging import try_save_diagnostic, try_save_traceback
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.clients import ClientLoader
@@ -42,9 +42,7 @@ class TargetRunner:
         now_fn: Callable[[], datetime.datetime],
         state_dir: str,
         state_repository_factory: Callable[..., JsonStateRepository] = JsonStateRepository,
-        executor_type: type[ItemExecutor] | None = None,
         acquire_lock_fn: Callable[[str], AbstractContextManager[Any]],
-        save_traceback_fn: Callable[..., None] = save_traceback,
     ) -> None:
         self.client_loader = client_loader
         self.notifier = notifier
@@ -52,9 +50,7 @@ class TargetRunner:
         self.now_fn = now_fn
         self.state_dir = Path(state_dir)
         self.state_repository_factory = state_repository_factory
-        self.executor_type = executor_type or ItemExecutor
         self.acquire_lock_fn = acquire_lock_fn
-        self.save_traceback_fn = save_traceback_fn
 
     def _try_notification(
         self,
@@ -66,10 +62,7 @@ class TargetRunner:
         try:
             return bool(operation())
         except Exception:
-            try:
-                self.save_traceback_fn(logger, target_name=target, log_to_console=False)
-            except Exception:
-                pass
+            try_save_traceback(logger, target_name=target, log_to_console=False)
             return False
 
     def _report_storage_error(
@@ -140,7 +133,7 @@ class TargetRunner:
                     if not load.items:
                         return result
                     client = self.client_loader.load(plugin, load.settings)
-                    executor = self.executor_type(
+                    executor = ItemExecutor(
                         target=plugin.target,
                         display_name=plugin.display_name,
                         client=client,
@@ -234,10 +227,7 @@ class TargetRunner:
             self.reporter.log_system_error(str(exc))
             result.statuses.add(ExitStatus.PLUGIN_DEPENDENCY_ERROR)
         except Exception as exc:
-            try:
-                self.save_traceback_fn(logger, target_name=plugin.target, log_to_console=False)
-            except Exception:
-                pass
+            try_save_traceback(logger, target_name=plugin.target, log_to_console=False)
             self.reporter.log_error(
                 "Scraper",
                 messages.plugin_lifecycle_failed(type(exc).__name__),

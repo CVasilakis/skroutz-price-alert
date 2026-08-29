@@ -70,6 +70,17 @@ class SilentRunReporter(RunReporter):
             return [ensure_period(notes)] if notes else []
         return [ensure_period(note) for note in notes if note]
 
+    # Deliberately duplicated in core.tui.run_reporter.InteractiveRunReporter.
+    # This mapping is four lines of shared vocabulary between two frontends that
+    # must not share a layer: SilentRunReporter lives in the application layer
+    # precisely so a background run never imports Rich, and InteractiveRunReporter
+    # is presentation. Every candidate home costs more than the duplication —
+    # core.presentation is scoped to settings display, application.contracts is
+    # deliberately presentation-neutral and would gain emoji, core.messages
+    # deliberately carries no icons at all, and a new module would exist for one
+    # function. Drift is not a silent risk either: the UI snapshot suite pins both
+    # the interactive panel and the background log, so changing one copy alone
+    # fails a test. Keep them in step by hand; do not centralize them.
     @staticmethod
     def _outcome_icon(outcome: PriceOutcome, delivery_failed: bool = False) -> str:
         if delivery_failed:

@@ -241,3 +241,33 @@ def save_traceback(
             log_file.write(f"Diagnostic context: {details}\n")
         traceback.print_exc(file=log_file)
         log_file.write(f"\n{'-' * 100}")
+
+
+def try_save_traceback(
+    logger: logging.Logger,
+    target_name: str | None = None,
+    url: str | None = None,
+    diagnostic_context: Mapping[str, str] | None = None,
+    log_to_console: bool = True,
+) -> bool:
+    """Best-effort traceback persistence for paths that must not fail.
+
+    The sibling of :func:`try_save_diagnostic`, for the same reason: writing a
+    diagnostic involves creating a directory and appending to a file, either of
+    which can fail on a full or read-only disk. A diagnostic that cannot be
+    written is itself a diagnostic — never a reason to abandon work that already
+    succeeded, and never a second failure layered on top of the one being
+    recorded.
+
+    Containment lives here rather than at each call site so the decision is made
+    once. Use :func:`save_traceback` directly where a write failure should
+    surface.
+
+    Returns:
+        Whether the traceback reached the error log.
+    """
+    try:
+        save_traceback(logger, target_name, url, diagnostic_context, log_to_console)
+    except OSError:
+        return False
+    return True

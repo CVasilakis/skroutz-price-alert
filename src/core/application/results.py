@@ -9,7 +9,7 @@ from collections.abc import Callable
 from core import messages
 from core.application.contracts import PriceOutcome, RunReporter
 from core.constants import MAX_RETRIES, STALE_ITEM_HOURS
-from core.infrastructure.logging import save_traceback
+from core.infrastructure.logging import try_save_traceback
 from core.infrastructure.persistence import format_utc
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import ListingResult, ScrapeResult, TrackedItem
@@ -59,10 +59,16 @@ class ResultHandler:
         return None
 
     def _try_notification(self, operation: Callable[[], bool]) -> bool:
+        """Attempt one delivery, containing any transport fault as "not delivered".
+
+        Deliberately duplicated in ``TargetRunner`` rather than shared: the two own
+        different lifecycles, and with the diagnostic write now contained inside
+        :func:`try_save_traceback` what remains here is shape, not policy.
+        """
         try:
             return bool(operation())
         except Exception:
-            save_traceback(self.logger, target_name=self.target, log_to_console=False)
+            try_save_traceback(self.logger, target_name=self.target, log_to_console=False)
             return False
 
     def _notify_matching_offers(

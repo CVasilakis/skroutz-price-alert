@@ -16,7 +16,7 @@ from core.application.reporting import SilentRunReporter
 from core.application.target import TargetRunner
 from core.exit_status import ExitStatus
 from core.infrastructure.locking import StateLockManager
-from core.infrastructure.logging import get_target_logger, save_traceback
+from core.infrastructure.logging import get_target_logger
 from core.infrastructure.signals import describe_signal
 from core.notifications.contracts import NotificationService
 from core.scrapers.framework.clients import ClientLoader
@@ -126,7 +126,6 @@ class ScrapingOrchestrator:
                 state_dir=self.state_dir,
                 state_repository_factory=self.state_repository_factory,
                 acquire_lock_fn=self.lock_manager.acquire,
-                save_traceback_fn=save_traceback,
             )
             target_outcome = target_runner.run(load, self._current_logger, lambda: self.interrupted)
             outcome.merge(target_outcome)

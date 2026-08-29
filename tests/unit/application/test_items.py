@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from unittest import mock
 
+import pytest
+
 from core.application.contracts import RunReporter
 from core.application.items import ItemExecutor
 from core.application.pacing import Pacer
@@ -106,6 +108,21 @@ def test_failed_retry_preparation_is_contained_in_its_attempt(monkeypatch):
     state.record_priced_check.assert_called_once()
     notes = reporter.log_price_result.call_args.kwargs["attempt_notes"]
     assert any("Retry preparation failed" in note for note in notes)
+
+
+def test_post_success_fault_is_not_answered_by_re_requesting_the_page():
+    """A defect after a successful scrape must not cost the store extra requests."""
+    executor, _, state, _ = _executor()
+    executor.client.scrape.return_value = PriceResult(12, "EUR")
+    executor.results.handle = mock.Mock(side_effect=RuntimeError("evaluation defect"))
+
+    # It propagates rather than being classified as a scraping failure, so the
+    # target ends loudly instead of retrying work that already succeeded.
+    with pytest.raises(RuntimeError, match="evaluation defect"):
+        executor.process(_item())
+
+    executor.client.scrape.assert_called_once()
+    state.record_priced_check.assert_not_called()
 
 
 def test_server_error_exhaustion_is_modeled_success_without_retry_preparation():
