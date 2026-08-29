@@ -1,162 +1,167 @@
 """Wiring test for ``run``: the liveness reminder is checked once per invocation and
 *before* the scraping orchestrator, so an aborted scrape can never suppress the heartbeat.
 
-Everything main() touches is patched with ``autospec=True``, so this asserts the wiring
-(that the reminder is constructed and run, in the right order) *and* that every
-constructor/function call still matches the real signatures — a parameter added to
-``ScrapingOrchestrator``, ``ReminderService``, ``AppriseNotifier``, ``load_target_configs`` or
-``validate_notification_preflight`` fails here instead of passing silently. It does not test any scraping
-behavior.
+The background-mode tests replace what main() touches with *autospecced* doubles, so this
+asserts the wiring (that the reminder is constructed and run, in the right order) *and*
+that every constructor/function call still matches the real signatures — a parameter added
+to ``ScrapingOrchestrator``, ``ReminderService``, ``AppriseNotifier``, ``load_target_configs``
+or ``validate_notification_preflight`` fails here instead of passing silently. It does not
+test any scraping behavior.
+
+Doubles are installed with pytest's ``monkeypatch`` (the suite's usual seam) rather than a
+stack of ``mock.patch`` context managers, which keeps each test flat: a nested ``with``
+group needs one block per collaborator, and CPython compiles at most 20 nested blocks per
+function — a ceiling the interactive test below was one collaborator away from reaching.
 """
 
 import sys
-import unittest
 from unittest import mock
+
+import pytest
 
 import core.run
 from core.infrastructure.updates import SoftwareVersionStatus
 
 
-class TestRunWiring(unittest.TestCase):
-    def test_reminder_runs_once_before_the_orchestrator(self):
-        order = []
+def _autospec(monkeypatch, name, **kwargs):
+    """Replace ``core.run.<name>`` with a signature-checked double, and return it.
 
-        with (
-            mock.patch.object(sys, "argv", ["run", "--quiet"]),
-            mock.patch("core.run.setup_global_logging", autospec=True),
-            mock.patch("core.run.PluginCatalog", autospec=True) as Catalog,
-            mock.patch("core.run.ClientLoader", autospec=True),
-            mock.patch("core.run.load_target_configs", autospec=True, return_value=[]),
-            mock.patch("core.run.load_general_config", autospec=True) as load_general,
-            mock.patch(
-                "core.run.record_general_diagnostic",
-                autospec=True,
-                side_effect=lambda general: general,
-            ),
-            mock.patch(
-                "core.run.validate_notification_preflight", autospec=True, return_value=None
-            ),
-            mock.patch("core.run.AppriseNotifier", autospec=True) as notifier_type,
-            mock.patch("core.run.ReminderStateRepository", autospec=True) as StateRepository,
-            mock.patch("core.run.StateLockManager", autospec=True) as LockManager,
-            mock.patch("core.run.ReminderService", autospec=True) as ReminderService,
-            mock.patch("core.run.ScrapingOrchestrator", autospec=True) as Orchestrator,
-        ):
-            catalog = Catalog.discover.return_value
-            catalog.targets = ("skroutz",)
-            general = load_general.return_value
-            general.notifications.valid_urls = ("json://localhost",)
-            general.settings_error = None
-            reminder = ReminderService.return_value
-            reminder.run_once.side_effect = lambda: order.append("reminder")
-            orchestrator = Orchestrator.return_value
-            orchestrator.run.side_effect = lambda: (order.append("orchestrator"), 0)[1]
-            with self.assertRaises(SystemExit) as caught:
-                core.run.main()
-
-        self.assertEqual(caught.exception.code, 0)
-        reminder.run_once.assert_called_once()
-        self.assertEqual(order, ["reminder", "orchestrator"])
-        load_general.assert_called_once_with(core.run.CONFIG_DIR)
-        self.assertEqual(ReminderService.call_args.args[2], notifier_type.return_value)
-        self.assertEqual(ReminderService.call_args.args[1], StateRepository.return_value)
-        LockManager.assert_called_once_with(core.run.STATE_DIR)
-        self.assertIs(
-            ReminderService.call_args.kwargs["acquire_lock_fn"],
-            LockManager.return_value.acquire,
-        )
-        notifier_type.assert_called_once_with(("json://localhost",))
-
-    def test_reminder_not_run_when_preflight_aborts(self):
-        # A fatal preflight (e.g. missing notifications in service mode) exits before the
-        # reminder/orchestrator phase, so no heartbeat is attempted on an unusable config.
-        failed_load = mock.MagicMock()
-        failed_load.target = "skroutz"
-        failed_load.settings.__getitem__.return_value = 7
-        with (
-            mock.patch.object(sys, "argv", ["run", "--quiet"]),
-            mock.patch("core.run.setup_global_logging", autospec=True),
-            mock.patch("core.run.PluginCatalog", autospec=True) as Catalog,
-            mock.patch("core.run.ClientLoader", autospec=True),
-            mock.patch(
-                "core.run.load_target_configs",
-                autospec=True,
-                return_value=[failed_load],
-            ),
-            mock.patch("core.run.load_general_config", autospec=True),
-            mock.patch(
-                "core.run.record_general_diagnostic",
-                autospec=True,
-                side_effect=lambda general: general,
-            ),
-            mock.patch(
-                "core.run.record_target_load_diagnostic",
-                autospec=True,
-            ) as record_diagnostic,
-            mock.patch("core.run.validate_notification_preflight", autospec=True, return_value=3),
-            mock.patch("core.run.AppriseNotifier", autospec=True),
-            mock.patch("core.run.ReminderStateRepository", autospec=True),
-            mock.patch("core.run.ReminderService", autospec=True) as ReminderService,
-            mock.patch("core.run.ScrapingOrchestrator", autospec=True) as Orchestrator,
-        ):
-            Catalog.discover.return_value.targets = ("skroutz",)
-            with self.assertRaises(SystemExit) as caught:
-                core.run.main()
-
-        self.assertEqual(caught.exception.code, 3)
-        record_diagnostic.assert_called_once_with(failed_load)
-        ReminderService.return_value.run_once.assert_not_called()
-        Orchestrator.assert_not_called()
-
-    def test_interactive_mode_installs_handler_and_uses_interactive_strategy(self):
-        version_status = SoftwareVersionStatus("1.7.0", False)
-        with (
-            mock.patch.object(sys, "argv", ["run", "--skroutz"]),
-            mock.patch("core.run.setup_global_logging"),
-            mock.patch("core.run.PluginCatalog") as Catalog,
-            mock.patch("core.run.ClientLoader") as ClientLoader,
-            mock.patch("core.run.load_target_configs", return_value=[]) as load_target_configs,
-            mock.patch("core.run.load_general_config") as load_general,
-            mock.patch(
-                "core.run.record_general_diagnostic",
-                side_effect=lambda general: general,
-            ),
-            mock.patch("core.run.install_interrupt_handler") as install_handler,
-            mock.patch("core.run.inspect_software_version", return_value=version_status),
-            mock.patch("core.run.inspect_user_lingering", return_value=True),
-            mock.patch("core.run.render_config_panel") as render_config,
-            mock.patch("core.run.Console") as Console,
-            mock.patch("core.run.signal.signal"),
-            mock.patch("core.run.InteractiveRunReporter") as reporter_type,
-            mock.patch("core.run.AppriseNotifier"),
-            mock.patch("core.run.ReminderStateRepository"),
-            mock.patch("core.run.ReminderService"),
-            mock.patch("core.run.ScrapingOrchestrator") as Orchestrator,
-        ):
-            plugin = mock.MagicMock(display_name="Skroutz")
-            catalog = Catalog.discover.return_value
-            catalog.targets = ("skroutz", "insomnia")
-            catalog.get.return_value = plugin
-            load_general.return_value.notifications.valid_urls = ("json://localhost",)
-            Orchestrator.return_value.run.return_value = 0
-            with self.assertRaises(SystemExit) as caught:
-                core.run.main()
-
-        self.assertEqual(caught.exception.code, 0)
-        load_target_configs.assert_called_once_with([plugin], core.run.CONFIG_DIR)
-        render_config.assert_called_once_with(
-            Console.return_value, load_general.return_value, version_status, True
-        )
-        install_handler.assert_called_once()
-        Orchestrator.assert_called_once_with(
-            [],
-            ClientLoader.return_value,
-            mock.ANY,
-            False,
-            reporter_type.return_value,
-            state_dir=core.run.STATE_DIR,
-        )
+    The ``monkeypatch`` equivalent of ``mock.patch(..., autospec=True)``: calls that no
+    longer match the real signature raise here rather than passing silently.
+    """
+    double = mock.create_autospec(getattr(core.run, name), **kwargs)
+    monkeypatch.setattr(core.run, name, double)
+    return double
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_reminder_runs_once_before_the_orchestrator(monkeypatch):
+    order = []
+
+    monkeypatch.setattr(sys, "argv", ["run", "--quiet"])
+    _autospec(monkeypatch, "setup_global_logging")
+    _autospec(monkeypatch, "ClientLoader")
+    _autospec(monkeypatch, "load_target_configs", return_value=[])
+    _autospec(monkeypatch, "record_general_diagnostic", side_effect=lambda general: general)
+    _autospec(monkeypatch, "validate_notification_preflight", return_value=None)
+    Catalog = _autospec(monkeypatch, "PluginCatalog")
+    load_general = _autospec(monkeypatch, "load_general_config")
+    notifier_type = _autospec(monkeypatch, "AppriseNotifier")
+    StateRepository = _autospec(monkeypatch, "ReminderStateRepository")
+    LockManager = _autospec(monkeypatch, "StateLockManager")
+    ReminderService = _autospec(monkeypatch, "ReminderService")
+    Orchestrator = _autospec(monkeypatch, "ScrapingOrchestrator")
+
+    catalog = Catalog.discover.return_value
+    catalog.targets = ("skroutz",)
+    general = load_general.return_value
+    general.notifications.valid_urls = ("json://localhost",)
+    general.settings_error = None
+    reminder = ReminderService.return_value
+    reminder.run_once.side_effect = lambda: order.append("reminder")
+    orchestrator = Orchestrator.return_value
+    orchestrator.run.side_effect = lambda: (order.append("orchestrator"), 0)[1]
+
+    with pytest.raises(SystemExit) as caught:
+        core.run.main()
+
+    assert caught.value.code == 0
+    reminder.run_once.assert_called_once()
+    assert order == ["reminder", "orchestrator"]
+    load_general.assert_called_once_with(core.run.CONFIG_DIR)
+    assert ReminderService.call_args.args[2] == notifier_type.return_value
+    assert ReminderService.call_args.args[1] == StateRepository.return_value
+    LockManager.assert_called_once_with(core.run.STATE_DIR)
+    assert ReminderService.call_args.kwargs["acquire_lock_fn"] is LockManager.return_value.acquire
+    notifier_type.assert_called_once_with(("json://localhost",))
+
+
+def test_reminder_not_run_when_preflight_aborts(monkeypatch):
+    # A fatal preflight (e.g. missing notifications in service mode) exits before the
+    # reminder/orchestrator phase, so no heartbeat is attempted on an unusable config.
+    failed_load = mock.MagicMock()
+    failed_load.target = "skroutz"
+    failed_load.settings.__getitem__.return_value = 7
+
+    monkeypatch.setattr(sys, "argv", ["run", "--quiet"])
+    _autospec(monkeypatch, "setup_global_logging")
+    _autospec(monkeypatch, "ClientLoader")
+    _autospec(monkeypatch, "load_target_configs", return_value=[failed_load])
+    _autospec(monkeypatch, "load_general_config")
+    _autospec(monkeypatch, "record_general_diagnostic", side_effect=lambda general: general)
+    _autospec(monkeypatch, "validate_notification_preflight", return_value=3)
+    _autospec(monkeypatch, "AppriseNotifier")
+    _autospec(monkeypatch, "ReminderStateRepository")
+    Catalog = _autospec(monkeypatch, "PluginCatalog")
+    record_diagnostic = _autospec(monkeypatch, "record_target_load_diagnostic")
+    ReminderService = _autospec(monkeypatch, "ReminderService")
+    Orchestrator = _autospec(monkeypatch, "ScrapingOrchestrator")
+
+    Catalog.discover.return_value.targets = ("skroutz",)
+
+    with pytest.raises(SystemExit) as caught:
+        core.run.main()
+
+    assert caught.value.code == 3
+    record_diagnostic.assert_called_once_with(failed_load)
+    ReminderService.return_value.run_once.assert_not_called()
+    Orchestrator.assert_not_called()
+
+
+def test_interactive_mode_installs_handler_and_uses_interactive_strategy(monkeypatch):
+    # Deliberately unspecced: this test drives the Rich/TUI collaborators, whose doubles
+    # stand in for a live console rather than pinning signatures the way the two
+    # background-mode tests above do.
+    version_status = SoftwareVersionStatus("1.7.0", False)
+    Catalog = mock.MagicMock()
+    ClientLoader = mock.MagicMock()
+    load_target_configs = mock.MagicMock(return_value=[])
+    load_general = mock.MagicMock()
+    install_handler = mock.MagicMock()
+    render_config = mock.MagicMock()
+    Console = mock.MagicMock()
+    reporter_type = mock.MagicMock()
+    Orchestrator = mock.MagicMock()
+
+    monkeypatch.setattr(sys, "argv", ["run", "--skroutz"])
+    monkeypatch.setattr(core.run, "setup_global_logging", lambda _quiet: None)
+    monkeypatch.setattr(core.run, "PluginCatalog", Catalog)
+    monkeypatch.setattr(core.run, "ClientLoader", ClientLoader)
+    monkeypatch.setattr(core.run, "load_target_configs", load_target_configs)
+    monkeypatch.setattr(core.run, "load_general_config", load_general)
+    monkeypatch.setattr(core.run, "record_general_diagnostic", lambda general: general)
+    monkeypatch.setattr(core.run, "install_interrupt_handler", install_handler)
+    monkeypatch.setattr(core.run, "inspect_software_version", lambda: version_status)
+    monkeypatch.setattr(core.run, "inspect_user_lingering", lambda: True)
+    monkeypatch.setattr(core.run, "render_config_panel", render_config)
+    monkeypatch.setattr(core.run, "Console", Console)
+    monkeypatch.setattr(core.run.signal, "signal", lambda *_: None)
+    monkeypatch.setattr(core.run, "InteractiveRunReporter", reporter_type)
+    monkeypatch.setattr(core.run, "AppriseNotifier", mock.MagicMock())
+    monkeypatch.setattr(core.run, "ReminderStateRepository", mock.MagicMock())
+    monkeypatch.setattr(core.run, "ReminderService", mock.MagicMock())
+    monkeypatch.setattr(core.run, "ScrapingOrchestrator", Orchestrator)
+
+    plugin = mock.MagicMock(display_name="Skroutz")
+    catalog = Catalog.discover.return_value
+    catalog.targets = ("skroutz", "insomnia")
+    catalog.get.return_value = plugin
+    load_general.return_value.notifications.valid_urls = ("json://localhost",)
+    Orchestrator.return_value.run.return_value = 0
+
+    with pytest.raises(SystemExit) as caught:
+        core.run.main()
+
+    assert caught.value.code == 0
+    load_target_configs.assert_called_once_with([plugin], core.run.CONFIG_DIR)
+    render_config.assert_called_once_with(
+        Console.return_value, load_general.return_value, version_status, True
+    )
+    install_handler.assert_called_once()
+    Orchestrator.assert_called_once_with(
+        [],
+        ClientLoader.return_value,
+        mock.ANY,
+        False,
+        reporter_type.return_value,
+        state_dir=core.run.STATE_DIR,
+    )

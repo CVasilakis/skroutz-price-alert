@@ -1,3 +1,16 @@
+"""Wiring test for the status entry point.
+
+``main()`` is a composition root: it collects from the catalog, the config loader, the
+state repository, systemd, and the update check, then hands the results to the panel
+builders. Every one of those collaborators is replaced here, so the test asserts the
+composition without discovering plugins, touching the filesystem, or shelling out.
+
+Replacement goes through pytest's ``monkeypatch`` (the suite's usual seam) rather than a
+stack of ``mock.patch`` context managers. Beyond matching the surrounding tests, it keeps
+the body flat: a nested ``with`` group needs one block per collaborator, and CPython
+compiles at most 20 nested blocks per function — a ceiling this test had already reached.
+"""
+
 from types import SimpleNamespace
 from unittest import mock
 
@@ -6,11 +19,7 @@ from core.infrastructure.updates import SoftwareVersionStatus
 from core.settings import SettingStatus
 
 
-# Patched as a decorator rather than inside the `with` block below: CPython caps a
-# function at 20 statically nested blocks, and the context-manager group is already
-# at that limit.
-@mock.patch("core.status.inspect_user_lingering", return_value=True)
-def test_status_main_renders_installed_missing_and_orphan_panels(_lingering):
+def test_status_main_renders_installed_missing_and_orphan_panels(monkeypatch):
     version_status = SoftwareVersionStatus("1.7.0", False)
     console = mock.MagicMock()
     catalog = mock.MagicMock()
@@ -49,40 +58,44 @@ def test_status_main_renders_installed_missing_and_orphan_panels(_lingering):
     orphan_panel = mock.MagicMock()
     not_installed = object()
 
-    with (
-        mock.patch("core.status.install_interrupt_handler"),
-        mock.patch("core.status.setup_global_logging"),
-        mock.patch("core.status.Console", return_value=console),
-        mock.patch("core.status.PluginCatalog.discover", return_value=catalog),
-        mock.patch("core.status.oncalendar_for", return_value="hourly") as oncalendar,
-        mock.patch("core.status.load_target_configs", return_value=(load,)),
-        mock.patch("core.status.load_general_config") as load_general,
-        mock.patch(
-            "core.status.record_general_diagnostic",
-            side_effect=lambda general: general,
-        ),
-        mock.patch(
-            "core.status.record_target_load_diagnostic",
-            return_value=True,
-        ),
-        mock.patch("core.status._check_for_updates", return_value=version_status),
-        mock.patch("core.status.render_config_panel") as render_config,
-        mock.patch("core.status.signal.signal"),
-        mock.patch("core.status.get_systemd_properties", side_effect=systemd_properties),
-        mock.patch("core.status.read_timer_oncalendar", return_value="daily"),
-        mock.patch("core.status.config_view", return_value="config-view"),
-        mock.patch("core.status.JsonStateRepository") as state_repository,
-        mock.patch("core.status.build_service_panel", return_value=service_panel) as build_service,
-        mock.patch(
-            "core.status.build_not_installed_panel", return_value=not_installed
-        ) as build_missing,
-        mock.patch(
-            "core.status.get_installed_plugin_units",
-            return_value={"alpha": {"timer"}, "orphan": {"service"}},
-        ),
-        mock.patch("core.status.build_orphan_panel", return_value=orphan_panel) as build_orphan,
-    ):
-        core.status.main()
+    # Collaborators the assertions below inspect.
+    oncalendar = mock.MagicMock(return_value="hourly")
+    load_general = mock.MagicMock()
+    render_config = mock.MagicMock()
+    state_repository = mock.MagicMock()
+    build_service = mock.MagicMock(return_value=service_panel)
+    build_missing = mock.MagicMock(return_value=not_installed)
+    build_orphan = mock.MagicMock(return_value=orphan_panel)
+
+    monkeypatch.setattr(core.status, "oncalendar_for", oncalendar)
+    monkeypatch.setattr(core.status, "load_general_config", load_general)
+    monkeypatch.setattr(core.status, "render_config_panel", render_config)
+    monkeypatch.setattr(core.status, "JsonStateRepository", state_repository)
+    monkeypatch.setattr(core.status, "build_service_panel", build_service)
+    monkeypatch.setattr(core.status, "build_not_installed_panel", build_missing)
+    monkeypatch.setattr(core.status, "build_orphan_panel", build_orphan)
+
+    # Collaborators that only need to stop doing the real thing.
+    monkeypatch.setattr(core.status, "install_interrupt_handler", lambda: None)
+    monkeypatch.setattr(core.status, "setup_global_logging", lambda: None)
+    monkeypatch.setattr(core.status, "Console", lambda: console)
+    monkeypatch.setattr(core.status.PluginCatalog, "discover", lambda: catalog)
+    monkeypatch.setattr(core.status, "load_target_configs", lambda *_: (load,))
+    monkeypatch.setattr(core.status, "record_general_diagnostic", lambda general: general)
+    monkeypatch.setattr(core.status, "record_target_load_diagnostic", lambda _load: True)
+    monkeypatch.setattr(core.status, "_check_for_updates", lambda: version_status)
+    monkeypatch.setattr(core.status, "inspect_user_lingering", lambda: True)
+    monkeypatch.setattr(core.status.signal, "signal", lambda *_: None)
+    monkeypatch.setattr(core.status, "get_systemd_properties", systemd_properties)
+    monkeypatch.setattr(core.status, "read_timer_oncalendar", lambda _target: "daily")
+    monkeypatch.setattr(core.status, "config_view", lambda *_args, **_kwargs: "config-view")
+    monkeypatch.setattr(
+        core.status,
+        "get_installed_plugin_units",
+        lambda: {"alpha": {"timer"}, "orphan": {"service"}},
+    )
+
+    core.status.main()
 
     oncalendar.assert_called_once_with("1h")
     state_repository.return_value.load.assert_called_once()
