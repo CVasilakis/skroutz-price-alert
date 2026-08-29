@@ -26,7 +26,7 @@ from core.infrastructure.logging import try_save_diagnostic, try_save_traceback
 from core.notifications.contracts import NotificationService
 from core.scrapers.api import TrackedItem
 from core.scrapers.framework.clients import ClientLoader
-from core.scrapers.framework.settings import KEY_NOTIFY, KEY_SUPPRESS_REPEATED_PRICE_ALERTS
+from core.scrapers.framework.setting_specs import KEY_NOTIFY, KEY_SUPPRESS_REPEATED_PRICE_ALERTS
 from core.scrapers.framework.state import JsonStateRepository
 
 

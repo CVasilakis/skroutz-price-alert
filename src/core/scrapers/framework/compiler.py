@@ -24,7 +24,7 @@ from core.scrapers.framework.naming import (
     RESERVED_PLUGIN_NAMES,
     SNAKE_CASE_KEY,
 )
-from core.scrapers.framework.settings import SUPPORTED_INTERVALS, framework_setting_specs
+from core.scrapers.framework.setting_specs import SUPPORTED_INTERVALS, framework_setting_specs
 from core.settings import SettingSpec
 
 RUNTIME_PLUGIN_FILES = ("__init__.py", "plugin.py", "client.py")

@@ -40,7 +40,7 @@ except Exception:  # pragma: no cover - tls_client not installed (core-only inst
 
 def _make_client():
     """Builds a concrete client with tls_client.Session patched inert."""
-    from core.scrapers.framework.settings import framework_setting_specs
+    from core.scrapers.framework.setting_specs import framework_setting_specs
     from core.settings import resolve_settings
 
     with mock.patch("core.scrapers.support.http.tls_client.Session"):
@@ -48,7 +48,7 @@ def _make_client():
 
 
 def _settings():
-    from core.scrapers.framework.settings import framework_setting_specs
+    from core.scrapers.framework.setting_specs import framework_setting_specs
     from core.settings import resolve_settings
 
     return resolve_settings(framework_setting_specs("1h"), {})
@@ -77,7 +77,7 @@ class TestBoundedGet(unittest.TestCase):
             REQUEST_TIMEOUT_SECONDS = 45
 
         with mock.patch("core.scrapers.support.http.tls_client.Session"):
-            from core.scrapers.framework.settings import framework_setting_specs
+            from core.scrapers.framework.setting_specs import framework_setting_specs
             from core.settings import resolve_settings
 
             client = SlowClient(resolve_settings(framework_setting_specs("1h"), {}))
@@ -129,7 +129,7 @@ class TestRaiseForStatus(unittest.TestCase):
             NOT_FOUND_CODES = (418,)  # this API signals "gone" with 418
 
         with mock.patch("core.scrapers.support.http.tls_client.Session"):
-            from core.scrapers.framework.settings import framework_setting_specs
+            from core.scrapers.framework.setting_specs import framework_setting_specs
             from core.settings import resolve_settings
 
             client = OddClient(resolve_settings(framework_setting_specs("1h"), {}))

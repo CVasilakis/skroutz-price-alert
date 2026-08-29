@@ -11,7 +11,7 @@ from core.scrapers.api import (
 )
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.compiler import compile_plugin
-from core.scrapers.framework.settings import KEY_SUPPRESS_REPEATED_PRICE_ALERTS
+from core.scrapers.framework.setting_specs import KEY_SUPPRESS_REPEATED_PRICE_ALERTS
 from core.settings import SettingStatus, resolve_settings
 
 

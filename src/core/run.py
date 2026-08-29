@@ -41,7 +41,7 @@ from core.infrastructure.updates import inspect_software_version
 from core.notifications.apprise import AppriseNotifier
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.clients import ClientLoader
-from core.scrapers.framework.settings import KEY_RETENTION
+from core.scrapers.framework.setting_specs import KEY_RETENTION
 from core.tui.config_check import render_config_panel
 from core.tui.run_reporter import InteractiveRunReporter
 

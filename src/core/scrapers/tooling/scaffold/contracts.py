@@ -16,7 +16,7 @@ from core.scrapers.framework.naming import (
     RESERVED_PLUGIN_NAMES,
     SNAKE_CASE_KEY,
 )
-from core.scrapers.framework.settings import framework_setting_specs
+from core.scrapers.framework.setting_specs import framework_setting_specs
 
 ResultType = Literal["price", "listing"]
 Transport = Literal["bare", "http"]

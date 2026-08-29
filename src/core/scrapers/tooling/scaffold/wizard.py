@@ -19,7 +19,7 @@ from rich.text import Text
 from core.scrapers.domain import normalize_domain
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS
 from core.scrapers.framework.naming import FRAMEWORK_ITEM_KEYS, SNAKE_CASE_KEY
-from core.scrapers.framework.settings import framework_setting_specs
+from core.scrapers.framework.setting_specs import framework_setting_specs
 from core.scrapers.tooling.scaffold.contracts import (
     VALUE_TYPES,
     CustomValueSpec,

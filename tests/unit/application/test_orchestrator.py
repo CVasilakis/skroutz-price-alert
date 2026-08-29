@@ -21,7 +21,7 @@ from core.infrastructure.locking import StateLockManager
 from core.scrapers.api import ScraperPlugin, TrackedItem, UrlField
 from core.scrapers.framework.clients import ClientLoader
 from core.scrapers.framework.compiler import compile_plugin
-from core.scrapers.framework.settings import KEY_SUPPRESS_REPEATED_PRICE_ALERTS
+from core.scrapers.framework.setting_specs import KEY_SUPPRESS_REPEATED_PRICE_ALERTS
 from core.scrapers.framework.state import JsonStateRepository
 from core.settings import resolve_settings
 

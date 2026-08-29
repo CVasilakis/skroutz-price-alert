@@ -38,7 +38,7 @@ from core.infrastructure.systemd import (
 from core.infrastructure.updates import SoftwareVersionStatus, inspect_software_version
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.intervals import oncalendar_for
-from core.scrapers.framework.settings import KEY_INTERVAL
+from core.scrapers.framework.setting_specs import KEY_INTERVAL
 from core.scrapers.framework.state import JsonStateRepository
 from core.settings import SettingStatus
 from core.tui.config_check import config_view, render_config_panel

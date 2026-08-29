@@ -13,7 +13,7 @@ from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.framework.configuration import TargetConfigLoader
 from core.scrapers.framework.intervals import SUPPORTED_INTERVALS, oncalendar_for
 from core.scrapers.framework.model import RegisteredPlugin
-from core.scrapers.framework.settings import KEY_INTERVAL
+from core.scrapers.framework.setting_specs import KEY_INTERVAL
 from core.scrapers.tooling.check import check_plugin
 from core.settings import ResolvedSetting, SettingStatus
 

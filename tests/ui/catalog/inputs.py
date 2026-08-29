@@ -11,7 +11,7 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from core.scrapers.framework.settings import framework_setting_specs
+from core.scrapers.framework.setting_specs import framework_setting_specs
 from core.settings import ResolvedSetting, ResolvedSettings, SettingStatus
 from core.tui.config_check import ConfigView, config_view
 

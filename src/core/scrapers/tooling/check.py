@@ -21,7 +21,7 @@ from core.scrapers.framework.migrations import (
     load_plugin_config_migration_plan,
 )
 from core.scrapers.framework.model import RegisteredPlugin
-from core.scrapers.framework.settings import framework_setting_specs
+from core.scrapers.framework.setting_specs import framework_setting_specs
 from core.scrapers.framework.state import JsonStateRepository, StateEntry
 from core.scrapers.tooling import SCAFFOLD_TEST_TODO
 from core.settings import MISSING

@@ -1,6 +1,6 @@
 """Messages for invalid framework-owned scraper settings.
 
-Separated from the declarations in ``framework/settings.py`` so wording can be
+Separated from the declarations in ``framework/setting_specs.py`` so wording can be
 reviewed in one place, and so the settings module stays a description of behavior
 rather than a mix of behavior and prose. Each message states the accepted values
 and the fallback, since it is shown precisely when a user got the value wrong.

@@ -20,7 +20,7 @@ from core.infrastructure.logging import get_target_logger
 from core.infrastructure.signals import describe_signal
 from core.notifications.contracts import NotificationService
 from core.scrapers.framework.clients import ClientLoader
-from core.scrapers.framework.settings import KEY_RETENTION
+from core.scrapers.framework.setting_specs import KEY_RETENTION
 from core.scrapers.framework.state import JsonStateRepository
 
 
