@@ -82,6 +82,37 @@ progress_delay() {
 
 PROGRESS_MAX_ATTEMPTS=20
 
+# Delayed progress runs two processes: the parent (run_with_progress, which keeps
+# the real command in the foreground) and a background presenter
+# (_progress_present_after_delay). They coordinate entirely through the entries of
+# one private mktemp workspace directory:
+#
+#   active     Regular file. Present while the progress line is still wanted. The
+#              parent creates it before forking the presenter and removes it once
+#              the command returns; the presenter refuses to print without it.
+#   lock       Directory used as a mkdir mutex. Every read or write of the other
+#              three entries happens while holding it, so the presenter's
+#              "still wanted, so print" and the parent's "finished, so revoke"
+#              can never interleave.
+#   delay-pid  PID of the backgrounded progress_delay, published by the presenter
+#              so a parent whose command finished early can end the wait directly
+#              instead of leaving a stray sleep behind.
+#   shown      Created by the presenter only after task_status actually wrote the
+#              line. It is the sole positive evidence that there is something on
+#              the terminal to erase.
+#
+# The parent erases only when the presenter has been reaped, the parent revoked
+# `active` while holding the lock, and `shown` exists. Each condition rules out a
+# different way a blind cursor-up would destroy unrelated output: a live presenter
+# could still print after the erase, an unrevoked (or unobserved) `active` means a
+# line may still be coming, and a missing `shown` means the row above belongs to
+# the caller. Every failure therefore degrades to leaving the progress line in
+# place, which is cosmetic, rather than erasing the wrong row.
+#
+# The single-row assumption behind that one cursor-up is established by
+# _progress_capabilities, which refuses the whole mechanism unless the rendered
+# line is strictly narrower than the terminal, so it cannot soft-wrap.
+
 _progress_capabilities() {
     _pc_message="$1"
     PROGRESS_CURSOR_UP=''
@@ -112,6 +143,11 @@ _progress_capabilities() {
     [ "${#_pc_line}" -lt "$PROGRESS_COLUMNS" ]
 }
 
+# Bounded mkdir mutex over the workspace. A lost race is retried because a holder
+# only ever keeps the lock for a few statements, but a missing workspace or an
+# mkdir failure with no lock directory to blame is a real filesystem problem and
+# fails immediately instead of spinning. Failure never means "the lock is yours":
+# both sides treat it as "the other side may still act".
 _progress_lock() {
     _pl_workspace="$1"
     _pl_attempt=0
@@ -128,6 +164,10 @@ _progress_lock() {
     return 1
 }
 
+# Terminate the presenter and reap it. Returns 0 only when the process is
+# confirmed gone. After the attempt limit it escalates to SIGKILL and returns 1
+# without reaping, which tells the parent the presenter may still write: neither
+# the erase nor the workspace removal may proceed on that path.
 _progress_stop_process() {
     _psp_pid="$1"
     case "$_psp_pid" in
@@ -148,6 +188,10 @@ _progress_stop_process() {
     return 0
 }
 
+# Background presenter: prints the task line once the command has outlived
+# progress_delay, and prints nothing at all if the command finished first. Every
+# early return here is a deliberate no-op, since a progress line is optional and
+# any contention, signal, or write failure resolves to "print nothing".
 _progress_present_after_delay() {
     _ppad_parent="$1"
     _ppad_workspace="$2"
@@ -156,6 +200,9 @@ _progress_present_after_delay() {
 
     _ppad_delay=''
     _ppad_lock_owned=0
+    # A signalled presenter must not die holding the lock or leaving the delay
+    # running: the parent would then spin out its own lock attempts and lose the
+    # ability to erase a line this process already printed.
     trap '
         [ -z "$_ppad_delay" ] ||
             kill "$_ppad_delay" 2>/dev/null || true
@@ -164,6 +211,8 @@ _progress_present_after_delay() {
         exit 0
     ' HUP INT TERM
 
+    # First critical section: confirm the line is still wanted, start the delay,
+    # and publish its PID before releasing the workspace to the parent.
     _progress_lock "$_ppad_workspace" || return 0
     _ppad_lock_owned=1
     if [ ! -f "$_ppad_workspace/active" ]; then
@@ -186,9 +235,14 @@ _progress_present_after_delay() {
         return 0
     fi
     _ppad_lock_owned=0
+    # A non-zero wait means the parent killed the delay because its command
+    # finished, so the line is no longer wanted. The liveness check additionally
+    # keeps an orphaned presenter from printing under a shell that has exited.
     wait "$_ppad_delay" || return 0
     _ppad_delay=''
     kill -0 "$_ppad_parent" 2>/dev/null || return 0
+    # Second critical section: re-check and record `shown` in the same section as
+    # the print, so the parent observes the line and its evidence together.
     _progress_lock "$_ppad_workspace" || return 0
     _ppad_lock_owned=1
     if [ -f "$_ppad_workspace/active" ] &&
@@ -208,6 +262,9 @@ _progress_present_after_delay() {
 # verified capable terminal, a one-second delayed task line is erased before
 # the caller renders its result. Redirected, CI, dumb, narrow, and otherwise
 # unsupported output uses an ordinary permanent task line instead.
+# This is the parent half of the workspace protocol documented above
+# _progress_capabilities; every setup failure below abandons the delayed line
+# and falls back to the permanent one rather than skipping the command.
 run_with_progress() {
     _rwp_message="$1"
     shift
@@ -251,6 +308,10 @@ run_with_progress() {
         _rwp_status=$?
     fi
 
+    # The command has returned, so revoke the line. Doing that under the lock is
+    # what makes the revocation binding: the presenter cannot be mid-print, and
+    # every later check it makes will see `active` gone. Only then is it safe to
+    # conclude that no further line can appear and that the row above is ours.
     _rwp_delay=''
     _rwp_can_erase=0
     if _progress_lock "$_rwp_workspace"; then
@@ -268,12 +329,18 @@ run_with_progress() {
             _rwp_can_erase=1
         fi
     else
+        # Without the lock the revocation is still worth attempting (it shortens
+        # the presenter's work), but it carries no guarantee, so _rwp_can_erase
+        # stays 0 and the progress line is simply left on screen.
         rm -f "$_rwp_workspace/active" 2>/dev/null || true
         if [ -f "$_rwp_workspace/delay-pid" ]; then
             IFS= read -r _rwp_delay < "$_rwp_workspace/delay-pid" ||
                 _rwp_delay=''
         fi
     fi
+    # End the delay so the presenter wakes immediately instead of sleeping out
+    # the remaining second; an absent or malformed PID just means it never
+    # reached the point of publishing one.
     case "$_rwp_delay" in
         ''|*[!0-9]*) ;;
         *) kill "$_rwp_delay" 2>/dev/null || true ;;
@@ -283,6 +350,10 @@ run_with_progress() {
     else
         _rwp_presenter_stopped=0
     fi
+    # All three conditions are required: a reaped presenter cannot print after
+    # the erase, a locked revocation means no line is still pending, and `shown`
+    # proves a line was printed at all. Missing any one of them, the row above
+    # may belong to the caller, so the progress line stays instead.
     if [ "$_rwp_presenter_stopped" -eq 1 ] &&
        [ "$_rwp_can_erase" -eq 1 ] &&
        [ -f "$_rwp_workspace/shown" ]; then
@@ -290,6 +361,9 @@ run_with_progress() {
             "$PROGRESS_CURSOR_UP" "$PROGRESS_CARRIAGE_RETURN" \
             "$PROGRESS_ERASE_LINE"
     fi
+    # A presenter that outlived SIGKILL confirmation may still touch the
+    # workspace, so leak the temporary directory rather than pull it out from
+    # under a live process.
     if [ "$_rwp_presenter_stopped" -eq 1 ]; then
         rm -rf "$_rwp_workspace"
     fi
