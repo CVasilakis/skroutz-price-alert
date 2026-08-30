@@ -565,6 +565,12 @@ reset_catalog_cache() {
     PLUGIN_SCHEDULE_DATA=''
 }
 
+# Lazily loads the catalog once and discards the command's own output, so a
+# caller that only needs the data stays quiet. That silence is why the scripts
+# with a --debug mode prime this cache themselves before any shared helper can
+# reach it: priming through run_captured is the only point at which the
+# underlying command's output can still be mirrored, and the warm cache then
+# keeps every later lazy call from running the command a second time.
 load_plugin_catalog() {
     case "$PLUGIN_CATALOG_STATE" in
         1) return 0 ;;

@@ -8,19 +8,16 @@ BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # shellcheck source=scripts/lib/systemd.sh
 . "$SCRIPT_DIR/lib/systemd.sh"
 
+# Debug-mode prime for the shared catalog cache; see load_plugin_catalog in
+# lib/common.sh for why the eager load is what makes --debug show this output.
 # shellcheck disable=SC2034  # cache values are consumed by shared catalog helpers
-load_plugin_catalog() {
+disable_load_catalog() {
     case "$PLUGIN_CATALOG_STATE" in
         1) return 0 ;;
         2) return 1 ;;
     esac
-    if [ "$DEBUG_MODE" -eq 1 ]; then
-        if run_captured catalog_cli catalog; then
-            PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
-            PLUGIN_CATALOG_STATE=1
-            return 0
-        fi
-    elif PLUGIN_CATALOG_DATA="$(catalog_cli catalog 2>/dev/null)"; then
+    if run_captured catalog_cli catalog; then
+        PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
         PLUGIN_CATALOG_STATE=1
         return 0
     fi
@@ -145,7 +142,7 @@ if ! run_action require_systemctl; then
     disable_finish 1
 fi
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    load_plugin_catalog || true
+    disable_load_catalog || true
 fi
 if ! run_action select_targets installed_union; then
     section_heading success "Disable preflight"

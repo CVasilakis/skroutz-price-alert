@@ -10,19 +10,16 @@ BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # shellcheck source=scripts/lib/provisioning.sh
 . "$SCRIPT_DIR/lib/provisioning.sh"
 
+# Debug-mode prime for the shared catalog cache; see load_plugin_catalog in
+# lib/common.sh for why the eager load is what makes --debug show this output.
 # shellcheck disable=SC2034  # cache values are consumed by shared catalog helpers
-load_plugin_catalog() {
+schedule_load_catalog() {
     case "$PLUGIN_CATALOG_STATE" in
         1) return 0 ;;
         2) return 1 ;;
     esac
-    if [ "$DEBUG_MODE" -eq 1 ]; then
-        if run_captured catalog_cli catalog; then
-            PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
-            PLUGIN_CATALOG_STATE=1
-            return 0
-        fi
-    elif PLUGIN_CATALOG_DATA="$(catalog_cli catalog 2>/dev/null)"; then
+    if run_captured catalog_cli catalog; then
+        PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
         PLUGIN_CATALOG_STATE=1
         return 0
     fi
@@ -31,21 +28,16 @@ load_plugin_catalog() {
     return 1
 }
 
-# shellcheck disable=SC2034,SC2329  # consumed indirectly through shared helpers
-load_plugin_schedules() {
+# Loads the shared schedule cache on the same contract, but unconditionally,
+# since this command needs the data itself rather than only its debug output.
+# shellcheck disable=SC2034,SC2329  # invoked by name through run_action
+schedule_load_schedules() {
     case "$PLUGIN_SCHEDULE_STATE" in
         1) return 0 ;;
         2) return 1 ;;
     esac
-    if [ "$DEBUG_MODE" -eq 1 ]; then
-        if run_captured catalog_cli schedules --config-dir "$BASE_DIR/config"; then
-            PLUGIN_SCHEDULE_DATA="$CAPTURED_COMMAND_OUTPUT"
-            PLUGIN_SCHEDULE_STATE=1
-            return 0
-        fi
-    elif PLUGIN_SCHEDULE_DATA="$(
-        catalog_cli schedules --config-dir "$BASE_DIR/config" 2>/dev/null
-    )"; then
+    if run_captured catalog_cli schedules --config-dir "$BASE_DIR/config"; then
+        PLUGIN_SCHEDULE_DATA="$CAPTURED_COMMAND_OUTPUT"
         PLUGIN_SCHEDULE_STATE=1
         return 0
     fi
@@ -188,7 +180,7 @@ if ! run_action require_systemctl; then
     schedule_finish 1
 fi
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    load_plugin_catalog || true
+    schedule_load_catalog || true
 fi
 if ! run_action select_targets installed_registered_timers; then
     section_heading success "Schedule preflight"
@@ -204,7 +196,7 @@ if [ -z "$PLUGINS" ]; then
     schedule_finish 0
 fi
 
-if ! run_action load_plugin_schedules ||
+if ! run_action schedule_load_schedules ||
     ! run_action capture_schedule_value list_plugin_schedules; then
     schedule_task failure "Failed to resolve target scheduling metadata."
     schedule_task info \
