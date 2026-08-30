@@ -354,6 +354,18 @@ EOF
     fi
 }
 
+# Two outcomes, and callers depend on the difference. Empty output with a zero
+# status means "no installed calendar worth comparing" — the timer is absent, a
+# symlink, a dangling link, a directory, or carries no OnCalendar line — which
+# schedule.sh reads as differing and so queues a change. A nonzero status means
+# the timer could not be read at all, which it reports instead of comparing.
+#
+# The symlink case is deliberately empty rather than followed. schedule.sh skips
+# a target whose installed calendar already matches, so reading through a link
+# would silently accept a unit the transaction is required to reject; returning
+# empty keeps the change queued until require_writable_unit_path surfaces the
+# link with the uninstall guidance. This is the read half of the rule that
+# managed unit symlinks are never replaced or normalized, only reported.
 read_timer_oncalendar() {
     _rto_path="$SYSTEMD_USER_DIR/$(unit_name "$1" timer)"
     [ -f "$_rto_path" ] && [ ! -L "$_rto_path" ] || return 0

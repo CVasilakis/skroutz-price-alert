@@ -532,6 +532,21 @@ class TestUnitFileRoundTrip(unittest.TestCase):
         service_text = (self.unit_dir / "foo-scraper.service").read_text()
         self.assertIn(f'ExecStart="{REPO_ROOT}/scripts/run.sh" --quiet --foo', service_text)
 
+    def test_read_timer_calendar_symlink_does_not_read_through(self):
+        """A linked timer must never compare equal to the configured schedule.
+
+        schedule.sh skips a target whose installed calendar already matches, so
+        following the link would silently accept a unit the transaction is
+        required to reject, and the user would never be told to remove it.
+        """
+        self.assertEqual(self._write("foo", "hourly").returncode, 0)
+        linked = self.unit_dir / "bar-scraper.timer"
+        linked.symlink_to(self.unit_dir / "foo-scraper.timer")
+
+        read = run_sh("read_timer_oncalendar bar", xdg_config_home=self.tmp)
+
+        self.assertEqual((read.returncode, read.stdout), (0, ""))
+
     def test_read_timer_calendar_missing_unit_is_empty_success(self):
         read = run_sh("read_timer_oncalendar ghost", xdg_config_home=self.tmp)
         self.assertEqual((read.returncode, read.stdout), (0, ""))
