@@ -585,6 +585,15 @@ load_plugin_catalog() {
     return 1
 }
 
+# Catalog snapshot columns, as the accessors below address them. The producer
+# (core.scrapers.tooling.cli catalog_rows) owns the contract; this legend exists
+# so a field number is editable here without reading the Python:
+#
+#   $1 target  $2 display_name  $3 example_config_path  $4 requirements_path
+#
+# Every column but $4 is always populated; $4 is empty for a plugin with no
+# private dependencies, which is why list_plugin_requirements filters on it.
+# The snapshot reads no target config, so these values survive a broken config.
 plugin_catalog() {
     load_plugin_catalog || return 1
     [ -z "$PLUGIN_CATALOG_DATA" ] || printf '%s\n' "$PLUGIN_CATALOG_DATA"
@@ -622,6 +631,18 @@ load_plugin_schedules() {
     return 1
 }
 
+# Schedule report columns, as the accessors below address them. The producer
+# (core.scrapers.tooling.cli schedule_rows) owns the contract:
+#
+#   $1 target  $2 on_calendar  $3 status  $4 error
+#
+# $3 is the branch key, with five values. 'error' means the target's config could
+# not be read at all: $2 is empty and $4 carries the message, so a config failure
+# is isolated to its own row and the other targets still report. The remaining
+# four are the execution_interval resolution: 'ok' and 'default' are schedulable
+# and carry a usable $2, while 'invalid' (a bad configured value) and 'nocfg' (no
+# config file on disk) warn and leave an existing timer unchanged. schedule.sh
+# branches on exactly this vocabulary.
 plugin_schedules() {
     load_plugin_schedules || return 1
     [ -z "$PLUGIN_SCHEDULE_DATA" ] || printf '%s\n' "$PLUGIN_SCHEDULE_DATA"

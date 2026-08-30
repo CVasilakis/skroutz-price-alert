@@ -59,7 +59,21 @@ def resolve_schedule(plugin: RegisteredPlugin, config_dir: str) -> ScheduleResol
 
 
 def catalog_rows(catalog: PluginCatalog) -> tuple[str, ...]:
-    """Return immutable, config-independent plugin metadata for shell scripts."""
+    """Return immutable, config-independent plugin metadata for shell scripts.
+
+    One row per registered plugin, in catalog order. Columns, numbered as the
+    consuming tab-separated ``awk`` in ``scripts/lib/common.sh`` addresses them:
+
+    1. ``target`` - the snake_case identity, also the systemd unit-name stem.
+    2. ``display_name`` - the human label the scripts print.
+    3. ``example_config_path`` - always populated.
+    4. ``requirements_path`` - empty when the plugin declares no private
+       dependencies. The shell filters on that emptiness rather than probing the
+       filesystem, so the column is emitted even when there is nothing to install.
+
+    Nothing here reads a target config, which is what keeps identity and static
+    paths available to the scripts while a target's configuration is broken.
+    """
     return tuple(
         _tsv_row(
             plugin.target,
@@ -72,7 +86,32 @@ def catalog_rows(catalog: PluginCatalog) -> tuple[str, ...]:
 
 
 def schedule_rows(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
-    """Return an isolated schedule result for every registered plugin."""
+    """Return an isolated schedule result for every registered plugin.
+
+    One row per registered plugin, in catalog order; a target whose config could
+    not be read fails alone and never suppresses another target's row. Columns,
+    numbered as ``scripts/lib/common.sh`` addresses them:
+
+    1. ``target``.
+    2. ``on_calendar`` - the rendered timer expression, empty on an error row.
+    3. ``status`` - the vocabulary the scripts branch on (``scripts/schedule.sh``).
+    4. ``error`` - the presentation-safe ``ConfigFileError`` message on an error
+       row, empty otherwise.
+
+    The status vocabulary has five values. ``error`` is this report's own state,
+    not a :class:`SettingStatus`: the config read raised, so no interval was
+    resolved at all. The other four are the ``execution_interval`` resolution
+    status: ``ok`` (configured and decoded), ``default`` (no value set),
+    ``invalid`` (a value was set but rejected), and ``nocfg`` (no config file on
+    disk). ``missing`` cannot reach a row, because ``execution_interval`` is
+    optional; a plugin's own *required* setting failing validation raises
+    ``ConfigFileError`` and lands on an ``error`` row instead.
+
+    ``nocfg`` therefore means the file is absent, and only that. A file that
+    exists without a ``settings`` block resolves against an empty block and
+    reports ``default``, while ``"settings": null`` is a schema violation and
+    reports ``error``.
+    """
     rows: list[str] = []
     for plugin in catalog.plugins:
         try:
@@ -92,7 +131,14 @@ def schedule_rows(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
 
 
 def requirements(catalog: PluginCatalog) -> tuple[str, ...]:
-    """Return config-independent target/private-requirement pairs for dev tooling."""
+    """Return config-independent target/private-requirement pairs for dev tooling.
+
+    Two columns, ``target`` and ``requirements_path``, the latter empty for a
+    plugin with no private dependencies. Unlike the shell's catalog accessor, the
+    empty column is not filtered out here: ``scripts/dev/setup.sh`` and the
+    per-plugin CI dependency job iterate every target and read an empty path as
+    "core dependencies only".
+    """
     return tuple(
         _tsv_row(plugin.target, plugin.requirements_path or "") for plugin in catalog.plugins
     )
@@ -126,7 +172,15 @@ def main(argv: list[str] | None = None, *, catalog: PluginCatalog | None = None)
     The two snapshots are deliberately separate. The catalog snapshot is
     config-independent, so identity and static paths stay available even when a
     target's configuration is broken; only the schedule report can carry a
-    per-target configuration error.
+    per-target configuration error. Each row builder documents its own columns,
+    and ``scripts/lib/common.sh`` repeats them as a legend beside the field
+    numbers its accessors use.
+
+    ``plugin-check`` is not one of those snapshots but a contributor-tooling
+    record stream, keyed by its first column rather than positional: ``ok`` per
+    passed check, exactly one ``tests`` row carrying ``0`` or ``1``, and a
+    ``warning`` row per advisory. ``scripts/dev/plugin-check.sh`` ignores
+    unrecognized kinds, so debug output interleaved by a wrapper stays harmless.
     """
     parser = argparse.ArgumentParser(prog="python -m core.scrapers.tooling.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
