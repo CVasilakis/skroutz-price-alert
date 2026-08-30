@@ -53,20 +53,6 @@ print_help() {
     printf '\n'
 }
 
-uninstall_task() {
-    _ut_kind="$1"
-    shift
-    case "$_ut_kind" in
-        success) _ut_marker='v'; _ut_color="$GREEN" ;;
-        failure) _ut_marker='x'; _ut_color="$RED" ;;
-        info) _ut_marker='i'; _ut_color="$CYAN" ;;
-        warning) _ut_marker='!'; _ut_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _ut_prefix="    ${_ut_color}[${_ut_marker}]${NC} "
-    _print_indented_wrapped "$_ut_prefix" '        ' "$@"
-}
-
 uninstall_finish() {
     end_operational_output
     exit "$1"
@@ -80,12 +66,12 @@ show_selection_failure() {
     for _ssf_target in $TARGET_FLAGS; do
         if ! stream_contains "$_ssf_target" "${_st_registered:-}" &&
             ! stream_contains "$_ssf_target" "${_st_installed:-}"; then
-            uninstall_task failure "Unknown target '$_ssf_target'."
+            task_status failure "Unknown target '$_ssf_target'."
             if [ -n "${_st_known:-}" ]; then
-                uninstall_task info \
+                task_status info \
                     "Available targets: $(stream_for_display "$_st_known")"
             else
-                uninstall_task info \
+                task_status info \
                     "Run $(command_text './scrooge-alert uninstall --help') for available targets."
             fi
             IFS="$_ssf_old_ifs"
@@ -93,9 +79,9 @@ show_selection_failure() {
         fi
     done
     IFS="$_ssf_old_ifs"
-    uninstall_task failure \
+    task_status failure \
         "The installed target units could not be selected safely."
-    uninstall_task info \
+    task_status info \
         "Run $(command_text './scrooge-alert uninstall --debug') for underlying diagnostics."
 }
 
@@ -108,7 +94,7 @@ show_uninstalled_notices() {
     for _sun_target in $TARGET_FLAGS; do
         if stream_contains "$_sun_target" "${_st_registered:-}" &&
             ! stream_contains "$_sun_target" "${_st_installed:-}"; then
-            uninstall_task info \
+            task_status info \
                 "[$_sun_target] Target is registered but not installed; nothing to remove."
         fi
     done
@@ -132,15 +118,15 @@ fi
 begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Uninstall preflight"
-    uninstall_task failure "The command-line arguments are invalid."
-    uninstall_task info "Run $(command_text './scrooge-alert uninstall --help') for usage."
+    task_status failure "The command-line arguments are invalid."
+    task_status info "Run $(command_text './scrooge-alert uninstall --help') for usage."
     uninstall_finish 1
 fi
 if ! run_action reject_project_venv_symlink; then
     section_heading success "Uninstall preflight"
-    uninstall_task failure \
+    task_status failure \
         "$BASE_DIR/venv must be a project-owned directory, not a symlink."
-    uninstall_task warning \
+    task_status warning \
         "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')."
     uninstall_finish 1
 fi
@@ -158,9 +144,9 @@ REMOVE_TARGETS="$SELECTED_TARGETS"
 if [ -n "$REMOVE_TARGETS" ]; then
     if ! run_action require_systemctl; then
         section_heading success "Uninstall preflight"
-        uninstall_task failure \
+        task_status failure \
             "systemctl (systemd) is not installed or not available."
-        uninstall_task warning "Install systemd, then retry this command."
+        task_status warning "Install systemd, then retry this command."
         uninstall_finish 1
     fi
 
@@ -174,19 +160,19 @@ if [ -n "$REMOVE_TARGETS" ]; then
         if run_with_progress \
             "[$target] Stopping and disabling the background timer and service..." \
             run_action disable_one "$target"; then
-            uninstall_task success \
+            task_status success \
                 "[$target] Background timer and service disabled."
         else
-            uninstall_task failure \
+            task_status failure \
                 "[$target] Background timer or service could not be disabled safely."
-            uninstall_task info \
+            task_status info \
                 "[$target] Run $(command_text "./scrooge-alert uninstall --debug --$target") for underlying diagnostics."
             TEARDOWN_FAILED=1
         fi
     done
     IFS="$OLD_IFS"
     if [ "$TEARDOWN_FAILED" -ne 0 ]; then
-        uninstall_task warning \
+        task_status warning \
             "No unit entries were removed because every selected target must stop safely first."
         uninstall_finish 1
     fi
@@ -202,21 +188,21 @@ if [ -n "$REMOVE_TARGETS" ]; then
             "$SYSTEMD_USER_DIR/$(unit_name "$target" timer)" \
             "$SYSTEMD_USER_DIR/$(unit_name "$target" service)"; then
             IFS="$OLD_IFS"
-            uninstall_task failure \
+            task_status failure \
                 "[$target] Timer and service unit entries could not be removed."
-            uninstall_task info \
+            task_status info \
                 "[$target] Run $(command_text "./scrooge-alert uninstall --debug --$target") for underlying diagnostics."
             uninstall_finish 1
         fi
-        uninstall_task success \
+        task_status success \
             "[$target] Timer and service unit entries removed."
     done
     IFS="$OLD_IFS"
     if run_action systemctl --user daemon-reload; then
-        uninstall_task success "systemd user manager reloaded."
+        task_status success "systemd user manager reloaded."
     else
-        uninstall_task failure "The systemd user manager could not be reloaded."
-        uninstall_task warning \
+        task_status failure "The systemd user manager could not be reloaded."
+        task_status warning \
             "Run systemctl --user daemon-reload after resolving the systemd failure."
         uninstall_finish 1
     fi
@@ -224,13 +210,13 @@ else
     section_heading success "Installed units"
     show_uninstalled_notices
     [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ] ||
-        uninstall_task info "No installed target timer or service units found."
+        task_status info "No installed target timer or service units found."
 fi
 
 if [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ]; then
     printf '\n'
     section_heading success "Remaining installation"
-    uninstall_task info \
+    task_status info \
         "The Python virtual environment and other targets were left intact."
     uninstall_finish 0
 fi
@@ -240,18 +226,18 @@ section_heading success "Python environment"
 if [ -d "$BASE_DIR/venv" ]; then
     if run_with_progress "Removing the project Python virtual environment..." \
         run_action rm -rf "${BASE_DIR:?}/venv"; then
-        uninstall_task success "Python virtual environment removed."
+        task_status success "Python virtual environment removed."
     else
-        uninstall_task failure "Python virtual environment could not be removed."
-        uninstall_task info \
+        task_status failure "Python virtual environment could not be removed."
+        task_status info \
             "Run $(command_text './scrooge-alert uninstall --debug') for underlying diagnostics."
         uninstall_finish 1
     fi
 else
-    uninstall_task info "Python virtual environment was already removed."
+    task_status info "Python virtual environment was already removed."
 fi
 
 printf '\n'
 section_heading success "Uninstallation complete"
-uninstall_task success "Configuration and state were preserved."
+task_status success "Configuration and state were preserved."
 uninstall_finish 0

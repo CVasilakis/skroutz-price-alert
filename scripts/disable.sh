@@ -53,20 +53,6 @@ print_help() {
     printf '\n'
 }
 
-disable_task() {
-    _dt_kind="$1"
-    shift
-    case "$_dt_kind" in
-        success) _dt_marker='v'; _dt_color="$GREEN" ;;
-        failure) _dt_marker='x'; _dt_color="$RED" ;;
-        info) _dt_marker='i'; _dt_color="$CYAN" ;;
-        warning) _dt_marker='!'; _dt_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _dt_prefix="    ${_dt_color}[${_dt_marker}]${NC} "
-    _print_indented_wrapped "$_dt_prefix" '        ' "$@"
-}
-
 disable_finish() {
     end_operational_output
     exit "$1"
@@ -80,12 +66,12 @@ show_selection_failure() {
     for _ssf_target in $TARGET_FLAGS; do
         if ! stream_contains "$_ssf_target" "${_st_registered:-}" &&
             ! stream_contains "$_ssf_target" "${_st_installed:-}"; then
-            disable_task failure "Unknown target '$_ssf_target'."
+            task_status failure "Unknown target '$_ssf_target'."
             if [ -n "${_st_known:-}" ]; then
-                disable_task info \
+                task_status info \
                     "Available targets: $(stream_for_display "$_st_known")"
             else
-                disable_task info \
+                task_status info \
                     "Run $(command_text './scrooge-alert disable --help') for available targets."
             fi
             IFS="$_ssf_old_ifs"
@@ -93,8 +79,8 @@ show_selection_failure() {
         fi
     done
     IFS="$_ssf_old_ifs"
-    disable_task failure "The installed target units could not be selected safely."
-    disable_task info \
+    task_status failure "The installed target units could not be selected safely."
+    task_status info \
         "Run $(command_text './scrooge-alert disable --debug') for underlying diagnostics."
 }
 
@@ -107,7 +93,7 @@ show_uninstalled_notices() {
     for _sun_target in $TARGET_FLAGS; do
         if stream_contains "$_sun_target" "${_st_registered:-}" &&
             ! stream_contains "$_sun_target" "${_st_installed:-}"; then
-            disable_task info \
+            task_status info \
                 "[$_sun_target] Target is registered but not installed; nothing to disable."
         fi
     done
@@ -131,14 +117,14 @@ fi
 begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Disable preflight"
-    disable_task failure "The command-line arguments are invalid."
-    disable_task info "Run $(command_text './scrooge-alert disable --help') for usage."
+    task_status failure "The command-line arguments are invalid."
+    task_status info "Run $(command_text './scrooge-alert disable --help') for usage."
     disable_finish 1
 fi
 if ! run_action require_systemctl; then
     section_heading success "Disable preflight"
-    disable_task failure "systemctl (systemd) is not installed or not available."
-    disable_task warning "Install systemd, then retry this command."
+    task_status failure "systemctl (systemd) is not installed or not available."
+    task_status warning "Install systemd, then retry this command."
     disable_finish 1
 fi
 if [ "$DEBUG_MODE" -eq 1 ]; then
@@ -155,7 +141,7 @@ section_heading success "Background execution"
 show_uninstalled_notices
 if [ -z "$PLUGINS" ]; then
     [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ] ||
-        disable_task info "No installed target timer or service units found."
+        task_status info "No installed target timer or service units found."
     disable_finish 0
 fi
 
@@ -166,15 +152,15 @@ IFS='
 # shellcheck disable=SC2086
 for plugin in $PLUGINS; do
     if run_action plugin_is_disabled "$plugin"; then
-        disable_task info \
+        task_status info \
             "[$plugin] Background timer and service are already disabled."
         continue
     else
         state_status=$?
     fi
     if [ "$state_status" -eq 2 ]; then
-        disable_task failure "[$plugin] Could not determine the systemd state."
-        disable_task info \
+        task_status failure "[$plugin] Could not determine the systemd state."
+        task_status info \
             "[$plugin] Run $(command_text "./scrooge-alert disable --debug --$plugin") for underlying diagnostics."
         FAILED=1
         continue
@@ -182,11 +168,11 @@ for plugin in $PLUGINS; do
     if run_with_progress \
         "[$plugin] Stopping and disabling background execution..." \
         run_action disable_one "$plugin"; then
-        disable_task success "[$plugin] Background execution disabled."
+        task_status success "[$plugin] Background execution disabled."
     else
-        disable_task failure \
+        task_status failure \
             "[$plugin] Background execution was not fully disabled."
-        disable_task info \
+        task_status info \
             "[$plugin] Run $(command_text "./scrooge-alert disable --debug --$plugin") for underlying diagnostics."
         FAILED=1
     fi
@@ -196,6 +182,6 @@ IFS="$OLD_IFS"
 [ "$FAILED" -eq 0 ] || disable_finish 1
 printf '\n'
 section_heading success "Optional controls"
-disable_task info \
+task_status info \
     "To re-enable background execution, run: $(command_text './scrooge-alert enable')"
 disable_finish 0

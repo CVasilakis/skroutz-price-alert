@@ -76,20 +76,6 @@ print_help() {
     printf '\n'
 }
 
-schedule_task() {
-    _st_kind="$1"
-    shift
-    case "$_st_kind" in
-        success) _st_marker='v'; _st_color="$GREEN" ;;
-        failure) _st_marker='x'; _st_color="$RED" ;;
-        info) _st_marker='i'; _st_color="$CYAN" ;;
-        warning) _st_marker='!'; _st_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _st_prefix="    ${_st_color}[${_st_marker}]${NC} "
-    _print_indented_wrapped "$_st_prefix" '        ' "$@"
-}
-
 schedule_finish() {
     end_operational_output
     exit "$1"
@@ -97,12 +83,12 @@ schedule_finish() {
 
 show_selection_failure() {
     if [ -n "${_st_installed:-}" ] && [ -z "${_st_registered:-}" ]; then
-        schedule_task failure "The target catalog could not be loaded."
+        task_status failure "The target catalog could not be loaded."
         if [ ! -x "$BASE_DIR/venv/bin/python3" ] || [ -L "$BASE_DIR/venv" ]; then
-            schedule_task warning \
+            task_status warning \
                 "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')"
         else
-            schedule_task warning \
+            task_status warning \
                 "Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry."
         fi
         return
@@ -115,30 +101,30 @@ show_selection_failure() {
     for _ssf_target in $TARGET_FLAGS; do
         if stream_contains "$_ssf_target" "${_st_installed:-}"; then
             if ! stream_contains "$_ssf_target" "${_st_registered:-}"; then
-                schedule_task failure \
+                task_status failure \
                     "'$_ssf_target' is installed but no longer registered (orphan)."
-                schedule_task warning \
+                task_status warning \
                     "Remove it with: $(command_text "./scrooge-alert uninstall --$_ssf_target")"
                 IFS="$_ssf_old_ifs"
                 return
             fi
         elif stream_contains "$_ssf_target" "${_st_registered:-}"; then
-            schedule_task failure \
+            task_status failure \
                 "'$_ssf_target' is registered but not installed."
-            schedule_task warning "Install it with: $(command_text "./scrooge-alert install --$_ssf_target")"
+            task_status warning "Install it with: $(command_text "./scrooge-alert install --$_ssf_target")"
             IFS="$_ssf_old_ifs"
             return
         else
-            schedule_task failure "Unknown target '$_ssf_target'."
-            schedule_task info \
+            task_status failure "Unknown target '$_ssf_target'."
+            task_status info \
                 "Run $(command_text './scrooge-alert schedule --help') for available targets."
             IFS="$_ssf_old_ifs"
             return
         fi
     done
     IFS="$_ssf_old_ifs"
-    schedule_task failure "The installed target timers could not be selected safely."
-    schedule_task info \
+    task_status failure "The installed target timers could not be selected safely."
+    task_status info \
         "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
 }
 
@@ -169,14 +155,14 @@ fi
 begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Schedule preflight"
-    schedule_task failure "The command-line arguments are invalid."
-    schedule_task info "Run $(command_text './scrooge-alert schedule --help') for usage."
+    task_status failure "The command-line arguments are invalid."
+    task_status info "Run $(command_text './scrooge-alert schedule --help') for usage."
     schedule_finish 1
 fi
 if ! run_action require_systemctl; then
     section_heading success "Schedule preflight"
-    schedule_task failure "systemctl (systemd) is not installed or not available."
-    schedule_task warning "Install systemd, then retry this command."
+    task_status failure "systemctl (systemd) is not installed or not available."
+    task_status warning "Install systemd, then retry this command."
     schedule_finish 1
 fi
 if [ "$DEBUG_MODE" -eq 1 ]; then
@@ -191,43 +177,43 @@ PLUGINS="$SELECTED_TARGETS"
 
 section_heading success "Execution intervals"
 if [ -z "$PLUGINS" ]; then
-    schedule_task info "No installed, registered target timers found."
-    schedule_task warning "Run $(command_text './scrooge-alert install') to provision targets."
+    task_status info "No installed, registered target timers found."
+    task_status warning "Run $(command_text './scrooge-alert install') to provision targets."
     schedule_finish 0
 fi
 
 if ! run_action schedule_load_schedules ||
     ! run_action capture_schedule_value list_plugin_schedules; then
-    schedule_task failure "Failed to resolve target scheduling metadata."
-    schedule_task info \
+    task_status failure "Failed to resolve target scheduling metadata."
+    task_status info \
         "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
     schedule_finish 1
 fi
 ALL_SCHEDULES="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value list_interval_status; then
-    schedule_task failure "Failed to resolve target scheduling metadata."
-    schedule_task info \
+    task_status failure "Failed to resolve target scheduling metadata."
+    task_status info \
         "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
     schedule_finish 1
 fi
 INTERVAL_STATUS="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value list_schedule_errors; then
-    schedule_task failure "Failed to resolve target scheduling metadata."
-    schedule_task info \
+    task_status failure "Failed to resolve target scheduling metadata."
+    task_status info \
         "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
     schedule_finish 1
 fi
 SCHEDULE_ERRORS="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value catalog_cli intervals; then
-    schedule_task failure "Failed to resolve target scheduling metadata."
-    schedule_task info \
+    task_status failure "Failed to resolve target scheduling metadata."
+    task_status info \
         "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
     schedule_finish 1
 fi
 SUPPORTED_INTERVAL_KEYS="$SCHEDULE_VALUE"
 if ! run_action capture_schedule_value list_plugin_examples; then
-    schedule_task failure "Failed to resolve target scheduling metadata."
-    schedule_task info \
+    task_status failure "Failed to resolve target scheduling metadata."
+    task_status info \
         "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
     schedule_finish 1
 fi
@@ -243,8 +229,8 @@ IFS='
 # shellcheck disable=SC2086
 for plugin in $PLUGINS; do
     status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")" || {
-        schedule_task failure "[$plugin] No interval status was returned."
-        schedule_task info \
+        task_status failure "[$plugin] No interval status was returned."
+        task_status info \
             "[$plugin] Run $(command_text "./scrooge-alert schedule --debug --$plugin") for underlying diagnostics."
         FAILED=1
         continue
@@ -254,48 +240,48 @@ for plugin in $PLUGINS; do
             schedule_error="$(
                 plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true
             )"
-            schedule_task failure \
+            task_status failure \
                 "[$plugin] ${schedule_error:-Could not resolve its schedule.}"
-            schedule_task info "[$plugin] Existing timer was left unchanged."
+            task_status info "[$plugin] Existing timer was left unchanged."
             CONFIG_FAILED=1
             continue ;;
         nocfg)
-            schedule_task warning \
+            task_status warning \
                 "[$plugin] No config file found; timer left unchanged."
             if example_path="$(
                 plugin_stream_value "$plugin" "$EXAMPLE_PAIRS"
             )"; then
-                schedule_task warning \
+                task_status warning \
                     "[$plugin] Copy $example_path to config/$plugin.json to configure it."
             fi
             continue ;;
         invalid)
-            schedule_task warning \
+            task_status warning \
                 "[$plugin] Unsupported execution_interval; timer left unchanged."
-            schedule_task warning \
+            task_status warning \
                 "[$plugin] Use one of: $SUPPORTED_INTERVAL_KEYS."
             continue ;;
     esac
     new_calendar="$(plugin_stream_value "$plugin" "$ALL_SCHEDULES")" || {
-        schedule_task failure "[$plugin] No resolved schedule was returned."
-        schedule_task info \
+        task_status failure "[$plugin] No resolved schedule was returned."
+        task_status info \
             "[$plugin] Run $(command_text "./scrooge-alert schedule --debug --$plugin") for underlying diagnostics."
         FAILED=1
         continue
     }
     if ! run_action capture_schedule_value read_timer_oncalendar "$plugin"; then
-        schedule_task failure "[$plugin] Could not read the installed timer schedule."
-        schedule_task info \
+        task_status failure "[$plugin] Could not read the installed timer schedule."
+        task_status info \
             "[$plugin] Run $(command_text "./scrooge-alert schedule --debug --$plugin") for underlying diagnostics."
         FAILED=1
         continue
     fi
     if [ "$new_calendar" = "$SCHEDULE_VALUE" ]; then
-        schedule_task info \
+        task_status info \
             "[$plugin] Timer already matches the configured interval."
         continue
     fi
-    schedule_task info "[$plugin] Timer schedule change queued."
+    task_status info "[$plugin] Timer schedule change queued."
     CHANGED="$(stream_add_unique "$CHANGED" "$plugin")"
     CHANGED_SCHEDULES="${CHANGED_SCHEDULES}${CHANGED_SCHEDULES:+
 }${plugin}	${new_calendar}"
@@ -311,22 +297,22 @@ if [ -n "$CHANGED" ]; then
 '
         # shellcheck disable=SC2086
         for plugin in $CHANGED; do
-            schedule_task success \
+            task_status success \
                 "[$plugin] Timer updated and its previous state preserved."
         done
         IFS="$OLD_IFS"
     else
-        schedule_task failure \
+        task_status failure \
             "One or more timer schedules could not be applied."
         if [ -n "${UNIT_RECOVERY_DIR:-}" ]; then
-            schedule_task warning "Rollback was incomplete. Recovery files:"
-            schedule_task warning "$UNIT_RECOVERY_DIR"
+            task_status warning "Rollback was incomplete. Recovery files:"
+            task_status warning "$UNIT_RECOVERY_DIR"
         elif [ "${UNIT_MUTATION_STARTED:-0}" -eq 1 ]; then
-            schedule_task info "Previous timer files and states were restored."
+            task_status info "Previous timer files and states were restored."
         else
-            schedule_task info "No live timer file or state was changed."
+            task_status info "No live timer file or state was changed."
         fi
-        schedule_task info \
+        task_status info \
             "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
         FAILED=1
     fi
@@ -338,11 +324,11 @@ fi
 printf '\n'
 section_heading success "Schedule result"
 if [ -n "$CHANGED" ]; then
-    schedule_task success "Updated targets: $(stream_for_display "$CHANGED")"
+    task_status success "Updated targets: $(stream_for_display "$CHANGED")"
 elif [ "$CONFIG_FAILED" -eq 0 ]; then
-    schedule_task success "No eligible timer changes were required."
+    task_status success "No eligible timer changes were required."
 else
-    schedule_task warning \
+    task_status warning \
         "Invalid target configuration left the affected timer unchanged."
 fi
 [ "$CONFIG_FAILED" -eq 0 ] || schedule_finish "$EXIT_STATUS_TARGET_CONFIG_ERROR"

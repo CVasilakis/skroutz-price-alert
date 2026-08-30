@@ -48,27 +48,12 @@ for argument in "$@"; do
     esac
 done
 
-migration_task() {
-    _mt_kind="$1"
-    shift
-    case "$_mt_kind" in
-        success) _mt_marker='v'; _mt_color="$GREEN" ;;
-        failure) _mt_marker='x'; _mt_color="$RED" ;;
-        info) _mt_marker='i'; _mt_color="$CYAN" ;;
-        warning) _mt_marker='!'; _mt_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _mt_prefix="    ${_mt_color}[${_mt_marker}]${NC} "
-    _mt_continuation='        '
-    _print_indented_wrapped "$_mt_prefix" "$_mt_continuation" "$@"
-}
-
 show_shell_failure() {
     _ssf_status="$1"
     shift
     section_heading success "JSON migration"
-    migration_task failure "$@"
-    migration_task info "Run ./scripts/dev/migrate.sh --help for usage."
+    task_status failure "$@"
+    task_status info "Run ./scripts/dev/migrate.sh --help for usage."
     end_operational_output
     exit "$_ssf_status"
 }
@@ -92,8 +77,8 @@ if ! run_action reject_project_venv_symlink; then
         exit 1
     fi
     section_heading success "Migration preflight"
-    migration_task failure "The project Python environment must not be a symlink."
-    migration_task info "Remove the symlink, then run ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')."
+    task_status failure "The project Python environment must not be a symlink."
+    task_status info "Remove the symlink, then run ./scripts/dev/setup.sh or $(command_text './scrooge-alert install')."
     end_operational_output
     exit 1
 fi
@@ -103,8 +88,8 @@ if ! run_action require_python_310 "$BASE_DIR/venv/bin/python3" "./scrooge-alert
         exit 1
     fi
     section_heading success "Migration preflight"
-    migration_task failure "Python 3.10 or newer is required."
-    migration_task info "Run $(command_text './scrooge-alert install'), then retry the migration."
+    task_status failure "Python 3.10 or newer is required."
+    task_status info "Run $(command_text './scrooge-alert install'), then retry the migration."
     end_operational_output
     exit 1
 fi
@@ -155,18 +140,18 @@ render_family() {
         fi
         case "$_rf_result" in
             current)
-                migration_task success "$_rf_path is current."
+                task_status success "$_rf_path is current."
                 ;;
             migrated)
                 if [ "$CHECK_MODE" -eq 1 ]; then
                     _rf_detail="${_rf_detail#pending }"
-                    migration_task info "$_rf_path requires migration: $_rf_detail."
+                    task_status info "$_rf_path requires migration: $_rf_detail."
                 else
-                    migration_task success "$_rf_path migrated: $_rf_detail."
+                    task_status success "$_rf_path migrated: $_rf_detail."
                 fi
                 ;;
             failed)
-                migration_task failure "$_rf_path: $_rf_detail"
+                task_status failure "$_rf_path: $_rf_detail"
                 ;;
         esac
     done
@@ -195,7 +180,7 @@ for migration_row in $MIGRATION_REPORT; do
     [ "$migration_result" = retained ] || continue
     [ "$VISIBLE_SECTION_COUNT" -eq 0 ] || printf '\n'
     section_heading warning "Recovery copies"
-    migration_task warning "Retained at $migration_path."
+    task_status warning "Retained at $migration_path."
     VISIBLE_SECTION_COUNT=$((VISIBLE_SECTION_COUNT + 1))
 done
 IFS="$OLD_IFS"
@@ -203,10 +188,10 @@ IFS="$OLD_IFS"
 if [ "$VISIBLE_SECTION_COUNT" -eq 0 ]; then
     section_heading success "JSON migration"
     if [ "$MIGRATION_STATUS" -eq 0 ]; then
-        migration_task info "No existing managed JSON documents were found."
+        task_status info "No existing managed JSON documents were found."
     else
-        migration_task failure "Migration could not start."
-        migration_task info "Retry with ./scripts/dev/migrate.sh --debug for underlying diagnostics."
+        task_status failure "Migration could not start."
+        task_status info "Retry with ./scripts/dev/migrate.sh --debug for underlying diagnostics."
     fi
 fi
 

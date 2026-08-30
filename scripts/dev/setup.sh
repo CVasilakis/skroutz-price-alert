@@ -50,20 +50,6 @@ setup_section() {
     SETUP_SECTION_STARTED=1
 }
 
-setup_task() {
-    _st_kind="$1"
-    shift
-    case "$_st_kind" in
-        success) _st_marker='v'; _st_color="$GREEN" ;;
-        failure) _st_marker='x'; _st_color="$RED" ;;
-        info) _st_marker='i'; _st_color="$CYAN" ;;
-        warning) _st_marker='!'; _st_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _st_prefix="    ${_st_color}[${_st_marker}]${NC} "
-    _print_indented_wrapped "$_st_prefix" '        ' "$@"
-}
-
 setup_finish() {
     [ "$SETUP_OUTPUT_STARTED" -eq 0 ] || end_operational_output
 }
@@ -122,46 +108,46 @@ done
 
 if [ -n "$INVALID_ARGUMENT" ]; then
     setup_section "Setup arguments"
-    setup_task failure "$INVALID_ARGUMENT"
-    setup_task info "Run ./scripts/dev/setup.sh --help for usage."
+    task_status failure "$INVALID_ARGUMENT"
+    task_status info "Run ./scripts/dev/setup.sh --help for usage."
     setup_exit 1
 fi
 
 setup_section "Environment checks"
 if ! run_action reject_project_venv_symlink; then
-    setup_task failure "The development venv path is a symlink."
-    setup_task info \
+    task_status failure "The development venv path is a symlink."
+    task_status info \
         "Remove the venv symlink, then recreate it with ./scripts/dev/setup.sh."
     setup_exit 1
 fi
-setup_task success "The development venv path is safe."
+task_status success "The development venv path is safe."
 
 if ! run_action require_python_310 python3 "./scripts/dev/setup.sh"; then
-    setup_task failure "System Python 3.10 or newer is required."
-    setup_task info \
+    task_status failure "System Python 3.10 or newer is required."
+    task_status info \
         "Install a supported Python, then run ./scripts/dev/setup.sh again."
     setup_exit 1
 fi
-setup_task success "System Python 3.10 or newer is available."
+task_status success "System Python 3.10 or newer is available."
 
 if [ -d "$PROJECT_ROOT/venv" ]; then
     if ! run_action require_python_310 "$VENV_PYTHON" "./scripts/dev/setup.sh"; then
-        setup_task failure "The existing development venv uses an unsupported Python."
-        setup_task info \
+        task_status failure "The existing development venv uses an unsupported Python."
+        task_status info \
             "Remove the venv directory, then run ./scripts/dev/setup.sh again."
         setup_exit 1
     fi
-    setup_task success "The existing development venv uses a supported Python."
+    task_status success "The existing development venv uses a supported Python."
 else
-    setup_task info "A new development venv is required."
+    task_status info "A new development venv is required."
 fi
 
 if run_captured requirements_report; then
     PLUGIN_REQUIREMENTS="$CAPTURED_COMMAND_OUTPUT"
 else
     requirements_status=$?
-    setup_task failure "Target dependency discovery failed."
-    setup_task info \
+    task_status failure "Target dependency discovery failed."
+    task_status info \
         "Fix the target catalog error, then run ./scripts/dev/setup.sh again."
     setup_exit "$requirements_status"
 fi
@@ -179,57 +165,57 @@ done
 IFS="$OLD_IFS"
 
 if [ -n "$SELECTED" ] && [ "$FOUND" -eq 0 ]; then
-    setup_task failure "Unknown target '$SELECTED'."
-    setup_task info "Run ./scripts/dev/setup.sh --help to list available targets."
+    task_status failure "Unknown target '$SELECTED'."
+    task_status info "Run ./scripts/dev/setup.sh --help to list available targets."
     setup_exit 1
 fi
 if [ -n "$SELECTED" ]; then
-    setup_task success "Dependency plan loaded for the $SELECTED target."
+    task_status success "Dependency plan loaded for the $SELECTED target."
 else
-    setup_task success "Dependency plan loaded for all targets."
+    task_status success "Dependency plan loaded for all targets."
 fi
 
 setup_section "Python environment"
 if [ -d "$PROJECT_ROOT/venv" ]; then
-    setup_task info "Updating the existing development venv."
+    task_status info "Updating the existing development venv."
 else
     if run_with_progress "Creating the development Python environment..." \
         run_action python3 -m venv "$PROJECT_ROOT/venv"; then
-        setup_task success "Development venv created."
+        task_status success "Development venv created."
     else
         venv_status=$?
-        setup_task failure "Development venv creation failed."
-        setup_task info \
+        task_status failure "Development venv creation failed."
+        task_status info \
             "Fix the Python venv support, then run ./scripts/dev/setup.sh again."
         setup_exit "$venv_status"
     fi
 fi
 if ! run_action require_python_310 "$VENV_PYTHON" "./scripts/dev/setup.sh"; then
-    setup_task failure "The development venv is not usable with Python 3.10 or newer."
-    setup_task info "Remove the venv directory, then run ./scripts/dev/setup.sh again."
+    task_status failure "The development venv is not usable with Python 3.10 or newer."
+    task_status info "Remove the venv directory, then run ./scripts/dev/setup.sh again."
     setup_exit 1
 fi
-setup_task success "The development venv is ready."
+task_status success "The development venv is ready."
 
 setup_section "Development dependencies"
 if run_with_progress "Updating Python packaging tools..." \
     run_action "$VENV_PYTHON" -m pip install --upgrade pip; then
-    setup_task success "Packaging tools updated."
+    task_status success "Packaging tools updated."
 else
     pip_status=$?
-    setup_task failure "Packaging tools could not be updated."
-    setup_task info \
+    task_status failure "Packaging tools could not be updated."
+    task_status info \
         "Check package-index access, then run ./scripts/dev/setup.sh --debug."
     setup_exit "$pip_status"
 fi
 if run_with_progress "Installing core and development dependencies..." \
     run_action "$VENV_PYTHON" -m pip install --upgrade -r "$PROJECT_ROOT/requirements.txt" \
     -r "$PROJECT_ROOT/scripts/dev/requirements-dev.txt"; then
-    setup_task success "Core and development dependencies installed."
+    task_status success "Core and development dependencies installed."
 else
     requirements_status=$?
-    setup_task failure "Core and development dependencies could not be installed."
-    setup_task info \
+    task_status failure "Core and development dependencies could not be installed."
+    task_status info \
         "Check the requirements and package-index access, then run ./scripts/dev/setup.sh --debug."
     setup_exit "$requirements_status"
 fi
@@ -249,9 +235,9 @@ for row in $PLUGIN_REQUIREMENTS; do
         else
             plugin_status=$?
             IFS="$OLD_IFS"
-            setup_task failure \
+            task_status failure \
                 "Private dependencies for the $target target could not be installed."
-            setup_task info \
+            task_status info \
                 "Check that target's requirements, then run ./scripts/dev/setup.sh --debug --$target."
             setup_exit "$plugin_status"
         fi
@@ -259,21 +245,21 @@ for row in $PLUGIN_REQUIREMENTS; do
 done
 IFS="$OLD_IFS"
 if [ "$PRIVATE_REQUIREMENTS" -eq 0 ]; then
-    setup_task info "No private target dependencies are required."
+    task_status info "No private target dependencies are required."
 elif [ "$PRIVATE_REQUIREMENTS" -eq 1 ]; then
-    setup_task success "Private dependencies installed for 1 target."
+    task_status success "Private dependencies installed for 1 target."
 else
-    setup_task success \
+    task_status success \
         "Private dependencies installed for $PRIVATE_REQUIREMENTS targets."
 fi
 
 if run_with_progress "Checking installed dependencies..." \
     run_action "$VENV_PYTHON" -m pip check; then
-    setup_task success "Installed dependencies are consistent."
+    task_status success "Installed dependencies are consistent."
 else
     check_status=$?
-    setup_task failure "Installed dependencies are inconsistent."
-    setup_task info \
+    task_status failure "Installed dependencies are inconsistent."
+    task_status info \
         "Resolve the reported dependency conflict, then run ./scripts/dev/setup.sh --debug."
     setup_exit "$check_status"
 fi
@@ -284,15 +270,15 @@ if (
     run_with_progress "Enabling repository-local pre-push checks..." \
         run_action "$PROJECT_ROOT/scripts/dev/install-hooks.sh"
 ); then
-    setup_task success "Repository-local pre-push checks are enabled."
+    task_status success "Repository-local pre-push checks are enabled."
 else
     hook_status=$?
-    setup_task failure "Repository-local pre-push checks could not be enabled."
-    setup_task info \
+    task_status failure "Repository-local pre-push checks could not be enabled."
+    task_status info \
         "Run ./scripts/dev/install-hooks.sh --debug for recovery details."
     setup_exit "$hook_status"
 fi
 
 setup_section "Setup complete"
-setup_task success "Development environment is ready."
+task_status success "Development environment is ready."
 setup_exit 0

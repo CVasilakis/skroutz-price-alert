@@ -53,20 +53,6 @@ print_help() {
     printf '\n'
 }
 
-enable_task() {
-    _et_kind="$1"
-    shift
-    case "$_et_kind" in
-        success) _et_marker='v'; _et_color="$GREEN" ;;
-        failure) _et_marker='x'; _et_color="$RED" ;;
-        info) _et_marker='i'; _et_color="$CYAN" ;;
-        warning) _et_marker='!'; _et_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _et_prefix="    ${_et_color}[${_et_marker}]${NC} "
-    _print_indented_wrapped "$_et_prefix" '        ' "$@"
-}
-
 enable_finish() {
     end_operational_output
     exit "$1"
@@ -74,12 +60,12 @@ enable_finish() {
 
 show_selection_failure() {
     if [ -n "${_st_installed:-}" ] && [ -z "${_st_registered:-}" ]; then
-        enable_task failure "The target catalog could not be loaded."
+        task_status failure "The target catalog could not be loaded."
         if [ ! -x "$BASE_DIR/venv/bin/python3" ] || [ -L "$BASE_DIR/venv" ]; then
-            enable_task warning \
+            task_status warning \
                 "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')"
         else
-            enable_task warning \
+            task_status warning \
                 "Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry."
         fi
         return
@@ -92,29 +78,29 @@ show_selection_failure() {
     for _ssf_target in $TARGET_FLAGS; do
         if stream_contains "$_ssf_target" "${_st_installed:-}"; then
             if ! stream_contains "$_ssf_target" "${_st_registered:-}"; then
-                enable_task failure \
+                task_status failure \
                     "'$_ssf_target' is installed but no longer registered (orphan)."
-                enable_task warning \
+                task_status warning \
                     "Remove it with: $(command_text "./scrooge-alert uninstall --$_ssf_target")"
                 IFS="$_ssf_old_ifs"
                 return
             fi
         elif stream_contains "$_ssf_target" "${_st_registered:-}"; then
-            enable_task failure \
+            task_status failure \
                 "'$_ssf_target' is registered but not installed."
-            enable_task warning "Install it with: $(command_text "./scrooge-alert install --$_ssf_target")"
+            task_status warning "Install it with: $(command_text "./scrooge-alert install --$_ssf_target")"
             IFS="$_ssf_old_ifs"
             return
         else
-            enable_task failure "Unknown target '$_ssf_target'."
-            enable_task info "Run $(command_text './scrooge-alert enable --help') for available targets."
+            task_status failure "Unknown target '$_ssf_target'."
+            task_status info "Run $(command_text './scrooge-alert enable --help') for available targets."
             IFS="$_ssf_old_ifs"
             return
         fi
     done
     IFS="$_ssf_old_ifs"
-    enable_task failure "The installed target timers could not be selected safely."
-    enable_task info "Run $(command_text './scrooge-alert enable --debug') for underlying diagnostics."
+    task_status failure "The installed target timers could not be selected safely."
+    task_status info "Run $(command_text './scrooge-alert enable --debug') for underlying diagnostics."
 }
 
 enable_timer_property() {
@@ -147,14 +133,14 @@ fi
 begin_operational_output
 if ! run_action parse_target_flags "$@"; then
     section_heading success "Enable preflight"
-    enable_task failure "The command-line arguments are invalid."
-    enable_task info "Run $(command_text './scrooge-alert enable --help') for usage."
+    task_status failure "The command-line arguments are invalid."
+    task_status info "Run $(command_text './scrooge-alert enable --help') for usage."
     enable_finish 1
 fi
 if ! run_action require_systemctl; then
     section_heading success "Enable preflight"
-    enable_task failure "systemctl (systemd) is not installed or not available."
-    enable_task warning "Install systemd, then retry this command."
+    task_status failure "systemctl (systemd) is not installed or not available."
+    task_status warning "Install systemd, then retry this command."
     enable_finish 1
 fi
 if [ "$DEBUG_MODE" -eq 1 ]; then
@@ -169,8 +155,8 @@ PLUGINS="$SELECTED_TARGETS"
 
 section_heading success "Background schedules"
 if [ -z "$PLUGINS" ]; then
-    enable_task info "No installed, registered target timers found."
-    enable_task warning "Run $(command_text './scrooge-alert install') to provision targets."
+    task_status info "No installed, registered target timers found."
+    task_status warning "Run $(command_text './scrooge-alert install') to provision targets."
     enable_finish 0
 fi
 
@@ -194,22 +180,22 @@ for plugin in $PLUGINS; do
         state_failed=1
     fi
     if [ "$state_failed" -eq 1 ]; then
-        enable_task failure "[$plugin] Could not determine the timer state."
-        enable_task info \
+        task_status failure "[$plugin] Could not determine the timer state."
+        task_status info \
             "[$plugin] Run $(command_text "./scrooge-alert enable --debug --$plugin") for underlying diagnostics."
         FAILED=1
         continue
     fi
     if [ "$timer_enabled" = enabled ] && [ "$timer_active" = active ]; then
-        enable_task info "[$plugin] Timer is already enabled and active."
+        task_status info "[$plugin] Timer is already enabled and active."
         continue
     fi
     if run_with_progress "[$plugin] Enabling and starting the background schedule..." \
         run_action enable_one "$plugin"; then
-        enable_task success "[$plugin] Background schedule enabled and started."
+        task_status success "[$plugin] Background schedule enabled and started."
     else
-        enable_task failure "[$plugin] Failed to enable and start the timer."
-        enable_task info \
+        task_status failure "[$plugin] Failed to enable and start the timer."
+        task_status info \
             "[$plugin] Run $(command_text "./scrooge-alert enable --debug --$plugin") for underlying diagnostics."
         FAILED=1
     fi
@@ -219,6 +205,6 @@ IFS="$OLD_IFS"
 [ "$FAILED" -eq 0 ] || enable_finish 1
 printf '\n'
 section_heading success "Optional controls"
-enable_task info \
+task_status info \
     "If needed, disable background execution with: $(command_text './scrooge-alert disable')"
 enable_finish 0

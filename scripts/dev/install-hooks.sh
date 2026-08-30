@@ -48,19 +48,11 @@ hook_section() {
     [ "$EMBEDDED_RUN" -eq 1 ] || section_heading success "Git hook setup"
 }
 
+# Wraps the shared renderer because setup.sh runs this script embedded, where
+# hook progress belongs to the setup section rather than its own output.
 hook_task() {
     [ "$EMBEDDED_RUN" -eq 0 ] || return 0
-    _ht_kind="$1"
-    shift
-    case "$_ht_kind" in
-        success) _ht_marker='v'; _ht_color="$GREEN" ;;
-        failure) _ht_marker='x'; _ht_color="$RED" ;;
-        info) _ht_marker='i'; _ht_color="$CYAN" ;;
-        warning) _ht_marker='!'; _ht_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _ht_prefix="    ${_ht_color}[${_ht_marker}]${NC} "
-    _print_indented_wrapped "$_ht_prefix" '        ' "$@"
+    task_status "$@"
 }
 
 finish_output() {

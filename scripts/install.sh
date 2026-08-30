@@ -80,20 +80,6 @@ install_warning_section() {
     INSTALL_SECTION_STARTED=1
 }
 
-install_task() {
-    _it_kind="$1"
-    shift
-    case "$_it_kind" in
-        success) _it_marker='v'; _it_color="$GREEN" ;;
-        failure) _it_marker='x'; _it_color="$RED" ;;
-        info) _it_marker='i'; _it_color="$CYAN" ;;
-        warning) _it_marker='!'; _it_color="$YELLOW" ;;
-        *) return 2 ;;
-    esac
-    _it_prefix="    ${_it_color}[${_it_marker}]${NC} "
-    _print_indented_wrapped "$_it_prefix" '        ' "$@"
-}
-
 install_command() {
     printf '        %s\n' "$1"
 }
@@ -111,10 +97,10 @@ install_exit() {
 }
 
 install_fail() {
-    install_task failure "$1"
+    task_status failure "$1"
     shift
     for _if_guidance in "$@"; do
-        install_task info "$_if_guidance"
+        task_status info "$_if_guidance"
     done
     install_exit 1
 }
@@ -171,8 +157,8 @@ for argument in "$@"; do
 done
 if ! run_action parse_target_flags "$@"; then
     install_section "Installation arguments"
-    install_task failure "The command-line arguments are invalid."
-    install_task info "Run $(command_text './scrooge-alert install --help') for usage."
+    task_status failure "The command-line arguments are invalid."
+    task_status info "Run $(command_text './scrooge-alert install --help') for usage."
     install_exit 1
 fi
 if [ "$TARGET_HELP_REQUESTED" -eq 1 ]; then
@@ -208,12 +194,12 @@ if ! run_action reject_project_venv_symlink; then
     install_fail "The project venv path is a symlink." \
         "Remove the venv symlink, then run $(command_text './scrooge-alert install') again."
 fi
-install_task success "The project venv path is safe."
+task_status success "The project venv path is safe."
 if ! run_action require_python_310 python3 "$(command_text './scrooge-alert install')"; then
     install_fail "System Python 3.10 or newer is required." \
         "Install a supported Python, then run $(command_text './scrooge-alert install') again."
 fi
-install_task success "System Python 3.10 or newer is available."
+task_status success "System Python 3.10 or newer is available."
 
 # Validate the import-light catalog, selection, source inputs, and every unit
 # destination before venv creation or package installation.
@@ -244,9 +230,9 @@ else
         if stream_contains "$sel" "$ALL_PLUGINS"; then
             PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
         else
-            install_task info \
+            task_status info \
                 "Target '$sel' is no longer registered; its units remain disabled."
-            install_task info "Remove them with $(command_text "./scrooge-alert uninstall --$sel")."
+            task_status info "Remove them with $(command_text "./scrooge-alert uninstall --$sel")."
         fi
     done
     IFS="$OLD_IFS"
@@ -293,22 +279,22 @@ if [ -d "$VENV_DIR" ]; then
         install_fail "The existing Python environment is unusable." \
             "Run $(command_text './scrooge-alert uninstall'), then run $(command_text './scrooge-alert install') again."
     fi
-    install_task success "The existing Python environment uses a supported Python."
+    task_status success "The existing Python environment uses a supported Python."
 else
-    install_task info "A new Python environment is required."
+    task_status info "A new Python environment is required."
 fi
 
 if ! run_action python3 -c "import ensurepip"; then
     install_fail "Python venv support is not available." \
         "Install the Python venv module, then run $(command_text './scrooge-alert install') again."
 fi
-install_task success "Python venv support is available."
+task_status success "Python venv support is available."
 
 if ! run_action require_systemctl; then
     install_fail "Systemd user services are not available." \
         "Install or enable systemd user services, then run $(command_text './scrooge-alert install') again."
 fi
-install_task success "Systemd user services are available."
+task_status success "Systemd user services are available."
 
 # ------------------------------------------------------------------------------
 # PYTHON VIRTUAL ENVIRONMENT SETUP
@@ -323,10 +309,10 @@ if [ ! -d "$VENV_DIR" ]; then
         install_fail "The Python environment could not be created." \
             "Fix Python venv support, then run $(command_text './scrooge-alert install --debug')."
     fi
-    install_task success "Created a new Python environment."
+    task_status success "Created a new Python environment."
     VENV_NEWLY_CREATED=true
 else
-    install_task info "Updating the existing Python environment."
+    task_status info "Updating the existing Python environment."
 fi
 
 if ! run_action require_python_310 \
@@ -334,14 +320,14 @@ if ! run_action require_python_310 \
     install_fail "The Python environment is not usable with Python 3.10 or newer." \
         "Run $(command_text './scrooge-alert uninstall'), then run $(command_text './scrooge-alert install') again."
 fi
-install_task success "The Python environment is ready."
+task_status success "The Python environment is ready."
 
 # Safely upgrade pip and install matching requirements
 if ! run_with_progress "Updating Python packaging tools..." pip_install pip; then
     install_fail "Packaging tools could not be updated." \
         "Check package-index access, then run $(command_text './scrooge-alert install --debug')."
 fi
-install_task success "Packaging tools updated."
+task_status success "Packaging tools updated."
 
 if [ -f "$REQUIREMENTS_FILE" ]; then
     if ! run_with_progress "Installing core dependencies..." \
@@ -355,9 +341,9 @@ else
 fi
 
 if [ "$VENV_NEWLY_CREATED" = true ]; then
-    install_task success "Installed core dependencies."
+    task_status success "Installed core dependencies."
 else
-    install_task success "Updated core dependencies."
+    task_status success "Updated core dependencies."
 fi
 
 # Re-read the same import-light metadata through the completed venv before
@@ -425,7 +411,7 @@ for pair in $PLUGIN_REQS; do
         install_fail "[$req_name] Its private dependencies could not be installed." \
             "Check that target's requirements, then run $(command_text "./scrooge-alert install --debug --$req_name")."
     fi
-    install_task success "[$req_name] Installed private dependencies."
+    task_status success "[$req_name] Installed private dependencies."
 done
 IFS="$OLD_IFS"
 
@@ -435,9 +421,9 @@ if ! run_with_progress "Checking installed dependencies..." \
         "Resolve the dependency conflict, then run $(command_text './scrooge-alert install --debug')."
 fi
 if [ "$HAS_PLUGIN_REQS" -eq 1 ]; then
-    install_task success "All installed dependencies are compatible."
+    task_status success "All installed dependencies are compatible."
 else
-    install_task success "Core dependencies are compatible."
+    task_status success "Core dependencies are compatible."
 fi
 
 # ------------------------------------------------------------------------------
@@ -491,9 +477,9 @@ for plugin in $PLUGINS; do
     fi
     if [ "$status" = "error" ]; then
         schedule_error="$(plugin_stream_value "$plugin" "$SCHEDULE_ERRORS" || true)"
-        install_task failure \
+        task_status failure \
             "[$plugin] ${schedule_error:-Could not resolve its timer schedule.}"
-        install_task info "[$plugin] Existing systemd units were left unchanged."
+        task_status info "[$plugin] Existing systemd units were left unchanged."
         CONFIG_FAILED=1
         continue
     fi
@@ -511,24 +497,24 @@ if [ -n "$PROVISION_PLUGINS" ]; then
         run_action provision_units_transaction \
         "$PROVISION_PLUGINS" "$ALL_SCHEDULES" "$PROVISION_MODE"; then
         if [ "$IS_UPDATE" -eq 1 ]; then
-            install_task failure \
+            task_status failure \
                 "Transactional systemd provisioning failed during the update."
         else
-            install_task failure "Transactional systemd provisioning failed."
+            task_status failure "Transactional systemd provisioning failed."
         fi
         if [ -n "${UNIT_RECOVERY_DIR:-}" ]; then
-            install_task warning "Recovery files were retained at $UNIT_RECOVERY_DIR."
+            task_status warning "Recovery files were retained at $UNIT_RECOVERY_DIR."
         fi
-        install_task info \
+        task_status info \
             "Rerun $(command_text './scrooge-alert install --debug'), or inspect with $(command_text './scrooge-alert status')."
         install_exit 1
     fi
-    install_task success "Configured timers for the selected targets."
+    task_status success "Configured timers for the selected targets."
 else
     if [ -n "$PLUGINS" ]; then
-        install_task info "No valid selected targets could be provisioned."
+        task_status info "No valid selected targets could be provisioned."
     else
-        install_task info "No registered targets require systemd provisioning."
+        task_status info "No registered targets require systemd provisioning."
     fi
 fi
 
@@ -540,7 +526,7 @@ if command -v loginctl >/dev/null 2>&1; then
     elif run_captured id -un; then
         LINGER_USER="$CAPTURED_COMMAND_OUTPUT"
     else
-        install_task warning \
+        task_status warning \
             "Could not identify the user for lingering; timers may run only while logged in."
         LINGER_USER=''
     fi
@@ -554,11 +540,11 @@ if command -v loginctl >/dev/null 2>&1; then
         # install is still valid (timers run while logged in), so a failure here
         # (e.g. a system that requires root to enable linger) must not abort.
         if run_action loginctl enable-linger "$LINGER_USER"; then
-            install_task success "Enabled user lingering."
+            task_status success "Enabled user lingering."
         else
-            install_task warning \
+            task_status warning \
                 "Could not enable user lingering; timers will run only while logged in."
-            install_task info \
+            task_status info \
                 "Ask the system administrator to enable lingering for '$LINGER_USER'."
         fi
     fi
@@ -598,18 +584,18 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
         case "$example" in
             "$BASE_DIR"/*) example="${example#"$BASE_DIR"/}" ;;
         esac
-        install_task warning "[$plugin] Its tracked-items configuration is missing."
+        task_status warning "[$plugin] Its tracked-items configuration is missing."
         CONFIG_COMMANDS="${CONFIG_COMMANDS}${CONFIG_COMMANDS:+
 }cp $example config/$plugin.json"
     done
 
     if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
-        install_task warning "The general configuration is missing."
+        task_status warning "The general configuration is missing."
         CONFIG_COMMANDS="${CONFIG_COMMANDS}${CONFIG_COMMANDS:+
 }cp src/core/general/config.example.json config/general.json"
     fi
 
-    install_task info "From the project directory, run:"
+    task_status info "From the project directory, run:"
     [ -d config ] || install_command "mkdir -p config"
     OLD_IFS="$IFS"
     IFS='
@@ -620,28 +606,28 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
     done
     IFS="$OLD_IFS"
     if [ -n "$MISSING_CONFIGS" ]; then
-        install_task info \
+        task_status info \
             "Fill each new target configuration with the items you want to track."
     fi
     if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
-        install_task info \
+        task_status info \
             "Configure notification URLs and preferences in config/general.json."
     fi
-    install_task info "Read README.md for configuration guidance."
+    task_status info "Read README.md for configuration guidance."
 fi
 
 if [ "$IS_UPDATE" -eq 0 ]; then
     if [ "$CONFIG_FAILED" -eq 0 ]; then
         install_section "Installation result"
-        install_task success "Installation complete."
+        task_status success "Installation complete."
     fi
 fi
 
 if [ "$CONFIG_FAILED" -ne 0 ]; then
     install_section "Installation result"
-    install_task failure \
+    task_status failure \
         "One or more targets were skipped because their configuration is invalid."
-    install_task info \
+    task_status info \
         "Fix each reported target configuration, then run $(command_text './scrooge-alert install') again."
     install_exit "$EXIT_STATUS_TARGET_CONFIG_ERROR"
 fi
