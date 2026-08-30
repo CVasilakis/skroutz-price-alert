@@ -512,6 +512,10 @@ main() {
 
     UPDATE_PHASE="migrating"
     update_section success "JSON migration"
+    # --machine is migrate.sh's internal mode: its stdout is exactly the report
+    # parsed below and its exit status is the engine's own, so this update owns
+    # the presentation and the recovery decisions rather than nesting another
+    # script's panels inside its own.
     if run_with_progress "Migrating managed JSON documents..." \
         run_captured "$SCRIPT_DIR/dev/migrate.sh" --machine; then
         MIGRATION_STATUS=0
@@ -539,6 +543,17 @@ main() {
     OLD_IFS="$IFS"
     IFS='
 '
+    # Migration report columns, as the parsing below addresses them. The producer
+    # (core.tooling.migration_cli) owns the contract:
+    #
+    #   $1 family  $2 target  $3 result  $4 path  $5 detail
+    #
+    # Only failed rows and the recovery row matter here, and $1 decides the blast
+    # radius of a failure: target_config and scraper_state leave just their own target ($2)
+    # disabled, general_config leaves every timer disabled because no target can
+    # be trusted without it, and reminder_state only downgrades the final status.
+    # The trailing recovery row carries the retained directory in $4. Any other
+    # result needs no action, so the rows are filtered rather than enumerated.
     # shellcheck disable=SC2086
     for migration_row in $MIGRATION_REPORT; do
         migration_family="${migration_row%%"$MIGRATION_TAB"*}"

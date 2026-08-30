@@ -1,4 +1,20 @@
 #!/bin/sh
+# Validate and migrate every managed JSON document, then report the outcome.
+#
+# Two output modes. By default the report is rendered as the usual operational
+# panels for a human. The internal --machine flag switches to the contract
+# scripts/update.sh consumes: stdout carries the engine's tab-separated report
+# verbatim and nothing else, the engine's exit status is passed through
+# unchanged, and every diagnostic - invalid arguments and preflight failures
+# included - is one terse stderr line instead of a panel. It stays out of
+# --help deliberately: ./scrooge-alert exposes no command that produces it, and
+# a user has the rendered mode for the same information.
+#
+# --debug remains compatible with either mode, because run_captured mirrors a
+# captured command's streams to stderr rather than stdout. Machine stdout is
+# therefore still exactly the report when the updater inherits debug through
+# SCROOGE_INTERNAL_DEBUG.
+
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
@@ -41,7 +57,7 @@ for argument in "$@"; do
             SCROOGE_INTERNAL_DEBUG=1
             export DEBUG_MODE SCROOGE_INTERNAL_DEBUG
             ;;
-        --machine) MACHINE_MODE=1 ;;
+        --machine) MACHINE_MODE=1 ;;  # internal; contract in the file header
         *)
             [ -n "$INVALID_ARGUMENT" ] || INVALID_ARGUMENT="$argument"
             ;;
@@ -94,6 +110,9 @@ if ! run_action require_python_310 "$BASE_DIR/venv/bin/python3" "./scrooge-alert
     exit 1
 fi
 
+# The engine is always asked for its machine report: this script parses that
+# report even when it renders panels, so MACHINE_MODE decides only whether the
+# report is forwarded or presented.
 # shellcheck disable=SC2329  # invoked indirectly by run_captured
 run_migration_engine() {
     set -- -m core.tooling.migration_cli --root "$BASE_DIR" --machine
@@ -108,11 +127,26 @@ else
 fi
 MIGRATION_REPORT="$CAPTURED_COMMAND_OUTPUT"
 
+# The machine contract ends here: the caller classifies the rows and owns the
+# presentation, so nothing below this point may write to stdout in that mode.
 if [ "$MACHINE_MODE" -eq 1 ]; then
     [ -z "$MIGRATION_REPORT" ] || printf '%s\n' "$MIGRATION_REPORT"
     exit "$MIGRATION_STATUS"
 fi
 
+# Migration report columns, as render_family and the recovery loop below address
+# them. The producer (core.tooling.migration_cli) owns the contract; this legend
+# exists so a field number is editable here without reading the Python:
+#
+#   $1 family  $2 target  $3 result  $4 path  $5 detail
+#
+# $1 is one of general_config, target_config, scraper_state, and reminder_state,
+# plus the single trailing recovery row emitted when a partial migration
+# retained copies. $3 is the branch key: current, migrated, failed, or missing
+# for a document row, and retained on the recovery row. A missing document is a
+# normal absence rather than an outcome, so it is dropped here instead of
+# printed. $5 is the only free-form field, collapsed to one line by the producer,
+# and in check mode a migrated row prefixes it with "pending ".
 render_family() {
     _rf_family="$1"
     _rf_heading="$2"

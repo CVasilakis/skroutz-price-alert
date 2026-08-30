@@ -43,6 +43,29 @@ def _print_human(outcomes: tuple[MigrationOutcome, ...], recovery: Path | None) 
 
 
 def _print_machine(outcomes: tuple[MigrationOutcome, ...], recovery: Path | None) -> None:
+    """Emit the tab-separated migration report the POSIX scripts parse.
+
+    One row per inspected document, in inspection order, with a single trailing
+    recovery row when a partially applied migration retained copies. Columns,
+    numbered as ``scripts/dev/migrate.sh`` and ``scripts/update.sh`` address them:
+
+    1. ``family`` - ``general_config``, ``target_config``, ``scraper_state``,
+       ``reminder_state``, or ``recovery`` on the trailing row.
+    2. ``target`` - the owning scraper, or ``general`` for a project-wide
+       document and for the recovery row.
+    3. ``result`` - ``current``, ``migrated``, ``failed``, or ``missing`` for a
+       document, and ``retained`` for the recovery row.
+    4. ``path`` - the document, or the retained recovery directory.
+    5. ``detail`` - free-form and possibly empty. Every separator is collapsed to
+       a space, because one stray tab or newline would misalign the row the shell
+       reads positionally.
+
+    Unlike the human rendering, a ``missing`` document still gets a row: the
+    consumers decide what an absent document means to them, and both currently
+    ignore it. The exit status, not the rows, is what tells a caller whether the
+    run failed; ``scripts/update.sh`` needs both, since it maps each failed row
+    onto the target whose timer must stay disabled.
+    """
     for outcome in outcomes:
         detail = outcome.detail.replace("\t", " ").replace("\r", " ").replace("\n", " ")
         print("\t".join((outcome.family, outcome.target, outcome.status, outcome.path, detail)))
@@ -68,6 +91,9 @@ def main(argv: list[str] | None = None) -> int:
             "lock metadata may be created"
         ),
     )
+    # Hidden because neither is a user interface: --machine is the shell wrapper's
+    # parsing contract (documented on _print_machine) and --root exists so that
+    # wrapper can name the checkout it was invoked from.
     parser.add_argument("--machine", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--root", default=BASE_DIR, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
