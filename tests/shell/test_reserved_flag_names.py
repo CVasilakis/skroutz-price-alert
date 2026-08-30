@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = sorted([REPO_ROOT / "scrooge-alert"] + list((REPO_ROOT / "scripts").glob("*.sh")))
 TARGET_SELECTING_NAMES = {
     "run.sh",
+    "status.sh",
     "install.sh",
     "enable.sh",
     "disable.sh",
@@ -52,7 +53,7 @@ class TestReservedFlagNames(unittest.TestCase):
     def test_scripts_were_found(self):
         # Guard against a silent-green pass if the layout changes.
         self.assertGreaterEqual(len(SCRIPTS), 8, SCRIPTS)
-        self.assertGreaterEqual(len(TARGET_SELECTING_SCRIPTS), 6, TARGET_SELECTING_SCRIPTS)
+        self.assertGreaterEqual(len(TARGET_SELECTING_SCRIPTS), 7, TARGET_SELECTING_SCRIPTS)
 
     def test_shell_reserved_names_match_the_scripts_builtin_flags(self):
         claimed: set[str] = set()

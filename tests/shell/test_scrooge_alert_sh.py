@@ -160,16 +160,21 @@ def test_command_help_is_canonical_and_keeps_dynamic_targets():
         run_help = _run(checkout, world, "run", "--help")
         install_help = _run(checkout, world, "install", "--help")
         status_help = _run(checkout, world, "status", "--help")
+        ping_help = _run(checkout, world, "ping", "--help")
     finally:
         _cleanup(checkout)
 
     assert run_help.returncode == install_help.returncode == status_help.returncode == 0
+    assert ping_help.returncode == 0
     assert "Usage: ./scrooge-alert run" in run_help.stdout
     assert "--skroutz" in run_help.stdout and "--insomnia" in run_help.stdout
     assert "Usage: ./scrooge-alert install" in install_help.stdout
     assert "--skroutz" in install_help.stdout and "--insomnia" in install_help.stdout
     assert "Usage: ./scrooge-alert status [--help]" in status_help.stdout
-    assert "--skroutz" not in status_help.stdout
+    assert "--skroutz" in status_help.stdout and "--insomnia" in status_help.stdout
+    # ping is the target-free command: it reads config/general.json and nothing else.
+    assert "Usage: ./scrooge-alert ping [--help]" in ping_help.stdout
+    assert "--skroutz" not in ping_help.stdout
 
 
 @pytest.mark.parametrize("target", ("ping", "status"))

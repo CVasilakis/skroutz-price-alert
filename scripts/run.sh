@@ -55,23 +55,6 @@ print_missing_venv_help() {
     printf '\n'
 }
 
-catalog_failure() {
-    if _cf_output="$(catalog_cli diagnose 2>&1)"; then
-        _cf_recovery="The target catalog is readable now; retry the command."
-    else
-        _cf_recovery="Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry."
-    fi
-    _cf_detail="$(
-        printf '%s\n' "$_cf_output" |
-            awk 'NF { sub(/^[[:space:]]+/, ""); print; exit }'
-    )"
-    runtime_failure \
-        "Run preflight" \
-        "The target catalog could not be loaded." \
-        "$_cf_detail" \
-        "$_cf_recovery"
-}
-
 HELP_REQUESTED=0
 for raw_arg in "$@"; do
     case "$raw_arg" in -h|--help) HELP_REQUESTED=1 ;; esac
@@ -92,25 +75,6 @@ if [ "$HELP_REQUESTED" -eq 1 ]; then
     exit 0
 fi
 
-FORWARD_COUNT=0
-
-append_forward_arg() {
-    FORWARD_COUNT=$((FORWARD_COUNT + 1))
-    # Values reaching this helper are fixed built-ins or validated target flags.
-    eval "FORWARD_$FORWARD_COUNT=\$1"
-}
-
-exec_with_forward_args() {
-    _ewfa_index="$1"
-    shift
-    if [ "$_ewfa_index" -gt "$FORWARD_COUNT" ]; then
-        exec_runtime_entrypoint run.py "$@"
-    fi
-    _ewfa_value=''
-    eval "_ewfa_value=\${FORWARD_$_ewfa_index}"
-    exec_with_forward_args "$((_ewfa_index + 1))" "$@" "$_ewfa_value"
-}
-
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help)
@@ -118,25 +82,13 @@ while [ "$#" -gt 0 ]; do
             exit 0
             ;;
         --quiet)
-            append_forward_arg --quiet
+            runtime_forward_arg --quiet
             ;;
         --)
             runtime_argument_failure run "Invalid argument: $1."
             ;;
         --*)
-            name="${1#--}"
-            if ! is_valid_target "$name"; then
-                runtime_argument_failure run \
-                    "Invalid target flag: $1 (expected --<snake_case target>)."
-            fi
-            if stream_contains "$name" "$PLUGINS"; then
-                append_forward_arg "$1"
-            else
-                if [ "$CATALOG_AVAILABLE" -eq 0 ]; then
-                    catalog_failure
-                fi
-                runtime_argument_failure run "Unknown target flag: $1."
-            fi
+            runtime_target_flag run "$1" "$PLUGINS" "$CATALOG_AVAILABLE"
             ;;
         *)
             runtime_argument_failure run "Invalid argument: $1."
@@ -145,4 +97,4 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-exec_with_forward_args 1
+runtime_exec_forwarded run.py

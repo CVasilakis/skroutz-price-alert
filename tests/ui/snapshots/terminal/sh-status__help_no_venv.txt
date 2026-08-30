@@ -8,5 +8,7 @@ With no target flag, report every known target.
 
 Optional arguments:
   -h, --help        show this help message and exit
-  --skroutz         Show status for the Skroutz scraper
-  --amazon          Show status for the Amazon scraper
+
+Target-specific options are unavailable because the project
+virtual environment is not installed.
+Run ./scrooge-alert install, then rerun this help command to list registered targets.

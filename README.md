@@ -324,8 +324,14 @@ your JSON configuration, validates notification URLs, and queries systemd to dis
 following background execution details:
 
 ```
-./scrooge-alert status
+./scrooge-alert status [--help] [--<target> ...]
 ```
+
+With no target flag the report covers every known target. A `--<target>` flag narrows the
+per-scraper panels to the named targets, and the flag list includes any **orphaned** unit
+still installed for an unregistered plugin, so it can be inspected on its own (run
+`./scrooge-alert status --help` to see the exact flags available). The **Configuration
+Check** panel is target-neutral and always renders.
 
 - **Systemd Timer Active:** Shows whether the timer is currently active.
 - **Last Execution Time:** Displays when the script was last run.

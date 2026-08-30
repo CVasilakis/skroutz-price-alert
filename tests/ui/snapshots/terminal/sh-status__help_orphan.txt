@@ -9,4 +9,4 @@ With no target flag, report every known target.
 Optional arguments:
   -h, --help        show this help message and exit
   --skroutz         Show status for the Skroutz scraper
-  --amazon          Show status for the Amazon scraper
+  --ghost           Show the orphaned ghost units

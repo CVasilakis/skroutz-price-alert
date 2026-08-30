@@ -88,6 +88,7 @@ if [ "$ORIGINAL_ARGUMENT_COUNT" -eq 0 ]; then
     fi
     PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
     export PYTHONPATH
+    # exec replaces this shell: the argument-driven flow below never runs in wizard mode.
     exec "$wizard_python" -m core.scrapers.tooling.scaffold --interactive
 fi
 
