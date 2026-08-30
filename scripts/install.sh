@@ -488,6 +488,10 @@ done
 IFS="$OLD_IFS"
 
 if [ -n "$PROVISION_PLUGINS" ]; then
+    # A direct install activates each provisioned timer itself. Under an update
+    # the timers stay quiesced: update.sh disabled them before the fast-forward
+    # and holds the pre-quiescence states, so it owns the reactivation. See the
+    # activation matrix above replace_units_transaction in lib/provisioning.sh.
     if [ "$IS_UPDATE" -eq 1 ]; then
         PROVISION_MODE="deferred"
     else

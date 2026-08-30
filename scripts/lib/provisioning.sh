@@ -30,6 +30,12 @@ validate_staged_units() {
             "ExecStart=\"$BASE_DIR/scripts/run.sh\" --quiet --$_vsu_target"
 }
 
+# Record one target's timer/service load, enabled, and active states, rejecting
+# any value the rollback path could not reassert. A timer that is not installed
+# yet is recorded as the 'absent' sentinel, which is deliberately not a systemd
+# UnitFileState/ActiveState value: it can never compare equal to a live state,
+# so a caller that reasserts captured values cannot mistake "was not there" for
+# "was disabled". restore_timer_state treats it as "leave this target alone".
 capture_timer_state() {
     _cts_target="$1"
     _cts_path="$2"
@@ -264,8 +270,84 @@ unit_transaction_interrupted() {
     exit "$_uti_status"
 }
 
+# Unit replacement is one transaction with six ordered phases. The order is not
+# stylistic: each phase exists to keep the previous ones recoverable.
+#
+#   validate   Argument shape and every live destination path, before anything
+#              exists to clean up. An illegal scope/activation pair returns 2 to
+#              mark a caller error, distinct from the 1 every runtime failure
+#              below returns.
+#   workspace  One private mktemp directory, created inside SYSTEMD_USER_DIR so
+#              the later staged -> live move is a rename within one filesystem
+#              rather than a copy that can half-succeed. The signal traps are
+#              installed only after every variable the handler reads is set.
+#   stage      Render the new unit files under staged/ and re-read them to
+#              confirm the load-bearing directives. A bad render costs nothing:
+#              no live file has been touched and no snapshot exists yet.
+#   capture    The last read-only phase. Back up the live unit files
+#              byte-for-byte and record each timer's load/enabled/active state.
+#              It sits immediately before the mutation so the states a rollback
+#              reasserts are the freshest ones observed, and so an unexpected
+#              systemd state is still fatal while aborting is still free.
+#   mutate     Move the staged files over the live ones, then daemon-reload.
+#   activate   Apply the activation mode described below.
+#
+# UNIT_MUTATION_STARTED is the rollback pivot, and it is set to 1 *before* the
+# first move, never after. A signal arriving between the flag and the first move
+# makes the handler restore a system that was not modified, which is harmless
+# because restoring is idempotent; the opposite order would leave a moved unit
+# file in place while the handler still believed nothing had changed. The same
+# flag selects the failure path: before it, discard the workspace and report
+# that no live file changed; after it, restore the files, daemon-reload, and
+# only then reassert the captured timer states, in that order, because a state
+# cannot be reasserted against a unit file that is not back yet.
+#
+# Two variables outlive the return as the caller-facing outcome contract, and
+# install.sh and schedule.sh both branch on them. UNIT_RECOVERY_DIR is cleared
+# whenever the workspace was removed -- success, pre-mutation abort, or a
+# completed rollback -- and is left set, with the directory still on disk, only
+# when a rollback was incomplete and a human has to inspect it. Alongside it,
+# UNIT_MUTATION_STARTED is never cleared, so a caller can still tell "previous
+# files and states were restored" from "nothing live was touched". Both are
+# reset by the next call, but only after its validate and workspace phases,
+# which is why this helper is invoked at most once per process.
+
 # replace_units_transaction <targets> <schedules> <pair|timer>
 #                           <normal|deferred|preserve>
+#
+# scope selects which files are staged, snapshotted, and rolled back:
+#   pair    the service and the timer, i.e. installing or reinstalling a target
+#   timer   the timer alone, leaving the installed service bytes untouched,
+#           i.e. changing a target's cadence
+#
+# activation selects what happens to the timer once the files are in place:
+#   normal    enable --now. The only mode that turns a target on, used by a
+#             direct ./scrooge-alert install.
+#   deferred  do nothing; the caller owns activation. Used only by the
+#             install.sh run that ./scrooge-alert update invokes with
+#             SCROOGE_INSTALL_CONTEXT=deferred. update.sh stopped and disabled
+#             every installed target before the fast-forward, and holds its own
+#             snapshot of the states from *before* that quiescence, so update.sh
+#             restores them in its own activation phase. This transaction's
+#             capture necessarily runs after that quiescence and so records the
+#             quiesced state: correct for rolling back this transaction alone,
+#             and precisely why activation cannot be left to it here.
+#   preserve  reassert what capture recorded: restart a timer that was active,
+#             otherwise confirm it stayed stopped, and confirm its enabled state
+#             is unchanged either way. Used by ./scrooge-alert schedule.
+#
+# Only pair:normal, pair:deferred, and timer:preserve are legal. The other three
+# are rejected because they are unsound, not merely unused:
+#   pair:preserve   a pair write is how a target gets installed, so its timer
+#                   may not exist yet; capture then records the 'absent'
+#                   sentinel, which no live UnitFileState can equal, and
+#                   preserve's verification would fail every fresh install.
+#   timer:normal    a cadence change must not turn on a target the user turned
+#                   off; enable --now would silently enable and start every
+#                   rescheduled timer.
+#   timer:deferred  nothing runs after a cadence change to activate the timer,
+#                   so deferring would leave the user's scrapers stopped with no
+#                   later phase to restore them.
 replace_units_transaction() {
     _rut_targets="$1"
     _rut_schedules="$2"
@@ -402,10 +484,14 @@ replace_units_transaction() {
     discard_unit_recovery
 }
 
+# Install or reinstall a target: both unit files, with the caller choosing
+# between normal and deferred activation.
 provision_units_transaction() {
     replace_units_transaction "$1" "$2" pair "$3"
 }
 
+# Change an installed target's cadence: the timer file only, with its previous
+# enabled and active state reasserted afterwards.
 schedule_units_transaction() {
     replace_units_transaction "$1" "$2" timer preserve
 }
