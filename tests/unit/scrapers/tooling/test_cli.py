@@ -4,9 +4,15 @@ from unittest import mock
 import pytest
 from support import fake_plugin, synthetic_catalog
 
-from core.exceptions import PluginValidationError
+from core.exceptions import ConfigFileError, PluginValidationError
 from core.scrapers.tooling.check import PluginCheckReport
-from core.scrapers.tooling.cli import _tsv_row, catalog_rows, resolve_schedule, schedule_rows
+from core.scrapers.tooling.cli import (
+    ScheduleResolution,
+    _tsv_row,
+    catalog_rows,
+    resolve_schedule,
+    schedule_rows,
+)
 from core.scrapers.tooling.cli import main as cli_main
 from core.settings import SettingStatus
 
@@ -49,6 +55,32 @@ def test_catalog_and_schedules_are_independent(capsys, tmp_path, catalog):
     assert statuses["insomnia"][1:3] == ["", "error"]
     assert "unsupported keys" in statuses["insomnia"][3]
     assert statuses["skroutz"][2] == "nocfg"
+
+
+def test_schedule_error_row_absorbs_a_multiline_message(tmp_path, catalog):
+    """A failing target must stay confined to its own row.
+
+    The message is the only free-form field in either snapshot, so it is the only
+    one that could carry a separator into the row builder and fail the whole
+    report - which would defeat the per-target isolation the error row provides.
+    """
+
+    def resolve(plugin, config_dir):
+        if plugin.target == "insomnia":
+            raise ConfigFileError("config/insomnia.json is unreadable\nline two\tcolumn")
+        return ScheduleResolution("hourly", SettingStatus.NO_CONFIG)
+
+    with mock.patch("core.scrapers.tooling.cli.resolve_schedule", side_effect=resolve):
+        rows = schedule_rows(catalog, str(tmp_path))
+
+    reported = {parts[0]: parts for row in rows if (parts := row.split("\t"))}
+    assert reported["insomnia"] == [
+        "insomnia",
+        "",
+        "error",
+        "config/insomnia.json is unreadable line two column",
+    ]
+    assert reported["skroutz"][2] == "nocfg"
 
 
 def test_verifier_and_tooling_cli(capsys, tmp_path, catalog):

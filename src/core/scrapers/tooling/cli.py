@@ -96,7 +96,7 @@ def schedule_rows(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
     2. ``on_calendar`` - the rendered timer expression, empty on an error row.
     3. ``status`` - the vocabulary the scripts branch on (``scripts/schedule.sh``).
     4. ``error`` - the presentation-safe ``ConfigFileError`` message on an error
-       row, empty otherwise.
+       row, collapsed to one line, empty otherwise.
 
     The status vocabulary has five values. ``error`` is this report's own state,
     not a :class:`SettingStatus`: the config read raised, so no interval was
@@ -117,7 +117,11 @@ def schedule_rows(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
         try:
             schedule = resolve_schedule(plugin, config_dir)
         except ConfigFileError as exc:
-            rows.append(_tsv_row(plugin.target, "", "error", str(exc)))
+            # The message is the only free-form field in either snapshot, so it is
+            # the only one that could carry a separator into _tsv_row and raise.
+            # Collapsing it here keeps a broken target on its own error row instead
+            # of failing the whole report, which is what that row exists to prevent.
+            rows.append(_tsv_row(plugin.target, "", "error", " ".join(str(exc).split())))
         else:
             rows.append(
                 _tsv_row(
