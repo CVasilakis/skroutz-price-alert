@@ -24,6 +24,9 @@ stem() {
     value="${value%-scraper.timer}"
     printf '%s' "${value%-scraper.service}"
 }
+# Markers are keyed by target, not by unit, so a target's timer and service
+# share one enabled/active/failed state. That is enough for the lifecycle
+# behavior under test; a per-unit model would touch every marker assertion.
 marker() {
     printf '%s/%s.%s' "$FAKE_STATE" "$1" "$(stem "$2")"
 }
@@ -50,6 +53,8 @@ case "$verb" in
             ActiveState)
                 if [ "${FAKE_UNEXPECTED_TARGET:-}" = "$target" ]; then
                     echo ActiveState=activating
+                elif [ -f "$(marker failed "$unit")" ]; then
+                    echo ActiveState=failed
                 elif [ -f "$(marker active "$unit")" ]; then
                     echo ActiveState=active
                 else
@@ -86,7 +91,9 @@ case "$verb" in
         if [ -L "$XDG_CONFIG_HOME/systemd/user/$unit" ]; then
             rm -f "$XDG_CONFIG_HOME/systemd/user/$unit"
         fi ;;
-    reset-failed) [ "${FAKE_FAIL_RESET_FAILED:-0}" != "1" ;;
+    reset-failed)
+        [ "${FAKE_FAIL_RESET_FAILED:-0}" != "1" ] || exit 1
+        rm -f "$(marker failed "$1")" ;;
 esac
 """
 
@@ -148,13 +155,15 @@ schedule_units_transaction "$targets" "$schedules"
     return subprocess.run(["sh", "-c", script], text=True, capture_output=True, env=env)
 
 
-def run_disable_one(shell_world, target, **env_updates):
+def run_disable_one(shell_world, target, enabled=True, failed=False, **env_updates):
     base, unit_dir, state, env = shell_world
     env.update({key: str(value) for key, value in env_updates.items()})
     for suffix in ("timer", "service"):
         (unit_dir / f"{target}-scraper.{suffix}").touch()
-    (state / f"enabled.{target}").touch()
-    (state / f"active.{target}").touch()
+    if enabled:
+        (state / f"enabled.{target}").touch()
+    # A failed unit is not also active, and the fake reports it in that order.
+    (state / (f"failed.{target}" if failed else f"active.{target}")).touch()
     script = f"""
 set -eu
 BASE_DIR={shlex_quote(str(base))}
@@ -173,6 +182,59 @@ def test_disable_does_not_reset_a_healthy_unit(shell_world):
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_disable_resets_a_failed_unit(shell_world):
+    """A failed unit is reset before teardown, so it stops cleanly.
+
+    state_is_stopped already accepts 'failed', so the return status alone
+    cannot tell whether reset-failed ran. The cleared marker can.
+    """
+    _, _, state, _ = shell_world
+
+    result = run_disable_one(shell_world, "alpha", failed=True)
+
+    assert result.returncode == 0, result.stderr
+    assert not (state / "failed.alpha").exists()
+
+
+def test_disable_reports_a_failed_reset(shell_world):
+    """A reset-failed that does not succeed must fail the whole teardown."""
+    _, _, state, _ = shell_world
+
+    result = run_disable_one(
+        shell_world,
+        "alpha",
+        failed=True,
+        FAKE_FAIL_RESET_FAILED="1",
+    )
+
+    assert result.returncode != 0
+    assert (state / "failed.alpha").exists()
+
+
+def test_disable_stops_the_service_after_the_timer_half_fails(shell_world):
+    """A failed timer half must not skip the service teardown.
+
+    disable_one accumulates into _do_failed instead of returning early
+    precisely so a failure on one half cannot leave the other running. An
+    unsupported UnitFileState is the cheapest way into that branch. No stop is
+    issued for the timer on this path, so a cleared active marker can only be
+    the service's.
+    """
+    _, _, state, _ = shell_world
+
+    result = run_disable_one(
+        shell_world,
+        "alpha",
+        enabled=False,
+        FAKE_UNIT_FILE_STATE_TARGET="alpha",
+        FAKE_UNIT_FILE_STATE="bad",
+    )
+
+    assert result.returncode != 0
+    assert "alpha-scraper.timer has unsupported state 'bad'" in result.stderr
+    assert not (state / "active.alpha").exists()
 
 
 def shlex_quote(value: str) -> str:

@@ -120,6 +120,11 @@ state_is_stopped() {
     case "$1" in inactive|failed) return 0 ;; *) return 1 ;; esac
 }
 
+# Enablement classification. Only "enabled" and "enabled-runtime" install the
+# .wants/ symlink that makes timers.target start a timer, so every other
+# UnitFileState is inert and counts as disabled. The two lists are exhaustive
+# over systemd's documented vocabulary apart from "bad", so a value matching
+# neither is genuinely unexpected and callers fail closed on it.
 timer_state_is_disabled() {
     case "$1" in
         disabled|masked|masked-runtime|static|indirect|generated|transient|linked|linked-runtime|alias)
@@ -150,6 +155,10 @@ reset_failed_if_failed() {
         run_action systemctl --user reset-failed "$1"
 }
 
+# plugin_is_disabled <plugin>: 0 if the pair already meets disable_one's
+# postcondition, 1 if work is required, 2 if the state could not be queried.
+# The third status is load-bearing: disable.sh reports an unknown state rather
+# than attempting a teardown whose result it could not verify afterwards.
 plugin_is_disabled() {
     _pid_timer="$(unit_name "$1" timer)"
     _pid_service="$(unit_name "$1" service)"
@@ -199,6 +208,13 @@ stop_one() {
     }
 }
 
+# disable_one <plugin>: stop and disable one target's pair, accumulating into
+# _do_failed rather than returning early — the timer and service halves are
+# independent, so a failure on one must not skip the other's teardown. The
+# opening LoadState reads are the deliberate exception: without them nothing is
+# known about which halves exist, so there is no safe work to attempt. Every
+# state is re-queried afterwards, because a systemctl command exiting 0 does
+# not prove the unit actually reached the requested state.
 disable_one() {
     _do_timer="$(unit_name "$1" timer)"
     _do_service="$(unit_name "$1" service)"
@@ -218,6 +234,11 @@ disable_one() {
             else
                 reset_failed_if_failed "$_do_timer" || _do_failed=1
                 run_action systemctl --user stop "$_do_timer" || _do_failed=1
+                # Only the enabled states get an actual disable: systemctl
+                # disable removes the symlink that *is* a linked or alias
+                # unit, so calling it on an already-inert timer would
+                # destroy the unit rather than disable it. Every other
+                # accepted state is verified above, never acted on.
                 case "$_do_enabled" in
                     enabled)
                         run_action systemctl --user disable "$_do_timer" ||
