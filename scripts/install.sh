@@ -276,6 +276,10 @@ for pair in $EARLY_PLUGIN_REQS; do
     fi
 done
 IFS="$OLD_IFS"
+if ! run_action require_renderable_base_dir; then
+    install_fail "systemd cannot read this project path safely." \
+        "Move the checkout to a path with no % \\ \" ' or newline characters, then run $(command_text './scrooge-alert install') again."
+fi
 if ! run_action validate_unit_destinations "$PLUGINS" pair; then
     install_fail "A managed systemd unit destination is unsafe." \
         "Remove the unsafe unit with $(command_text './scrooge-alert uninstall --<target>'), then retry."

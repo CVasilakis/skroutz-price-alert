@@ -9,6 +9,12 @@ require_systemctl() {
     fi
 }
 
+# One private, dot-prefixed mktemp directory inside SYSTEMD_USER_DIR, created
+# for a caller that owns its lifetime. The location is deliberate, but for a
+# different reason per caller: the unit transaction renames staged files from
+# here onto the live units, which must be one filesystem, while update.sh only
+# copies into it and retains it on failure at a path it reports to the user for
+# manual recovery. The dot prefix keeps it out of the *-scraper.<suffix> globs.
 create_private_workspace() {
     case "$1" in ''|*[!a-z0-9_-]*) return 2 ;; esac
     command -v mktemp >/dev/null 2>&1 || {
@@ -66,6 +72,26 @@ require_writable_unit_path() {
             "Error: Managed unit path must be absent or a regular file: $_rwup_path" >&2
         return 1
     fi
+}
+
+# BASE_DIR reaches the rendered units verbatim, and systemd reads more than the
+# quoting: it expands % specifiers, unescapes \ sequences, and refuses an
+# executable name containing a single quote. A path carrying any of those still
+# renders a file validate_staged_units accepts, because that check builds its
+# expected line from the same BASE_DIR and so agrees with the corrupt text. The
+# unit only breaks when systemd parses it, leaving an install that reported
+# success and a timer that never runs. Refuse the path rather than escape it.
+# Spaces and $ are safe in both directives and stay legal.
+require_renderable_base_dir() {
+    case "$BASE_DIR" in
+        *'%'*|*\\*|*'"'*|*"'"*|*'
+'*)
+            printf '%s\n' \
+                "Error: systemd cannot read this project path safely: $BASE_DIR" >&2
+            printf '%s\n' \
+                "Move the checkout to a path with no % \\ \" ' or newline characters." >&2
+            return 1 ;;
+    esac
 }
 
 validate_unit_destinations() {
@@ -285,6 +311,14 @@ restart_timer_one() {
     [ "$(systemd_property "$_rto_timer" ActiveState)" = active ]
 }
 
+# The two BASE_DIR interpolations below are quoted differently on purpose, and
+# both forms are load-bearing. ExecStart is parsed as a command line split on
+# whitespace, so a path containing spaces must be quoted or systemd takes only
+# its first word as the command. WorkingDirectory takes the rest of the line as
+# one value and performs no unquoting, so the same quotes there land inside the
+# path and systemd rejects it as not absolute. Harmonising the two in either
+# direction breaks the install. validate_staged_units matches the ExecStart line
+# verbatim, so it changes with this renderer or provisioning fails closed.
 render_plugin_service() {
     if ! cat > "$2" << EOF
 [Unit]

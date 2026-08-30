@@ -133,12 +133,12 @@ def shell_world(tmp_path):
     return base, unit_dir, state, env
 
 
-def run_transaction(shell_world, targets, schedules, mode="normal", **env_updates):
+def run_transaction(shell_world, targets, schedules, mode="normal", base_dir=None, **env_updates):
     base, _, _, env = shell_world
     env.update({key: str(value) for key, value in env_updates.items()})
     script = f"""
 set -eu
-BASE_DIR={shlex_quote(str(base))}
+BASE_DIR={shlex_quote(str(base_dir or base))}
 . {shlex_quote(str(ROOT / "scripts/lib/common.sh"))}
 . {shlex_quote(str(ROOT / "scripts/lib/systemd.sh"))}
 . {shlex_quote(str(ROOT / "scripts/lib/provisioning.sh"))}
@@ -581,6 +581,39 @@ exec /bin/rm "$@"
     assert (unit_dir / "alpha-scraper.timer").is_file()
     assert (state / "enabled.alpha").is_file()
     assert (state / "active.alpha").is_file()
+
+
+@pytest.mark.parametrize("hostile", ("pct%dir", "back\\slash", 'quo"te', "quo'te"))
+def test_transaction_refuses_a_base_dir_systemd_would_misread(shell_world, hostile):
+    """systemd reads more of the path than the quoting protects.
+
+    It expands % specifiers, unescapes backslashes, and refuses an executable
+    name containing a quote. validate_staged_units cannot catch any of it: it
+    builds its expected line from the same BASE_DIR, so it agrees with the
+    corrupt text and the unit only breaks once systemd parses it.
+    """
+    base, unit_dir, _, _ = shell_world
+    project = base.parent / hostile
+    project.mkdir()
+
+    result = run_transaction(shell_world, "alpha", "alpha\thourly", base_dir=str(project))
+
+    assert result.returncode != 0
+    assert "cannot read this project path safely" in result.stderr
+    assert not (unit_dir / "alpha-scraper.timer").exists()
+    assert not (unit_dir / "alpha-scraper.service").exists()
+
+
+def test_transaction_accepts_a_base_dir_systemd_reads_correctly(shell_world):
+    """Spaces and $ survive the rendered quoting, so they must stay legal."""
+    base, unit_dir, _, _ = shell_world
+    project = base.parent / "dollar $dir with spaces"
+    project.mkdir()
+
+    result = run_transaction(shell_world, "alpha", "alpha\thourly", base_dir=str(project))
+
+    assert result.returncode == 0, result.stderr
+    assert (unit_dir / "alpha-scraper.service").is_file()
 
 
 def test_rollback_failure_retains_private_recovery_artifacts(shell_world):

@@ -273,8 +273,9 @@ unit_transaction_interrupted() {
 # Unit replacement is one transaction with six ordered phases. The order is not
 # stylistic: each phase exists to keep the previous ones recoverable.
 #
-#   validate   Argument shape and every live destination path, before anything
-#              exists to clean up. An illegal scope/activation pair returns 2 to
+#   validate   Argument shape, the project path interpolated into every rendered
+#              unit, and every live destination path, before anything exists to
+#              clean up. An illegal scope/activation pair returns 2 to
 #              mark a caller error, distinct from the 1 every runtime failure
 #              below returns.
 #   workspace  One private mktemp directory, created inside SYSTEMD_USER_DIR so
@@ -359,8 +360,9 @@ replace_units_transaction() {
     esac
     [ -n "$_rut_targets" ] || return 0
 
-    # All target names and destinations are checked before workspace creation,
-    # state capture, or any live mutation.
+    # The project path, all target names, and all destinations are checked
+    # before workspace creation, state capture, or any live mutation.
+    require_renderable_base_dir || return 1
     validate_unit_destinations "$_rut_targets" "$_rut_scope" || return 1
     UNIT_RECOVERY_DIR="$(create_private_workspace units)" || return 1
     UNIT_TRANSACTION_TARGETS="$_rut_targets"
