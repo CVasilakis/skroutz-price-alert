@@ -217,7 +217,10 @@ run_shell() {
     trap 'rm -f "$shell_paths" "$shell_stage"' 0 HUP INT TERM
     if run_action enumerate_shell_paths; then
         if [ "$DEBUG_MODE" -eq 1 ]; then
-            cat "$shell_paths" >&2
+            # The enumerated list is NUL-separated for xargs -0 below. Print it
+            # one path per line so the dump is readable and so the terminating
+            # newline keeps the following task status on its own line.
+            xargs -0 -n 1 printf '%s\n' < "$shell_paths" >&2
         fi
     else
         check_failure 1 "Could not enumerate shell files from Git."

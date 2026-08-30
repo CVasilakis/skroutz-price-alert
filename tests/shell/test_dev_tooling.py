@@ -725,6 +725,21 @@ def test_check_accepts_debug_alone_and_with_every_mode(tmp_path, args):
     assert_task_status(result.stdout, "v", "All requested checks passed.")
 
 
+def test_check_shell_debug_prints_enumerated_paths_one_per_line(tmp_path):
+    result = _run("scripts/dev/check.sh", "shell", "--debug", env=_fake_check_tools(tmp_path))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    # git ls-files -z separates paths with NUL, so dumping it verbatim rendered
+    # the whole enumeration as one unreadable line and, having no terminating
+    # newline, absorbed the ShellCheck status that follows it.
+    assert "\0" not in result.stderr
+    dumped = result.stderr.splitlines()
+    assert "scripts/dev/check.sh" in dumped
+    assert "scripts/lib/common.sh" in dumped
+    assert_task_status(result.stdout, "v", "ShellCheck passed.")
+    assert_task_status(result.stdout, "v", "POSIX syntax checks passed.")
+
+
 @pytest.mark.parametrize(
     "args",
     (
