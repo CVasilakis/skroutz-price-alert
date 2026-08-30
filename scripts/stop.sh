@@ -1,4 +1,11 @@
 #!/bin/sh
+# Stop the currently running executions of installed targets.
+#
+# Selection policy: installed_services, installed service units only. Stopping
+# acts on the service, so an installed timer with no service has no execution to
+# stop and is not selectable. Registration is deliberately not required: an
+# orphan's service can still be running, and must stay stoppable.
+
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"

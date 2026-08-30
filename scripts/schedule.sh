@@ -1,4 +1,11 @@
 #!/bin/sh
+# Apply each target's configured execution interval to its installed timer.
+#
+# Selection policy: installed_registered_timers, the same intersection enable.sh
+# uses and for the same reason: re-rendering OnCalendar needs both the timer unit
+# and the registered plugin that owns the configured or canonical interval, so an
+# orphan has no interval to apply and is skipped rather than rescheduled.
+
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"

@@ -766,6 +766,12 @@ catalog_diagnose() {
 # select_targets <registered|installed_registered_timers|installed_services|installed_union>
 # Requires systemd.sh for installed policies.
 #
+# This helper owns the mechanics of each policy, not the reason a command picks
+# one; each entry point states that in its own file header, since the choice
+# follows from what that command does to a unit (enable/schedule act on a timer
+# and need its plugin, stop acts on a service, disable/uninstall tear down
+# whatever is installed).
+#
 # Exports four values, all initialized before any early return: SELECTED_TARGETS
 # is the result, and SELECTED_REGISTERED, SELECTED_INSTALLED, and SELECTED_KNOWN
 # (their union) are the sets the policy was resolved against. The three sets are

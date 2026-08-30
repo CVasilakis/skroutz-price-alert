@@ -1,4 +1,13 @@
 #!/bin/sh
+# Enable and start the background timers of installed, registered targets.
+#
+# Selection policy: installed_registered_timers, the intersection of installed
+# timer units and registered plugins. Only a timer is enabled, so a leftover
+# service without its timer is not selectable, and an orphan is refused rather
+# than started: enabling a timer whose plugin is gone would schedule a run that
+# cannot work. An unflagged run therefore skips orphans silently, while naming
+# one explicitly fails with the uninstall remediation instead.
+
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"

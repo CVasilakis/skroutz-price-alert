@@ -1,4 +1,10 @@
 #!/bin/sh
+# Remove installed unit entries, and on a full teardown the project venv.
+#
+# Selection policy: installed_union, the same teardown-reaches-everything rule
+# disable.sh uses, since an orphaned or half-installed pair is precisely what an
+# uninstall has to be able to remove.
+
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"

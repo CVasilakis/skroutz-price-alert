@@ -1,4 +1,12 @@
 #!/bin/sh
+# Stop and disable the background timer/service pairs of installed targets.
+#
+# Selection policy: installed_union, every installed timer or service unit
+# whether or not its plugin is still registered. Disabling touches both units of
+# a pair and is pure teardown, so orphans and half-installed pairs must stay
+# reachable; requiring registration here would strand exactly the units a user
+# most needs to switch off.
+
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"

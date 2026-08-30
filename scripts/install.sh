@@ -1,4 +1,12 @@
 #!/bin/sh
+# Provision one timer+service pair per selected target.
+#
+# Selection policy: registered, the catalog alone, because only a registered
+# plugin supplies the sources, dependencies, and interval a unit is rendered
+# from. Update mode (--update) is the one exception and does not use the shared
+# policy: it re-filters the preserved selection itself so a target that stopped
+# being registered upstream is reported and skipped rather than failing the run.
+
 set -eu
 
 # ==============================================================================
