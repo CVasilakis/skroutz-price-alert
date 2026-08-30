@@ -669,44 +669,55 @@ catalog_diagnose() {
 }
 
 # select_targets <registered|installed_registered_timers|installed_services|installed_union>
-# Requires systemd.sh for installed policies. Exports SELECTED_TARGETS.
+# Requires systemd.sh for installed policies.
+#
+# Exports four values, all initialized before any early return: SELECTED_TARGETS
+# is the result, and SELECTED_REGISTERED, SELECTED_INSTALLED, and SELECTED_KNOWN
+# (their union) are the sets the policy was resolved against. The three sets are
+# part of the contract, not scratch state: callers wrap this in run_action, which
+# suppresses stderr in quiet mode, so the diagnostics printed below reach the user
+# only under --debug. In quiet mode each lifecycle script re-renders the same
+# diagnosis through task_status from these sets, in its own per-command wording
+# (timers/services/units, and which remediation command to name). The sets also
+# drive the success-path "registered but not installed" notices. Keeping the
+# rendering in the scripts keeps per-command presentation vocabulary out of this
+# shared helper; renaming these four breaks those callers.
 select_targets() {
     _st_policy="$1"
-    _st_registered="$(list_plugins 2>/dev/null || true)"
+    # Initialize the whole contract before any early return so a caller rendering
+    # a failure never reads a stale set from an earlier call.
+    SELECTED_TARGETS=''
+    SELECTED_INSTALLED=''
+    SELECTED_KNOWN=''
+    SELECTED_REGISTERED="$(list_plugins 2>/dev/null || true)"
     case "$_st_policy" in
-        registered)
-            _st_installed=''
-            _st_available="$_st_registered"
-            ;;
+        registered) ;;
         installed_registered_timers)
-            _st_installed="$(list_installed_units timer)" || return 1
-            _st_available="$_st_installed"
-            if [ -n "$_st_installed" ] && [ -z "$_st_registered" ]; then
+            SELECTED_INSTALLED="$(list_installed_units timer)" || return 1
+            if [ -n "$SELECTED_INSTALLED" ] && [ -z "$SELECTED_REGISTERED" ]; then
                 catalog_diagnose || return 1
             fi
             ;;
         installed_services)
-            _st_installed="$(list_installed_units service)" || return 1
-            _st_available="$_st_installed"
+            SELECTED_INSTALLED="$(list_installed_units service)" || return 1
             ;;
         installed_union)
-            _st_installed="$(list_installed_targets)" || return 1
-            _st_available="$_st_installed"
+            SELECTED_INSTALLED="$(list_installed_targets)" || return 1
             ;;
         *) return 2 ;;
     esac
+    SELECTED_KNOWN="$(stream_union "$SELECTED_REGISTERED" "$SELECTED_INSTALLED")"
 
-    SELECTED_TARGETS=''
     if [ "$TARGET_FLAGS_EXPLICIT" -eq 0 ]; then
         case "$_st_policy" in
-            registered) SELECTED_TARGETS="$_st_registered" ;;
+            registered) SELECTED_TARGETS="$SELECTED_REGISTERED" ;;
             installed_registered_timers)
                 _st_old_ifs="$IFS"
                 IFS='
 '
                 # shellcheck disable=SC2086
-                for _st_target in $_st_installed; do
-                    if stream_contains "$_st_target" "$_st_registered"; then
+                for _st_target in $SELECTED_INSTALLED; do
+                    if stream_contains "$_st_target" "$SELECTED_REGISTERED"; then
                         SELECTED_TARGETS="$(
                             stream_add_unique "$SELECTED_TARGETS" "$_st_target"
                         )"
@@ -714,12 +725,11 @@ select_targets() {
                 done
                 IFS="$_st_old_ifs"
                 ;;
-            *) SELECTED_TARGETS="$_st_installed" ;;
+            *) SELECTED_TARGETS="$SELECTED_INSTALLED" ;;
         esac
         return 0
     fi
 
-    _st_known="$(stream_union "$_st_registered" "$_st_installed")"
     _st_old_ifs="$IFS"
     IFS='
 '
@@ -727,17 +737,17 @@ select_targets() {
     for _st_target in $TARGET_FLAGS; do
         case "$_st_policy" in
             registered)
-                if ! stream_contains "$_st_target" "$_st_registered"; then
+                if ! stream_contains "$_st_target" "$SELECTED_REGISTERED"; then
                     printf '%s\n' "Error: Unknown target '$_st_target'." >&2
                     printf '%s\n' \
-                        "Available targets: $(stream_for_display "$_st_registered")" >&2
+                        "Available targets: $(stream_for_display "$SELECTED_REGISTERED")" >&2
                     IFS="$_st_old_ifs"
                     return 1
                 fi
                 ;;
             installed_registered_timers)
-                if ! stream_contains "$_st_target" "$_st_installed"; then
-                    if stream_contains "$_st_target" "$_st_registered"; then
+                if ! stream_contains "$_st_target" "$SELECTED_INSTALLED"; then
+                    if stream_contains "$_st_target" "$SELECTED_REGISTERED"; then
                         printf '%s\n' \
                             "Error: '$_st_target' is registered but not installed." >&2
                     else
@@ -746,7 +756,7 @@ select_targets() {
                     IFS="$_st_old_ifs"
                     return 1
                 fi
-                if ! stream_contains "$_st_target" "$_st_registered"; then
+                if ! stream_contains "$_st_target" "$SELECTED_REGISTERED"; then
                     printf '%s\n' \
                         "Error: '$_st_target' is installed but no longer registered (orphan)." >&2
                     printf '%s\n' \
@@ -756,14 +766,14 @@ select_targets() {
                 fi
                 ;;
             installed_services|installed_union)
-                if ! stream_contains "$_st_target" "$_st_known"; then
+                if ! stream_contains "$_st_target" "$SELECTED_KNOWN"; then
                     printf '%s\n' "Error: Unknown target '$_st_target'." >&2
                     printf '%s\n' \
-                        "Available targets: $(stream_for_display "$_st_known")" >&2
+                        "Available targets: $(stream_for_display "$SELECTED_KNOWN")" >&2
                     IFS="$_st_old_ifs"
                     return 1
                 fi
-                if ! stream_contains "$_st_target" "$_st_installed"; then
+                if ! stream_contains "$_st_target" "$SELECTED_INSTALLED"; then
                     printf '%s\n' \
                         "[$_st_target] is registered but not installed - nothing to do."
                     continue

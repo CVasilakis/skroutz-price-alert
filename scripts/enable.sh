@@ -59,7 +59,7 @@ enable_finish() {
 }
 
 show_selection_failure() {
-    if [ -n "${_st_installed:-}" ] && [ -z "${_st_registered:-}" ]; then
+    if [ -n "$SELECTED_INSTALLED" ] && [ -z "$SELECTED_REGISTERED" ]; then
         task_status failure "The target catalog could not be loaded."
         if [ ! -x "$BASE_DIR/venv/bin/python3" ] || [ -L "$BASE_DIR/venv" ]; then
             task_status warning \
@@ -76,8 +76,8 @@ show_selection_failure() {
 '
     # shellcheck disable=SC2086
     for _ssf_target in $TARGET_FLAGS; do
-        if stream_contains "$_ssf_target" "${_st_installed:-}"; then
-            if ! stream_contains "$_ssf_target" "${_st_registered:-}"; then
+        if stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
+            if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
                 task_status failure \
                     "'$_ssf_target' is installed but no longer registered (orphan)."
                 task_status warning \
@@ -85,7 +85,7 @@ show_selection_failure() {
                 IFS="$_ssf_old_ifs"
                 return
             fi
-        elif stream_contains "$_ssf_target" "${_st_registered:-}"; then
+        elif stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
             task_status failure \
                 "'$_ssf_target' is registered but not installed."
             task_status warning "Install it with: $(command_text "./scrooge-alert install --$_ssf_target")"

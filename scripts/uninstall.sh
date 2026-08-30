@@ -64,12 +64,12 @@ show_selection_failure() {
 '
     # shellcheck disable=SC2086
     for _ssf_target in $TARGET_FLAGS; do
-        if ! stream_contains "$_ssf_target" "${_st_registered:-}" &&
-            ! stream_contains "$_ssf_target" "${_st_installed:-}"; then
+        if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED" &&
+            ! stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
             task_status failure "Unknown target '$_ssf_target'."
-            if [ -n "${_st_known:-}" ]; then
+            if [ -n "$SELECTED_KNOWN" ]; then
                 task_status info \
-                    "Available targets: $(stream_for_display "$_st_known")"
+                    "Available targets: $(stream_for_display "$SELECTED_KNOWN")"
             else
                 task_status info \
                     "Run $(command_text './scrooge-alert uninstall --help') for available targets."
@@ -92,8 +92,8 @@ show_uninstalled_notices() {
 '
     # shellcheck disable=SC2086
     for _sun_target in $TARGET_FLAGS; do
-        if stream_contains "$_sun_target" "${_st_registered:-}" &&
-            ! stream_contains "$_sun_target" "${_st_installed:-}"; then
+        if stream_contains "$_sun_target" "$SELECTED_REGISTERED" &&
+            ! stream_contains "$_sun_target" "$SELECTED_INSTALLED"; then
             task_status info \
                 "[$_sun_target] Target is registered but not installed; nothing to remove."
         fi
