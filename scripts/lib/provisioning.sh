@@ -97,8 +97,8 @@ restore_timer_state() {
     _rts_failed=0
     [ "$_rts_load" != not-found ] || return 0
 
+    reset_failed_if_failed "$_rts_timer" || _rts_failed=1
     run_action systemctl --user stop "$_rts_timer" || _rts_failed=1
-    run_action systemctl --user reset-failed "$_rts_timer" || _rts_failed=1
     case "$_rts_enabled" in
         enabled)
             run_action systemctl --user enable "$_rts_timer" || _rts_failed=1 ;;

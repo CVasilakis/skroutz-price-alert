@@ -97,8 +97,7 @@ skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
 skroutz
 skroutz hourly  ok
 skroutz ok
-debug systemctl stdout
-debug systemctl stderr
+ActiveState=inactive
 debug systemctl stdout
 debug systemctl stderr
 debug systemctl stdout

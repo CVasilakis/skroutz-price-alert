@@ -149,6 +149,12 @@ service_state() {
     systemd_property "$(unit_name "$1" service)" ActiveState
 }
 
+# reset-failed only works on a unit the manager still holds, and systemd
+# collects one that nothing references — so a timer that has been stopped and
+# disabled is already gone. Callers must therefore clear a failed state before
+# quiescing a unit, never after, and the guard keeps the call out of the path
+# entirely when there is nothing to clear. LoadState is no help in predicting
+# this: it still reads 'loaded' at the moment reset-failed reports otherwise.
 reset_failed_if_failed() {
     _rfif_active="$(systemd_property "$1" ActiveState)" || return 1
     [ "$_rfif_active" != failed ] ||

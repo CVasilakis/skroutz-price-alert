@@ -93,6 +93,16 @@ case "$verb" in
         fi ;;
     reset-failed)
         [ "${FAKE_FAIL_RESET_FAILED:-0}" != "1" ] || exit 1
+        # systemd collects a unit nothing references, and reset-failed refuses
+        # to touch one that is not loaded. A failed unit is always kept, which
+        # is what makes the guarded call safe. LoadState above deliberately
+        # still reports loaded here, as the real systemctl does.
+        if [ ! -f "$(marker failed "$1")" ] && [ ! -f "$(marker active "$1")" ] &&
+           [ ! -f "$(marker enabled "$1")" ] &&
+           [ ! -f "$(marker enabled_runtime "$1")" ]; then
+            echo "Failed to reset failed state of unit $1: Unit $1 not loaded." >&2
+            exit 1
+        fi
         rm -f "$(marker failed "$1")" ;;
 esac
 """
@@ -182,6 +192,45 @@ def test_disable_does_not_reset_a_healthy_unit(shell_world):
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def run_restore_timer_state(shell_world, target, enabled, active, **env_updates):
+    base, unit_dir, _, env = shell_world
+    env.update({key: str(value) for key, value in env_updates.items()})
+    (unit_dir / f"{target}-scraper.timer").touch()
+    script = f"""
+set -eu
+BASE_DIR={shlex_quote(str(base))}
+. {shlex_quote(str(ROOT / "scripts/lib/common.sh"))}
+. {shlex_quote(str(ROOT / "scripts/lib/systemd.sh"))}
+. {shlex_quote(str(ROOT / "scripts/lib/provisioning.sh"))}
+restore_timer_state {shlex_quote(target)} loaded {shlex_quote(enabled)} {shlex_quote(active)}
+"""
+    return subprocess.run(["sh", "-c", script], text=True, capture_output=True, env=env)
+
+
+def test_restore_does_not_fail_on_a_collected_timer(shell_world):
+    """Rolling back to a disabled, inactive timer must not report a false failure.
+
+    Nothing references such a timer once it is stopped, so systemd collects it
+    and reset-failed refuses to touch it. update.sh's deferred capture records
+    exactly this state, which makes it the ordinary rollback target rather than
+    an edge case.
+    """
+    result = run_restore_timer_state(shell_world, "alpha", "disabled", "inactive")
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_restore_resets_a_failed_timer(shell_world):
+    """The guard must not cost the rollback its reset of a genuinely failed timer."""
+    _, _, state, _ = shell_world
+    (state / "failed.alpha").touch()
+
+    result = run_restore_timer_state(shell_world, "alpha", "disabled", "inactive")
+
+    assert result.returncode == 0, result.stderr
+    assert not (state / "failed.alpha").exists()
 
 
 def test_disable_resets_a_failed_unit(shell_world):

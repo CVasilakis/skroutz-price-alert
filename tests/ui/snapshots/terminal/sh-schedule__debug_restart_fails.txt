@@ -39,8 +39,7 @@ LoadState=loaded
 ActiveState=inactive
 injected failing systemctl stdout
 injected failing systemctl stderr
-injected failing systemctl stdout
-injected failing systemctl stderr
+ActiveState=inactive
 injected failing systemctl stdout
 injected failing systemctl stderr
 injected failing systemctl stdout
