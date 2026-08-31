@@ -495,6 +495,114 @@ class TestMetadataSnapshots(unittest.TestCase):
         self.assertEqual(schedule_counter.read_text(), "x")
 
 
+class TestEagerPriming(unittest.TestCase):
+    """The eager primers exist so a --debug run can mirror the metadata commands.
+
+    They fill the same caches the lazy loaders fill, so the mirrored output is
+    also the only acquisition: every later lazy call must be served from the
+    warm cache. The commands with a --debug mode all depend on this, which is
+    why the contract is asserted here rather than only through their snapshots.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.counter = self.tmp / "calls"
+
+    def _stub(self, exit_status=0):
+        """A catalog_cli stub that records each call and can fail on demand."""
+        return (
+            "catalog_cli() {\n"
+            f'  printf x >> "{self.counter}"\n'
+            "  printf 'alpha\\tAlpha Store\\t/example.json\\t/req.txt\\n'\n"
+            "  printf 'catalog stderr line\\n' >&2\n"
+            f"  return {exit_status}\n"
+            "}\n"
+        )
+
+    def test_priming_serves_every_later_lazy_call(self):
+        result = run_sh(
+            self._stub()
+            + "DEBUG_MODE=1\n"
+            + "prime_plugin_catalog\n"
+            + "list_plugins >/dev/null\n"
+            + "plugin_display_name alpha >/dev/null\n"
+            + "load_plugin_catalog\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.counter.read_text(), "x")
+
+    def test_a_second_prime_is_served_from_the_warm_cache(self):
+        """install.sh primes twice, so the memo has to hold across both calls."""
+        result = run_sh(self._stub() + "DEBUG_MODE=1\nprime_plugin_catalog\nprime_plugin_catalog\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.counter.read_text(), "x")
+
+    def test_resetting_the_cache_re_reads_through_a_later_prime(self):
+        """install.sh re-reads the same metadata through the completed venv."""
+        result = run_sh(
+            self._stub()
+            + "DEBUG_MODE=1\nprime_plugin_catalog\nreset_catalog_cache\nprime_plugin_catalog\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.counter.read_text(), "xx")
+
+    def test_priming_mirrors_both_streams_once_in_debug_mode(self):
+        result = run_sh(
+            self._stub() + "DEBUG_MODE=1\nprime_plugin_catalog\nlist_plugins >/dev/null\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr.count("Alpha Store"), 1)
+        self.assertEqual(result.stderr.count("catalog stderr line"), 1)
+
+    def test_priming_is_silent_outside_debug_mode(self):
+        result = run_sh(
+            self._stub() + "DEBUG_MODE=0\nprime_plugin_catalog\nlist_plugins >/dev/null\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "")
+
+    def test_a_failed_prime_is_reported_and_not_retried(self):
+        result = run_sh(
+            self._stub(exit_status=1)
+            + "DEBUG_MODE=0\n"
+            + "if prime_plugin_catalog; then printf 'loaded\\n'; else printf 'refused\\n'; fi\n"
+            + "if list_plugins; then printf 'served\\n'; else printf 'propagated\\n'; fi\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ["refused", "propagated"])
+        self.assertEqual(self.counter.read_text(), "x")
+
+    def test_both_lazy_loaders_stay_silent_on_failure(self):
+        """The lazy loaders are the quiet path, so neither stream may leak.
+
+        Every current caller primes first, so this guards the fallback the
+        accessors would reach if a future caller did not.
+        """
+        result = run_sh(
+            self._stub(exit_status=1)
+            + "DEBUG_MODE=0\n"
+            + "load_plugin_catalog || true\n"
+            + "load_plugin_schedules || true\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "")
+
+    def test_schedule_priming_serves_every_later_lazy_call(self):
+        result = run_sh(
+            self._stub()
+            + "DEBUG_MODE=1\n"
+            + "prime_plugin_schedules\n"
+            + "list_plugin_schedules >/dev/null\n"
+            + "list_interval_status >/dev/null\n"
+            + "load_plugin_schedules\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.counter.read_text(), "x")
+
+
 class TestUnitFileRoundTrip(unittest.TestCase):
     """The unit writer accepts and recovers one framework-owned calendar value."""
 

@@ -126,36 +126,6 @@ pip_install() {
     fi
 }
 
-install_load_catalog() {
-    case "$PLUGIN_CATALOG_STATE" in
-        1) return 0 ;;
-        2) return 1 ;;
-    esac
-    if run_captured catalog_cli catalog; then
-        PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
-        PLUGIN_CATALOG_STATE=1
-        return 0
-    fi
-    PLUGIN_CATALOG_DATA=''
-    PLUGIN_CATALOG_STATE=2
-    return 1
-}
-
-install_load_schedules() {
-    case "$PLUGIN_SCHEDULE_STATE" in
-        1) return 0 ;;
-        2) return 1 ;;
-    esac
-    if run_captured catalog_cli schedules --config-dir "$BASE_DIR/config"; then
-        PLUGIN_SCHEDULE_DATA="$CAPTURED_COMMAND_OUTPUT"
-        PLUGIN_SCHEDULE_STATE=1
-        return 0
-    fi
-    PLUGIN_SCHEDULE_DATA=''
-    PLUGIN_SCHEDULE_STATE=2
-    return 1
-}
-
 cd "$BASE_DIR"
 CATALOG_PYTHON=python3
 INHERITED_DEBUG="$DEBUG_MODE"
@@ -216,7 +186,7 @@ task_status success "System Python 3.10 or newer is available."
 
 # Validate the import-light catalog, selection, source inputs, and every unit
 # destination before venv creation or package installation.
-if ! install_load_catalog; then
+if ! prime_plugin_catalog; then
     run_action catalog_diagnose || true
     install_fail "The target catalog could not be loaded." \
         "Fix the catalog error, then run $(command_text './scrooge-alert install --debug')."
@@ -367,7 +337,7 @@ fi
 # installing plugin-private dependencies and resolving schedules.
 CATALOG_PYTHON="$BASE_DIR/venv/bin/python3"
 reset_catalog_cache
-if ! install_load_catalog; then
+if ! prime_plugin_catalog; then
     run_action catalog_diagnose || true
     install_fail "The target catalog could not be loaded from the completed environment." \
         "Fix the catalog error, then run $(command_text './scrooge-alert install --debug')."
@@ -456,7 +426,7 @@ fi
 
 # Resolve config-dependent schedules separately from the immutable plugin catalog.
 # A structurally invalid config excludes only its own target from this transaction.
-if ! install_load_schedules; then
+if ! prime_plugin_schedules; then
     install_fail "Target scheduling metadata could not be resolved." \
         "Fix the target configuration, then run $(command_text './scrooge-alert install --debug')."
 fi

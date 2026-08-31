@@ -17,42 +17,6 @@ BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # shellcheck source=scripts/lib/provisioning.sh
 . "$SCRIPT_DIR/lib/provisioning.sh"
 
-# Debug-mode prime for the shared catalog cache; see load_plugin_catalog in
-# lib/common.sh for why the eager load is what makes --debug show this output.
-# shellcheck disable=SC2034  # cache values are consumed by shared catalog helpers
-schedule_load_catalog() {
-    case "$PLUGIN_CATALOG_STATE" in
-        1) return 0 ;;
-        2) return 1 ;;
-    esac
-    if run_captured catalog_cli catalog; then
-        PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
-        PLUGIN_CATALOG_STATE=1
-        return 0
-    fi
-    PLUGIN_CATALOG_STATE=2
-    PLUGIN_CATALOG_DATA=''
-    return 1
-}
-
-# Loads the shared schedule cache on the same contract, but unconditionally,
-# since this command needs the data itself rather than only its debug output.
-# shellcheck disable=SC2034,SC2329  # invoked by name through run_action
-schedule_load_schedules() {
-    case "$PLUGIN_SCHEDULE_STATE" in
-        1) return 0 ;;
-        2) return 1 ;;
-    esac
-    if run_captured catalog_cli schedules --config-dir "$BASE_DIR/config"; then
-        PLUGIN_SCHEDULE_DATA="$CAPTURED_COMMAND_OUTPUT"
-        PLUGIN_SCHEDULE_STATE=1
-        return 0
-    fi
-    PLUGIN_SCHEDULE_STATE=2
-    PLUGIN_SCHEDULE_DATA=''
-    return 1
-}
-
 print_help() {
     load_plugin_catalog || true
     _ph_registered="$(list_plugins 2>/dev/null || true)"
@@ -173,7 +137,7 @@ if ! run_action require_systemctl; then
     schedule_finish 1
 fi
 if [ "$DEBUG_MODE" -eq 1 ]; then
-    schedule_load_catalog || true
+    prime_plugin_catalog || true
 fi
 if ! run_action select_targets installed_registered_timers; then
     section_heading success "Schedule preflight"
@@ -189,7 +153,7 @@ if [ -z "$PLUGINS" ]; then
     schedule_finish 0
 fi
 
-if ! run_action schedule_load_schedules ||
+if ! run_action prime_plugin_schedules ||
     ! run_action capture_schedule_value list_plugin_schedules; then
     task_status failure "Failed to resolve target scheduling metadata."
     task_status info \

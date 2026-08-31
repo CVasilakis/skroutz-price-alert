@@ -640,17 +640,38 @@ reset_catalog_cache() {
 }
 
 # Lazily loads the catalog once and discards the command's own output, so a
-# caller that only needs the data stays quiet. That silence is why the scripts
-# with a --debug mode prime this cache themselves before any shared helper can
-# reach it: priming through run_captured is the only point at which the
-# underlying command's output can still be mirrored, and the warm cache then
-# keeps every later lazy call from running the command a second time.
+# caller that only needs the data stays quiet. Callers that must also show that
+# output use prime_plugin_catalog below instead.
 load_plugin_catalog() {
     case "$PLUGIN_CATALOG_STATE" in
         1) return 0 ;;
         2) return 1 ;;
     esac
     if PLUGIN_CATALOG_DATA="$(catalog_cli catalog 2>/dev/null)"; then
+        PLUGIN_CATALOG_STATE=1
+        return 0
+    fi
+    PLUGIN_CATALOG_STATE=2
+    PLUGIN_CATALOG_DATA=''
+    return 1
+}
+
+# Fills the same cache on the same contract, but through run_captured, which
+# mirrors the command's output in debug mode. Because load_plugin_catalog is
+# silent by design, this eager call is the only point at which --debug can show
+# the underlying catalog command, and the cache it leaves warm is what keeps
+# every later lazy call from running that command a second time. Commands with
+# a --debug mode therefore prime here before any shared helper can reach the
+# lazy loader; the status is identical, so a caller may branch on it or ignore
+# it. A caller that needs a re-read rather than a first read must
+# reset_catalog_cache first, since this memoizes exactly like the lazy loader.
+prime_plugin_catalog() {
+    case "$PLUGIN_CATALOG_STATE" in
+        1) return 0 ;;
+        2) return 1 ;;
+    esac
+    if run_captured catalog_cli catalog; then
+        PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
         PLUGIN_CATALOG_STATE=1
         return 0
     fi
@@ -704,8 +725,25 @@ load_plugin_schedules() {
         2) return 1 ;;
     esac
     if PLUGIN_SCHEDULE_DATA="$(
-        catalog_cli schedules --config-dir "$BASE_DIR/config"
+        catalog_cli schedules --config-dir "$BASE_DIR/config" 2>/dev/null
     )"; then
+        PLUGIN_SCHEDULE_STATE=1
+        return 0
+    fi
+    PLUGIN_SCHEDULE_STATE=2
+    PLUGIN_SCHEDULE_DATA=''
+    return 1
+}
+
+# The schedule-report counterpart of prime_plugin_catalog, on the same contract
+# and for the same reason; see that function for why the eager call exists.
+prime_plugin_schedules() {
+    case "$PLUGIN_SCHEDULE_STATE" in
+        1) return 0 ;;
+        2) return 1 ;;
+    esac
+    if run_captured catalog_cli schedules --config-dir "$BASE_DIR/config"; then
+        PLUGIN_SCHEDULE_DATA="$CAPTURED_COMMAND_OUTPUT"
         PLUGIN_SCHEDULE_STATE=1
         return 0
     fi
