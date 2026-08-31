@@ -98,19 +98,15 @@ if [ -n "$invalid_argument" ] || [ "$mode_count" -gt 1 ] ||
     finish_checks 2
 fi
 
+# CI runs this gate from a checkout that has no ./venv, so it selects the
+# workflow interpreter through SCROOGE_CHECK_PYTHON. Not a public interface.
 CHECK_PYTHON="${SCROOGE_CHECK_PYTHON:-$PROJECT_ROOT/venv/bin/python3}"
 
-# Invoked through run_action.
-# shellcheck disable=SC2329
-require_python() {
-    if [ -z "${SCROOGE_CHECK_PYTHON:-}" ]; then
-        reject_project_venv_symlink || return 127
-    fi
-    require_python_310 "$CHECK_PYTHON" "./scripts/dev/setup.sh" || return 127
-}
-
 require_check_python() {
-    if ! run_action require_python; then
+    if ! run_action reject_project_venv_symlink_for "$CHECK_PYTHON"; then
+        check_failure 1 "The development venv path is a symlink."
+    fi
+    if ! run_action require_python_310 "$CHECK_PYTHON" "./scripts/dev/setup.sh"; then
         check_failure 127 \
             "Python 3.10 or newer is unavailable. Run ./scripts/dev/setup.sh first."
     fi
@@ -150,6 +146,8 @@ run_static() {
 # Invoked through run_action.
 # shellcheck disable=SC2329
 resolve_shellcheck() {
+    # CI pins and selects its own binary through SCROOGE_SHELLCHECK so runner
+    # versions cannot drift from the one pre-push checks exercise.
     shellcheck_binary="${SCROOGE_SHELLCHECK:-$PROJECT_ROOT/venv/bin/shellcheck}"
     if [ ! -x "$shellcheck_binary" ]; then
         shellcheck_binary="$(command -v shellcheck || true)"

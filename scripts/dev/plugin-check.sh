@@ -120,12 +120,12 @@ if [ -n "$invalid_argument" ] || [ "$target_count" -ne 1 ] ||
 fi
 
 section_heading success "Target verification"
-if [ -z "${SCROOGE_PLUGIN_CHECK_PYTHON:-}" ]; then
-    if ! run_action reject_project_venv_symlink; then
-        verification_failure 1 "The development venv path is a symlink."
-    fi
-fi
+# CI verifies each plugin against a throwaway venv holding only that plugin's
+# declared dependencies, selected through SCROOGE_PLUGIN_CHECK_PYTHON.
 plugin_check_python="${SCROOGE_PLUGIN_CHECK_PYTHON:-$BASE_DIR/venv/bin/python3}"
+if ! run_action reject_project_venv_symlink_for "$plugin_check_python"; then
+    verification_failure 1 "The development venv path is a symlink."
+fi
 if ! run_action require_python_310 "$plugin_check_python" "./scripts/dev/setup.sh"; then
     verification_failure 127 "Python 3.10 or newer is unavailable."
 fi

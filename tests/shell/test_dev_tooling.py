@@ -1630,6 +1630,116 @@ def test_dev_setup_rejects_project_venv_symlink_before_python_work(tmp_path):
     assert (project / "venv").is_symlink()
 
 
+def _symlinked_venv_project(tmp_path, *relatives):
+    """A project copy whose ./venv is a symlink, for the venv guard tests."""
+    project = tmp_path / "project"
+    for relative in relatives:
+        destination = project / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / relative, destination)
+    external = tmp_path / "external-venv"
+    (external / "bin").mkdir(parents=True)
+    (project / "venv").symlink_to(external, target_is_directory=True)
+    return project, external
+
+
+@pytest.mark.parametrize(
+    ("script", "args", "override"),
+    (
+        ("scripts/dev/check.sh", ("static",), "SCROOGE_CHECK_PYTHON"),
+        ("scripts/dev/plugin-check.sh", ("--skroutz",), "SCROOGE_PLUGIN_CHECK_PYTHON"),
+        ("scripts/dev/plugin-create.sh", (), "SCROOGE_PLUGIN_CREATE_PYTHON"),
+    ),
+)
+def test_dev_checks_reject_project_venv_symlink_when_the_override_names_it(
+    tmp_path, script, args, override
+):
+    """An override pointing back at the project venv must not skip the guard."""
+    project, _ = _symlinked_venv_project(
+        tmp_path, script, "scripts/lib/common.sh", "scripts/lib/preflight.sh"
+    )
+    env = os.environ.copy()
+    env[override] = str(project / "venv/bin/python3")
+
+    result = subprocess.run(
+        ["sh", str(project / script), *args],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode != 0
+    assert "is a symlink" in result.stdout + result.stderr
+    assert (project / "venv").is_symlink()
+
+
+@pytest.mark.parametrize(
+    ("script", "args", "override"),
+    (
+        ("scripts/dev/check.sh", ("static",), "SCROOGE_CHECK_PYTHON"),
+        ("scripts/dev/plugin-check.sh", ("--skroutz",), "SCROOGE_PLUGIN_CHECK_PYTHON"),
+    ),
+)
+def test_dev_checks_allow_an_external_interpreter_past_the_venv_symlink_guard(
+    tmp_path, script, args, override
+):
+    """CI and plugin isolation select an interpreter outside the project venv."""
+    project, external = _symlinked_venv_project(
+        tmp_path, script, "scripts/lib/common.sh", "scripts/lib/preflight.sh"
+    )
+    outside = tmp_path / "outside-venv/bin"
+    outside.mkdir(parents=True)
+    interpreter = outside / "python3"
+    interpreter.write_text("#!/bin/sh\nexit 3\n", encoding="utf-8")
+    interpreter.chmod(0o755)
+    assert external.exists()
+    env = os.environ.copy()
+    env[override] = str(interpreter)
+
+    result = subprocess.run(
+        ["sh", str(project / script), *args],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    # The run still fails on the stub interpreter, but never on the venv guard.
+    assert "is a symlink" not in result.stdout + result.stderr
+    assert (project / "venv").is_symlink()
+
+
+@pytest.mark.parametrize("override", (None, "external", "relative"))
+def test_plugin_create_wizard_rejects_a_symlinked_venv_under_every_override(tmp_path, override):
+    """The wizard guards unconditionally, so no override spelling reaches it."""
+    project, _ = _symlinked_venv_project(
+        tmp_path,
+        "scripts/dev/plugin-create.sh",
+        "scripts/lib/common.sh",
+        "scripts/lib/preflight.sh",
+    )
+    env = os.environ.copy()
+    if override == "external":
+        env["SCROOGE_PLUGIN_CREATE_PYTHON"] = sys.executable
+    elif override == "relative":
+        # The lexical comparison in reject_project_venv_symlink_for would miss
+        # this spelling; the wizard's unconditional guard must not.
+        env["SCROOGE_PLUGIN_CREATE_PYTHON"] = "venv/bin/python3"
+
+    result = subprocess.run(
+        ["sh", str(project / "scripts/dev/plugin-create.sh")],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    assert_task_status(result.stdout, "x", "The development venv path is a symlink.")
+    assert (project / "venv").is_symlink()
+
+
 @pytest.fixture
 def python39(tmp_path):
     fake = tmp_path / "python3"

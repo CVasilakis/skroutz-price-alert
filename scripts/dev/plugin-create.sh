@@ -70,11 +70,21 @@ while [ "$remaining" -gt 0 ]; do
 done
 
 if [ "$ORIGINAL_ARGUMENT_COUNT" -eq 0 ]; then
+    # Deliberately unconditional, unlike every reject_project_venv_symlink_for
+    # call site. That helper compares the interpreter path lexically, so a
+    # non-canonical spelling of the project venv (venv/bin/python3 rather than
+    # $PROJECT_ROOT/venv/bin/python3) skips the guard and runs through the symlink
+    # anyway. The other sites accept that limit because they are read-only checks
+    # that CI must be able to point at an external interpreter. The wizard has no
+    # such need: it scaffolds into a checkout whose ./venv is already in an
+    # unsupported state, so it refuses outright and no spelling gets past.
     if ! run_action reject_project_venv_symlink; then
         task_status failure "The development venv path is a symlink."
         task_status info "Recreate it with ./scripts/dev/setup.sh --debug."
         exit 1
     fi
+    # SCROOGE_PLUGIN_CREATE_PYTHON lets the wizard's tests drive it with the
+    # running interpreter instead of requiring a provisioned project venv.
     wizard_python="${SCROOGE_PLUGIN_CREATE_PYTHON:-$PROJECT_ROOT/venv/bin/python3}"
     if ! run_action require_python_310 "$wizard_python" "./scripts/dev/setup.sh --debug"; then
         task_status failure "The guided wizard requires the development venv."

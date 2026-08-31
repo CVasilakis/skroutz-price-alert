@@ -482,6 +482,19 @@ reject_project_venv_symlink() {
     fi
 }
 
+# reject_project_venv_symlink_for <interpreter>
+# The guard applies exactly when the project venv is the interpreter in use.
+# An explicitly selected external interpreter is outside the project venv, so
+# there is nothing for the guard to protect: CI runs the checks with no ./venv
+# at all, and plugin isolation runs each target against its own throwaway venv.
+# The comparison is lexical, so a non-canonical spelling of the project venv
+# skips it. That is acceptable for the read-only checks here, where the override
+# is a deliberate act by whoever set it; plugin-create.sh states why the wizard
+# keeps an unconditional guard instead.
+reject_project_venv_symlink_for() {
+    [ "$1" != "$BASE_DIR/venv/bin/python3" ] || reject_project_venv_symlink
+}
+
 unit_name() {
     printf '%s-scraper.%s' "$1" "$2"
 }
@@ -617,9 +630,7 @@ parse_target_flags() {
 # CATALOG_PYTHON for its import-light, pre-venv validation pass.
 catalog_cli() {
     _cc_python="${CATALOG_PYTHON:-$BASE_DIR/venv/bin/python3}"
-    if [ "$_cc_python" = "$BASE_DIR/venv/bin/python3" ]; then
-        reject_project_venv_symlink || return 1
-    fi
+    reject_project_venv_symlink_for "$_cc_python" || return 1
     case "$_cc_python" in
         */*) [ -x "$_cc_python" ] || return 1 ;;
         *) command -v "$_cc_python" >/dev/null 2>&1 || return 1 ;;
@@ -799,18 +810,13 @@ list_supported_intervals() {
 
 catalog_diagnose() {
     _cd_python="${CATALOG_PYTHON:-$BASE_DIR/venv/bin/python3}"
-    if [ "$_cd_python" = "$BASE_DIR/venv/bin/python3" ]; then
-        if [ -L "$BASE_DIR/venv" ]; then
-            reject_project_venv_symlink
-            return 1
-        fi
-        if [ ! -x "$_cd_python" ]; then
-            printf '%s\n' \
-                "Error: Cannot read the plugin catalog - the Python environment looks missing or broken." >&2
-            printf '%s\n' \
-                "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')" >&2
-            return 1
-        fi
+    reject_project_venv_symlink_for "$_cd_python" || return 1
+    if [ "$_cd_python" = "$BASE_DIR/venv/bin/python3" ] && [ ! -x "$_cd_python" ]; then
+        printf '%s\n' \
+            "Error: Cannot read the plugin catalog - the Python environment looks missing or broken." >&2
+        printf '%s\n' \
+            "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')" >&2
+        return 1
     fi
     printf '%s\n' "Error: The scraper plugin catalog could not be loaded." >&2
     if catalog_cli diagnose >&2; then
