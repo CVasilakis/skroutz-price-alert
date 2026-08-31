@@ -1,4 +1,17 @@
 #!/bin/sh
+# Fast-forward the checkout to origin/main and reprovision what is installed.
+#
+# Selection policy: none of the shared ones. This is the only lifecycle entry
+# point that does not call select_targets -- it takes exactly the set
+# list_installed_targets reads off disk, accepts no --<target> flags, and
+# refuses when that set is empty, because an update preserves an existing
+# installation rather than choosing a new one. Registration is not required to
+# be selected: a target whose plugin disappeared upstream is still quiesced and
+# still reported, just left disabled instead of reactivated.
+#
+# The interrupt and recovery model is documented at update_interrupted, and the
+# handoff to install.sh at the SCROOGE_INSTALL_CONTEXT=deferred call site.
+
 set -eu
 
 # Keep the entire update in one function: the shell reads these function bodies
@@ -550,6 +563,16 @@ main() {
         task_status info "No migrated target can be reprovisioned."
     else
         UPDATE_SECTION_STARTED=0
+        # The handoff to the fetched install.sh. Both variables are required:
+        # the context selects deferred provisioning, which renders and replaces
+        # the units but activates nothing, because this script quiesced every
+        # timer before the fast-forward and restores their prior states itself
+        # below; the internal marker plus the explicit per-target flags built
+        # above are what that context validates before it will run at all, so
+        # the mode cannot be entered from the command line. install.sh
+        # re-filters these flags against the new catalog, which is how a target
+        # deregistered upstream is reported and skipped instead of failing the
+        # whole update.
         if SCROOGE_INTERNAL_UPDATE=1 SCROOGE_INSTALL_CONTEXT=deferred \
             "$SCRIPT_DIR/install.sh" "$@"; then
             INSTALL_STATUS=0

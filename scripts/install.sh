@@ -3,9 +3,14 @@
 #
 # Selection policy: registered, the catalog alone, because only a registered
 # plugin supplies the sources, dependencies, and interval a unit is rendered
-# from. Update mode (--update) is the one exception and does not use the shared
-# policy: it re-filters the preserved selection itself so a target that stopped
-# being registered upstream is reported and skipped rather than failing the run.
+# from. The deferred update context is the one exception and does not use the
+# shared policy. update.sh re-invokes this script with
+# SCROOGE_INSTALL_CONTEXT=deferred and an explicit --<target> flag per target it
+# preserved, and that mode re-filters those flags against the catalog itself, so
+# a target that stopped being registered upstream is reported and skipped rather
+# than failing the run. It is a context, not a flag: it additionally refuses
+# unless SCROOGE_INTERNAL_UPDATE=1 and the flag set is explicit and non-empty,
+# so no one can reach it by passing an argument.
 
 set -eu
 
