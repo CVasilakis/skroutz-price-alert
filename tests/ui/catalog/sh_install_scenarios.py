@@ -257,6 +257,15 @@ _case(
     world=ShellWorld(venv=False, linger="no", config_dir=False),
 )
 
+# Not redundant with fresh_install_config_notes above: one missing config renders
+# identically whether install.sh accumulates them as a stream or as a space-joined
+# string, so only a second target pins the newline delimiting.
+_case(
+    "multiple_missing_configs",
+    "Two unconfigured targets each get their own warning and copy command.",
+    world=ShellWorld(plugins=("skroutz", "amazon"), config_dir=False),
+)
+
 _case(
     "reinstall_all_configured",
     "Re-run on a fully configured install: quiet happy path.",

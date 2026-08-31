@@ -32,7 +32,6 @@ print_help() {
     _ph_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ph_target in $_ph_known; do
         printf '  --%-15s Stop only the %s target\n' "$_ph_target" "$_ph_target"
     done
@@ -49,7 +48,6 @@ show_selection_failure() {
     _ssf_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ssf_target in $TARGET_FLAGS; do
         if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED" &&
             ! stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
@@ -74,7 +72,6 @@ show_uninstalled_notices() {
     _sun_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _sun_target in $TARGET_FLAGS; do
         if stream_contains "$_sun_target" "$SELECTED_REGISTERED" &&
             ! stream_contains "$_sun_target" "$SELECTED_INSTALLED"; then
@@ -142,7 +139,6 @@ FAILED=0
 OLD_IFS="$IFS"
 IFS='
 '
-# shellcheck disable=SC2086
 for plugin in $PLUGINS; do
     if ! state="$(capture_service_state "$plugin")"; then
         task_status failure "[$plugin] Could not determine the service state."

@@ -34,7 +34,6 @@ print_help() {
     _ph_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ph_target in $_ph_installed; do
         stream_contains "$_ph_target" "$_ph_registered" || continue
         printf '  --%-15s Enable only the %s scraper\n' \
@@ -65,7 +64,6 @@ show_selection_failure() {
     _ssf_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ssf_target in $TARGET_FLAGS; do
         if stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
             if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
@@ -155,7 +153,6 @@ FAILED=0
 OLD_IFS="$IFS"
 IFS='
 '
-# shellcheck disable=SC2086
 for plugin in $PLUGINS; do
     state_failed=0
     if timer_enabled="$(enable_timer_property "$plugin" UnitFileState)"; then

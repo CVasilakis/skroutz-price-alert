@@ -128,7 +128,6 @@ restore_captured_states() {
     _rcst_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _rcst_target in $_rcst_targets; do
         read_captured_state "$_rcst_state_dir/$_rcst_target"
         restore_timer_state "$_rcst_target" "$CAPTURED_TIMER_LOAD" \
@@ -157,7 +156,6 @@ capture_unit_snapshot() {
     _cus_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _cus_target in $_cus_targets; do
         capture_timer_state "$_cus_target" \
             "$_cus_workspace/state/$_cus_target" || {
@@ -207,7 +205,6 @@ restore_unit_snapshot() {
     _rus_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _rus_target in $_rus_targets; do
         disable_one "$_rus_target" || _rus_failed=1
         for _rus_suffix in timer service; do
@@ -382,7 +379,6 @@ replace_units_transaction() {
     _rut_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _rut_target in $_rut_targets; do
         _rut_calendar="$(
             plugin_stream_value "$_rut_target" "$_rut_schedules"
@@ -419,7 +415,6 @@ replace_units_transaction() {
     UNIT_MUTATION_STARTED=1
     IFS='
 '
-    # shellcheck disable=SC2086
     for _rut_target in $_rut_targets; do
         for _rut_suffix in timer service; do
             [ "$_rut_scope" = pair ] || [ "$_rut_suffix" = timer ] || continue
@@ -440,7 +435,6 @@ replace_units_transaction() {
     if [ "$_rut_failed" -eq 0 ]; then
         IFS='
 '
-        # shellcheck disable=SC2086
         for _rut_target in $_rut_targets; do
             case "$_rut_activation" in
                 normal) enable_one "$_rut_target" || _rut_failed=1 ;;

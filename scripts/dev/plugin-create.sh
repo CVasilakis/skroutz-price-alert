@@ -113,7 +113,6 @@ scaffold_detail() {
     _sd_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # deliberate newline-only diagnostic iteration
     for _sd_line in $_sd_details; do
         case "$_sd_line" in
             "Target scaffold failed:"*|usage:*|"./scripts/dev/plugin-create.sh: error:"*)

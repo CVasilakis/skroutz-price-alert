@@ -32,7 +32,6 @@ print_help() {
     _ph_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ph_target in $_ph_known; do
         printf '  --%-15s Remove only the %s target\n' \
             "$_ph_target" "$_ph_target"
@@ -50,7 +49,6 @@ show_selection_failure() {
     _ssf_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ssf_target in $TARGET_FLAGS; do
         if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED" &&
             ! stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
@@ -78,7 +76,6 @@ show_uninstalled_notices() {
     _sun_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _sun_target in $TARGET_FLAGS; do
         if stream_contains "$_sun_target" "$SELECTED_REGISTERED" &&
             ! stream_contains "$_sun_target" "$SELECTED_INSTALLED"; then
@@ -143,7 +140,6 @@ if [ -n "$REMOVE_TARGETS" ]; then
     OLD_IFS="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for target in $REMOVE_TARGETS; do
         if run_with_progress \
             "[$target] Stopping and disabling the background timer and service..." \
@@ -170,7 +166,6 @@ if [ -n "$REMOVE_TARGETS" ]; then
     IFS='
 '
     # rm -f unlinks symlinks themselves and never follows their targets.
-    # shellcheck disable=SC2086
     for target in $REMOVE_TARGETS; do
         if ! run_action rm -f \
             "$SYSTEMD_USER_DIR/$(unit_name "$target" timer)" \

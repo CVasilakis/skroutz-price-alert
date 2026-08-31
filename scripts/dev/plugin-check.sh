@@ -66,7 +66,6 @@ verification_detail() {
     _vd_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # deliberate newline-only diagnostic iteration
     for _vd_line in $_vd_details; do
         case "$_vd_line" in
             "Plugin check failed:"*) _vd_match="$_vd_line" ;;
@@ -154,7 +153,6 @@ tab="$(printf '\t')"
 old_ifs="$IFS"
 IFS='
 '
-# shellcheck disable=SC2086  # deliberate newline-only machine-report iteration
 for report_row in $CAPTURED_COMMAND_OUTPUT; do
     report_kind="${report_row%%"$tab"*}"
     report_value="${report_row#*"$tab"}"

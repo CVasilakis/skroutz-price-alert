@@ -514,13 +514,37 @@ require_valid_target() {
     fi
 }
 
+# Target streams: newline-delimited text used as an ordered, unique set, because
+# POSIX sh has no arrays. (runtime.sh answers the same problem with a numbered
+# positional queue instead, since it forwards argv rather than holding a set.)
+#
+# The empty string is the empty set. Newline is an IFS whitespace character, so
+# blank lines collapse and an item can never be empty: that is why an accumulator
+# can start at '' and why stream_contains '' never matches. Membership compares
+# whole items, so a prefix of a target is not that target.
+#
+# Every consumer -- these helpers and the loops in the command scripts -- reads a
+# stream the same way: set IFS to a lone newline, expand the stream unquoted so it
+# splits on newlines alone, then restore IFS before leaving, including on an early
+# return, so no caller inherits it. Items may contain spaces, since
+# plugin_stream_value returns tab-delimited snapshot values that do, but the
+# unquoted expansion still globs. Keeping glob characters out is the producer's
+# job: is_valid_target gates every target name before it reaches a stream.
+#
+# That IFS assignment is spelled over two lines with the closing quote at column 0,
+# because POSIX sh has no $'\n' escape and the newline has to be typed inside the
+# quotes. Indenting the closing quote would put that indentation into IFS as well
+# and restore splitting on spaces, so it stays flush left inside indented bodies.
+#
+# ShellCheck does not warn about an unquoted expansion in a 'for' word list, so
+# these loops need no SC2086 directive. One is only needed for an unquoted
+# expansion in command arguments, which this layer no longer has.
 stream_contains() {
     _sc_needle="$1"
     _sc_stream="$2"
     _sc_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # deliberate newline-only stream iteration
     for _sc_item in $_sc_stream; do
         if [ "$_sc_item" = "$_sc_needle" ]; then
             IFS="$_sc_old_ifs"
@@ -545,7 +569,6 @@ stream_union() {
     _su_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # deliberate newline-only stream iteration
     for _su_item in $1 ${2:-}; do
         if ! stream_contains "$_su_item" "$_su_result"; then
             _su_result="$(stream_add_unique "$_su_result" "$_su_item")"
@@ -559,7 +582,6 @@ stream_for_display() {
     _sfd_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # deliberate newline-only stream iteration
     for _sfd_item in $1; do
         printf '%s ' "$_sfd_item"
     done
@@ -573,7 +595,6 @@ plugin_stream_value() {
     _psv_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # deliberate newline-only stream iteration
     for _psv_row in $_psv_rows; do
         if [ "${_psv_row%%"$_psv_tab"*}" = "$_psv_target" ]; then
             IFS="$_psv_old_ifs"
@@ -894,7 +915,6 @@ select_targets() {
                 _st_old_ifs="$IFS"
                 IFS='
 '
-                # shellcheck disable=SC2086
                 for _st_target in $SELECTED_INSTALLED; do
                     if stream_contains "$_st_target" "$SELECTED_REGISTERED"; then
                         SELECTED_TARGETS="$(
@@ -912,7 +932,6 @@ select_targets() {
     _st_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _st_target in $TARGET_FLAGS; do
         case "$_st_policy" in
             registered)

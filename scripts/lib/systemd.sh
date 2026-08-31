@@ -100,7 +100,6 @@ validate_unit_destinations() {
     _vud_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _vud_target in $_vud_targets; do
         require_valid_target "$_vud_target" || {
             IFS="$_vud_old_ifs"

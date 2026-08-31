@@ -1,0 +1,39 @@
+# border: green
+# exit: 0
+
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
+
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [i] Updating Python packaging tools...
+    [v] Packaging tools updated.
+    [i] Installing core dependencies...
+    [v] Updated core dependencies.
+    [i] Checking installed dependencies...
+    [v] Core dependencies are compatible.
+
+[+] Target provisioning
+    [i] Configuring selected target timers...
+    [v] Configured timers for the selected targets.
+
+[!] Configuration required
+    [!] [skroutz] Its tracked-items configuration is missing.
+    [!] [amazon] Its tracked-items configuration is missing.
+    [!] The general configuration is missing.
+    [i] From the project directory, run:
+        mkdir -p config
+        cp src/core/scrapers/plugins/skroutz/config.example.json config/skroutz.json
+        cp src/core/scrapers/plugins/amazon/config.example.json config/amazon.json
+        cp src/core/general/config.example.json config/general.json
+    [i] Fill each new target configuration with the items you want to track.
+    [i] Configure notification URLs and preferences in config/general.json.
+    [i] Read README.md for configuration guidance.
+
+[+] Installation result
+    [v] Installation complete.

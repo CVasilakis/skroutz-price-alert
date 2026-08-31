@@ -155,7 +155,6 @@ render_family() {
     _rf_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # deliberate newline-only TSV row iteration
     for _rf_row in $MIGRATION_REPORT; do
         _rf_row_family="${_rf_row%%"$_rf_tab"*}"
         [ "$_rf_row_family" = "$_rf_family" ] || continue
@@ -202,7 +201,6 @@ MIGRATION_TAB="$(printf '\t')"
 OLD_IFS="$IFS"
 IFS='
 '
-# shellcheck disable=SC2086  # deliberate newline-only TSV row iteration
 for migration_row in $MIGRATION_REPORT; do
     migration_family="${migration_row%%"$MIGRATION_TAB"*}"
     [ "$migration_family" = recovery ] || continue

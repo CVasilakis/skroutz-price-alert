@@ -150,7 +150,6 @@ main() {
         _dut_old_ifs="$IFS"
         IFS='
 '
-        # shellcheck disable=SC2086  # intentional newline-only stream iteration
         for _dut_target in $INSTALLED_TARGETS; do
             run_update_helper disable_one "$_dut_target" ||
                 UPDATE_DISABLE_FAILED=1
@@ -400,7 +399,6 @@ main() {
     OLD_IFS="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
         if run_with_progress "[$target] Stopping and disabling its timer..." \
             run_update_helper disable_one "$target"; then
@@ -494,7 +492,6 @@ main() {
     # be trusted without it, and reminder_state only downgrades the final status.
     # The trailing recovery row carries the retained directory in $4. Any other
     # result needs no action, so the rows are filtered rather than enumerated.
-    # shellcheck disable=SC2086
     for migration_row in $MIGRATION_REPORT; do
         migration_family="${migration_row%%"$MIGRATION_TAB"*}"
         migration_rest="${migration_row#*"$MIGRATION_TAB"}"
@@ -548,7 +545,6 @@ main() {
     set --
     IFS='
 '
-    # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
         if stream_contains "$target" "$MIGRATION_FAILED_TARGETS"; then
             task_status warning \
@@ -643,7 +639,6 @@ main() {
     ACTIVATE_FAILED=0
     IFS='
 '
-    # shellcheck disable=SC2086  # intentional newline-only stream iteration
     for target in $INSTALLED_TARGETS; do
         if stream_contains "$target" "$MIGRATION_FAILED_TARGETS"; then
             continue
@@ -720,7 +715,6 @@ main() {
         INSTALLED_NOW="$CAPTURED_COMMAND_OUTPUT"
         IFS='
 '
-        # shellcheck disable=SC2086  # intentional newline-only stream iteration
         for target in $CURRENT_TARGETS; do
             if ! stream_contains "$target" "$INSTALLED_NOW"; then
                 NEW_TARGETS="$(stream_add_unique "$NEW_TARGETS" "$target")"

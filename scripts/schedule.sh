@@ -37,7 +37,6 @@ print_help() {
     _ph_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ph_target in $_ph_installed; do
         stream_contains "$_ph_target" "$_ph_registered" || continue
         printf '  --%-15s Apply only the %s target interval\n' \
@@ -68,7 +67,6 @@ show_selection_failure() {
     _ssf_old_ifs="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for _ssf_target in $TARGET_FLAGS; do
         if stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
             if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
@@ -197,7 +195,6 @@ CONFIG_FAILED=0
 OLD_IFS="$IFS"
 IFS='
 '
-# shellcheck disable=SC2086
 for plugin in $PLUGINS; do
     status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS")" || {
         task_status failure "[$plugin] No interval status was returned."
@@ -266,7 +263,6 @@ if [ -n "$CHANGED" ]; then
         run_action schedule_units_transaction "$CHANGED" "$CHANGED_SCHEDULES"; then
         IFS='
 '
-        # shellcheck disable=SC2086
         for plugin in $CHANGED; do
             task_status success \
                 "[$plugin] Timer updated and its previous state preserved."

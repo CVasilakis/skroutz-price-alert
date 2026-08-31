@@ -208,7 +208,6 @@ else
     OLD_IFS="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086
     for sel in $TARGET_FLAGS; do
         if stream_contains "$sel" "$ALL_PLUGINS"; then
             PLUGINS="$(stream_add_unique "$PLUGINS" "$sel")"
@@ -239,7 +238,6 @@ OLD_IFS="$IFS"
 IFS='
 '
 PAIR_TAB="$(printf '\t')"
-# shellcheck disable=SC2086
 for pair in $EARLY_PLUGIN_REQS; do
     req_name="${pair%%"$PAIR_TAB"*}"
     req_path="${pair#*"$PAIR_TAB"}"
@@ -374,7 +372,6 @@ OLD_IFS="$IFS"
 IFS='
 '
 PAIR_TAB="$(printf '\t')"
-# shellcheck disable=SC2086  # intentional newline-only stream iteration
 for pair in $PLUGIN_REQS; do
     req_name="${pair%%"$PAIR_TAB"*}"
     if stream_contains "$req_name" "$PLUGINS"; then
@@ -465,7 +462,6 @@ IFS='
 # there a fallback would silently downgrade a working schedule and it warns
 # instead. 'nocfg' needs no warning here because the "Configuration required"
 # section below reports every missing config with the command that creates it.
-# shellcheck disable=SC2086  # intentional newline-only stream iteration
 for plugin in $PLUGINS; do
     status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS" || true)"
     if [ -z "$status" ]; then
@@ -567,7 +563,7 @@ fi
 # Report any plugin whose products config file is still missing (non-fatal), and
 # whether the shared general configuration is missing.
 
-MISSING_CONFIGS=""
+MISSING_CONFIGS=''
 if run_captured list_plugin_examples; then
     EXAMPLE_PAIRS="$CAPTURED_COMMAND_OUTPUT"
 else
@@ -577,9 +573,9 @@ fi
 OLD_IFS="$IFS"
 IFS='
 '
-# shellcheck disable=SC2086  # intentional newline-only stream iteration
 for plugin in $PLUGINS; do
-    [ -f "config/$plugin.json" ] || MISSING_CONFIGS="$MISSING_CONFIGS $plugin"
+    [ -f "config/$plugin.json" ] ||
+        MISSING_CONFIGS="$(stream_add_unique "$MISSING_CONFIGS" "$plugin")"
 done
 IFS="$OLD_IFS"
 
@@ -590,15 +586,22 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
     install_warning_section "Configuration required"
     CONFIG_COMMANDS=''
 
+    OLD_IFS="$IFS"
+    IFS='
+'
     for plugin in $MISSING_CONFIGS; do
-        example="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")"
+        task_status warning "[$plugin] Its tracked-items configuration is missing."
+        # Every catalog row carries an example path, so a miss means the snapshot
+        # contract broke. Report the missing config without a copy command rather
+        # than suggesting a "cp" with an empty source.
+        example="$(plugin_stream_value "$plugin" "$EXAMPLE_PAIRS")" || continue
         case "$example" in
             "$BASE_DIR"/*) example="${example#"$BASE_DIR"/}" ;;
         esac
-        task_status warning "[$plugin] Its tracked-items configuration is missing."
         CONFIG_COMMANDS="${CONFIG_COMMANDS}${CONFIG_COMMANDS:+
 }cp $example config/$plugin.json"
     done
+    IFS="$OLD_IFS"
 
     if [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
         task_status warning "The general configuration is missing."
@@ -611,7 +614,6 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
     OLD_IFS="$IFS"
     IFS='
 '
-    # shellcheck disable=SC2086  # intentional newline-only command iteration
     for config_command in $CONFIG_COMMANDS; do
         install_command "$config_command"
     done

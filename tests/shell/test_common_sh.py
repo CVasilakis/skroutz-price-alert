@@ -445,6 +445,17 @@ class TestNamingHelpers(unittest.TestCase):
         result = run_sh("unit_name skroutz timer")
         self.assertEqual(result.stdout, "skroutz-scraper.timer")
 
+
+class TestTargetStreams(unittest.TestCase):
+    """The newline-delimited ordered set the whole shell layer selects targets with.
+
+    The prose contract sits above stream_contains in scripts/lib/common.sh; each
+    test below pins one clause of it, and each names the caller that would break.
+    They exist because the properties are invisible at the call sites: every
+    lifecycle command asks "is this target flag in this set?" without showing that
+    membership is by whole item, or that a stream can hold no empty item.
+    """
+
     def test_stream_contains_hit_and_miss(self):
         self.assertEqual(run_sh('stream_contains b "a\nb\nc"').returncode, 0)
         self.assertEqual(run_sh('stream_contains z "a\nb\nc"').returncode, 1)
@@ -452,9 +463,65 @@ class TestNamingHelpers(unittest.TestCase):
     def test_stream_contains_with_empty_list(self):
         self.assertEqual(run_sh('stream_contains z ""').returncode, 1)
 
+    def test_stream_contains_matches_whole_items_only(self):
+        """A prefix of a target is not that target, so --skro cannot select skroutz.
+
+        select_targets and runtime_target_flag accept or reject a target flag on
+        this answer alone, so a substring match would let a typo run a scraper.
+        """
+        self.assertEqual(run_sh('stream_contains skro "skroutz\nfoo"').returncode, 1)
+        self.assertEqual(run_sh('stream_contains skroutzz "skroutz\nfoo"').returncode, 1)
+
+    def test_stream_contains_does_not_split_items_on_spaces(self):
+        """Guards the IFS-newline mechanism itself, not just this helper.
+
+        Dropping the IFS assignment -- or indenting its closing quote, which puts
+        the indentation into IFS -- would split on spaces too, and no target-name
+        stream would notice. plugin_stream_value returns snapshot values that do
+        contain spaces, so this is the test that fails if the mechanism is lost.
+        """
+        self.assertEqual(run_sh('stream_contains bar "foo bar"').returncode, 1)
+        self.assertEqual(run_sh('stream_contains "foo bar" "foo bar"').returncode, 0)
+
+    def test_stream_never_holds_an_empty_item(self):
+        """Newline is IFS whitespace, so blank lines collapse instead of becoming items.
+
+        This is what makes the empty-set rules safe: an accumulator can start at
+        '' and a lookup for '' can never accidentally match a stray blank line.
+        """
+        result = run_sh("stream_union \"$(printf 'a\\n\\nb')\"")
+        self.assertEqual(result.stdout.splitlines(), ["a", "b"])
+        self.assertEqual(run_sh("stream_contains '' \"$(printf 'a\\n\\nb')\"").returncode, 1)
+
     def test_stream_add_unique_preserves_order_and_deduplicates(self):
         result = run_sh('items="alpha\nbeta"\nstream_add_unique "$items" beta')
         self.assertEqual(result.stdout.splitlines(), ["alpha", "beta"])
+
+    def test_stream_add_unique_onto_an_empty_stream_adds_no_blank_line(self):
+        """Every accumulator in the layer starts at '', so this is the common case."""
+        result = run_sh("stream_add_unique '' alpha")
+        self.assertEqual(result.stdout, "alpha\n")
+
+    def test_stream_union_with_empty_operands(self):
+        """Both operands are routinely empty at the two call sites.
+
+        select_targets unions registered with installed, and either side is empty
+        on a broken catalog or a fresh machine; list_installed_targets unions
+        timers with services, and a half-installed pair leaves one of them empty.
+        """
+        self.assertEqual(run_sh("stream_union '' ''").stdout, "")
+        self.assertEqual(run_sh("stream_union '' \"$(printf 'a\\nb')\"").stdout, "a\nb\n")
+        self.assertEqual(run_sh("stream_union \"$(printf 'a\\nb')\"").stdout, "a\nb\n")
+
+    def test_stream_for_display_joins_items_on_one_line(self):
+        """Rendered verbatim into the user-facing 'Available targets:' line.
+
+        The trailing space is the helper's shape rather than an oversight: it
+        emits one 'item ' per item. It stays invisible because the terminal
+        snapshots strip trailing whitespace, so removing it is not worth a change.
+        """
+        self.assertEqual(run_sh("stream_for_display \"$(printf 'a\\nb')\"").stdout, "a b ")
+        self.assertEqual(run_sh("stream_for_display ''").stdout, "")
 
     def test_plugin_stream_value_preserves_spaces(self):
         result = run_sh(
@@ -462,6 +529,18 @@ class TestNamingHelpers(unittest.TestCase):
             'plugin_stream_value foo "$rows"'
         )
         self.assertEqual(result.stdout, "custom feed.json")
+
+    def test_plugin_stream_value_reports_a_miss(self):
+        """Callers branch on this status rather than on an empty value.
+
+        schedule.sh, provisioning.sh, and install.sh each guard the call, because
+        under set -e an unguarded assignment from a miss ends the script silently.
+        """
+        result = run_sh(
+            "rows=\"$(printf 'foo\\tone.json')\"\n"
+            'if plugin_stream_value nope "$rows"; then printf hit; else printf "miss=%s" "$?"; fi'
+        )
+        self.assertEqual(result.stdout, "miss=1")
 
 
 class TestMetadataSnapshots(unittest.TestCase):

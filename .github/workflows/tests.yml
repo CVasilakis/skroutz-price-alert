@@ -58,7 +58,10 @@ jobs:
       - name: Install shell analysis toolchain
         run: python -m pip install -r scripts/dev/requirements-shell.txt
 
-      # Intentional word splitting is suppressed only at the exact expansion.
+      # No diagnostic is disabled globally, and the remaining per-line directives
+      # are narrow. Intentional word splitting needs none: it all happens in 'for'
+      # word lists, which ShellCheck does not flag. See the target-stream contract
+      # above stream_contains in scripts/lib/common.sh.
       # -x follows sourced libraries via the "shellcheck source=" directives.
       # The list comes from git so tracked and new nonignored scripts anywhere
       # in the repo are covered before they are committed.
