@@ -673,19 +673,28 @@ plugin_catalog() {
     [ -z "$PLUGIN_CATALOG_DATA" ] || printf '%s\n' "$PLUGIN_CATALOG_DATA"
 }
 
+# Each accessor loads before it pipes, even though plugin_catalog already
+# guards: a pipeline's status is its last command's, and awk succeeds on empty
+# input, so piping alone would report an unloadable catalog as an empty success.
+# Callers branch on these, so the load has to be reached outside the pipeline.
+# The loader is memoized, so the extra call costs nothing after the first.
 list_plugins() {
+    load_plugin_catalog || return 1
     plugin_catalog | awk -F '\t' '{ print $1 }'
 }
 
 plugin_display_name() {
+    load_plugin_catalog || return 1
     plugin_catalog | awk -F '\t' -v target="$1" '$1 == target { print $2; exit }'
 }
 
 list_plugin_examples() {
+    load_plugin_catalog || return 1
     plugin_catalog | awk -F '\t' '{ print $1 "\t" $3 }'
 }
 
 list_plugin_requirements() {
+    load_plugin_catalog || return 1
     plugin_catalog | awk -F '\t' '$4 != "" { print $1 "\t" $4 }'
 }
 
@@ -722,15 +731,19 @@ plugin_schedules() {
     [ -z "$PLUGIN_SCHEDULE_DATA" ] || printf '%s\n' "$PLUGIN_SCHEDULE_DATA"
 }
 
+# The same pipeline-status rule applies here; see the catalog accessors above.
 list_plugin_schedules() {
+    load_plugin_schedules || return 1
     plugin_schedules | awk -F '\t' '$3 != "error" { print $1 "\t" $2 }'
 }
 
 list_interval_status() {
+    load_plugin_schedules || return 1
     plugin_schedules | awk -F '\t' '{ print $1 "\t" $3 }'
 }
 
 list_schedule_errors() {
+    load_plugin_schedules || return 1
     plugin_schedules | awk -F '\t' '$3 == "error" { print $1 "\t" $4 }'
 }
 
@@ -772,17 +785,18 @@ catalog_diagnose() {
 # and need its plugin, stop acts on a service, disable/uninstall tear down
 # whatever is installed).
 #
-# Exports four values, all initialized before any early return: SELECTED_TARGETS
-# is the result, and SELECTED_REGISTERED, SELECTED_INSTALLED, and SELECTED_KNOWN
-# (their union) are the sets the policy was resolved against. The three sets are
+# Exports five values, all initialized before any early return: SELECTED_TARGETS
+# is the result, SELECTED_REGISTERED, SELECTED_INSTALLED, and SELECTED_KNOWN
+# (their union) are the sets the policy was resolved against, and
+# SELECTED_CATALOG_LOADED records whether the catalog answered at all. They are
 # part of the contract, not scratch state: callers wrap this in run_action, which
 # suppresses stderr in quiet mode, so the diagnostics printed below reach the user
 # only under --debug. In quiet mode each lifecycle script re-renders the same
-# diagnosis through task_status from these sets, in its own per-command wording
+# diagnosis through task_status from these values, in its own per-command wording
 # (timers/services/units, and which remediation command to name). The sets also
 # drive the success-path "registered but not installed" notices. Keeping the
 # rendering in the scripts keeps per-command presentation vocabulary out of this
-# shared helper; renaming these four breaks those callers.
+# shared helper; renaming these five breaks those callers.
 select_targets() {
     _st_policy="$1"
     # Initialize the whole contract before any early return so a caller rendering
@@ -790,12 +804,24 @@ select_targets() {
     SELECTED_TARGETS=''
     SELECTED_INSTALLED=''
     SELECTED_KNOWN=''
-    SELECTED_REGISTERED="$(list_plugins 2>/dev/null || true)"
+    # An unloadable catalog and one that legitimately registers nothing are
+    # different situations with the same empty set, so ask rather than infer.
+    # The old proxy -- units installed but nothing registered -- both missed a
+    # broken catalog when nothing was installed yet and cried "catalog could not
+    # be loaded" at a healthy catalog that simply has no plugins left.
+    SELECTED_CATALOG_LOADED=1
+    if ! SELECTED_REGISTERED="$(list_plugins 2>/dev/null)"; then
+        SELECTED_REGISTERED=''
+        SELECTED_CATALOG_LOADED=0
+    fi
     case "$_st_policy" in
         registered) ;;
         installed_registered_timers)
             SELECTED_INSTALLED="$(list_installed_units timer)" || return 1
-            if [ -n "$SELECTED_INSTALLED" ] && [ -z "$SELECTED_REGISTERED" ]; then
+            # Only this policy needs the catalog: it resolves an installed timer
+            # to the plugin behind it. The teardown policies below act on units
+            # alone and must keep working while the catalog is broken.
+            if [ "$SELECTED_CATALOG_LOADED" -eq 0 ]; then
                 catalog_diagnose || return 1
             fi
             ;;

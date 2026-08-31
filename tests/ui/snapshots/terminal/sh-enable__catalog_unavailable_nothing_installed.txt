@@ -1,0 +1,6 @@
+# border: red
+# exit: 1
+
+[+] Enable preflight
+    [x] The target catalog could not be loaded.
+    [!] Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry.

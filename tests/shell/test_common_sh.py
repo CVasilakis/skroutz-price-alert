@@ -736,6 +736,33 @@ class TestRealRegistryBridge(unittest.TestCase):
         statuses = dict(line.split("\t") for line in result.stdout.splitlines())
         self.assertEqual(statuses.get("skroutz"), "nocfg")
 
+    def test_every_accessor_reports_an_unloadable_catalog(self):
+        """A load failure must not reach callers as an empty success.
+
+        Each accessor filters the loaded stream through awk, and a pipeline's
+        status is its last command's -- awk succeeds on empty input. Without an
+        explicit load outside the pipeline these all returned 0 with no rows,
+        which is indistinguishable from "no plugin is registered" and is the
+        shape callers branch on.
+        """
+        for accessor in (
+            "list_plugins",
+            "plugin_display_name skroutz",
+            "list_plugin_examples",
+            "list_plugin_requirements",
+            "list_plugin_schedules",
+            "list_interval_status",
+            "list_schedule_errors",
+        ):
+            with self.subTest(accessor=accessor):
+                result = run_sh(
+                    f"reset_catalog_cache\n{accessor}",
+                    base_dir=self.base_dir,
+                    extra_env={"CATALOG_PYTHON": "/bin/false"},
+                )
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

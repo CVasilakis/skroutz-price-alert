@@ -7,7 +7,9 @@ from ui.catalog.shell_inputs import (
     WORLD_ALL_ORPHANS,
     WORLD_AMAZON_UNINSTALLED,
     WORLD_BROKEN_CATALOG,
+    WORLD_BROKEN_CATALOG_EMPTY,
     WORLD_EMPTY,
+    WORLD_EMPTY_CATALOG_ORPHAN,
     WORLD_HEALTHY,
     WORLD_INSTALLED,
     WORLD_NO_VENV,
@@ -46,6 +48,20 @@ _case(
     "Units exist but plugin discovery raises.",
     world=WORLD_BROKEN_CATALOG,
     tags=("error", "catalog"),
+)
+
+_case(
+    "catalog_unavailable_nothing_installed",
+    "Discovery raises before any install; the catalog's status is the only signal.",
+    world=WORLD_BROKEN_CATALOG_EMPTY,
+    tags=("error", "catalog"),
+)
+
+_case(
+    "empty_catalog_with_orphan",
+    "A catalog that loads and registers nothing is not a broken catalog.",
+    world=WORLD_EMPTY_CATALOG_ORPHAN,
+    tags=("catalog", "orphan"),
 )
 
 _case(

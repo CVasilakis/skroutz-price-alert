@@ -68,7 +68,7 @@ enable_finish() {
 }
 
 show_selection_failure() {
-    if [ -n "$SELECTED_INSTALLED" ] && [ -z "$SELECTED_REGISTERED" ]; then
+    if [ "$SELECTED_CATALOG_LOADED" -eq 0 ]; then
         task_status failure "The target catalog could not be loaded."
         if [ ! -x "$BASE_DIR/venv/bin/python3" ] || [ -L "$BASE_DIR/venv" ]; then
             task_status warning \

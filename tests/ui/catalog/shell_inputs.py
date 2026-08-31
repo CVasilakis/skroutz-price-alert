@@ -70,6 +70,18 @@ WORLD_BROKEN_CATALOG = ShellWorld(
     installed_services=("skroutz",),
 )
 
+#: Discovery raises before anything is installed. Nothing on disk hints at the
+#: cause, so only the catalog's own status can name it.
+WORLD_BROKEN_CATALOG_EMPTY = ShellWorld(plugins=(), discovery_error=DISCOVERY_ERROR)
+
+#: The catalog loads and legitimately registers nothing, with an orphan unit
+#: left behind - the foil for WORLD_BROKEN_CATALOG, identical on disk.
+WORLD_EMPTY_CATALOG_ORPHAN = ShellWorld(
+    plugins=(),
+    installed_timers=("ghost",),
+    installed_services=("ghost",),
+)
+
 
 def shell_case(surface: Surface, script: str):
     """A terse per-script registrar: each call registers one drive_shell scenario.

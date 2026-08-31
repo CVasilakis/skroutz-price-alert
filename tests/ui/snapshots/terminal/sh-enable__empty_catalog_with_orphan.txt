@@ -1,0 +1,6 @@
+# border: green
+# exit: 0
+
+[+] Background schedules
+    [i] No installed, registered target timers found.
+    [!] Run ./scrooge-alert install to provision targets.
