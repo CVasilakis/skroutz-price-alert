@@ -606,11 +606,30 @@ plugin_stream_value() {
     return 1
 }
 
+# Named rather than inlined so parse_target_flags can route it through
+# run_action like the target validator beside it.
+report_invalid_argument() {
+    printf '%s\n' "Error: Invalid argument: $1" >&2
+    return 1
+}
+
 # parse_target_flags <arguments...>
 # Exports TARGET_FLAGS, TARGET_FLAGS_EXPLICIT, TARGET_HELP_REQUESTED, and the
 # shared DEBUG_MODE. SCROOGE_INTERNAL_DEBUG propagates debug state only to child
 # project scripts and is intentionally not a public command-line interface.
 # Help is recognized in any position before other arguments are interpreted.
+#
+# DEBUG_MODE is cleared before the scan, so an inherited SCROOGE_INTERNAL_DEBUG
+# does not survive a public argument parse: --debug is a per-invocation flag, and
+# an ambient variable must not silently turn debug on for a command the user
+# invoked directly. install.sh's deferred update context is the one caller that
+# must defeat this, and it restores the inherited value itself.
+#
+# This function gates its own argument diagnostics rather than letting callers
+# wrap it in run_action, because a wrapper reads DEBUG_MODE to choose redirection
+# before the scan below sets it -- which is why --debug could not surface them.
+# Routing them through run_action here is safe for the opposite reason: the first
+# pass has already resolved DEBUG_MODE by the time the second pass reports.
 parse_target_flags() {
     TARGET_FLAGS=''
     TARGET_FLAGS_EXPLICIT=0
@@ -630,17 +649,17 @@ parse_target_flags() {
         case "$_ptf_arg" in
             --debug) ;;
             --)
-                printf '%s\n' "Error: Invalid argument: $_ptf_arg" >&2
+                run_action report_invalid_argument "$_ptf_arg"
                 return 1
                 ;;
             --?*)
                 _ptf_target="${_ptf_arg#--}"
-                require_valid_target "$_ptf_target" || return 1
+                run_action require_valid_target "$_ptf_target" || return 1
                 TARGET_FLAGS_EXPLICIT=1
                 TARGET_FLAGS="$(stream_add_unique "$TARGET_FLAGS" "$_ptf_target")"
                 ;;
             *)
-                printf '%s\n' "Error: Invalid argument: $_ptf_arg" >&2
+                run_action report_invalid_argument "$_ptf_arg"
                 return 1
                 ;;
         esac

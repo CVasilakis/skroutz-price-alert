@@ -128,17 +128,13 @@ pip_install() {
 
 cd "$BASE_DIR"
 CATALOG_PYTHON=python3
+# The debug state common.sh seeded from SCROOGE_INTERNAL_DEBUG, captured before
+# parse_target_flags clears it. update.sh forwards only --<target> flags and
+# propagates its own --debug through that variable alone, so this is the only
+# record of the parent's intent once the public parse has run; the deferred
+# branch below restores it.
 INHERITED_DEBUG="$DEBUG_MODE"
-for argument in "$@"; do
-    case "$argument" in
-        --debug)
-            DEBUG_MODE=1
-            SCROOGE_INTERNAL_DEBUG=1
-            export DEBUG_MODE SCROOGE_INTERNAL_DEBUG
-            ;;
-    esac
-done
-if ! run_action parse_target_flags "$@"; then
+if ! parse_target_flags "$@"; then
     install_section "Installation arguments"
     task_status failure "The command-line arguments are invalid."
     task_status info "Run $(command_text './scrooge-alert install --help') for usage."
@@ -159,6 +155,8 @@ case "${SCROOGE_INSTALL_CONTEXT:-normal}" in
             install_fail "The internal deferred-install context is invalid." \
                 "Rerun $(command_text './scrooge-alert update') to restart the update safely."
         fi
+        # Reinstate the updater's debug intent. Only this context may: a normal
+        # install treats --debug as the sole public source of debug state.
         if [ "$INHERITED_DEBUG" -eq 1 ]; then
             DEBUG_MODE=1
             SCROOGE_INTERNAL_DEBUG=1

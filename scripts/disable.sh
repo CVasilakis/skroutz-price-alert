@@ -94,15 +94,12 @@ for argument in "$@"; do
     esac
 done
 if [ "$HELP_REQUESTED" -eq 1 ]; then
-    DEBUG_MODE=0
-    SCROOGE_INTERNAL_DEBUG=0
-    export DEBUG_MODE SCROOGE_INTERNAL_DEBUG
     print_help
     exit 0
 fi
 
 begin_operational_output
-if ! run_action parse_target_flags "$@"; then
+if ! parse_target_flags "$@"; then
     section_heading success "Disable preflight"
     task_status failure "The command-line arguments are invalid."
     task_status info "Run $(command_text './scrooge-alert disable --help') for usage."
