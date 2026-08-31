@@ -1,0 +1,18 @@
+# border: red
+# exit: 143
+
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [i] Fetching origin/main...
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [i] [skroutz] Stopping and disabling its timer...
+
+[+] Update interruption
+    [x] Update interrupted by TERM.
+    [v] The original timer states were restored.

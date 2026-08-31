@@ -97,6 +97,13 @@ _case(
     tags=("error",),
 )
 _case(
+    "dirty_tree_debug",
+    "Debug adds the preflight refusal's own diagnostic beneath the panel verdict.",
+    "--debug",
+    world=replace(_BASE, git_dirty=True),
+    tags=("error",),
+)
+_case(
     "wrong_branch",
     "The updater never switches branches implicitly.",
     world=replace(_BASE, git_branch="beta"),
@@ -131,6 +138,12 @@ _case(
     "A scraper that cannot quiesce aborts before source advancement.",
     world=replace(_BASE, activating_services=("skroutz",), systemctl_fail=("stop",)),
     tags=("error",),
+)
+_case(
+    "interrupted_during_quiescence",
+    "A signal while targets are being stopped restores every prior timer state.",
+    world=replace(_BASE, systemctl_signal="disable"),
+    tags=("error", "interrupt"),
 )
 _case(
     "fast_forward_fails",

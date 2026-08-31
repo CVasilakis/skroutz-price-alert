@@ -1,5 +1,7 @@
 #!/bin/sh
 # Shared prerequisite checks. This file is sourced; entry points own set -eu.
+# Source common.sh first: every check below reports through run_captured or
+# run_action, and require_clean_worktree formats a command with command_text.
 
 require_command() {
     _rc_command="$1"
@@ -43,26 +45,37 @@ require_python_310() {
     fi
 }
 
+# Every git check below runs its command through run_captured instead of a
+# plain $(...) carrying its own redirections. run_captured is quiet by default
+# and mirrors both streams in debug mode, so `./scrooge-alert update --debug`
+# shows git's own diagnostic beside the verdict here, while a normal run stays
+# silent because update.sh invokes these through run_update_helper, which
+# discards both streams. Writing the suppression into the check itself would
+# make the debug mode structurally unable to explain a refusal.
+#
+# require_fast_forward_to_origin is the deliberate exception: it captures no
+# output and suppresses none, so it is already debug-transparent as written.
 require_git_worktree() {
     require_command git Git || return 1
-    if ! _rgw_inside="$(git -C "$BASE_DIR" rev-parse --is-inside-work-tree 2>/dev/null)" ||
-       [ "$_rgw_inside" != "true" ]; then
+    if ! run_captured git -C "$BASE_DIR" rev-parse --is-inside-work-tree ||
+       [ "$CAPTURED_COMMAND_OUTPUT" != "true" ]; then
         printf '%s\n' "Error: $BASE_DIR is not a Git worktree." >&2
         return 1
     fi
-    if ! _rgw_bare="$(git -C "$BASE_DIR" rev-parse --is-bare-repository 2>/dev/null)" ||
-       [ "$_rgw_bare" != "false" ]; then
+    if ! run_captured git -C "$BASE_DIR" rev-parse --is-bare-repository ||
+       [ "$CAPTURED_COMMAND_OUTPUT" != "false" ]; then
         printf '%s\n' "Error: $BASE_DIR is a bare or unusable Git repository." >&2
         return 1
     fi
 }
 
 require_clean_worktree() {
-    if ! _rcw_status="$(git -C "$BASE_DIR" status --porcelain --untracked-files=normal)"; then
+    if ! run_captured git -C "$BASE_DIR" status \
+        --porcelain --untracked-files=normal; then
         printf '%s\n' "Error: Could not inspect the Git working tree." >&2
         return 1
     fi
-    if [ -n "$_rcw_status" ]; then
+    if [ -n "$CAPTURED_COMMAND_OUTPUT" ]; then
         printf '%s\n' "Error: The working tree contains tracked changes or nonignored untracked files." >&2
         printf '%s\n' "Commit or stash your work before running $(command_text './scrooge-alert update'); nothing was changed." >&2
         return 1
@@ -70,19 +83,19 @@ require_clean_worktree() {
 }
 
 require_main_branch() {
-    if ! _rmb_branch="$(git -C "$BASE_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null)"; then
+    if ! run_captured git -C "$BASE_DIR" symbolic-ref --short HEAD; then
         printf '%s\n' "Error: The checkout is in detached-HEAD state; $(command_text './scrooge-alert update') requires branch 'main'." >&2
         return 1
     fi
-    if [ "$_rmb_branch" != "main" ]; then
-        printf '%s\n' "Error: $(command_text './scrooge-alert update') requires branch 'main' (current branch: '$_rmb_branch')." >&2
+    if [ "$CAPTURED_COMMAND_OUTPUT" != "main" ]; then
+        printf '%s\n' "Error: $(command_text './scrooge-alert update') requires branch 'main' (current branch: '$CAPTURED_COMMAND_OUTPUT')." >&2
         printf '%s\n' "Switch branches yourself after saving any work, then retry." >&2
         return 1
     fi
 }
 
 require_origin_remote() {
-    if ! git -C "$BASE_DIR" remote get-url origin >/dev/null 2>&1; then
+    if ! run_captured git -C "$BASE_DIR" remote get-url origin; then
         printf '%s\n' "Error: Git remote 'origin' is missing or unusable." >&2
         return 1
     fi
@@ -90,8 +103,8 @@ require_origin_remote() {
 
 require_origin_main() {
     require_origin_remote || return 1
-    if ! git -C "$BASE_DIR" rev-parse --verify --quiet \
-        'refs/remotes/origin/main^{commit}' >/dev/null; then
+    if ! run_captured git -C "$BASE_DIR" rev-parse --verify \
+        'refs/remotes/origin/main^{commit}'; then
         printf '%s\n' "Error: origin/main is missing or does not name a commit." >&2
         return 1
     fi
@@ -115,7 +128,8 @@ require_revision_paths() {
     _rrp_revision="$1"
     shift
     for _rrp_path in "$@"; do
-        if ! git -C "$BASE_DIR" cat-file -e "$_rrp_revision:$_rrp_path" 2>/dev/null; then
+        if ! run_captured git -C "$BASE_DIR" cat-file -e \
+            "$_rrp_revision:$_rrp_path"; then
             printf '%s\n' \
                 "Error: Fetched revision $_rrp_revision is missing required file '$_rrp_path'." >&2
             return 1

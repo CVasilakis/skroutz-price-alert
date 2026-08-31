@@ -1,0 +1,12 @@
+# border: red
+# exit: 1
+
+[+] Update checks
+true
+false
+main
+ M src/core/run.py
+Error: The working tree contains tracked changes or nonignored untracked files.
+Commit or stash your work before running ./scrooge-alert update; nothing was changed.
+    [x] The working tree contains tracked changes or nonignored untracked files.
+    [!] Commit or stash your work before running ./scrooge-alert update.

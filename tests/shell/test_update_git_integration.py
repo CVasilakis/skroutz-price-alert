@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -392,3 +393,104 @@ exec /bin/rm "$@"
         assert list((checkout / "xdg/systemd/user").glob(".scrooge-update.*")) == []
     finally:
         _cleanup(checkout)
+
+
+def test_signal_before_any_target_is_stopped_removes_the_recovery_workspace():
+    """The private workspace is owned from the moment its path is known.
+
+    The interrupt lands after ``create_private_workspace`` returned but before
+    any target was quiesced - the window that only the ``workspace`` phase
+    covers. Nothing on the system has changed, so the handler must delete the
+    workspace outright rather than leave an unreferenced directory in
+    SYSTEMD_USER_DIR, which nothing else ever cleans up.
+    """
+    world = ShellWorld(
+        installed_timers=("alpha",),
+        installed_services=("alpha",),
+        enabled_timers=("alpha",),
+        active_timers=("alpha",),
+        config_files=("alpha.json", "general.json"),
+        plugins=("alpha",),
+    )
+    checkout = _build_sandbox(world)
+    pid_file = checkout / "update.pid"
+    fake_mkdir = checkout / "bin/mkdir"
+    fake_mkdir.unlink()
+    fake_mkdir.write_text(
+        """#!/bin/sh
+/bin/mkdir "$@" || exit $?
+case "$*" in
+    *.scrooge-update.*backups*) kill -TERM "$(cat "$UPDATE_PID_FILE")" ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_mkdir.chmod(0o755)
+    env = _fake_env(checkout, world)
+    env["UPDATE_PID_FILE"] = str(pid_file)
+    try:
+        # `exec` keeps the recorded PID: the shim signals the update shell
+        # itself, never a helper subshell that would swallow it.
+        result = subprocess.run(
+            ["/bin/sh", "-c", f'echo $$ > "{pid_file}"; exec /bin/sh scripts/update.sh'],
+            cwd=checkout,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        assert result.returncode == 143, result.stdout + result.stderr
+        assert "Update interrupted by TERM." in result.stdout
+        unit_dir = checkout / "xdg/systemd/user"
+        assert list(unit_dir.glob(".scrooge-update.*")) == []
+        state = checkout / "systemd-state"
+        assert (state / "enabled.alpha").exists()
+        assert (state / "timer_active.alpha").exists()
+    finally:
+        _cleanup(checkout)
+
+
+_PREFLIGHT_WORLD = ShellWorld(
+    installed_timers=("skroutz",),
+    installed_services=("skroutz",),
+    enabled_timers=("skroutz",),
+    active_timers=("skroutz",),
+    config_files=("skroutz.json", "general.json"),
+)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"git_worktree": False}, "is not a Git worktree."),
+        (
+            {"git_dirty": True},
+            "Error: The working tree contains tracked changes or nonignored untracked files.",
+        ),
+        ({"git_branch": "beta"}, "requires branch 'main' (current branch: 'beta')."),
+        ({"git_origin": False}, "Error: Git remote 'origin' is missing or unusable."),
+        ({"git_relation": "ahead"}, "Error: Local main has commits that are not contained"),
+        (
+            {"fetched_paths_valid": False},
+            "is missing required file 'scrooge-alert'.",
+        ),
+    ],
+)
+def test_debug_surfaces_each_preflight_git_refusal(overrides, message):
+    """Only --debug explains *why* a preflight check refused the update.
+
+    A normal run shows the panel verdict alone, because update.sh invokes every
+    check through run_update_helper, which discards both streams. These
+    messages therefore live on the debug path only, and nothing else executes
+    them - so they are asserted here rather than left to drift.
+    """
+    world = replace(_PREFLIGHT_WORLD, **overrides)
+    for args, expected in ((("--debug",), True), ((), False)):
+        checkout = _build_sandbox(world)
+        try:
+            result = run_update(checkout, _fake_env(checkout, world), *args)
+            transcript = (result.stdout + result.stderr).replace(str(checkout), "<BASE_DIR>")
+            assert result.returncode == 1, transcript
+            assert (message in transcript) is expected, transcript
+        finally:
+            _cleanup(checkout)

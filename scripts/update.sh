@@ -16,7 +16,7 @@ main() {
     # shellcheck source=scripts/lib/provisioning.sh
     . "$SCRIPT_DIR/lib/provisioning.sh"
 
-    UPDATE_PHASE="preflight"
+    UPDATE_PHASE="safe"
     UPDATE_RECOVERY_DIR=''
     INSTALLED_TARGETS=''
     UPDATE_OUTPUT_STARTED=0
@@ -101,112 +101,14 @@ main() {
         fi
     }
 
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
-    update_require_git_worktree() {
-        [ "$DEBUG_MODE" -eq 1 ] || {
-            require_git_worktree
-            return
-        }
-        require_command git Git || return 1
-        if ! run_captured git -C "$BASE_DIR" rev-parse --is-inside-work-tree ||
-           [ "$CAPTURED_COMMAND_OUTPUT" != "true" ]; then
-            printf '%s\n' "Error: $BASE_DIR is not a Git worktree." >&2
-            return 1
-        fi
-        if ! run_captured git -C "$BASE_DIR" rev-parse --is-bare-repository ||
-           [ "$CAPTURED_COMMAND_OUTPUT" != "false" ]; then
-            printf '%s\n' \
-                "Error: $BASE_DIR is a bare or unusable Git repository." >&2
-            return 1
-        fi
-    }
-
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
-    update_require_clean_worktree() {
-        [ "$DEBUG_MODE" -eq 1 ] || {
-            require_clean_worktree
-            return
-        }
-        if ! run_captured git -C "$BASE_DIR" status \
-            --porcelain --untracked-files=normal; then
-            printf '%s\n' "Error: Could not inspect the Git working tree." >&2
-            return 1
-        fi
-        if [ -n "$CAPTURED_COMMAND_OUTPUT" ]; then
-            printf '%s\n' \
-                "Error: The working tree contains tracked changes or nonignored untracked files." >&2
-            printf '%s\n' \
-                "Commit or stash your work before running $(command_text './scrooge-alert update'); nothing was changed." >&2
-            return 1
-        fi
-    }
-
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
-    update_require_main_branch() {
-        [ "$DEBUG_MODE" -eq 1 ] || {
-            require_main_branch
-            return
-        }
-        if ! run_captured git -C "$BASE_DIR" symbolic-ref --short HEAD; then
-            printf '%s\n' \
-                "Error: The checkout is in detached-HEAD state; $(command_text './scrooge-alert update') requires branch 'main'." >&2
-            return 1
-        fi
-        if [ "$CAPTURED_COMMAND_OUTPUT" != "main" ]; then
-            printf '%s\n' \
-                "Error: $(command_text './scrooge-alert update') requires branch 'main' (current branch: '$CAPTURED_COMMAND_OUTPUT')." >&2
-            printf '%s\n' \
-                "Switch branches yourself after saving any work, then retry." >&2
-            return 1
-        fi
-    }
-
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
-    update_require_origin_remote() {
-        [ "$DEBUG_MODE" -eq 1 ] || {
-            require_origin_remote
-            return
-        }
-        if ! run_captured git -C "$BASE_DIR" remote get-url origin; then
-            printf '%s\n' "Error: Git remote 'origin' is missing or unusable." >&2
-            return 1
-        fi
-    }
-
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
-    update_require_origin_main() {
-        [ "$DEBUG_MODE" -eq 1 ] || {
-            require_origin_main
-            return
-        }
-        update_require_origin_remote || return 1
-        if ! run_captured git -C "$BASE_DIR" rev-parse --verify \
-            'refs/remotes/origin/main^{commit}'; then
-            printf '%s\n' \
-                "Error: origin/main is missing or does not name a commit." >&2
-            return 1
-        fi
-    }
-
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
-    update_require_revision_paths() {
-        [ "$DEBUG_MODE" -eq 1 ] || {
-            require_revision_paths "$@"
-            return
-        }
-        _urp_revision="$1"
-        shift
-        for _urp_path in "$@"; do
-            if ! run_captured git -C "$BASE_DIR" cat-file -e \
-                "$_urp_revision:$_urp_path"; then
-                printf '%s\n' \
-                    "Error: Fetched revision $_urp_revision is missing required file '$_urp_path'." >&2
-                return 1
-            fi
-        done
-    }
-
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
+    # The two loaders below are the only helpers here called directly rather
+    # than through run_update_helper. They are built on run_captured, which is
+    # already quiet outside debug mode and mirrors both streams inside it, so
+    # the wrapper would add nothing but its subshell -- and that subshell
+    # discards the PLUGIN_* cache these exist to refresh, leaving the accessors
+    # below to re-run the catalog CLI ungated. Their pipelines end in awk and so
+    # always exit 0, which would turn a post-update discovery failure into a
+    # silently empty target list on a run that still reports success.
     update_load_catalog() {
         if run_captured catalog_cli catalog; then
             PLUGIN_CATALOG_DATA="$CAPTURED_COMMAND_OUTPUT"
@@ -218,7 +120,6 @@ main() {
         return 1
     }
 
-    # shellcheck disable=SC2329  # invoked indirectly through run_update_helper
     update_load_schedules() {
         if run_captured catalog_cli schedules --config-dir "$BASE_DIR/config"; then
             PLUGIN_SCHEDULE_DATA="$CAPTURED_COMMAND_OUTPUT"
@@ -249,6 +150,36 @@ main() {
             "$INSTALLED_TARGETS" pair "$UPDATE_RECOVERY_DIR"
     }
 
+    # UPDATE_PHASE names how much of the update must be undone if a signal
+    # arrives. Each value maps to exactly one recovery strategy below; there is
+    # no default arm because "no phase has advanced yet" and "nothing to undo"
+    # are the same state.
+    #
+    #   safe       Nothing exists to undo: argument parsing, the read-only
+    #              checks, the fetch, and the fast-forward verification. No
+    #              workspace exists and no target has been stopped.
+    #   workspace  The private recovery workspace exists but no target has been
+    #              stopped. Remove it; the system is untouched. Set immediately
+    #              after the mktemp path is captured, never after the snapshot
+    #              completes, so the directory cannot outlive the run.
+    #   quiescing  Targets are being or have been stopped, but the checkout is
+    #              unchanged. Restore the captured unit files and timer states,
+    #              then remove the workspace; retain it if the restore failed.
+    #   mutating   The fast-forward, the migration, the reprovision, or the
+    #              activation is in flight. The checkout may already be new, so
+    #              the captured states can no longer be trusted: leave every
+    #              target disabled, retain the workspace, and point at status.
+    #
+    # The quiescing -> mutating pivot is set *before* the fast-forward, never
+    # after, for the same reason provisioning.sh sets UNIT_MUTATION_STARTED
+    # before its first move: treating an unmodified checkout as modified only
+    # costs a disabled timer, while the opposite order would restore timers
+    # against source that has already changed underneath them.
+    #
+    # The recovery helpers below still run through run_update_helper, whose
+    # subshell re-arms these signals, so a second interrupt during a rollback
+    # aborts that rollback. That is deliberate: the operator asked twice, and
+    # the retained-workspace warning reports the incomplete result honestly.
     # shellcheck disable=SC2317,SC2329  # invoked indirectly by HUP/INT/TERM traps
     update_interrupted() {
         _ui_signal="$1"
@@ -257,11 +188,11 @@ main() {
         update_section success "Update interruption"
         task_status failure "Update interrupted by $_ui_signal."
         case "$UPDATE_PHASE" in
-            capturing)
+            workspace)
                 [ -z "$UPDATE_RECOVERY_DIR" ] ||
                     run_action rm -rf "$UPDATE_RECOVERY_DIR"
                 ;;
-            captured|quiescing)
+            quiescing)
                 if restore_update_snapshot; then
                     run_action rm -rf "$UPDATE_RECOVERY_DIR"
                     task_status success "The original timer states were restored."
@@ -270,7 +201,7 @@ main() {
                     task_status warning "Recovery data was retained at $UPDATE_RECOVERY_DIR."
                 fi
                 ;;
-            advancing|post_advance|migrating|provisioning|activating)
+            mutating)
                 disable_update_targets
                 if [ "$UPDATE_DISABLE_FAILED" -eq 0 ]; then
                     task_status warning "Affected timers were left disabled for safety."
@@ -348,23 +279,23 @@ main() {
         task_status warning "Install or enable systemd user services, then retry."
         update_exit 1
     fi
-    if ! run_update_helper update_require_git_worktree; then
+    if ! run_update_helper require_git_worktree; then
         task_status failure "The project directory is not a usable Git worktree."
         task_status warning "Restore the Git checkout, then retry."
         update_exit 1
     fi
-    if ! run_update_helper update_require_main_branch; then
+    if ! run_update_helper require_main_branch; then
         task_status failure "The checkout is not on branch 'main'."
         task_status warning "Switch to main after saving any work, then retry."
         update_exit 1
     fi
-    if ! run_update_helper update_require_clean_worktree; then
+    if ! run_update_helper require_clean_worktree; then
         task_status failure \
             "The working tree contains tracked changes or nonignored untracked files."
         task_status warning "Commit or stash your work before running $(command_text './scrooge-alert update')."
         update_exit 1
     fi
-    if ! run_update_helper update_require_origin_remote; then
+    if ! run_update_helper require_origin_remote; then
         task_status failure "Git remote 'origin' is missing or unusable."
         task_status warning "Restore the origin remote, then retry."
         update_exit 1
@@ -393,7 +324,6 @@ main() {
     task_status success "The checkout and installed target selection are safe to update."
 
     update_section success "Source update"
-    UPDATE_PHASE="fetching"
     if run_with_progress "Fetching origin/main..." fetch_update_source; then
         FETCH_STATUS=0
     else
@@ -407,11 +337,11 @@ main() {
     task_status success "Fetched origin/main before stopping any target."
 
     # Close the race between the first inspection and the destructive phase.
-    if ! run_update_helper update_require_main_branch ||
-        ! run_update_helper update_require_clean_worktree ||
-        ! run_update_helper update_require_origin_main ||
+    if ! run_update_helper require_main_branch ||
+        ! run_update_helper require_clean_worktree ||
+        ! run_update_helper require_origin_main ||
         ! run_update_helper require_fast_forward_to_origin ||
-        ! run_update_helper update_require_revision_paths origin/main \
+        ! run_update_helper require_revision_paths origin/main \
             scrooge-alert \
             scripts/install.sh \
             scripts/dev/migrate.sh \
@@ -429,6 +359,7 @@ main() {
     update_section success "Target quiescence"
     if run_captured create_private_workspace update; then
         UPDATE_RECOVERY_DIR="$CAPTURED_COMMAND_OUTPUT"
+        UPDATE_PHASE="workspace"
     else
         task_status failure \
             "Could not create private update state in $SYSTEMD_USER_DIR."
@@ -442,7 +373,6 @@ main() {
         update_exit 1
     fi
 
-    UPDATE_PHASE="capturing"
     if ! run_update_helper capture_unit_snapshot "$INSTALLED_TARGETS" pair \
         "$UPDATE_RECOVERY_DIR"; then
         run_action rm -rf "$UPDATE_RECOVERY_DIR"
@@ -452,7 +382,6 @@ main() {
     fi
     task_status success "Captured the installed unit files and timer states."
 
-    UPDATE_PHASE="captured"
     QUIESCE_FAILED=0
     UPDATE_PHASE="quiescing"
     OLD_IFS="$IFS"
@@ -481,7 +410,7 @@ main() {
         update_exit 1
     fi
 
-    UPDATE_PHASE="advancing"
+    UPDATE_PHASE="mutating"
     update_section success "Source advancement"
     if run_with_progress "Advancing the checkout with a verified fast-forward..." \
         advance_update_source; then
@@ -500,7 +429,6 @@ main() {
         fi
         update_exit 1
     fi
-    UPDATE_PHASE="post_advance"
     task_status success "Fast-forwarded the project files to origin/main."
 
     if [ ! -f "$SCRIPT_DIR/install.sh" ] || [ -L "$SCRIPT_DIR/install.sh" ]; then
@@ -510,7 +438,6 @@ main() {
         update_exit 1
     fi
 
-    UPDATE_PHASE="migrating"
     update_section success "JSON migration"
     # --machine is migrate.sh's internal mode: its stdout is exactly the report
     # parsed below and its exit status is the engine's own, so this update owns
@@ -618,7 +545,6 @@ main() {
         set -- "$@" "--$target"
     done
     IFS="$OLD_IFS"
-    UPDATE_PHASE="provisioning"
     if [ "$#" -eq 0 ]; then
         INSTALL_STATUS=0
         task_status info "No migrated target can be reprovisioned."
@@ -651,13 +577,13 @@ main() {
     # its newly reconstructed timer is enabled and started as a repair.
     update_section success "Timer activation"
     task_status info "Restoring eligible target timer states."
-    run_update_helper update_load_catalog || true
+    update_load_catalog || true
     if run_captured list_plugins; then
         CURRENT_TARGETS="$CAPTURED_COMMAND_OUTPUT"
     else
         CURRENT_TARGETS=''
     fi
-    if ! run_update_helper update_load_schedules; then
+    if ! update_load_schedules; then
         task_status failure \
             "Could not reload target scheduling metadata after the update."
         task_status warning "Affected timers remain disabled for safety."
@@ -677,7 +603,6 @@ main() {
         update_exit 1
     fi
     ACTIVATE_FAILED=0
-    UPDATE_PHASE="activating"
     IFS='
 '
     # shellcheck disable=SC2086  # intentional newline-only stream iteration
@@ -741,9 +666,9 @@ main() {
 
     # No rollback is needed after successful activation. Ignore termination only
     # across the tiny recovery-cleanup window so a trap cannot reference data
-    # that has just been removed.
+    # that has just been removed, then restore the default disposition: with the
+    # workspace gone there is no phase left for a handler to act on.
     trap '' HUP INT TERM
-    UPDATE_PHASE="complete"
     run_action rm -rf "$UPDATE_RECOVERY_DIR"
     UPDATE_RECOVERY_DIR=''
     trap - HUP INT TERM
