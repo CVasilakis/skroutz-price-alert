@@ -577,7 +577,22 @@ main() {
     # its newly reconstructed timer is enabled and started as a repair.
     update_section success "Timer activation"
     task_status info "Restoring eligible target timer states."
-    update_load_catalog || true
+    # A catalog failure here is not advisory. CURRENT_TARGETS gates every
+    # target's activation below, so an empty list is indistinguishable from
+    # "every plugin was removed upstream" -- the legitimate case that branch
+    # exists for -- and would disable every timer, tell the user to uninstall
+    # healthy targets, and still exit 0. Refuse on an unknown catalog the same
+    # way the schedule reload below refuses on unknown cadences.
+    if ! update_load_catalog; then
+        task_status failure \
+            "Could not reload the target catalog after the update."
+        task_status warning "Affected timers remain disabled for safety."
+        task_status warning \
+            "Recorded timer states were retained at $UPDATE_RECOVERY_DIR."
+        task_status warning \
+            "Rerun $(command_text './scrooge-alert update'), or inspect with $(command_text './scrooge-alert status')."
+        update_exit 1
+    fi
     if run_captured list_plugins; then
         CURRENT_TARGETS="$CAPTURED_COMMAND_OUTPUT"
     else
@@ -673,21 +688,23 @@ main() {
     UPDATE_RECOVERY_DIR=''
     trap - HUP INT TERM
 
+    # The panel below is purely advisory: the update has already succeeded and
+    # nothing depends on its content. Skip it when the unit inventory cannot be
+    # read rather than reading an empty one as "nothing is installed", which
+    # would invite the user to install the targets just restored above.
     NEW_TARGETS=''
     if run_captured list_installed_targets; then
         INSTALLED_NOW="$CAPTURED_COMMAND_OUTPUT"
-    else
-        INSTALLED_NOW=''
-    fi
-    IFS='
+        IFS='
 '
-    # shellcheck disable=SC2086  # intentional newline-only stream iteration
-    for target in $CURRENT_TARGETS; do
-        if ! stream_contains "$target" "$INSTALLED_NOW"; then
-            NEW_TARGETS="$(stream_add_unique "$NEW_TARGETS" "$target")"
-        fi
-    done
-    IFS="$OLD_IFS"
+        # shellcheck disable=SC2086  # intentional newline-only stream iteration
+        for target in $CURRENT_TARGETS; do
+            if ! stream_contains "$target" "$INSTALLED_NOW"; then
+                NEW_TARGETS="$(stream_add_unique "$NEW_TARGETS" "$target")"
+            fi
+        done
+        IFS="$OLD_IFS"
+    fi
     if [ -n "$NEW_TARGETS" ]; then
         update_section warning "Additional targets"
         task_status info \

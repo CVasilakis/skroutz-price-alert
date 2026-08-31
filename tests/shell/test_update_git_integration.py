@@ -494,3 +494,117 @@ def test_debug_surfaces_each_preflight_git_refusal(overrides, message):
             assert (message in transcript) is expected, transcript
         finally:
             _cleanup(checkout)
+
+
+_CATALOG_WORLD = ShellWorld(
+    plugins=("skroutz", "amazon"),
+    installed_timers=("skroutz",),
+    installed_services=("skroutz",),
+    enabled_timers=("skroutz",),
+    active_timers=("skroutz",),
+    config_files=("skroutz.json", "amazon.json", "general.json"),
+)
+
+
+def _count_and_fail(sandbox: Path, verb: str, nth: int) -> None:
+    """Makes the venv interpreter fail its `nth` catalog_cli <verb> invocation."""
+    counter = sandbox / f"{verb}.count"
+    for rel in ("bin/venv-python-template", "venv/bin/python3"):
+        shim = sandbox / rel
+        if not shim.exists():
+            continue
+        body = shim.read_text(encoding="utf-8")
+        shim.write_text(
+            body.replace(
+                "#!/bin/sh\n",
+                "#!/bin/sh\n"
+                'case "$*" in\n'
+                f'  *"tooling.cli {verb}"*)\n'
+                f'    n=$(cat "{counter}" 2>/dev/null || echo 0); n=$((n+1))\n'
+                f'    echo "$n" > "{counter}"\n'
+                f'    [ "$n" = "{nth}" ] && exit 1\n'
+                "    ;;\n"
+                "esac\n",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
+
+
+def test_catalog_failure_after_provisioning_refuses_instead_of_deregistering():
+    """An unreadable catalog must not masquerade as mass deregistration.
+
+    CURRENT_TARGETS gates activation, so an empty list is indistinguishable
+    from every plugin having been removed upstream - the legitimate case the
+    "no longer registered" branch serves, which correctly succeeds. Treating a
+    failed reload as that case disabled every timer, advised uninstalling
+    healthy targets, and still exited 0.
+    """
+    checkout = _build_sandbox(_CATALOG_WORLD)
+    # The first catalog call belongs to install.sh, which has its own failure
+    # path; the second is update.sh reloading it to decide activation.
+    _count_and_fail(checkout, "catalog", 2)
+    try:
+        result = run_update(checkout, _fake_env(checkout, _CATALOG_WORLD))
+        transcript = result.stdout + result.stderr
+        assert result.returncode == 1, transcript
+        assert "Could not reload the target catalog after the update." in result.stdout
+        assert "no longer registered" not in transcript
+        assert "Update complete" not in transcript
+    finally:
+        _cleanup(checkout)
+
+
+def test_orphaned_target_is_left_disabled_without_failing_the_update():
+    """The legitimate trigger for the same branch, which must still succeed."""
+    world = replace(
+        _CATALOG_WORLD,
+        plugins=("skroutz",),
+        installed_timers=("skroutz", "ghost"),
+        installed_services=("skroutz", "ghost"),
+        enabled_timers=("skroutz", "ghost"),
+        active_timers=("skroutz", "ghost"),
+    )
+    checkout = _build_sandbox(world)
+    try:
+        result = run_update(checkout, _fake_env(checkout, world))
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "[ghost] Left disabled because it is no longer registered." in result.stdout
+        assert "uninstall --ghost" in result.stdout
+        assert "[skroutz] Restored its prior timer state." in result.stdout
+    finally:
+        _cleanup(checkout)
+
+
+def test_unreadable_unit_inventory_skips_the_advisory_panel():
+    """The closing panel is advisory, so an unreadable inventory drops it.
+
+    Reading an empty inventory as "nothing is installed" listed every
+    registered target as available - including the one restored two lines
+    above in the same transcript.
+    """
+    checkout = _build_sandbox(_CATALOG_WORLD)
+    unit_dir = checkout / "xdg/systemd/user"
+    # The recovery-workspace removal is the last command before the inventory
+    # is re-read, so a malformed managed unit planted there is only visible to
+    # that final call - the identical check at startup already passed.
+    fake_rm = checkout / "bin/rm"
+    fake_rm.unlink()
+    fake_rm.write_text(
+        f"""#!/bin/sh
+case "$*" in
+    *.scrooge-update.*) : > "{unit_dir}/BAD-scraper.timer" ;;
+esac
+exec /bin/rm "$@"
+""",
+        encoding="utf-8",
+    )
+    fake_rm.chmod(0o755)
+    try:
+        result = run_update(checkout, _fake_env(checkout, _CATALOG_WORLD))
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "Available but not installed" not in result.stdout
+        assert "[skroutz] Restored its prior timer state." in result.stdout
+    finally:
+        _cleanup(checkout)
