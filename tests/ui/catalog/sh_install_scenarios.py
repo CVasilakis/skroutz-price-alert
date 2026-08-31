@@ -202,6 +202,29 @@ _case(
 )
 
 _case(
+    "invalid_interval",
+    "An unsupported execution_interval is warned about and provisioned at the default cadence.",
+    world=replace(
+        _CONFIGURED,
+        interval_status={"skroutz": "invalid"},
+        installed_timers=("skroutz",),
+        installed_services=("skroutz",),
+        installed_blocks={"skroutz": "OnCalendar=*-*-* 06:00:00"},
+    ),
+    tags=("target_config",),
+)
+
+_case(
+    "no_target_config",
+    "A target with no config file still gets a timer at its canonical default.",
+    world=ShellWorld(
+        interval_status={"skroutz": "nocfg"},
+        config_files=("general.json",),
+    ),
+    tags=("target_config",),
+)
+
+_case(
     "unit_write_fails",
     "The systemd user dir is unwritable, so unit rendering fails.",
     world=ShellWorld(unit_dir_readonly=True),

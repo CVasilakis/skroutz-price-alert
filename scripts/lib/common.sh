@@ -760,10 +760,18 @@ prime_plugin_schedules() {
 # $3 is the branch key, with five values. 'error' means the target's config could
 # not be read at all: $2 is empty and $4 carries the message, so a config failure
 # is isolated to its own row and the other targets still report. The remaining
-# four are the execution_interval resolution: 'ok' and 'default' are schedulable
-# and carry a usable $2, while 'invalid' (a bad configured value) and 'nocfg' (no
-# config file on disk) warn and leave an existing timer unchanged. schedule.sh
-# branches on exactly this vocabulary.
+# four are the execution_interval resolution: 'ok' (configured), 'default' (no
+# value set), 'invalid' (a bad configured value), and 'nocfg' (no config file on
+# disk). All four carry a usable $2, because the producer falls back to the
+# plugin's canonical default_interval rather than leaving a target unrenderable.
+#
+# The report states what was resolved, not what to do about it; each consuming
+# command owns that policy and they legitimately differ. install.sh (and update.sh
+# through it) provisions every non-'error' row, so a target is never left without
+# a timer over a typo or an unwritten config, and warns on 'invalid'. schedule.sh
+# retunes a timer the user already has, so it applies 'ok'/'default' and warns on
+# 'invalid'/'nocfg' rather than downgrading a working schedule to the fallback.
+# Each script's own header explains why it chose its side.
 plugin_schedules() {
     load_plugin_schedules || return 1
     [ -z "$PLUGIN_SCHEDULE_DATA" ] || printf '%s\n' "$PLUGIN_SCHEDULE_DATA"

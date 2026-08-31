@@ -454,6 +454,17 @@ PROVISION_PLUGINS=""
 OLD_IFS="$IFS"
 IFS='
 '
+# Only an 'error' row is excluded here, which is the opposite of what schedule.sh
+# does with the same vocabulary, and deliberately so. An 'error' target has no
+# resolved cadence at all, so there is nothing to render. 'invalid' and 'nocfg'
+# do carry the plugin's canonical default in $2, and install is the command that
+# must leave a target with a working timer rather than none: refusing a first
+# install over a mistyped execution_interval, or over a config file the user has
+# not written yet, would strand the target unscheduled. schedule.sh answers the
+# opposite question - it changes the cadence of a timer the user already has, so
+# there a fallback would silently downgrade a working schedule and it warns
+# instead. 'nocfg' needs no warning here because the "Configuration required"
+# section below reports every missing config with the command that creates it.
 # shellcheck disable=SC2086  # intentional newline-only stream iteration
 for plugin in $PLUGINS; do
     status="$(plugin_stream_value "$plugin" "$INTERVAL_STATUS" || true)"
@@ -469,6 +480,15 @@ for plugin in $PLUGINS; do
         task_status info "[$plugin] Existing systemd units were left unchanged."
         CONFIG_FAILED=1
         continue
+    fi
+    if [ "$status" = "invalid" ]; then
+        # Provisioning still proceeds, but silence here would rewrite an existing
+        # timer to the default cadence without ever saying so. The supported
+        # cadences belong to schedule.sh, which prints them.
+        task_status warning \
+            "[$plugin] Unsupported execution_interval; provisioned its default schedule."
+        task_status warning \
+            "[$plugin] Fix config/$plugin.json, then run $(command_text './scrooge-alert schedule')."
     fi
     PROVISION_PLUGINS="$(stream_add_unique "$PROVISION_PLUGINS" "$plugin")"
 done

@@ -94,7 +94,9 @@ def schedule_rows(catalog: PluginCatalog, config_dir: str) -> tuple[str, ...]:
 
     1. ``target``.
     2. ``on_calendar`` - the rendered timer expression, empty on an error row.
-    3. ``status`` - the vocabulary the scripts branch on (``scripts/schedule.sh``).
+    3. ``status`` - the vocabulary the scripts branch on. Each consuming command
+       owns what to do with a given value and they differ deliberately;
+       ``scripts/lib/common.sh`` records the policies beside the accessors.
     4. ``error`` - the presentation-safe ``ConfigFileError`` message on an error
        row, collapsed to one line, empty otherwise.
 
