@@ -1,0 +1,9 @@
+# border: red
+# exit: 1
+
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+[+] Background schedules
+Error: Could not query UnitFileState for skroutz-scraper.timer.
+Error: Could not query ActiveState for skroutz-scraper.timer.
+    [x] [skroutz] Could not determine the timer state.
+    [i] [skroutz] Run ./scrooge-alert enable --debug --skroutz for underlying diagnostics.

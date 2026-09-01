@@ -48,61 +48,16 @@ enable_finish() {
     exit "$1"
 }
 
-show_selection_failure() {
-    if [ "$SELECTED_CATALOG_LOADED" -eq 0 ]; then
-        task_status failure "The target catalog could not be loaded."
-        if [ ! -x "$BASE_DIR/venv/bin/python3" ] || [ -L "$BASE_DIR/venv" ]; then
-            task_status warning \
-                "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')"
-        else
-            task_status warning \
-                "Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry."
-        fi
-        return
+# The query runs in a command substitution, so systemd_property's own diagnostic
+# would bypass run_action and reach the terminal in quiet mode. Redirect it there
+# rather than reimplementing the property parse, so --debug still explains which
+# property of which unit failed -- exactly as stop.sh reads the paired service.
+capture_timer_property() {
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+        systemd_property "$(unit_name "$1" timer)" "$2"
+    else
+        systemd_property "$(unit_name "$1" timer)" "$2" 2>/dev/null
     fi
-
-    _ssf_old_ifs="$IFS"
-    IFS='
-'
-    for _ssf_target in $TARGET_FLAGS; do
-        if stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
-            if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
-                task_status failure \
-                    "'$_ssf_target' is installed but no longer registered (orphan)."
-                task_status warning \
-                    "Remove it with: $(command_text "./scrooge-alert uninstall --$_ssf_target")"
-                IFS="$_ssf_old_ifs"
-                return
-            fi
-        elif stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
-            task_status failure \
-                "'$_ssf_target' is registered but not installed."
-            task_status warning "Install it with: $(command_text "./scrooge-alert install --$_ssf_target")"
-            IFS="$_ssf_old_ifs"
-            return
-        else
-            task_status failure "Unknown target '$_ssf_target'."
-            task_status info "Run $(command_text './scrooge-alert enable --help') for available targets."
-            IFS="$_ssf_old_ifs"
-            return
-        fi
-    done
-    IFS="$_ssf_old_ifs"
-    task_status failure "The installed target timers could not be selected safely."
-    task_status info "Run $(command_text './scrooge-alert enable --debug') for underlying diagnostics."
-}
-
-enable_timer_property() {
-    _etp_unit="$(unit_name "$1" timer)"
-    _etp_property="$2"
-    run_captured systemctl --user show -p "$_etp_property" "$_etp_unit" ||
-        return 1
-    case "$CAPTURED_COMMAND_OUTPUT" in
-        "$_etp_property="*)
-            printf '%s' "${CAPTURED_COMMAND_OUTPUT#*=}"
-            ;;
-        *) return 1 ;;
-    esac
 }
 
 HELP_REQUESTED=0
@@ -134,7 +89,7 @@ if [ "$DEBUG_MODE" -eq 1 ]; then
 fi
 if ! run_action select_targets installed_registered_timers; then
     section_heading success "Enable preflight"
-    show_selection_failure
+    show_timer_selection_failure enable
     enable_finish 1
 fi
 PLUGINS="$SELECTED_TARGETS"
@@ -152,13 +107,13 @@ IFS='
 '
 for plugin in $PLUGINS; do
     state_failed=0
-    if timer_enabled="$(enable_timer_property "$plugin" UnitFileState)"; then
+    if timer_enabled="$(capture_timer_property "$plugin" UnitFileState)"; then
         :
     else
         timer_enabled=''
         state_failed=1
     fi
-    if timer_active="$(enable_timer_property "$plugin" ActiveState)"; then
+    if timer_active="$(capture_timer_property "$plugin" ActiveState)"; then
         :
     else
         timer_active=''

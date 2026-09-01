@@ -93,6 +93,14 @@ _case(
 )
 
 _case(
+    "query_fails_debug",
+    "Debug names the service property that could not be read, as enable.sh does.",
+    "--debug",
+    world=replace(WORLD_INSTALLED, activating_services=("skroutz",), systemctl_fail=("show",)),
+    tags=("error",),
+)
+
+_case(
     "partial_failure",
     "One target fails to stop while a second target still succeeds.",
     world=ShellWorld(

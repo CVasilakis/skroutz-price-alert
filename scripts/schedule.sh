@@ -51,52 +51,9 @@ schedule_finish() {
     exit "$1"
 }
 
-show_selection_failure() {
-    if [ "$SELECTED_CATALOG_LOADED" -eq 0 ]; then
-        task_status failure "The target catalog could not be loaded."
-        if [ ! -x "$BASE_DIR/venv/bin/python3" ] || [ -L "$BASE_DIR/venv" ]; then
-            task_status warning \
-                "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')"
-        else
-            task_status warning \
-                "Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry."
-        fi
-        return
-    fi
-
-    _ssf_old_ifs="$IFS"
-    IFS='
-'
-    for _ssf_target in $TARGET_FLAGS; do
-        if stream_contains "$_ssf_target" "$SELECTED_INSTALLED"; then
-            if ! stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
-                task_status failure \
-                    "'$_ssf_target' is installed but no longer registered (orphan)."
-                task_status warning \
-                    "Remove it with: $(command_text "./scrooge-alert uninstall --$_ssf_target")"
-                IFS="$_ssf_old_ifs"
-                return
-            fi
-        elif stream_contains "$_ssf_target" "$SELECTED_REGISTERED"; then
-            task_status failure \
-                "'$_ssf_target' is registered but not installed."
-            task_status warning "Install it with: $(command_text "./scrooge-alert install --$_ssf_target")"
-            IFS="$_ssf_old_ifs"
-            return
-        else
-            task_status failure "Unknown target '$_ssf_target'."
-            task_status info \
-                "Run $(command_text './scrooge-alert schedule --help') for available targets."
-            IFS="$_ssf_old_ifs"
-            return
-        fi
-    done
-    IFS="$_ssf_old_ifs"
-    task_status failure "The installed target timers could not be selected safely."
-    task_status info \
-        "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
-}
-
+# Deliberately not stop.sh's shape: these readers are wrapped in run_action, which
+# discards stdout in quiet mode, so the value has to come back out of band rather
+# than through a command substitution.
 # shellcheck disable=SC2329  # invoked indirectly through run_action
 capture_schedule_value() {
     if run_captured "$@"; then
@@ -136,7 +93,7 @@ if [ "$DEBUG_MODE" -eq 1 ]; then
 fi
 if ! run_action select_targets installed_registered_timers; then
     section_heading success "Schedule preflight"
-    show_selection_failure
+    show_timer_selection_failure schedule
     schedule_finish 1
 fi
 PLUGINS="$SELECTED_TARGETS"

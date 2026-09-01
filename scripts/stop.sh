@@ -44,6 +44,10 @@ stop_finish() {
     exit "$1"
 }
 
+# Quiet-mode rendering of a failed `select_targets installed_services`; see that
+# helper in common.sh for why the teardown scripts each keep their own copy
+# rather than sharing one. disable.sh and uninstall.sh hold the same shape, in
+# their own unit vocabulary.
 show_selection_failure() {
     _ssf_old_ifs="$IFS"
     IFS='
@@ -67,21 +71,9 @@ show_selection_failure() {
     task_status info "Run $(command_text './scrooge-alert stop --debug') for underlying diagnostics."
 }
 
-show_uninstalled_notices() {
-    [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ] || return 0
-    _sun_old_ifs="$IFS"
-    IFS='
-'
-    for _sun_target in $TARGET_FLAGS; do
-        if stream_contains "$_sun_target" "$SELECTED_REGISTERED" &&
-            ! stream_contains "$_sun_target" "$SELECTED_INSTALLED"; then
-            task_status info \
-                "[$_sun_target] Target is registered but not installed; nothing to stop."
-        fi
-    done
-    IFS="$_sun_old_ifs"
-}
-
+# The query runs in a command substitution, so systemd_property's own diagnostic
+# would bypass run_action and reach the terminal in quiet mode. enable.sh reads
+# the paired timer the same way.
 capture_service_state() {
     if [ "$DEBUG_MODE" -eq 1 ]; then
         service_state "$1"
@@ -125,7 +117,7 @@ fi
 PLUGINS="$SELECTED_TARGETS"
 
 section_heading success "Active executions"
-show_uninstalled_notices
+show_uninstalled_notices stop
 if [ -z "$PLUGINS" ]; then
     [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ] ||
         task_status info "No installed target services found."

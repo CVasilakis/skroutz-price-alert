@@ -154,6 +154,14 @@ _case(
 )
 
 _case(
+    "query_fails_debug",
+    "Debug names the timer property that could not be read, as stop.sh does.",
+    "--debug",
+    world=replace(WORLD_INSTALLED, systemctl_fail=("show",)),
+    tags=("error",),
+)
+
+_case(
     "partial_failure",
     "One target fails to enable while a second target still succeeds.",
     world=ShellWorld(

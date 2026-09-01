@@ -45,6 +45,10 @@ uninstall_finish() {
     exit "$1"
 }
 
+# Quiet-mode rendering of a failed `select_targets installed_union`; see that
+# helper in common.sh for why the teardown scripts each keep their own copy
+# rather than sharing one. disable.sh and stop.sh hold the same shape, in
+# their own unit vocabulary.
 show_selection_failure() {
     _ssf_old_ifs="$IFS"
     IFS='
@@ -69,21 +73,6 @@ show_selection_failure() {
         "The installed target units could not be selected safely."
     task_status info \
         "Run $(command_text './scrooge-alert uninstall --debug') for underlying diagnostics."
-}
-
-show_uninstalled_notices() {
-    [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ] || return 0
-    _sun_old_ifs="$IFS"
-    IFS='
-'
-    for _sun_target in $TARGET_FLAGS; do
-        if stream_contains "$_sun_target" "$SELECTED_REGISTERED" &&
-            ! stream_contains "$_sun_target" "$SELECTED_INSTALLED"; then
-            task_status info \
-                "[$_sun_target] Target is registered but not installed; nothing to remove."
-        fi
-    done
-    IFS="$_sun_old_ifs"
 }
 
 HELP_REQUESTED=0
@@ -188,7 +177,7 @@ if [ -n "$REMOVE_TARGETS" ]; then
     fi
 else
     section_heading success "Installed units"
-    show_uninstalled_notices
+    show_uninstalled_notices remove
     [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ] ||
         task_status info "No installed target timer or service units found."
 fi

@@ -883,12 +883,19 @@ catalog_diagnose() {
 # SELECTED_CATALOG_LOADED records whether the catalog answered at all. They are
 # part of the contract, not scratch state: callers wrap this in run_action, which
 # suppresses stderr in quiet mode, so the diagnostics printed below reach the user
-# only under --debug. In quiet mode each lifecycle script re-renders the same
-# diagnosis through task_status from these values, in its own per-command wording
-# (timers/services/units, and which remediation command to name). The sets also
-# drive the success-path "registered but not installed" notices. Keeping the
-# rendering in the scripts keeps per-command presentation vocabulary out of this
-# shared helper; renaming these five breaks those callers.
+# only under --debug. In quiet mode the caller re-renders the same diagnosis
+# through task_status from these values, and the sets also drive the success-path
+# "registered but not installed" notices. Renaming these five breaks every
+# renderer named below.
+#
+# Where that re-rendering lives follows how much of it is actually per-command:
+# show_timer_selection_failure below owns the installed_registered_timers
+# rendering, because its only per-command word is the command name and it
+# restates catalog_diagnose's broken-environment policy, which must not drift.
+# The teardown policies (installed_services, installed_union) keep a local
+# show_selection_failure in disable.sh, stop.sh, and uninstall.sh instead: those
+# differ in presentation vocabulary alone (services versus units) and carry no
+# shared policy, so a parameter per noun would buy nothing.
 select_targets() {
     _st_policy="$1"
     # Initialize the whole contract before any early return so a caller rendering
@@ -1000,4 +1007,82 @@ select_targets() {
         SELECTED_TARGETS="$(stream_add_unique "$SELECTED_TARGETS" "$_st_target")"
     done
     IFS="$_st_old_ifs"
+}
+
+# show_timer_selection_failure <command>
+# Quiet-mode rendering of a failed `select_targets installed_registered_timers`,
+# shared by enable.sh and schedule.sh because the command name is the only thing
+# that differs between them. The broken-catalog branch is the task_status mirror
+# of catalog_diagnose: same two situations (an unusable project venv versus a
+# readable venv with an offending package), same two remediations, so the pair
+# must be changed together.
+show_timer_selection_failure() {
+    _stsf_command="$1"
+    if [ "$SELECTED_CATALOG_LOADED" -eq 0 ]; then
+        task_status failure "The target catalog could not be loaded."
+        if [ ! -x "$BASE_DIR/venv/bin/python3" ] || [ -L "$BASE_DIR/venv" ]; then
+            task_status warning \
+                "Reinstall it with: $(command_text './scrooge-alert uninstall') then $(command_text './scrooge-alert install')"
+        else
+            task_status warning \
+                "Fix (or remove) the offending package under src/core/scrapers/plugins/, then retry."
+        fi
+        return
+    fi
+
+    _stsf_old_ifs="$IFS"
+    IFS='
+'
+    for _stsf_target in $TARGET_FLAGS; do
+        if stream_contains "$_stsf_target" "$SELECTED_INSTALLED"; then
+            if ! stream_contains "$_stsf_target" "$SELECTED_REGISTERED"; then
+                task_status failure \
+                    "'$_stsf_target' is installed but no longer registered (orphan)."
+                task_status warning \
+                    "Remove it with: $(command_text "./scrooge-alert uninstall --$_stsf_target")"
+                IFS="$_stsf_old_ifs"
+                return
+            fi
+        elif stream_contains "$_stsf_target" "$SELECTED_REGISTERED"; then
+            task_status failure \
+                "'$_stsf_target' is registered but not installed."
+            task_status warning \
+                "Install it with: $(command_text "./scrooge-alert install --$_stsf_target")"
+            IFS="$_stsf_old_ifs"
+            return
+        else
+            task_status failure "Unknown target '$_stsf_target'."
+            task_status info \
+                "Run $(command_text "./scrooge-alert $_stsf_command --help") for available targets."
+            IFS="$_stsf_old_ifs"
+            return
+        fi
+    done
+    IFS="$_stsf_old_ifs"
+    task_status failure "The installed target timers could not be selected safely."
+    task_status info \
+        "Run $(command_text "./scrooge-alert $_stsf_command --debug") for underlying diagnostics."
+}
+
+# show_uninstalled_notices <verb>
+# Success-path counterpart for the teardown policies: select_targets skips an
+# explicitly named target that is registered but has no installed unit, and this
+# reports each one as informational rather than failing the command. The verb
+# ("disable", "stop", "remove") is the only per-command word, so the condition --
+# which is the SELECTED_REGISTERED/SELECTED_INSTALLED contract itself -- is stated
+# once here instead of once per teardown script.
+show_uninstalled_notices() {
+    [ "$TARGET_FLAGS_EXPLICIT" -eq 1 ] || return 0
+    _sun_verb="$1"
+    _sun_old_ifs="$IFS"
+    IFS='
+'
+    for _sun_target in $TARGET_FLAGS; do
+        if stream_contains "$_sun_target" "$SELECTED_REGISTERED" &&
+            ! stream_contains "$_sun_target" "$SELECTED_INSTALLED"; then
+            task_status info \
+                "[$_sun_target] Target is registered but not installed; nothing to $_sun_verb."
+        fi
+    done
+    IFS="$_sun_old_ifs"
 }

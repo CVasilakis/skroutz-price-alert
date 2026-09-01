@@ -1,0 +1,8 @@
+# border: red
+# exit: 1
+
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+[+] Active executions
+Error: Could not query ActiveState for skroutz-scraper.service.
+    [x] [skroutz] Could not determine the service state.
+    [i] [skroutz] Run ./scrooge-alert stop --debug --skroutz for underlying diagnostics.
