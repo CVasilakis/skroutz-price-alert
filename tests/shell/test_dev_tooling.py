@@ -14,7 +14,7 @@ import pytest
 
 from core.scrapers.framework.catalog import PluginCatalog
 from core.scrapers.tooling.scaffold.cli import _parser as scaffold_parser
-from shell.assertions import assert_task_status
+from shell.assertions import assert_task_status, logical_task_lines
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -970,6 +970,113 @@ def test_shell_gate_checks_tracked_and_new_nonignored_scripts(tmp_path):
     assert str(hook.relative_to(project)) in arguments
     assert ignored.name not in arguments
     assert deleted.name not in arguments
+
+
+def _shell_gate_project(tmp_path, bad_name: str, bad_body: str) -> Path:
+    """A minimal worktree whose shell gate has exactly one failing script."""
+    project = tmp_path / "project"
+    dev_scripts = project / "scripts" / "dev"
+    dev_scripts.mkdir(parents=True)
+    shutil.copy(ROOT / "scripts" / "dev" / "check.sh", dev_scripts / "check.sh")
+    lib = project / "scripts" / "lib"
+    lib.mkdir()
+    shutil.copy(ROOT / "scripts" / "lib" / "common.sh", lib / "common.sh")
+    shutil.copy(ROOT / "scripts" / "lib" / "preflight.sh", lib / "preflight.sh")
+
+    # Sorts between "a_bad.sh" and "zz_bad.sh", so it is enumerated after one
+    # and before the other. It must pass, since a failing file that follows the
+    # real failure is what used to overwrite the recorded stage.
+    (project / "m_good.sh").write_text('#!/bin/sh\nprintf "%s\\n" ok\n', encoding="utf-8")
+    (project / bad_name).write_text(bad_body, encoding="utf-8")
+
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    subprocess.run(["git", "add", "-A"], cwd=project, check=True)
+    return project
+
+
+def _run_shell_gate(project: Path, shellcheck: Path):
+    env = os.environ.copy()
+    env["SCROOGE_SHELLCHECK"] = str(shellcheck)
+    env["SCROOGE_CHECK_PYTHON"] = sys.executable
+    return subprocess.run(
+        ["sh", str(project / "scripts" / "dev" / "check.sh"), "shell"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+
+# Fails ShellCheck (SC2050/SC3014) but parses cleanly, so it reaches the failure
+# through ShellCheck alone rather than through the syntax pass behind it.
+_LINT_ONLY_FAILURE = '#!/bin/sh\nif [ "a" == "a" ]; then\n  echo hi\nfi\n'
+
+
+@pytest.mark.parametrize("bad_name", ("a_bad.sh", "zz_bad.sh"))
+def test_check_shell_failure_report_does_not_depend_on_enumeration_order(tmp_path, bad_name):
+    shellcheck = Path(os.environ.get("SCROOGE_SHELLCHECK") or ROOT / "venv/bin/shellcheck")
+    if not shellcheck.is_file():
+        resolved = shutil.which("shellcheck")
+        if resolved is None:
+            pytest.skip("ShellCheck is unavailable")
+        shellcheck = Path(resolved)
+
+    project = _shell_gate_project(tmp_path, bad_name, _LINT_ONLY_FAILURE)
+
+    result = _run_shell_gate(project, shellcheck)
+
+    # xargs keeps going after a failing child, so any per-file record of the
+    # stage reached ends up describing the last file rather than the failing
+    # one. That made an identical ShellCheck failure report itself as a POSIX
+    # syntax failure whenever a passing file was enumerated after it.
+    assert result.returncode != 0
+    assert_task_status(result.stdout, "x", "ShellCheck or POSIX syntax checks failed.")
+    assert_task_status(result.stdout, "x", "Requested checks failed.")
+    # Neither single-tool verdict may be asserted, in either enumeration order.
+    tasks = logical_task_lines(result.stdout)
+    assert "[x] POSIX syntax checks failed." not in tasks
+    assert "[x] ShellCheck failed." not in tasks
+
+
+def test_check_shell_reports_failure_from_the_syntax_pass(tmp_path):
+    # A passing ShellCheck isolates the failure to `sh -n`, which is the branch
+    # the removed stage file happened to classify correctly.
+    shellcheck = tmp_path / "shellcheck"
+    shellcheck.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    shellcheck.chmod(0o755)
+    project = _shell_gate_project(
+        tmp_path, "a_bad.sh", "#!/bin/sh\nif [ 1 = 1 ]; then\n  echo hi\n"
+    )
+
+    result = _run_shell_gate(project, shellcheck)
+
+    assert result.returncode != 0
+    assert_task_status(result.stdout, "x", "ShellCheck or POSIX syntax checks failed.")
+    assert_task_status(result.stdout, "x", "Requested checks failed.")
+
+
+def test_check_shell_gate_leaves_no_temporary_files_behind(tmp_path):
+    shellcheck = tmp_path / "shellcheck"
+    shellcheck.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    shellcheck.chmod(0o755)
+    project = _shell_gate_project(tmp_path, "a_bad.sh", '#!/bin/sh\nprintf "%s\\n" ok\n')
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+
+    env = os.environ.copy()
+    env["SCROOGE_SHELLCHECK"] = str(shellcheck)
+    env["SCROOGE_CHECK_PYTHON"] = sys.executable
+    env["TMPDIR"] = str(scratch)
+    result = subprocess.run(
+        ["sh", str(project / "scripts" / "dev" / "check.sh"), "shell"],
+        cwd=project,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert list(scratch.glob("scrooge-shell-*")) == []
 
 
 def test_dev_setup_contains_no_service_or_user_data_operations():

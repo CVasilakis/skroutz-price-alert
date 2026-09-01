@@ -170,8 +170,7 @@ validate_shell_paths() {
             set -eu
             shellcheck_command="$1"
             dash_command="$2"
-            stage_file="$3"
-            path="${4:-}"
+            path="${3:-}"
             [ -n "$path" ] && [ -f "$path" ] || exit 0
             case "$path" in
                 *.sh) ;;
@@ -183,12 +182,10 @@ validate_shell_paths() {
                     esac
                     ;;
             esac
-            printf "%s\n" "shellcheck" > "$stage_file"
             "$shellcheck_command" -x "$path"
-            printf "%s\n" "syntax" > "$stage_file"
             sh -n "$path"
             [ -z "$dash_command" ] || "$dash_command" -n "$path"
-        ' sh "$shellcheck_binary" "$dash_binary" "$shell_stage" < "$shell_paths"
+        ' sh "$shellcheck_binary" "$dash_binary" < "$shell_paths"
 }
 
 run_shell() {
@@ -211,8 +208,6 @@ run_shell() {
 
     shell_paths="$(mktemp "${TMPDIR:-/tmp}/scrooge-shell-paths.XXXXXX")"
     trap 'rm -f "$shell_paths"' 0 HUP INT TERM
-    shell_stage="$(mktemp "${TMPDIR:-/tmp}/scrooge-shell-stage.XXXXXX")"
-    trap 'rm -f "$shell_paths" "$shell_stage"' 0 HUP INT TERM
     if run_action enumerate_shell_paths; then
         if [ "$DEBUG_MODE" -eq 1 ]; then
             # The enumerated list is NUL-separated for xargs -0 below. Print it
@@ -228,13 +223,15 @@ run_shell() {
         task_status success "ShellCheck passed."
         task_status success "POSIX syntax checks passed."
     else
+        # xargs runs every remaining file after one fails and reports its own
+        # aggregate status, so the parent cannot attribute the failure to a
+        # specific file or to ShellCheck rather than the syntax pass. Name both
+        # checks instead of guessing; the underlying output shown by --debug
+        # already identifies the tool and the file.
         check_status=$?
-        if [ "$(cat "$shell_stage")" = "syntax" ]; then
-            check_failure "$check_status" "POSIX syntax checks failed."
-        fi
-        check_failure "$check_status" "ShellCheck failed."
+        check_failure "$check_status" "ShellCheck or POSIX syntax checks failed."
     fi
-    rm -f "$shell_paths" "$shell_stage"
+    rm -f "$shell_paths"
     trap - 0 HUP INT TERM
 }
 
