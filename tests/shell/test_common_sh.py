@@ -302,6 +302,32 @@ class TestProgressExecution(unittest.TestCase):
         self.assertEqual(stale.stdout, "attempts=20 status=1\n")
         self.assertEqual(failed.stdout, "attempts=1 status=1\n")
 
+    def test_a_failed_yield_abandons_the_lock_instead_of_spinning(self):
+        """A yield that cannot run (fork failure, or a signal reaching the shell)
+        must stop the retry loop rather than burn the remaining attempts. The
+        contended workspace is what makes this observable: the same input retries
+        twenty times when the yield succeeds, so a single attempt can only come
+        from the failed yield."""
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        contended_workspace = temp_dir / "contended"
+        contended_workspace.mkdir()
+        (contended_workspace / "lock").mkdir()
+
+        result = run_sh(
+            "attempts=0\n"
+            "mkdir() { attempts=$((attempts + 1)); return 1; }\n"
+            "sleep() { return 1; }\n"
+            f'if _progress_lock "{contended_workspace}"; then\n'
+            "  status=0\n"
+            "else\n"
+            "  status=$?\n"
+            "fi\n"
+            'printf "attempts=%s status=%s\\n" "$attempts" "$status"'
+        )
+
+        self.assertEqual(result.stdout, "attempts=1 status=1\n")
+
     def test_redirected_output_uses_permanent_line_and_preserves_status(self):
         result = run_sh(
             "probe() {\n"

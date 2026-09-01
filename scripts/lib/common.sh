@@ -80,6 +80,15 @@ progress_delay() {
     sleep 1
 }
 
+# One limit for both bounded waits below (the mkdir mutex and the presenter
+# reap). They are deliberately not separate policies: each waits on the other
+# half of the same two-process protocol, each peer only ever occupies the awaited
+# state for a few statements, and each exhaustion degrades the same way, by
+# abandoning the progress line rather than the command. The unit that matters is
+# time, not tries: the wait between attempts is a yield rather than a delay, so
+# twenty of them is on the order of twenty milliseconds — ample for a peer that
+# is merely descheduled, and too short for a wedged one to hold up a user-facing
+# command. tests/shell/test_common_sh.py pins the count from the outside.
 PROGRESS_MAX_ATTEMPTS=20
 
 # Delayed progress runs two processes: the parent (run_with_progress, which keeps
@@ -159,6 +168,12 @@ _progress_lock() {
         [ -d "$_pl_workspace/lock" ] || return 1
         _pl_attempt=$((_pl_attempt + 1))
         [ "$_pl_attempt" -lt "$PROGRESS_MAX_ATTEMPTS" ] || break
+        # `sleep` is an external command, so `sleep 0` yields the CPU to the lock
+        # holder without spending wall-clock time. A non-zero status means either
+        # that the fork failed or that a signal reached this shell; retrying is
+        # futile in the first case and unwanted in the second, since callers run
+        # this under HUP/INT/TERM traps and must not spin out the remaining
+        # attempts before the handler gets to run.
         sleep 0 || return 1
     done
     return 1
@@ -182,6 +197,9 @@ _progress_stop_process() {
             kill -KILL "$_psp_pid" 2>/dev/null || true
             return 1
         fi
+        # Yield to the dying presenter; see _progress_lock for why a failed
+        # yield abandons the loop instead of retrying. Giving up here is the
+        # conservative answer too: an unconfirmed presenter blocks the erase.
         sleep 0 || return 1
     done
     wait "$_psp_pid" 2>/dev/null || true
