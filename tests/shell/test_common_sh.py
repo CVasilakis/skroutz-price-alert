@@ -11,6 +11,7 @@ tmp directory via ``XDG_CONFIG_HOME``.
 """
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -22,6 +23,12 @@ from core.exit_status import ExitStatus
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_SH = REPO_ROOT / "scripts" / "lib" / "common.sh"
 SYSTEMD_SH = REPO_ROOT / "scripts" / "lib" / "systemd.sh"
+_COLOR_SEQUENCE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _visible(output: str) -> str:
+    """Return what the terminal shows: the output without its color sequences."""
+    return _COLOR_SEQUENCE.sub("", output)
 
 
 def test_install_does_not_invoke_configuration_migration():
@@ -167,6 +174,33 @@ class TestPresentationHelpers(unittest.TestCase):
                     extra_env={"COLUMNS": columns},
                 )
                 self.assertEqual(result.stdout, f"    {message}\n")
+
+    def test_wrapping_never_narrows_past_the_readable_lower_bound(self):
+        """An implausibly narrow width must not degenerate to one word per line."""
+        result = run_sh('guidance "one two three four five"', extra_env={"COLUMNS": "5"})
+
+        self.assertEqual(
+            result.stdout.splitlines(),
+            ["    one two three", "        four five"],
+        )
+
+    def test_wrapping_measures_visible_width_not_color_sequences(self):
+        """Colored prefixes and command_text must not steal columns from prose."""
+        message = 'Run $(command_text "./scrooge-alert status") to check it now'
+        colored = run_sh(
+            f'COLUMNS=60\ntask_status warning "{message}"',
+            extra_env={"NO_COLOR": None, "CLICOLOR_FORCE": "1"},
+        )
+        plain = run_sh(
+            f'COLUMNS=60\ntask_status warning "{message}"',
+            extra_env={"NO_COLOR": "1", "CLICOLOR_FORCE": "1"},
+        )
+
+        self.assertEqual(
+            plain.stdout.splitlines(),
+            ["    [!] Run ./scrooge-alert status to check it now"],
+        )
+        self.assertEqual(_visible(colored.stdout).splitlines(), plain.stdout.splitlines())
 
 
 class TestDebugExecution(unittest.TestCase):

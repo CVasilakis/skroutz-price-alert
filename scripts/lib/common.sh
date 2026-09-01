@@ -247,6 +247,10 @@ _progress_present_after_delay() {
     _ppad_lock_owned=1
     if [ -f "$_ppad_workspace/active" ] &&
        kill -0 "$_ppad_parent" 2>/dev/null; then
+        # The real terminal width completes the single-row invariant: the
+        # capability check already proved the line fits the terminal, and this
+        # keeps _print_indented_wrapped's default width from hard-wrapping a
+        # line that is wider than that default but still fits the screen.
         COLUMNS="$_ppad_columns"
         if task_status info "$_ppad_message"; then
             (: > "$_ppad_workspace/shown") 2>/dev/null || true
@@ -370,6 +374,13 @@ run_with_progress() {
     return "$_rwp_status"
 }
 
+# Renders every task_status, guidance, and bullet line, wrapping prose onto the
+# caller's continuation indent. Width is measured after removing color sequences
+# because task prefixes and command_text embed them mid-line. sh never exports
+# COLUMNS, so 100 is the width these scripts actually run at rather than a rare
+# fallback; it is the deterministic width the test environments pin (see
+# tests/conftest.py and tests/ui/harness/shell.py). The lower bound is cosmetic:
+# it keeps an implausibly narrow width from degenerating into one word per line.
 _print_indented_wrapped() {
     _piw_first="$1"
     _piw_continuation="$2"
