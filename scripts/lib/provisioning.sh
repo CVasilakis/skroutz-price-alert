@@ -313,6 +313,14 @@ unit_transaction_interrupted() {
 # replace_units_transaction <targets> <schedules> <pair|timer>
 #                           <normal|deferred|preserve>
 #
+# <targets> selects the work; <schedules> is only looked up, one
+# plugin_stream_value call per target, so it may be a superset. Both callers pass
+# the whole list_plugin_schedules snapshot beside a narrower target stream --
+# install.sh the provisionable targets, schedule.sh the targets whose cadence
+# actually drifted -- and neither filters the rows, because a row for a target
+# not in <targets> is never read. Nothing here builds a row, which is what keeps
+# the tab-delimited shape a Python-side contract with no shell producer.
+#
 # scope selects which files are staged, snapshotted, and rolled back:
 #   pair    the service and the timer, i.e. installing or reinstalling a target
 #   timer   the timer alone, leaving the installed service bytes untouched,

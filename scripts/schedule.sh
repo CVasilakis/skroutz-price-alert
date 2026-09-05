@@ -143,7 +143,6 @@ fi
 EXAMPLE_PAIRS="$SCHEDULE_VALUE"
 
 CHANGED=''
-CHANGED_SCHEDULES=''
 FAILED=0
 CONFIG_FAILED=0
 OLD_IFS="$IFS"
@@ -205,8 +204,6 @@ for plugin in $PLUGINS; do
     fi
     task_status info "[$plugin] Timer schedule change queued."
     CHANGED="$(stream_add_unique "$CHANGED" "$plugin")"
-    CHANGED_SCHEDULES="${CHANGED_SCHEDULES}${CHANGED_SCHEDULES:+
-}${plugin}	${new_calendar}"
 done
 IFS="$OLD_IFS"
 
@@ -214,7 +211,7 @@ if [ -n "$CHANGED" ]; then
     printf '\n'
     section_heading success "Timer updates"
     if run_with_progress "Applying queued timer schedule changes..." \
-        run_action schedule_units_transaction "$CHANGED" "$CHANGED_SCHEDULES"; then
+        run_action schedule_units_transaction "$CHANGED" "$ALL_SCHEDULES"; then
         IFS='
 '
         for plugin in $CHANGED; do

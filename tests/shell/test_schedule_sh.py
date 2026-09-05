@@ -195,3 +195,43 @@ def test_total_transaction_failure_is_framed_and_preserves_exit_one():
     assert_task_status(result.stdout, "i", "Previous timer files and states were restored.")
     assert "[+] Schedule result" not in result.stdout
     _assert_standalone_frame(result.stdout)
+
+
+def test_each_updated_timer_receives_its_own_resolved_calendar():
+    """The only test that reads what schedule.sh actually wrote.
+
+    Every other assertion here is on rendered status lines, and those stay
+    identical whether the right cadence reaches the timer or not:
+    validate_staged_units checks the staged file against the same calendar the
+    transaction was handed, so a wrong value validates against itself. Two
+    targets with distinct cadences are the point -- one target could pass while
+    reading its own row by luck, but a lost tab, a swapped row, or a hardcoded
+    calendar all cross the targets and fail here.
+    """
+    world = ShellWorld(
+        plugins=("skroutz", "amazon"),
+        installed_timers=("skroutz", "amazon"),
+        installed_services=("skroutz", "amazon"),
+        schedules={"skroutz": "daily", "amazon": "*:0/15"},
+    )
+    checkout = _build_sandbox(world)
+    try:
+        env = _fake_env(checkout, world)
+        env["NO_COLOR"] = "1"
+        result = subprocess.run(
+            ["/bin/sh", str(checkout / "scripts/schedule.sh")],
+            cwd=checkout,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        unit_dir = checkout / "xdg" / "systemd" / "user"
+        for target, calendar in (("skroutz", "daily"), ("amazon", "*:0/15")):
+            written = (unit_dir / f"{target}-scraper.timer").read_text(encoding="utf-8")
+            assert f"OnCalendar={calendar}\n" in written, written
+            assert f"Unit={target}-scraper.service\n" in written, written
+    finally:
+        _cleanup(checkout)

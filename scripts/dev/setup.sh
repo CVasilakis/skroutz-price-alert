@@ -157,11 +157,23 @@ else
 fi
 
 FOUND=0
+# Requirements report columns, as both loops below address them. The producer
+# (core.scrapers.tooling.cli requirements) owns the contract:
+#
+#   $1 target  $2 requirements_path
+#
+# $2 is empty for a target with no private dependencies, which this reads as
+# "core dependencies only" rather than filtering the row out; the shell's own
+# list_plugin_requirements accessor drops those instead, because install.sh only
+# ever wants something to install. The separator is spelled through printf
+# because POSIX sh has no $'\t' and a literal tab in a ${...%%pattern} is
+# invisible on screen -- the same idiom install.sh uses to parse this shape.
+REQUIREMENTS_TAB="$(printf '\t')"
 OLD_IFS="$IFS"
 IFS='
 '
 for row in $PLUGIN_REQUIREMENTS; do
-    target="${row%%	*}"
+    target="${row%%"$REQUIREMENTS_TAB"*}"
     if [ -n "$SELECTED" ] && [ "$target" = "$SELECTED" ]; then
         FOUND=1
     fi
@@ -228,8 +240,8 @@ PRIVATE_REQUIREMENTS=0
 IFS='
 '
 for row in $PLUGIN_REQUIREMENTS; do
-    target="${row%%	*}"
-    requirement="${row#*	}"
+    target="${row%%"$REQUIREMENTS_TAB"*}"
+    requirement="${row#*"$REQUIREMENTS_TAB"}"
     [ -z "$SELECTED" ] || [ "$target" = "$SELECTED" ] || continue
     if [ -n "$requirement" ]; then
         PRIVATE_REQUIREMENTS=$((PRIVATE_REQUIREMENTS + 1))
