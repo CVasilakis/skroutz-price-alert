@@ -294,7 +294,7 @@ Once `./scrooge-alert install` has run successfully, each scraper executes autom
 You can manually interact with the application using the wrapper script. You can safely interrupt the manual execution at any time by pressing `Ctrl+C`.
 
 ```
-./scrooge-alert run [-h] [--quiet] [--<target> ...]
+./scrooge-alert run [-h] [--quiet] [--debug] [--<target> ...]
 ```
 
 #### Available CLI Flags:
@@ -306,9 +306,10 @@ These flags modify the overall behavior of the script or trigger user assistance
 | :--- | :--- |
 | `-h`, `--help` | Displays the help message with all available script arguments. |
 | `--quiet` | Suppresses all console output and redirects execution logs to the `logs/` directory. This is utilized by the systemd setup to ensure silent background operation. |
+| `--debug` | Prints those same execution log lines to the console instead of drawing the live panel. They are finer grained than the panel — each failed attempt is reported as it happens, with the underlying error message the panel shortens to an error type. Nothing else about the run changes: the configuration check still runs first, and the `logs/` files are left untouched. Cannot be combined with `--quiet`. Note that the panel's spinner and pacing countdown are absent, so the console stays silent during the delay between item checks. |
 
 **Target Scraper Flags:**
-These flags allow you to isolate execution to specific platforms. If no target flags are provided, the script defaults to running all registered scrapers sequentially. They can be combined with `--quiet`.
+These flags allow you to isolate execution to specific platforms. If no target flags are provided, the script defaults to running all registered scrapers sequentially. They can be combined with `--quiet` or `--debug`.
 
 | Flag&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Action |
 | :--- | :--- |
@@ -560,7 +561,7 @@ You can easily test your notification setup using the `ping` command:
 
 The application maintains comprehensive logs to help you monitor background executions and diagnose issues. You can find these files in the `logs/` directory:
 
-*   **Background Execution Logs (`logs/<target>/output.log`):** When the script runs automatically in the background, all standard output is saved here (one subdirectory per scraper target). Log line timestamps are recorded in UTC (and labelled as such). These logs rotate daily at midnight UTC, and at each rotation the oldest files beyond your configured [`log_retention_days`](#scraper-settings) (default 7) are pruned. Because pruning happens only at rotation, lowering the value takes effect at the next midnight-UTC rotation, while raising it keeps more history going forward without deleting anything.
+*   **Background Execution Logs (`logs/<target>/output.log`):** When the script runs automatically in the background, all standard output is saved here (one subdirectory per scraper target). To read the same lines live without waiting for a scheduled run, use [`./scrooge-alert run --debug`](#available-cli-flags), which prints them to the console and writes nothing here. Log line timestamps are recorded in UTC (and labelled as such). These logs rotate daily at midnight UTC, and at each rotation the oldest files beyond your configured [`log_retention_days`](#scraper-settings) (default 7) are pruned. Because pruning happens only at rotation, lowering the value takes effect at the next midnight-UTC rotation, while raising it keeps more history going forward without deleting anything.
 *   **Scraper Error Logs (`logs/<target>/errors.txt`):** When a specific scraper hits a critical exception during a run, the detailed stack trace and error information are saved to that scraper's own `errors.txt` (one per target, e.g., `logs/skroutz/errors.txt`).
 *   **General Error Logs (`logs/errors.txt`):** Top-level failures that occur with no specific scraper context (e.g. a total crash before any target starts) are saved to the root `logs/errors.txt` instead. Both error logs are timestamped in UTC.
 

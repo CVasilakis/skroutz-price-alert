@@ -73,10 +73,14 @@ _case(
 )
 
 _case(
-    "debug_not_supported",
-    "The wrapper does not expose a shell-level --debug mode.",
+    "quiet_debug_conflict",
+    "--quiet and --debug ask for opposite output modes and are rejected together.",
+    "--quiet",
     "--debug",
     tags=("error",),
+    # run.sh forwards --debug rather than interpreting it, so this transcript is an
+    # ordinary operational failure and must stay under the shell layout guard.
+    shell_debug=False,
 )
 
 _case(
@@ -121,6 +125,14 @@ _case(
     "--quiet --<target>: the systemd ExecStart shape.",
     "--quiet",
     "--skroutz",
+)
+
+_case(
+    "dispatch_target_debug",
+    "--debug --<target>: forwarded to run.py, which owns the runtime's output modes.",
+    "--debug",
+    "--skroutz",
+    shell_debug=False,
 )
 
 _case(

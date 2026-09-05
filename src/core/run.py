@@ -5,10 +5,16 @@ notifications, state root — composes the application, infrastructure, and TUI
 layers, and returns one exit status. It owns no scraping policy itself: target
 execution belongs to ``ScrapingOrchestrator`` and rendering to the reporters.
 
-Invoked two ways. Interactively it draws the live Rich panel; under systemd it
-runs quiet, logging to file. A background invocation always selects exactly one
-target, because the installer generates one timer per plugin — an assumption the
-exit-status policy relies on (see ``RunOutcome.exit_status``).
+Invoked three ways, which pair two frontends with two log sinks. Interactively it
+draws the live Rich panel; under ``--quiet`` (systemd's form) it runs silent,
+logging to file; under ``--debug`` it drives the *file* frontend to the console, so
+a person sees the finer-grained lines a background run would have written —
+notably each failed attempt's underlying error message, which the panel collapses
+to an exception type. ``--debug`` selects a frontend and nothing else: it keeps the
+interactive preflight and never adopts the background notification gating, so what
+it changes is what you read, not what the run does. A background invocation always
+selects exactly one target, because the installer generates one timer per plugin —
+an assumption the exit-status policy relies on (see ``RunOutcome.exit_status``).
 """
 
 import argparse
@@ -55,7 +61,18 @@ def _run() -> None:
     The workflow delegates each lock/client/state lifecycle to ``TargetRunner``.
     """
     parser = argparse.ArgumentParser(description="Scrooge Alert scraper")
-    parser.add_argument("--quiet", action="store_true", help="Run script with no console output")
+    # The two non-default frontends contradict each other: --quiet silences the console
+    # to write the target's log file, --debug writes that same log to the console. run.sh
+    # rejects the pair in the project's own wording; this group guards direct invocation.
+    output_mode = parser.add_mutually_exclusive_group()
+    output_mode.add_argument(
+        "--quiet", action="store_true", help="Run script with no console output"
+    )
+    output_mode.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print the background log lines instead of the live panel",
+    )
 
     # Atomically discover and compile the immutable plugin catalog.
     catalog = PluginCatalog.discover()
@@ -102,7 +119,10 @@ def _run() -> None:
 
         console.print()
 
-        reporter = InteractiveRunReporter()
+        # Both console frontends; the orchestrator is told quiet=False either way, so the
+        # target logger propagates to the console instead of opening the rotating file.
+        # A --debug run therefore leaves logs/<target>/output.log untouched.
+        reporter = SilentRunReporter() if args.debug else InteractiveRunReporter()
     else:
         retention_by_target = {
             load.target: load.settings[load.plugin.setting(KEY_RETENTION)] for load in load_results

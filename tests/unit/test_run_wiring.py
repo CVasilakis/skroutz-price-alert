@@ -165,3 +165,80 @@ def test_interactive_mode_installs_handler_and_uses_interactive_strategy(monkeyp
         reporter_type.return_value,
         state_dir=core.run.STATE_DIR,
     )
+
+
+def test_debug_mode_selects_the_file_frontend_without_the_background_contract(monkeypatch):
+    # --debug is a frontend choice, not a run-policy change: it drives SilentRunReporter
+    # (the background log lines) to the console while keeping the interactive preflight,
+    # and it must not adopt the quiet path's notification gating. Passing quiet=False to
+    # the orchestrator is what keeps the target logger propagating to the console rather
+    # than opening logs/<target>/output.log, so a --debug run leaves that file untouched.
+    version_status = SoftwareVersionStatus("1.7.0", False)
+    Catalog = mock.MagicMock()
+    ClientLoader = mock.MagicMock()
+    load_target_configs = mock.MagicMock(return_value=[])
+    load_general = mock.MagicMock()
+    render_config = mock.MagicMock()
+    preflight = mock.MagicMock()
+    silent_type = mock.MagicMock()
+    interactive_type = mock.MagicMock()
+    Orchestrator = mock.MagicMock()
+
+    monkeypatch.setattr(sys, "argv", ["run", "--debug", "--skroutz"])
+    monkeypatch.setattr(core.run, "setup_global_logging", lambda _quiet: None)
+    monkeypatch.setattr(core.run, "PluginCatalog", Catalog)
+    monkeypatch.setattr(core.run, "ClientLoader", ClientLoader)
+    monkeypatch.setattr(core.run, "load_target_configs", load_target_configs)
+    monkeypatch.setattr(core.run, "load_general_config", load_general)
+    monkeypatch.setattr(core.run, "record_general_diagnostic", lambda general: general)
+    monkeypatch.setattr(core.run, "validate_notification_preflight", preflight)
+    monkeypatch.setattr(core.run, "install_interrupt_handler", mock.MagicMock())
+    monkeypatch.setattr(core.run, "inspect_software_version", lambda: version_status)
+    monkeypatch.setattr(core.run, "inspect_user_lingering", lambda: True)
+    monkeypatch.setattr(core.run, "render_config_panel", render_config)
+    monkeypatch.setattr(core.run, "Console", mock.MagicMock())
+    monkeypatch.setattr(core.run.signal, "signal", lambda *_: None)
+    monkeypatch.setattr(core.run, "SilentRunReporter", silent_type)
+    monkeypatch.setattr(core.run, "InteractiveRunReporter", interactive_type)
+    monkeypatch.setattr(core.run, "AppriseNotifier", mock.MagicMock())
+    monkeypatch.setattr(core.run, "ReminderStateRepository", mock.MagicMock())
+    monkeypatch.setattr(core.run, "ReminderService", mock.MagicMock())
+    monkeypatch.setattr(core.run, "ScrapingOrchestrator", Orchestrator)
+
+    catalog = Catalog.discover.return_value
+    catalog.targets = ("skroutz", "insomnia")
+    catalog.get.return_value = mock.MagicMock(display_name="Skroutz")
+    load_general.return_value.notifications.valid_urls = ("json://localhost",)
+    Orchestrator.return_value.run.return_value = 0
+
+    with pytest.raises(SystemExit) as caught:
+        core.run.main()
+
+    assert caught.value.code == 0
+    interactive_type.assert_not_called()
+    preflight.assert_not_called()
+    render_config.assert_called_once()
+    Orchestrator.assert_called_once_with(
+        [],
+        ClientLoader.return_value,
+        mock.ANY,
+        False,
+        silent_type.return_value,
+        state_dir=core.run.STATE_DIR,
+    )
+
+
+def test_quiet_and_debug_are_mutually_exclusive(monkeypatch):
+    # run.sh rejects the pair in the project's wording; this is the direct-invocation
+    # guard behind it, so neither frontend can be selected twice over.
+    Catalog = mock.MagicMock()
+    Catalog.discover.return_value.targets = ()
+
+    monkeypatch.setattr(sys, "argv", ["run", "--quiet", "--debug"])
+    monkeypatch.setattr(core.run, "setup_global_logging", lambda _quiet: None)
+    monkeypatch.setattr(core.run, "PluginCatalog", Catalog)
+
+    with pytest.raises(SystemExit) as caught:
+        core.run.main()
+
+    assert caught.value.code == 2

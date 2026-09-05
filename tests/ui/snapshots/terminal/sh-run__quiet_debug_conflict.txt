@@ -2,5 +2,5 @@
 # exit: 1
 
 [+] Run arguments
-    [x] Unknown target flag: --debug.
+    [x] Conflicting arguments: --quiet and --debug select different output modes.
     [!] Run ./scrooge-alert run --help to view supported options.

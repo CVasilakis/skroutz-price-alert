@@ -103,8 +103,15 @@ def shell_case(surface: Surface, script: str):
         world: ShellWorld = ShellWorld(),
         stdin: str = "",
         tags: tuple[str, ...] = (),
+        shell_debug: bool | None = None,
     ) -> None:
-        @scenario(surface, name, description, tags, shell_debug="--debug" in args)
+        # --debug means "show underlying command output" in every script that owns the
+        # flag, so deriving the exemption from the argument is right for all of them
+        # but run.sh, which merely forwards --debug to run.py and keeps printing its
+        # own operational sections. That one caller passes the answer explicitly.
+        exempt = ("--debug" in args) if shell_debug is None else shell_debug
+
+        @scenario(surface, name, description, tags, shell_debug=exempt)
         @cache
         def _build():
             return drive_shell(script, *args, world=world, stdin=stdin)

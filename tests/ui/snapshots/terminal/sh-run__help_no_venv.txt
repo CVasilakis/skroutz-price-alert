@@ -1,7 +1,7 @@
 # border: green
 # exit: 0
 
-Usage: run.sh [-h] [--quiet] [--<target> ...]
+Usage: run.sh [-h] [--quiet] [--debug] [--<target> ...]
 
 Check prices for every registered target or only selected targets.
 With no target flag, price-check every registered target.
@@ -9,6 +9,7 @@ With no target flag, price-check every registered target.
 Optional arguments:
   -h, --help        show this help message and exit
   --quiet           Run script with no console output
+  --debug           Print the background log lines instead of the live panel
 
 Target-specific options are unavailable because the project
 virtual environment is not installed.

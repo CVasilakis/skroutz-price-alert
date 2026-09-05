@@ -11,22 +11,29 @@ BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 
 PLUGINS=""
 CATALOG_AVAILABLE=0
+# Unlike every other script's --debug, run.sh's is forwarded rather than interpreted:
+# it selects run.py's file-log frontend, so this wrapper still sets no DEBUG_MODE and
+# still has no shell-level debug mode of its own. These two record which of the pair
+# was seen, because they conflict and the case ladder sees only one argument at a time.
+QUIET_REQUESTED=0
+DEBUG_REQUESTED=0
 
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_fixed_help() {
     if [ "${SCROOGE_PUBLIC_COMMAND:-}" = run ]; then
         printf '\n'
-        printf '%s\n' "Usage: ./scrooge-alert run [--help] [--quiet] [--<target> ...]"
+        printf '%s\n' "Usage: ./scrooge-alert run [--help] [--quiet] [--debug] [--<target> ...]"
         printf '\n'
         printf '%s\n' "Check prices for every registered target or only selected targets."
         printf '\n'
         printf '%s\n' "Options:"
         printf '%s\n' "  --help            Show this help message and exit"
         printf '%s\n' "  --quiet           Run with no console output"
+        printf '%s\n' "  --debug           Print the background log lines instead of the live panel"
         return
     fi
     printf '\n'
-    printf '%s\n' "Usage: run.sh [-h] [--quiet] [--<target> ...]"
+    printf '%s\n' "Usage: run.sh [-h] [--quiet] [--debug] [--<target> ...]"
     printf '\n'
     printf '%s\n' "Check prices for every registered target or only selected targets."
     printf '%s\n' "With no target flag, price-check every registered target."
@@ -34,6 +41,7 @@ print_fixed_help() {
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
     printf '%s\n' "  --quiet           Run script with no console output"
+    printf '%s\n' "  --debug           Print the background log lines instead of the live panel"
 }
 
 print_help() {
@@ -82,7 +90,12 @@ while [ "$#" -gt 0 ]; do
             exit 0
             ;;
         --quiet)
+            QUIET_REQUESTED=1
             runtime_forward_arg --quiet
+            ;;
+        --debug)
+            DEBUG_REQUESTED=1
+            runtime_forward_arg --debug
             ;;
         --)
             runtime_argument_failure run "Invalid argument: $1."
@@ -96,5 +109,12 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
+
+# Both flags reach argparse's mutually exclusive group, but run.py's diagnosis for it
+# is a bare usage dump on exit 2; reject the pair here so the wrapper's own arguments
+# fail in the project's wording and exit status, as its other rejections do.
+if [ "$QUIET_REQUESTED" -eq 1 ] && [ "$DEBUG_REQUESTED" -eq 1 ]; then
+    runtime_argument_failure run "Conflicting arguments: --quiet and --debug select different output modes."
+fi
 
 runtime_exec_forwarded run.py
