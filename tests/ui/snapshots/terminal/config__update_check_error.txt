@@ -1,13 +1,12 @@
 # border: yellow
 
 ╭────────────────────────── Configuration Check ──────────────────────────╮
-│   🟡    Software Version        1.7.0 (Could not check for updates)     │
-│                                 [1]                                     │
-│   ✅    Lingering               Enabled                                 │
-│   ✅    Notifications           2 valid URL(s)                          │
-│   ✅    Reminder                Every 1 month (default)                 │
-│   ✅    Reminder Day            Saturday (default)                      │
-│   ✅    Reminder Time           13:00 (default)                         │
+│   🟡    Software Version      1.7.0 (Could not check for updates) [1]   │
+│   ✅    Lingering             Enabled                                   │
+│   ✅    Notifications         2 valid URL(s)                            │
+│   ✅    Reminder              Every 1 month (default)                   │
+│   ✅    Reminder Day          Saturday (default)                        │
+│   ✅    Reminder Time         13:00 (default)                           │
 │                                                                         │
 │   [1] Check your internet connection and retry shortly.                 │
 ╰─────────────────────────────────────────────────────────────────────────╯

@@ -62,6 +62,88 @@ def test_default_layout_prioritizes_value_content(label, value, expected_primary
     assert layout.primary + layout.value == 57
 
 
+@pytest.mark.parametrize(
+    ("label", "value", "expected_primary", "expected_value"),
+    [
+        # 37 cells is what the value gets while the labels hold the full reserve; past
+        # that the short labels lend exactly the surplus the value needs, no more.
+        ("Short", "V" * 38, 19, 38),
+        ("Short", "V" * 45, 12, 45),
+        ("L" * 19, "V" * 38, 19, 38),
+        # The value may draw the labels down to their own content, never below it.
+        ("Short", "V" * 52, 5, 52),
+    ],
+)
+def test_short_labels_lend_unused_reserve_to_a_wrapping_value(
+    label, value, expected_primary, expected_value
+):
+    layout = PanelTableLayout.from_rows(PANEL_WIDTH, [("✅", label, value)])
+
+    assert layout.primary == expected_primary
+    assert layout.value == expected_value
+    assert layout.primary + layout.value == 57
+
+
+@pytest.mark.parametrize("value_width", [53, 60, 80])
+def test_value_beyond_every_spare_cell_keeps_the_established_geometry(value_width):
+    """A value that wraps even with all the slack must not shift the columns for nothing."""
+    layout = PanelTableLayout.from_rows(PANEL_WIDTH, [("✅", "Short", "V" * value_width)])
+
+    assert (layout.primary, layout.value) == (PRIMARY_COLUMN_MIN, 37)
+
+
+def test_labels_that_need_the_reserve_never_lend_it():
+    """Only the remainder no label claims is available; a value cannot evict real labels."""
+    rows = [("✅", "Short", "V" * 45), ("✅", "L" * PRIMARY_COLUMN_MIN, "small")]
+
+    assert PanelTableLayout.from_rows(PANEL_WIDTH, rows).primary == PRIMARY_COLUMN_MIN
+
+
+@pytest.mark.parametrize("width", [40, 45, 55, PANEL_WIDTH, 95, 120])
+def test_lending_never_truncates_labels_below_their_content(width):
+    """Lending may shrink the label column, but never past what the labels themselves need.
+
+    Labels longer than the reserve are still ellipsized by the pre-existing rule that
+    gives values priority; the guarantee here is that *lending* never causes it.
+    """
+    # A panel of empty labels beside an unfittable value pins this width's label reserve:
+    # nothing is lent, and the value claims everything the reserve does not hold back.
+    reserve = PanelTableLayout.from_rows(width, [("✅", "", "V" * 300)]).primary
+
+    for primary_width in range(1, 60):
+        for value_width in (0, 20, 38, 52, 90, 300):
+            layout = PanelTableLayout.from_rows(
+                width, [("✅", "L" * primary_width, "V" * value_width)]
+            )
+            assert layout.primary >= min(primary_width, reserve)
+
+
+def test_borrowed_width_keeps_a_footnoted_url_on_one_line():
+    """The ping panel's short labels must not strand the cells its URLs need."""
+    panel = StatusPanelBuilder("Notification Check Results")
+    ref = panel.add_note_ref("Apprise flagged this endpoint as invalid.")
+    panel.add_row("❗", "Invalid URL", f"Apprise URL 2: discord://<...>/...{ref}")
+
+    lines = _render(panel).splitlines()
+
+    assert len(lines) == 5  # border, row, blank, footnote, border
+    assert "Apprise URL 2: discord://<...>/... [1]" in lines[1]
+
+
+def test_configuration_check_geometry_is_unaffected():
+    """Labels shorter than the reserve keep it when no value is starved of room."""
+    panel = StatusPanelBuilder("Configuration Check")
+    panel.add_row("🟡", "Software Version", "1.7.0 (alpha branch)" + panel.add_note_ref("Not main"))
+    panel.add_row("✅", "Lingering", "Enabled")
+    panel.add_row("✅", "Reminder Day", "Saturday")
+
+    layout = PanelTableLayout.from_rows(
+        PANEL_WIDTH, [(e[1], e[2], e[3]) for e in panel._rows if e[0] == "row"]
+    )
+
+    assert (layout.primary, layout.value) == (PRIMARY_COLUMN_MIN, 37)
+
+
 def test_wider_panel_derives_additional_capacity_from_panel_width():
     layout = PanelTableLayout.from_rows(95, [("✅", "L" * 80, "small")])
 

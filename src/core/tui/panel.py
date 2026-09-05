@@ -8,6 +8,13 @@ what makes the snapshot suite able to pin wrapping and truncation at all, and it
 keeps output readable when it is copied into an issue or scrolled back in a
 narrow window. Column widths are then allocated from the actual row content, so a
 long value borrows space from a short label instead of forcing the panel wider.
+
+Values are sized first and labels absorb the remainder. The label column normally
+holds ``PRIMARY_COLUMN_MIN`` cells so labels line up across panels, but that reserve
+exists for labels rather than for whitespace: when every label is shorter than it and
+lending the difference is what puts a wrapping value on one line, the value takes it.
+The label column is never truncated below its own content to do so, and a value too
+long to fit either way leaves the established geometry untouched.
 """
 
 from collections.abc import Iterable, Sequence
@@ -46,6 +53,25 @@ def _text_cell_width(value: object) -> int | None:
     else:
         return None
     return max((line.cell_len for line in text.split("\n")), default=0)
+
+
+def _primary_reserved_width(
+    column_budget: int,
+    primary_min: int,
+    primary_desired: int,
+    value_desired: int,
+) -> int:
+    """Return the cells withheld for labels before the value column is sized.
+
+    ``PRIMARY_COLUMN_MIN`` reserves room for labels, not blank space. When no label
+    needs the whole reserve *and* the unclaimed remainder is exactly what lets a
+    wrapping value onto one line, the value borrows it. A value that would wrap even
+    with every spare cell keeps the established geometry instead, so columns never
+    shift for a fit that was never reachable.
+    """
+    primary_need = max(primary_desired, _MIN_RENDERABLE_COLUMN_WIDTH)
+    value_fits_beside_labels = value_desired <= column_budget - primary_need
+    return min(primary_min, primary_need) if value_fits_beside_labels else primary_min
 
 
 @dataclass(frozen=True)
@@ -93,7 +119,8 @@ class PanelTableLayout:
 
         reserved_value = min(
             max(value_desired, value_min),
-            column_budget - primary_min,
+            column_budget
+            - _primary_reserved_width(column_budget, primary_min, primary_desired, value_desired),
         )
         primary = min(
             max(primary_desired, primary_min),
