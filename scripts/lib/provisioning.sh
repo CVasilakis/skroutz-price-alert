@@ -230,14 +230,33 @@ restore_unit_snapshot() {
     [ "$_rus_failed" -eq 0 ]
 }
 
+# The two transaction exits. Both disarm the traps and differ only in whether
+# the workspace survives, which is the caller-facing outcome contract described
+# above replace_units_transaction.
+#
+# Disarming is what actually ends the transaction: UNIT_TRANSACTION_ACTIVE is
+# read only by the handler, and the handler can only run while the traps are
+# armed. Clearing it here keeps the flag from describing a transaction that is
+# over; it is not a second guard, which is why one assignment is enough.
+#
+# clear_unit_transaction_traps keeps the workspace, for the one path that must
+# retain it: a rollback that did not complete.
 clear_unit_transaction_traps() {
     trap - HUP INT TERM
     UNIT_TRANSACTION_ACTIVE=0
 }
 
+# discard_unit_recovery removes it. Ignore termination across that removal so a
+# handler cannot roll back from data being deleted underneath it, then disarm.
+# `trap -` restores the default disposition rather than a saved one because that
+# is the disposition every caller had on entry: install.sh and schedule.sh
+# install no signal traps, and update.sh reaches this file only through the
+# snapshot, restore, and unit-state helpers, none of which touch traps. Keep it
+# that way -- run_update_helper drops its subshell under --debug, so a
+# trap-touching helper called from there would disarm update.sh's own rollback
+# handler in debug runs only.
 discard_unit_recovery() {
     trap '' HUP INT TERM
-    UNIT_TRANSACTION_ACTIVE=0
     [ -z "${UNIT_RECOVERY_DIR:-}" ] || rm -rf "$UNIT_RECOVERY_DIR"
     UNIT_RECOVERY_DIR=''
     clear_unit_transaction_traps

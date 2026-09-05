@@ -583,6 +583,45 @@ exec /bin/rm "$@"
     assert (state / "active.alpha").is_file()
 
 
+def test_signal_during_rollback_cleanup_cannot_restart_the_rollback(shell_world):
+    """The ignore window also covers the cleanup that follows a completed rollback.
+
+    Here the handler would still see UNIT_MUTATION_STARTED=1, so a signal that
+    reached it would restore a second time from a workspace being deleted and
+    replace the transaction's exit status with the signal's.
+    """
+    _, unit_dir, state, _ = shell_world
+    service = unit_dir / "alpha-scraper.service"
+    timer = unit_dir / "alpha-scraper.timer"
+    service.write_bytes(b"old service bytes\n")
+    timer.write_bytes(b"old timer bytes\n")
+    (state / "enabled.alpha").touch()
+    install_fake_command(
+        shell_world,
+        "rm",
+        """#!/bin/sh
+case "$*" in
+    *.scrooge-units.*) kill -TERM "$PPID" ;;
+esac
+exec /bin/rm "$@"
+""",
+    )
+
+    result = run_transaction(
+        shell_world,
+        "alpha",
+        "alpha\thourly",
+        FAKE_FAIL_ENABLE_TARGET="alpha",
+    )
+
+    assert result.returncode == 1, result.stderr
+    assert "restoring previous files and states" in result.stderr
+    assert "Unit replacement interrupted" not in result.stderr
+    assert service.read_bytes() == b"old service bytes\n"
+    assert timer.read_bytes() == b"old timer bytes\n"
+    assert list(unit_dir.glob(".scrooge-units.*")) == []
+
+
 @pytest.mark.parametrize("hostile", ("pct%dir", "back\\slash", 'quo"te', "quo'te"))
 def test_transaction_refuses_a_base_dir_systemd_would_misread(shell_world, hostile):
     """systemd reads more of the path than the quoting protects.
