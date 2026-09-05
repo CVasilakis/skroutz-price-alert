@@ -557,8 +557,12 @@ require_valid_target() {
 # splits on newlines alone, then restore IFS before leaving, including on an early
 # return, so no caller inherits it. Items may contain spaces, since
 # plugin_stream_value returns tab-delimited snapshot values that do, but the
-# unquoted expansion still globs. Keeping glob characters out is the producer's
-# job: is_valid_target gates every target name before it reaches a stream.
+# unquoted expansion still globs. Keeping whitespace and glob characters out is
+# the producer's job, and there are two producers with the same alphabet:
+# is_valid_target gates on-disk unit names and target flags, while catalog rows
+# arrive pre-validated from the Python side's SNAKE_CASE_KEY. A consumer cannot
+# see which kind of stream it holds, so every one of them sets IFS even where
+# today's items could not split under the default.
 #
 # That IFS assignment is spelled over two lines with the closing quote at column 0,
 # because POSIX sh has no $'\n' escape and the newline has to be typed inside the

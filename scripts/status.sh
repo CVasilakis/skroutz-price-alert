@@ -42,6 +42,9 @@ print_fixed_help() {
 # through the unfiltered run.
 print_help() {
     print_fixed_help
+    _ph_old_ifs="$IFS"
+    IFS='
+'
     for target in $KNOWN; do
         if stream_contains "$target" "$PLUGINS"; then
             display_name="$(plugin_display_name "$target")"
@@ -51,6 +54,7 @@ print_help() {
             printf '  --%-15s Show the orphaned %s units\n' "$target" "$target"
         fi
     done
+    IFS="$_ph_old_ifs"
     printf '\n'
 }
 

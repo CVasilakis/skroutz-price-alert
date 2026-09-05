@@ -61,10 +61,14 @@ print_help() {
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
     printf '%s\n' "  --debug           show underlying command output"
+    _ph_old_ifs="$IFS"
+    IFS='
+'
     for plugin in $(list_plugins 2>/dev/null || true); do
         display_name="$(plugin_display_name "$plugin")"
         printf '  --%-15s Install and enable only the %s scraper\n' "$plugin" "${display_name:-$plugin}"
     done
+    IFS="$_ph_old_ifs"
     printf '\n'
 }
 

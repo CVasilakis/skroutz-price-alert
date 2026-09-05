@@ -38,8 +38,16 @@ def _compile(definition=None, target="teststore"):
     return compile_plugin(definition or _plugin(), target=target, package=f"tests.plugins.{target}")
 
 
-@pytest.mark.parametrize("target", ["Bad", "1bad", "debug", "general", "migration", "reminder"])
+@pytest.mark.parametrize(
+    "target", ["Bad", "1bad", "bad target", "debug", "general", "migration", "reminder"]
+)
 def test_invalid_or_reserved_target_rejected(target):
+    """The shell layer's target streams rely on the whitespace case in particular.
+
+    scripts/lib/common.sh splits a stream on a lone newline, so a target name
+    holding a space would become two selectable targets there. This compiler is
+    the only gate in front of the catalog rows the shell reads.
+    """
     with pytest.raises(PluginValidationError):
         _compile(target=target)
 

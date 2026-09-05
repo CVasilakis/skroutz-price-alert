@@ -46,11 +46,15 @@ print_fixed_help() {
 
 print_help() {
     print_fixed_help
+    _ph_old_ifs="$IFS"
+    IFS='
+'
     for plugin in $PLUGINS; do
         display_name="$(plugin_display_name "$plugin")"
         printf '  --%-15s Run exclusively the %s scraper\n' \
             "$plugin" "${display_name:-$plugin}"
     done
+    IFS="$_ph_old_ifs"
     printf '\n'
 }
 

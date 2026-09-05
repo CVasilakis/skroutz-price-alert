@@ -23,11 +23,15 @@ print_help() {
     printf '%s\n' "  -h, --help        show this help message and exit"
     printf '%s\n' "  --debug           show underlying command output"
     if [ -n "$_ph_targets" ]; then
+        _ph_old_ifs="$IFS"
+        IFS='
+'
         for _ph_target in $_ph_targets; do
             _ph_display_name="$(plugin_display_name "$_ph_target")"
             printf '  --%-15s Install private dependencies for only the %s target\n' \
                 "$_ph_target" "${_ph_display_name:-$_ph_target}"
         done
+        IFS="$_ph_old_ifs"
     else
         printf '%s\n' "  --<target>        install private dependencies for only that target"
     fi
