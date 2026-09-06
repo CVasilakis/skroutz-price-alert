@@ -18,4 +18,13 @@ _case(
     world=WORLD_NO_VENV,
     tags=("error", "system"),
 )
+_case(
+    "debug_not_supported",
+    "ping.py owns its diagnostics, so the wrapper offers no shell-level --debug.",
+    "--debug",
+    tags=("error",),
+    # ping.sh does not own --debug; this transcript is an ordinary argument
+    # rejection, so it stays under the shell layout guard.
+    shell_debug=False,
+)
 _case("dispatch", "No flags dispatches directly to ping.py.")

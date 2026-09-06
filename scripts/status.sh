@@ -100,6 +100,15 @@ while [ "$#" -gt 0 ]; do
         --)
             runtime_argument_failure status "Invalid argument: $1."
             ;;
+        --quiet|--debug)
+            # Neither name can ever be a target -- both are reserved in
+            # SHELL_RESERVED_PLUGIN_NAMES -- and this wrapper deliberately has no
+            # shell-level debug mode, because status.py owns its TUI, runtime
+            # diagnostics, and logging. Claim them here so the rejection reads as
+            # "this command has no such option", the way ping.sh's does, instead
+            # of reaching runtime_target_flag and naming --debug an unknown scraper.
+            runtime_argument_failure status "Invalid argument: $1."
+            ;;
         --*)
             runtime_target_flag status "$1" "$KNOWN" "$CATALOG_AVAILABLE"
             ;;

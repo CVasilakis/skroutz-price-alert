@@ -1,0 +1,6 @@
+# border: red
+# exit: 1
+
+[+] Run arguments
+    [x] Invalid argument: --debug.
+    [!] Run ./scrooge-alert ping --help to view supported options.

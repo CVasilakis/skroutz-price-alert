@@ -65,6 +65,16 @@ _case(
 )
 
 _case(
+    "debug_not_supported",
+    "status.py owns its diagnostics, so the wrapper offers no shell-level --debug.",
+    "--debug",
+    tags=("error",),
+    # status.sh does not own --debug; this transcript is an ordinary argument
+    # rejection, so it stays under the shell layout guard.
+    shell_debug=False,
+)
+
+_case(
     "no_venv_dispatch",
     "A missing runtime environment produces the shared repair guidance.",
     world=WORLD_NO_VENV,

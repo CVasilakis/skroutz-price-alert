@@ -36,6 +36,9 @@ done
 
 require_runtime_python
 
+# ping takes no options at all, --debug included: ping.py owns its TUI, runtime
+# diagnostics, and logging, so this wrapper has no shell-level debug mode to offer
+# and no target flags to validate.
 if [ "$#" -gt 0 ]; then
     runtime_argument_failure ping "Invalid argument: $1."
 fi
