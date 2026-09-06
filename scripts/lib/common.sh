@@ -1,6 +1,31 @@
 #!/bin/sh
 # Shared POSIX-shell foundations. Callers define BASE_DIR before sourcing.
 
+# Pseudo-locals: POSIX sh has no "local", so every variable a function assigns is
+# a global that outlives the call. Each function therefore prefixes the ones it
+# owns with _<abbrev>_, normally the initials of its name -- _sc_ in
+# stream_contains, _vsu_ in validate_staged_units. The abbreviation is extended
+# wherever initials read badly or are already spoken for: restore_captured_states
+# uses _rcst_ and systemd_property uses _sdp_. It is a readable label chosen per
+# function, not a derivation, and nothing computes it.
+#
+# The invariant is that no two functions reachable in one process assign the same
+# variable NAME. A prefix is not owned. restart_timer_one and read_timer_oncalendar
+# are both _rto_ in systemd.sh and that is harmless, because _rto_timer, _rto_path,
+# and _rto_line remain three distinct names; files that never meet may reuse a name
+# outright, as _rf_detail does in migrate.sh and runtime.sh, which no entry point
+# sources together. Reading a caller's frame is the matching prohibition: a function
+# assigns every pseudo-local it reads, so no call depends on what its caller happens
+# to be holding.
+#
+# The sourced libraries are the strict half, since their functions run inside a
+# caller's namespace and cannot see what it holds; every function-local in
+# scripts/lib is prefixed. That is also what keeps bare names safe in an entry
+# point, which owns its whole process -- dev/check.sh, written before the library
+# split introduced this convention, still uses them throughout.
+#
+# tests/shell/test_pseudo_locals.py pins all three rules.
+
 # shellcheck disable=SC2034  # colors and paths are consumed by sourcing scripts
 if [ -z "${NO_COLOR:-}" ] && { [ -t 1 ] || [ -n "${CLICOLOR_FORCE:-}" ]; }; then
     RED='\033[0;31m'
