@@ -542,6 +542,13 @@ main() {
             "JSON migration recovery copies were retained at $MIGRATION_RECOVERY_PATH."
     fi
 
+    # Reuse main's own argv as the install.sh argument vector. Nothing is lost:
+    # update accepts only one --debug and one -h/--help, both fully consumed into
+    # scalars by the argument scan above, and this script never re-execs itself.
+    # Argv is the right carrier because these flags are handed to a command
+    # verbatim; see the target-stream contract in common.sh for why a stream is
+    # not. The loop cannot be lifted into a function to keep the clobber local,
+    # since it also reports per-target warnings in section order.
     set --
     IFS='
 '
@@ -554,6 +561,8 @@ main() {
         set -- "$@" "--$target"
     done
     IFS="$OLD_IFS"
+    # "$#" counts the target flags built directly above, not this script's
+    # arguments: zero means every installed target failed its migration.
     if [ "$#" -eq 0 ]; then
         INSTALL_STATUS=0
         task_status info "No migrated target can be reprovisioned."

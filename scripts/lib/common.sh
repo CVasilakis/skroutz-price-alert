@@ -547,6 +547,17 @@ require_valid_target() {
 # POSIX sh has no arrays. (runtime.sh answers the same problem with a numbered
 # positional queue instead, since it forwards argv rather than holding a set.)
 #
+# Argv itself is the third and last shape a list takes here. When a list exists
+# only to become some command's arguments, build it with "set --" and pass "$@":
+# a stream cannot carry arguments, because handing one over means re-splitting it
+# and reintroducing the globbing this contract exists to avoid, and the numbered
+# queue is the heavier answer for forwarding argv across a boundary that cannot
+# hold it. Build it inside a function wherever the surrounding code allows, so the
+# clobber stays local to that function's positional parameters -- migrate.sh's
+# run_migration_engine is the reference shape. A top-level "set --" is legitimate
+# too, but it overwrites the script's own arguments, so it belongs only where they
+# have already been consumed and a comment says so.
+#
 # The empty string is the empty set. Newline is an IFS whitespace character, so
 # blank lines collapse and an item can never be empty: that is why an accumulator
 # can start at '' and why stream_contains '' never matches. Membership compares

@@ -53,8 +53,20 @@ if [ "$HELP_REQUESTED" -eq 1 ]; then
     exit 0
 fi
 
+# Counted before the strip below, deliberately and unlike update.sh, which
+# removes --debug first so the flag alone still counts as no arguments. Here the
+# help text's rule is the stricter one -- any argument selects strict
+# non-interactive mode -- so "--debug" on its own is a scaffold invocation
+# missing its required options, and argparse rejects it rather than opening the
+# wizard. Moving this line below the loop would silently turn that into a guided
+# run.
 ORIGINAL_ARGUMENT_COUNT=$#
 
+# Rotate argv to drop --debug from what the scaffold receives: take $1, shift,
+# and append it back unless it is the flag, exactly $# times so each argument is
+# inspected once. The shell has no way to remove one element in place, and the
+# survivors have to stay argv because they are forwarded to the Python scaffold
+# verbatim; see the target-stream contract in common.sh for why not a stream.
 remaining=$#
 while [ "$remaining" -gt 0 ]; do
     argument=$1

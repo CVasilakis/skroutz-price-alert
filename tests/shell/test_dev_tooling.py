@@ -88,6 +88,24 @@ def test_plugin_create_interactive_output_is_owned_by_rich_panels():
     assert result.stdout.endswith("\n\n")
 
 
+def test_plugin_create_debug_alone_still_selects_strict_non_interactive_mode():
+    """--debug is an argument, so it opts out of the wizard like any other.
+
+    The wizard is reached only by a truly bare invocation. update.sh strips its
+    --debug before applying the same no-argument rule; this script deliberately
+    counts it first, and that ordering is what this pins.
+    """
+    env = os.environ.copy()
+    env["SCROOGE_PLUGIN_CREATE_PYTHON"] = sys.executable
+
+    result = _run("scripts/dev/plugin-create.sh", "--debug", env=env)
+
+    assert result.returncode != 0
+    assert "Scrooge-Alert Plugin Wizard" not in result.stdout
+    assert "non-interactive mode requires target" in result.stdout + result.stderr
+    assert_task_status(result.stdout, "x", "Target scaffold could not be created.")
+
+
 def _interactive_plugin_create_process(*, terminal_type: str = "xterm-256color"):
     master, slave = pty.openpty()
     original = termios.tcgetattr(slave)

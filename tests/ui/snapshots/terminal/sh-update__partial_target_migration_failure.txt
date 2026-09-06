@@ -1,0 +1,57 @@
+# border: red
+# exit: 15
+
+[+] Update checks
+    [v] The checkout and installed target selection are safe to update.
+
+[+] Source update
+    [i] Fetching origin/main...
+    [v] Fetched origin/main before stopping any target.
+    [v] Verified origin/main can safely fast-forward this checkout.
+
+[+] Target quiescence
+    [v] Captured the installed unit files and timer states.
+    [i] [alpha] Stopping and disabling its timer...
+    [v] [alpha] Safely stopped and disabled its timer.
+    [i] [beta] Stopping and disabling its timer...
+    [v] [beta] Safely stopped and disabled its timer.
+
+[+] Source advancement
+    [i] Advancing the checkout with a verified fast-forward...
+    [v] Fast-forwarded the project files to origin/main.
+
+[+] JSON migration
+    [i] Migrating managed JSON documents...
+    [x] [config/alpha.json] Migration failed: invalid legacy config
+    [!] [alpha] Leaving it disabled after its migration failure.
+
+[+] Installation checks
+    [v] The project venv path is safe.
+    [v] System Python 3.10 or newer is available.
+    [v] The existing Python environment uses a supported Python.
+    [v] Python venv support is available.
+    [v] Systemd user services are available.
+
+[+] Python environment
+    [i] Updating the existing Python environment.
+    [v] The Python environment is ready.
+    [i] Updating Python packaging tools...
+    [v] Packaging tools updated.
+    [i] Installing core dependencies...
+    [v] Updated core dependencies.
+    [i] Checking installed dependencies...
+    [v] Core dependencies are compatible.
+
+[+] Target provisioning
+    [i] Configuring selected target timers...
+    [v] Configured timers for the selected targets.
+
+[+] Timer activation
+    [i] Restoring eligible target timer states.
+    [i] [beta] Restoring its prior timer state...
+    [v] [beta] Restored its prior timer state.
+
+[!] Update result
+    [!] Update complete, but one or more targets retained their existing units because their
+        configuration is invalid.
+    [!] Fix each reported target configuration, then rerun ./scrooge-alert update.

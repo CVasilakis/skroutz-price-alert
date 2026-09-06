@@ -212,6 +212,32 @@ _case(
     tags=("error", "target_config", "system"),
 )
 _case(
+    "partial_target_migration_failure",
+    "A migration failure withholds only its own target from the installer handoff.",
+    # The failure is on the *first* installed target on purpose. Both halves of the
+    # loop that builds the installer's flags are then load-bearing: beta is still
+    # provisioned and reactivated after alpha is skipped, so the skip cannot be
+    # widened into an early exit, and the installer never names alpha, whose config
+    # is separately invalid and would therefore have been reported by name -- as
+    # beta is in partial_invalid_config -- had its flag been forwarded anyway.
+    world=ShellWorld(
+        plugins=("alpha", "beta"),
+        installed_timers=("alpha", "beta"),
+        installed_services=("alpha", "beta"),
+        enabled_timers=("alpha", "beta"),
+        active_timers=("alpha", "beta"),
+        config_files=("alpha.json", "beta.json", "general.json"),
+        schedule_errors={"alpha": "Remove unsupported keys from `config/alpha.json`."},
+        migration_report=(
+            "target_config\talpha\tfailed\tconfig/alpha.json\tinvalid legacy config",
+            "target_config\tbeta\tmigrated\tconfig/beta.json\tv1 to v2",
+            "scraper_state\tbeta\tcurrent\tstate/beta.json\t",
+        ),
+        migration_status=15,
+    ),
+    tags=("error", "target_config", "system"),
+)
+_case(
     "scraper_state_migration_failure",
     "A scraper-state migration failure isolates its target and reports storage failure.",
     world=replace(

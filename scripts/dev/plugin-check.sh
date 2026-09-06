@@ -204,6 +204,8 @@ else
     verification_status=$?
     verification_failure "$verification_status" "Type checking failed."
 fi
+# Argv holds the two Ruff invocations' shared path list; this script's own
+# arguments were consumed into scalars by the argument scan above.
 set -- "$BASE_DIR/src/core/scrapers/plugins/$target"
 if [ "$plugin_has_tests" -eq 1 ]; then
     set -- "$@" "$BASE_DIR/tests/plugins/$target"
