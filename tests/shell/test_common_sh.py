@@ -935,6 +935,20 @@ class TestKnownTargets(unittest.TestCase):
         result = run_sh("list_installed_targets", xdg_config_home=tmp)
         self.assertEqual(result.stdout.split(), ["timeronly", "serviceonly"])
 
+    def test_installed_units_are_empty_when_the_glob_matches_nothing(self):
+        """The unexpanded-pattern arm of path_entry_exists, on a fresh machine.
+
+        POSIX sh leaves an unmatched glob as its literal text, so discovery would
+        otherwise emit a target named after the pattern. Every lifecycle command
+        branches on this stream being empty rather than failing.
+        """
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "systemd" / "user").mkdir(parents=True)
+        result = run_sh("list_installed_units timer", xdg_config_home=tmp)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+
     def test_installed_target_union_includes_dangling_symlink(self):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
@@ -1002,14 +1016,16 @@ class TestCatalogDiagnose(unittest.TestCase):
         self.assertNotIn("Fix (or remove)", result.stderr)
 
 
-class TestListSupportedIntervals(unittest.TestCase):
+class TestSupportedIntervals(unittest.TestCase):
+    """schedule.sh renders this vocabulary in its help line; it has no snapshot."""
+
     def test_matches_the_settings_vocabulary(self):
         venv_python = REPO_ROOT / "venv" / "bin" / "python3"
         if not venv_python.exists():  # pragma: no cover - core-only checkout
             self.skipTest("project venv not available")
         from core.scrapers.framework.intervals import SUPPORTED_INTERVALS
 
-        result = run_sh("list_supported_intervals")
+        result = run_sh("catalog_cli intervals")
         self.assertEqual(result.stdout.strip(), ", ".join(SUPPORTED_INTERVALS))
 
 

@@ -21,7 +21,7 @@ print_help() {
     load_plugin_catalog || true
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_units timer 2>/dev/null || true)"
-    _ph_intervals="$(list_supported_intervals 2>/dev/null || true)"
+    _ph_intervals="$(catalog_cli intervals 2>/dev/null || true)"
     printf '\n'
     if [ "${SCROOGE_PUBLIC_COMMAND:-}" = schedule ]; then
         printf '%s\n' "Usage: ./scrooge-alert schedule [--help] [--debug] [--<target> ...]"

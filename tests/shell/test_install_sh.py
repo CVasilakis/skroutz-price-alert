@@ -249,3 +249,91 @@ def test_install_is_independent_of_the_working_directory():
         ]
     finally:
         _cleanup(checkout)
+
+
+def _run_in(checkout, world: ShellWorld, *args: str):
+    """install.sh against a checkout the caller has already tampered with."""
+    env = _fake_env(checkout, world)
+    env["NO_COLOR"] = "1"
+    return subprocess.run(
+        ["/bin/sh", str(checkout / "scripts/install.sh"), *args],
+        cwd=checkout,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+
+# Only files install.sh does not source itself: a missing lib/common.sh or
+# lib/systemd.sh fails at the `.` line above with the shell's own error, so those
+# entries in the required-file list are unreachable from here by construction.
+@pytest.mark.parametrize(
+    "required_file",
+    ("scrooge-alert", "requirements.txt", "scripts/run.sh", "scripts/lib/runtime.sh"),
+)
+@pytest.mark.parametrize("kind", ("missing", "symlink"))
+def test_unsafe_required_project_file_is_refused_before_any_provisioning(
+    required_file: str, kind: str
+):
+    """require_regular_owned_file's fail-closed arm, at install.sh's first use.
+
+    The symlink half is the one that fails open if the guard is weakened: the link
+    resolves, so every later read succeeds and the install provisions units from a
+    file the checkout does not own. Asserting the empty unit directory pins that
+    the refusal lands before provisioning rather than after it.
+    """
+    world = ShellWorld(config_files=("skroutz.json", "general.json"))
+    checkout = _build_sandbox(world)
+    try:
+        victim = checkout / required_file
+        victim.unlink()
+        if kind == "symlink":
+            outside = checkout / "outside-the-checkout"
+            outside.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            outside.chmod(0o755)
+            victim.symlink_to(outside)
+        result = _run_in(checkout, world)
+
+        assert result.returncode == 1
+        assert_task_status(
+            result.stdout,
+            "x",
+            f"Required project file '{required_file}' is missing or unsafe.",
+        )
+        assert list((checkout / "xdg/systemd/user").iterdir()) == []
+        if kind == "symlink":
+            assert victim.is_symlink()
+    finally:
+        _cleanup(checkout)
+
+
+@pytest.mark.parametrize("kind", ("missing", "symlink"))
+def test_unsafe_plugin_requirements_file_is_refused_for_the_named_target(kind: str):
+    """The same guard on the catalog-computed path, which names its target.
+
+    This one is per-selected-plugin rather than per-checkout, so the message
+    carries the target and the failure has to survive being reached from inside
+    the IFS-split loop over the requirements pairs.
+    """
+    world = ShellWorld(
+        config_files=("skroutz.json", "general.json"),
+        requirements={"skroutz": "/normalized/by/the-harness"},
+    )
+    checkout = _build_sandbox(world)
+    try:
+        victim = checkout / "src/core/scrapers/plugins/skroutz/requirements.txt"
+        victim.unlink()
+        if kind == "symlink":
+            outside = checkout / "outside-requirements.txt"
+            outside.write_text("requests\n", encoding="utf-8")
+            victim.symlink_to(outside)
+        result = _run_in(checkout, world)
+
+        assert result.returncode == 1
+        assert_task_status(
+            result.stdout, "x", "[skroutz] Its requirements file is missing or unsafe."
+        )
+        assert list((checkout / "xdg/systemd/user").iterdir()) == []
+    finally:
+        _cleanup(checkout)

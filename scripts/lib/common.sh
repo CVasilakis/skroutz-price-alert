@@ -555,10 +555,26 @@ run_captured() {
     return "$_rc_status"
 }
 
+# path_entry_exists <path>
+# True for anything occupying the path, a dangling symlink included: -e follows
+# the link, so a managed entry whose target is gone reads as absent without the
+# -L arm. Both callers need that arm - unit discovery must still see a broken
+# link, because teardown removes links without following them, and
+# restore_unit_snapshot must not read a failed rm as a clean removal. Neither arm
+# matches an unexpanded glob, which is also how list_installed_units yields
+# nothing rather than a literal pattern on a host with no managed units.
 path_entry_exists() {
     [ -e "$1" ] || [ -L "$1" ]
 }
 
+# require_regular_owned_file <path>
+# "owned" is the managed-path symlink policy's sense of the word - a regular file
+# the checkout itself provides - and not filesystem ownership: this deliberately
+# tests no uid, mode, or path prefix. The link arm is the whole point. A symlink
+# is refused rather than followed because the caller is about to act on the
+# file's contents, and following one would move that decision outside the
+# checkout. ./scrooge-alert repeats this test inline, plus -x, for the owner
+# script it is about to exec.
 require_regular_owned_file() {
     if [ -L "$1" ] || [ ! -f "$1" ]; then
         printf '%s\n' "Error: Required project file must be a regular file: $1" >&2
@@ -963,10 +979,6 @@ list_interval_status() {
 list_schedule_errors() {
     load_plugin_schedules || return 1
     plugin_schedules | awk -F '\t' '$3 == "error" { print $1 "\t" $4 }'
-}
-
-list_supported_intervals() {
-    catalog_cli intervals 2>/dev/null
 }
 
 catalog_diagnose() {
