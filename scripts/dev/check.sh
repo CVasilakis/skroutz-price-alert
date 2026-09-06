@@ -143,6 +143,13 @@ run_static() {
     fi
 }
 
+# The three helpers below are run_shell's steps, split out only because
+# run_action and run_with_progress take a command rather than a block. They
+# exchange values through run_shell's variables — shellcheck_binary, dash_binary,
+# and shell_paths — because run_action owns the command's streams: it discards
+# stdout normally and mirrors it to the terminal in debug mode, so a helper
+# cannot report a value by printing it. Read them as the body of run_shell.
+
 # Invoked through run_action.
 # shellcheck disable=SC2329
 resolve_shellcheck() {
@@ -158,15 +165,26 @@ resolve_shellcheck() {
 # Invoked through run_action.
 # shellcheck disable=SC2329
 enumerate_shell_paths() {
-    git ls-files --cached --others --exclude-standard -z > "$shell_paths"
+    # git ls-files lists only what is below the current directory and reports it
+    # relative to that directory, so the gate is anchored to PROJECT_ROOT like
+    # the static and test checks already are. Enumerating from wherever the
+    # caller happened to stand would silently narrow the file list rather than
+    # fail: from src/ it finds no shell file at all and still reports a pass.
+    # The cd is a subshell because run_action runs this in the caller's shell.
+    (cd "$PROJECT_ROOT" && git ls-files --cached --others --exclude-standard -z) \
+        > "$shell_paths"
 }
 
 # Invoked through run_action.
 # shellcheck disable=SC2329
 validate_shell_paths() {
+    # The enumerated paths are relative to PROJECT_ROOT, so resolve them there.
+    # Keeping them relative rather than absolute preserves the paths ShellCheck
+    # prints and the ones the debug dump above lists. The cd is a subshell
+    # because run_action runs this in the caller's shell.
     # The child sh, not this parent script, must expand positional values.
     # shellcheck disable=SC2016
-    xargs -0 -n 1 sh -c '
+    (cd "$PROJECT_ROOT" && xargs -0 -n 1 sh -c '
             set -eu
             shellcheck_command="$1"
             dash_command="$2"
@@ -185,7 +203,7 @@ validate_shell_paths() {
             "$shellcheck_command" -x "$path"
             sh -n "$path"
             [ -z "$dash_command" ] || "$dash_command" -n "$path"
-        ' sh "$shellcheck_binary" "$dash_binary" < "$shell_paths"
+        ' sh "$shellcheck_binary" "$dash_binary") < "$shell_paths"
 }
 
 run_shell() {
@@ -199,7 +217,7 @@ run_shell() {
     if [ -n "${CI:-}" ] && [ -z "$dash_binary" ]; then
         check_failure 127 "dash is required for shell syntax checks in CI."
     fi
-    if ! run_captured git rev-parse --is-inside-work-tree; then
+    if ! run_captured git -C "$PROJECT_ROOT" rev-parse --is-inside-work-tree; then
         check_failure 1 "Shell checks require a Git worktree."
     fi
     if [ "$CAPTURED_COMMAND_OUTPUT" != "true" ]; then
@@ -235,6 +253,11 @@ run_shell() {
     trap - 0 HUP INT TERM
 }
 
+# Not a selectable mode, and deliberately without require_check_python. The three
+# modes above exist because CI selects them as separate jobs; there is no
+# dependency job, since each CI job runs its own pip check against the
+# environment it just built. This step is therefore local-gate only, reachable
+# only from full, where run_static has already validated CHECK_PYTHON.
 run_dependencies() {
     section_heading success "Dependencies"
     if run_with_progress "Checking installed dependencies..." \

@@ -1097,6 +1097,34 @@ def test_check_shell_gate_leaves_no_temporary_files_behind(tmp_path):
     assert list(scratch.glob("scrooge-shell-*")) == []
 
 
+def test_check_shell_gate_is_anchored_to_the_repository_root(tmp_path):
+    # git ls-files lists only what is below the current directory, so a gate
+    # enumerating from the caller's directory narrows itself silently instead of
+    # failing: invoked from a subdirectory it used to check nothing above it and
+    # still report a pass. The failing script sits at the repository root, above
+    # the directory the gate is invoked from.
+    shellcheck = tmp_path / "shellcheck"
+    shellcheck.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    shellcheck.chmod(0o755)
+    project = _shell_gate_project(
+        tmp_path, "a_bad.sh", "#!/bin/sh\nif [ 1 = 1 ]; then\n  echo hi\n"
+    )
+
+    env = os.environ.copy()
+    env["SCROOGE_SHELLCHECK"] = str(shellcheck)
+    env["SCROOGE_CHECK_PYTHON"] = sys.executable
+    result = subprocess.run(
+        ["sh", str(project / "scripts" / "dev" / "check.sh"), "shell"],
+        cwd=project / "scripts" / "dev",
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert_task_status(result.stdout, "x", "ShellCheck or POSIX syntax checks failed.")
+
+
 def test_dev_setup_contains_no_service_or_user_data_operations():
     contents = (ROOT / "scripts/dev/setup.sh").read_text(encoding="utf-8")
     assert "systemctl" not in contents

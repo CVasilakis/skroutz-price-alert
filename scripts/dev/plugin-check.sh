@@ -3,6 +3,7 @@ set -eu
 
 PROJECT_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
 BASE_DIR="$PROJECT_ROOT"
+# shellcheck source=scripts/lib/common.sh
 . "$PROJECT_ROOT/scripts/lib/common.sh"
 # shellcheck source=scripts/lib/preflight.sh
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
@@ -140,6 +141,7 @@ plugin_check_venv_parent="$(dirname -- "$plugin_check_venv_dir")"
 
 if run_with_progress "[$target] Checking the source and dependency contract..." \
     run_source_contract_check; then
+    contract_report="$CAPTURED_COMMAND_OUTPUT"
     task_status success "[$target] Source and dependency contract passed."
 else
     verification_status=$?
@@ -153,7 +155,7 @@ tab="$(printf '\t')"
 old_ifs="$IFS"
 IFS='
 '
-for report_row in $CAPTURED_COMMAND_OUTPUT; do
+for report_row in $contract_report; do
     report_kind="${report_row%%"$tab"*}"
     report_value="${report_row#*"$tab"}"
     case "$report_kind" in

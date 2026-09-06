@@ -438,6 +438,38 @@ class TestProgressExecution(unittest.TestCase):
         self.assertEqual(result.stdout, "    [v] Probe passed.\n")
         self.assertEqual(list(temp_dir.iterdir()), [])
 
+    def test_capable_path_still_runs_the_command_in_the_caller_shell(self):
+        # The two fallback paths already pin this; the capable path is the one
+        # that forks a presenter, so it is where a subshell would be introduced.
+        # check.sh, plugin-check.sh, plugin-create.sh, and update.sh all layer
+        # run_captured under run_with_progress and then read
+        # CAPTURED_COMMAND_OUTPUT, which only reaches them because the command
+        # runs in their own shell.
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
+        result = run_sh(
+            "_progress_capabilities() {\n"
+            "  PROGRESS_CURSOR_UP='<UP>'\n"
+            "  PROGRESS_CARRIAGE_RETURN='<CR>'\n"
+            "  PROGRESS_ERASE_LINE='<EL>'\n"
+            "  PROGRESS_COLUMNS=100\n"
+            "  return 0\n"
+            "}\n"
+            "progress_delay() { while :; do :; done; }\n"
+            "probe() { printf '%s\\n' captured-line; return 23; }\n"
+            "PROBE_SIDE_EFFECT=missing\n"
+            'if run_with_progress "Running probe..." run_captured probe; then\n'
+            "  status=0\n"
+            "else\n"
+            "  status=$?\n"
+            "fi\n"
+            'printf "captured=%s status=%s\\n" "$CAPTURED_COMMAND_OUTPUT" "$status"',
+            extra_env={"TMPDIR": str(temp_dir)},
+        )
+        self.assertEqual(result.stdout, "captured=captured-line status=23\n")
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(list(temp_dir.iterdir()), [])
+
     def test_capable_slow_command_replaces_exactly_one_progress_line(self):
         temp_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
