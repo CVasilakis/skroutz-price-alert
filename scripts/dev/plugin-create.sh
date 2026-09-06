@@ -9,15 +9,18 @@ BASE_DIR="$PROJECT_ROOT"
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
 
 print_help() {
-    printf '\n%s\n' \
+    printf '\n'
+    printf '%s\n' \
         "Usage: ./scripts/dev/plugin-create.sh"
     printf '%s\n' \
         "       ./scripts/dev/plugin-create.sh [-h] [--debug] <target> --display-name <name>"
     printf '%s\n' "       --domain <domain> [--domain <domain> ...] --url-prefix <prefix>"
     printf '%s\n' "       --result-type <price|listing> --default-interval <interval>"
-    printf '%s\n\n' "       --transport <http|bare> <--with-tests|--without-tests> [options]"
+    printf '%s\n' "       --transport <http|bare> <--with-tests|--without-tests> [options]"
+    printf '\n'
     printf '%s\n' "With no arguments, launch the guided Rich wizard. Any argument selects"
-    printf '%s\n\n' "strict non-interactive mode; all required choices must then be supplied."
+    printf '%s\n' "strict non-interactive mode; all required choices must then be supplied."
+    printf '\n'
     printf '%s\n' "Required arguments:"
     printf '%s\n' "  <target>                  non-reserved snake_case target name"
     printf '%s\n' "  --display-name <name>     user-facing store name"
@@ -26,7 +29,8 @@ print_help() {
     printf '%s\n' "  --result-type <type>      price or listing result scaffold"
     printf '%s\n' "  --default-interval <time> canonical framework execution interval"
     printf '%s\n' "  --transport <type>        shared http transport or bare client"
-    printf '%s\n\n' "  --with-tests/--without-tests  explicitly choose example tests"
+    printf '%s\n' "  --with-tests/--without-tests  explicitly choose example tests"
+    printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  --required-item-field KEY TYPE EXAMPLE_JSON"
     printf '%s\n' "  --optional-item-field KEY TYPE DEFAULT_JSON EXAMPLE_JSON"
@@ -38,8 +42,9 @@ print_help() {
     printf '%s\n' "                              nonnegative-number, boolean, text-list"
     printf '%s\n' "  -h, --help                show this help message and exit"
     printf '%s\n' "  --debug                   show underlying command output"
-    printf '%s\n\n' \
+    printf '%s\n' \
         "Example field: --optional-item-field title_terms text-list '[]' '[\"Pixel\"]'"
+    printf '\n'
 }
 
 HELP_REQUESTED=0

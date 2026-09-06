@@ -17,22 +17,26 @@
 
 set -eu
 
-SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
-BASE_DIR="$(dirname -- "$(dirname -- "$SCRIPT_DIR")")"
+PROJECT_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+BASE_DIR="$PROJECT_ROOT"
 
 # shellcheck source=scripts/lib/common.sh
-. "$BASE_DIR/scripts/lib/common.sh"
+. "$PROJECT_ROOT/scripts/lib/common.sh"
 # shellcheck source=scripts/lib/preflight.sh
-. "$BASE_DIR/scripts/lib/preflight.sh"
+. "$PROJECT_ROOT/scripts/lib/preflight.sh"
 
 print_help() {
-    printf '\n%s\n\n' "Usage: migrate.sh [-h] [--check] [--debug]"
+    printf '\n'
+    printf '%s\n' "Usage: migrate.sh [-h] [--check] [--debug]"
+    printf '\n'
     printf '%s\n' "Validate and migrate every known Scrooge Alert JSON document."
-    printf '%s\n\n' "With no flag, migrate outdated managed JSON documents in place."
+    printf '%s\n' "With no flag, migrate outdated managed JSON documents in place."
+    printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
     printf '%s\n' "  --check           Validate and report without modifying JSON files"
-    printf '%s\n\n' "  --debug           show underlying command output"
+    printf '%s\n' "  --debug           show underlying command output"
+    printf '\n'
 }
 
 HELP_REQUESTED=0

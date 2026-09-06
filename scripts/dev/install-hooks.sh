@@ -7,11 +7,15 @@ BASE_DIR="$PROJECT_ROOT"
 . "$PROJECT_ROOT/scripts/lib/common.sh"
 
 print_help() {
-    printf '\n%s\n\n' "Usage: ./scripts/dev/install-hooks.sh [-h] [--debug]"
-    printf '%s\n\n' "Enable the versioned pre-push checks for this Git worktree."
+    printf '\n'
+    printf '%s\n' "Usage: ./scripts/dev/install-hooks.sh [-h] [--debug]"
+    printf '\n'
+    printf '%s\n' "Enable the versioned pre-push checks for this Git worktree."
+    printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n\n' "  --debug           show underlying command output"
+    printf '%s\n' "  --debug           show underlying command output"
+    printf '\n'
 }
 
 HELP_REQUESTED=0

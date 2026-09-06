@@ -20,15 +20,17 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_units service 2>/dev/null || true)"
     _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
+    printf '\n'
     if [ "${SCROOGE_PUBLIC_COMMAND:-}" = stop ]; then
-        printf '\n%s\n\n' "Usage: ./scrooge-alert stop [--help] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: ./scrooge-alert stop [--help] [--debug] [--<target> ...]"
     else
-        printf '\n%s\n\n' "Usage: stop.sh [-h] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: stop.sh [-h] [--debug] [--<target> ...]"
     fi
-    printf '%s\n\n' "Stop currently running installed scraper services."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n' "  --debug           show underlying command output"
+    printf '\n'
+    printf '%s\n' "Stop currently running installed scraper services."
+    printf '\n'
+    help_options_block stop
+    help_debug_flag stop
     _ph_old_ifs="$IFS"
     IFS='
 '

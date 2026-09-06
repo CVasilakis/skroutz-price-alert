@@ -5,5 +5,5 @@ Usage: ping.sh [-h]
 
 Send a test notification through configured endpoints.
 
-Options:
+Optional arguments:
   -h, --help        show this help message and exit

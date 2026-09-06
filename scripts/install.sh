@@ -14,10 +14,6 @@
 
 set -eu
 
-# ==============================================================================
-# GLOBAL VARIABLES
-# ==============================================================================
-
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
 BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 
@@ -42,10 +38,6 @@ INSTALL_OUTPUT_STARTED=0
 INSTALL_SECTION_STARTED=0
 IS_UPDATE=0
 
-# ==============================================================================
-# HELPER FUNCTIONS
-# ==============================================================================
-
 # Note for developers/agents: In user-facing text, a "plugin" is referred to as a "target".
 print_help() {
     load_plugin_catalog || true
@@ -62,9 +54,8 @@ print_help() {
     printf '%s\n' "run this command as many times as you like - run it again in the future"
     printf '%s\n' "to install additional scrapers."
     printf '\n'
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n' "  --debug           show underlying command output"
+    help_options_block install
+    help_debug_flag install
     _ph_old_ifs="$IFS"
     IFS='
 '
@@ -286,10 +277,6 @@ if ! run_action require_systemctl; then
 fi
 task_status success "Systemd user services are available."
 
-# ------------------------------------------------------------------------------
-# PYTHON VIRTUAL ENVIRONMENT SETUP
-# ------------------------------------------------------------------------------
-
 # Initialize or update python virtual environment
 VENV_NEWLY_CREATED=false
 install_section "Python environment"
@@ -356,9 +343,6 @@ if [ "$FINAL_PLUGINS" != "$ALL_PLUGINS" ]; then
         "Retry $(command_text './scrooge-alert install') after the source tree is stable."
 fi
 
-# ------------------------------------------------------------------------------
-# PER-PLUGIN DEPENDENCIES
-# ------------------------------------------------------------------------------
 # The root requirements.txt installed above carries only the core framework. Each
 # plugin may ship its own requirements.txt (next to its plugin.py) listing the
 # transport/parsing libraries only it needs (e.g. tls-client, selenium). Only the
@@ -414,10 +398,6 @@ if [ "$HAS_PLUGIN_REQS" -eq 1 ]; then
 else
     task_status success "Core dependencies are compatible."
 fi
-
-# ------------------------------------------------------------------------------
-# SYSTEMD SETUP
-# ------------------------------------------------------------------------------
 
 install_section "Target provisioning"
 
@@ -562,9 +542,6 @@ if command -v loginctl >/dev/null 2>&1; then
     fi
 fi
 
-# ------------------------------------------------------------------------------
-# LAST CHECKS
-# ------------------------------------------------------------------------------
 # Report any plugin whose products config file is still missing (non-fatal), and
 # whether the shared general configuration is missing.
 

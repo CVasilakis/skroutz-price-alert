@@ -9,18 +9,23 @@ BASE_DIR="$PROJECT_ROOT"
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
 
 print_help() {
-    printf '\n%s\n\n' \
+    printf '\n'
+    printf '%s\n' \
         "Usage: ./scripts/dev/check.sh [-h] [--debug] [full|static|shell|tests]"
+    printf '\n'
     printf '%s\n' "Run the project's non-mutating local/CI acceptance checks."
-    printf '%s\n\n' "With no check mode, run the complete local pre-push gate."
+    printf '%s\n' "With no check mode, run the complete local pre-push gate."
+    printf '\n'
     printf '%s\n' "Check modes:"
     printf '%s\n' "  full              run the complete local pre-push gate"
     printf '%s\n' "  static            run Ruff and basedpyright"
     printf '%s\n' "  shell             run ShellCheck and POSIX shell syntax checks"
-    printf '%s\n\n' "  tests             run the full pytest suite"
+    printf '%s\n' "  tests             run the full pytest suite"
+    printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n\n' "  --debug           show underlying command output"
+    printf '%s\n' "  --debug           show underlying command output"
+    printf '\n'
 }
 
 HELP_REQUESTED=0

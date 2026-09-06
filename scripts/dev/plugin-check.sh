@@ -9,14 +9,19 @@ BASE_DIR="$PROJECT_ROOT"
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
 
 print_help() {
-    printf '\n%s\n\n' "Usage: ./scripts/dev/plugin-check.sh [-h] [--debug] --<target>"
+    printf '\n'
+    printf '%s\n' "Usage: ./scripts/dev/plugin-check.sh [-h] [--debug] --<target>"
+    printf '\n'
     printf '%s\n' "Verify one target against its source, optional tests, and private dependencies."
-    printf '%s\n\n' "Missing tests produce a warning; existing test failures still block."
+    printf '%s\n' "Missing tests produce a warning; existing test failures still block."
+    printf '\n'
     printf '%s\n' "Required arguments:"
-    printf '%s\n\n' "  --<target>        target to verify (for example, --skroutz)"
+    printf '%s\n' "  --<target>        target to verify (for example, --skroutz)"
+    printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n\n' "  --debug           show underlying command output"
+    printf '%s\n' "  --debug           show underlying command output"
+    printf '\n'
 }
 
 HELP_REQUESTED=0

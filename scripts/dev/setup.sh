@@ -20,9 +20,12 @@ SETUP_SECTION_STARTED=0
 print_help() {
     load_plugin_catalog || true
     _ph_targets="$(list_plugins 2>/dev/null || true)"
-    printf '\n%s\n\n' "Usage: ./scripts/dev/setup.sh [-h] [--debug] [--<target>]"
+    printf '\n'
+    printf '%s\n' "Usage: ./scripts/dev/setup.sh [-h] [--debug] [--<target>]"
+    printf '\n'
     printf '%s\n' "Create or update the development venv without systemd or user-data"
-    printf '%s\n\n' "changes. With no target, install every target's private dependencies."
+    printf '%s\n' "changes. With no target, install every target's private dependencies."
+    printf '\n'
     printf '%s\n' "Optional arguments:"
     printf '%s\n' "  -h, --help        show this help message and exit"
     printf '%s\n' "  --debug           show underlying command output"

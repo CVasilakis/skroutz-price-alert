@@ -19,16 +19,18 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_targets 2>/dev/null || true)"
     _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
+    printf '\n'
     if [ "${SCROOGE_PUBLIC_COMMAND:-}" = uninstall ]; then
-        printf '\n%s\n\n' "Usage: ./scrooge-alert uninstall [--help] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: ./scrooge-alert uninstall [--help] [--debug] [--<target> ...]"
     else
-        printf '\n%s\n\n' "Usage: uninstall.sh [-h] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: uninstall.sh [-h] [--debug] [--<target> ...]"
     fi
+    printf '\n'
     printf '%s\n' "With no target, remove all installed units and the project venv."
-    printf '%s\n\n' "With target flags, remove only those targets' unit entries."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n' "  --debug           show underlying command output"
+    printf '%s\n' "With target flags, remove only those targets' unit entries."
+    printf '\n'
+    help_options_block uninstall
+    help_debug_flag uninstall
     _ph_old_ifs="$IFS"
     IFS='
 '

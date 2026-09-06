@@ -46,9 +46,8 @@ main() {
         printf '%s\n' "Safely update Scrooge Alert from origin/main and transactionally"
         printf '%s\n' "reprovision exactly the scraper targets that are already installed."
         printf '\n'
-        printf '%s\n' "Optional arguments:"
-        printf '%s\n' "  -h, --help        show this help message and exit"
-        printf '%s\n' "  --debug           show underlying command output"
+        help_options_block update
+        help_debug_flag update
         printf '\n'
     }
 

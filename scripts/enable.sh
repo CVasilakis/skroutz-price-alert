@@ -21,16 +21,18 @@ print_help() {
     load_plugin_catalog || true
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_units timer 2>/dev/null || true)"
+    printf '\n'
     if [ "${SCROOGE_PUBLIC_COMMAND:-}" = enable ]; then
-        printf '\n%s\n\n' "Usage: ./scrooge-alert enable [--help] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: ./scrooge-alert enable [--help] [--debug] [--<target> ...]"
     else
-        printf '\n%s\n\n' "Usage: enable.sh [-h] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: enable.sh [-h] [--debug] [--<target> ...]"
     fi
+    printf '\n'
     printf '%s\n' "Enable and start installed, registered scraper timers."
-    printf '%s\n\n' "With no target flag, every eligible installed timer is enabled."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n' "  --debug           show underlying command output"
+    printf '%s\n' "With no target flag, every eligible installed timer is enabled."
+    printf '\n'
+    help_options_block enable
+    help_debug_flag enable
     _ph_old_ifs="$IFS"
     IFS='
 '

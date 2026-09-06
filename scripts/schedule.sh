@@ -22,18 +22,20 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_units timer 2>/dev/null || true)"
     _ph_intervals="$(list_supported_intervals 2>/dev/null || true)"
+    printf '\n'
     if [ "${SCROOGE_PUBLIC_COMMAND:-}" = schedule ]; then
-        printf '\n%s\n\n' "Usage: ./scrooge-alert schedule [--help] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: ./scrooge-alert schedule [--help] [--debug] [--<target> ...]"
     else
-        printf '\n%s\n\n' "Usage: schedule.sh [-h] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: schedule.sh [-h] [--debug] [--<target> ...]"
     fi
+    printf '\n'
     printf '%s\n' "Apply configured execution intervals to installed target timers."
     printf '%s\n' "Only registered targets are eligible; orphaned timers are skipped."
-    printf '%s\n\n' \
+    printf '%s\n' \
         "Supported intervals: ${_ph_intervals:-unavailable (run ./scrooge-alert install first)}"
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n' "  --debug           show underlying command output"
+    printf '\n'
+    help_options_block schedule
+    help_debug_flag schedule
     _ph_old_ifs="$IFS"
     IFS='
 '

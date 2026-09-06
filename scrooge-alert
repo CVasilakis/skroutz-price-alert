@@ -28,7 +28,8 @@ command_text() {
 print_help() {
     printf '\n'
     printf '%s\n' "Usage: ./scrooge-alert <command> [options]"
-    printf '\n%s\n' "Commands:"
+    printf '\n'
+    printf '%s\n' "Commands:"
     printf '  %-13s%s\n' \
         run "Check prices for tracked items" \
         ping "Send a test notification" \
@@ -40,7 +41,8 @@ print_help() {
         schedule "Apply configured target schedules" \
         update "Update this checkout" \
         uninstall "Remove installed targets or this installation"
-    printf '\n%s\n' "Options:"
+    printf '\n'
+    printf '%s\n' "Options:"
     printf '%s\n' \
         "  -h, --help   Show this help message and exit" \
         "  --version    Show the installed release version and exit"

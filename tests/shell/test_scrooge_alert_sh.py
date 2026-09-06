@@ -422,3 +422,84 @@ def test_public_commands_reach_real_owners(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert expected in result.stdout
+
+
+_DISPATCHER_COMMANDS = (
+    "run",
+    "ping",
+    "status",
+    "install",
+    "enable",
+    "disable",
+    "stop",
+    "schedule",
+    "update",
+    "uninstall",
+)
+
+# run is the one command whose --debug is not "show the underlying command
+# output" but a choice of frontend, so it words that row itself. The dialect
+# rule still governs its options heading and --help row.
+_SHARED_DEBUG_COMMANDS = tuple(c for c in _DISPATCHER_COMMANDS if c != "run")
+
+
+@pytest.mark.parametrize("command", _DISPATCHER_COMMANDS)
+def test_public_help_uses_the_dispatcher_dialect(command: str):
+    """Every command reached through ./scrooge-alert documents itself the same way.
+
+    The public dialect is "Options:" with the long flag alone, matching the usage
+    line's [--help] and the dispatcher's own help. The argparse dialect belongs to
+    direct invocation of the owner script. Seven commands used to switch only their
+    usage line and then print the argparse block here, so a public user was told to
+    pass "-h" by a screen whose usage line offered only "--help". Nothing covered
+    this: every sh-*__help snapshot invokes an owner script directly, so all ten
+    public help screens were unasserted.
+    """
+    world = ShellWorld(plugins=("skroutz", "insomnia"))
+    checkout = _build_sandbox(world)
+    try:
+        result = _run(checkout, world, command, "--help")
+    finally:
+        _cleanup(checkout)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"Usage: ./scrooge-alert {command} [--help]" in result.stdout
+    assert "Options:" in result.stdout
+    assert "  --help            Show this help message and exit" in result.stdout
+    assert "Optional arguments:" not in result.stdout
+    assert "-h, --help" not in result.stdout
+    if command in _SHARED_DEBUG_COMMANDS and "[--debug]" in result.stdout:
+        assert "  --debug           Show underlying command output" in result.stdout
+
+
+@pytest.mark.parametrize("command", _DISPATCHER_COMMANDS)
+def test_direct_help_uses_the_argparse_dialect(command: str):
+    """Invoking the owner script itself keeps argparse's wording.
+
+    This is the other half of the rule: the direct usage line reads [-h], so the
+    block below it advertises "-h, --help". Both spellings are accepted in either
+    dialect; only what each screen advertises differs.
+    """
+    script = "scripts/dev/migrate.sh" if command == "migrate" else f"scripts/{command}.sh"
+    world = ShellWorld(plugins=("skroutz", "insomnia"))
+    checkout = _build_sandbox(world)
+    try:
+        env = _fake_env(checkout, world)
+        env["NO_COLOR"] = "1"
+        result = subprocess.run(
+            ["/bin/sh", str(checkout / script), "--help"],
+            cwd=checkout,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+    finally:
+        _cleanup(checkout)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Optional arguments:" in result.stdout
+    assert "  -h, --help        show this help message and exit" in result.stdout
+    assert "Options:" not in result.stdout
+    if command in _SHARED_DEBUG_COMMANDS and "[--debug]" in result.stdout:
+        assert "  --debug           show underlying command output" in result.stdout

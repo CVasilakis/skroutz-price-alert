@@ -21,16 +21,18 @@ print_help() {
     _ph_registered="$(list_plugins 2>/dev/null || true)"
     _ph_installed="$(list_installed_targets 2>/dev/null || true)"
     _ph_known="$(stream_union "$_ph_registered" "$_ph_installed")"
+    printf '\n'
     if [ "${SCROOGE_PUBLIC_COMMAND:-}" = disable ]; then
-        printf '\n%s\n\n' "Usage: ./scrooge-alert disable [--help] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: ./scrooge-alert disable [--help] [--debug] [--<target> ...]"
     else
-        printf '\n%s\n\n' "Usage: disable.sh [-h] [--debug] [--<target> ...]"
+        printf '%s\n' "Usage: disable.sh [-h] [--debug] [--<target> ...]"
     fi
+    printf '\n'
     printf '%s\n' "Stop and disable installed scraper timer/service pairs."
-    printf '%s\n\n' "Orphaned and partial unit pairs remain selectable for teardown."
-    printf '%s\n' "Optional arguments:"
-    printf '%s\n' "  -h, --help        show this help message and exit"
-    printf '%s\n' "  --debug           show underlying command output"
+    printf '%s\n' "Orphaned and partial unit pairs remain selectable for teardown."
+    printf '\n'
+    help_options_block disable
+    help_debug_flag disable
     _ph_old_ifs="$IFS"
     IFS='
 '

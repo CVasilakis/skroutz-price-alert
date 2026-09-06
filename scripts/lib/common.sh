@@ -99,6 +99,46 @@ command_text() {
     printf '%b' "$NC"
 }
 
+# help_options_block <command> [--debug]
+# help_debug_flag <command>
+#
+# The two help dialects, in one place. A command reached through the dispatcher
+# is documented in the dispatcher's own wording -- "Options:", the long flag
+# alone, sentence-case descriptions -- because ./scrooge-alert is the interface
+# the user typed. Running the owner script directly gets argparse's wording
+# instead, matching the Python entry points a contributor invokes beside it.
+#
+# "-h" is accepted in both, and advertised only in the direct dialect, so that
+# each block agrees with the usage line above it: the public usage line reads
+# [--help] and the direct one reads [-h].
+#
+# Centralized because this is one rule about one CLI, and spelling it out per
+# script is exactly how it drifted: seven commands used to switch only their
+# usage line and then print the argparse block to public users, contradicting
+# that line. run.sh and status.sh keep their own blocks, since their two
+# dialects differ in prose as well as in wording.
+_help_is_public() {
+    [ "${SCROOGE_PUBLIC_COMMAND:-}" = "$1" ]
+}
+
+help_options_block() {
+    if _help_is_public "$1"; then
+        printf '%s\n' "Options:"
+        printf '%s\n' "  --help            Show this help message and exit"
+    else
+        printf '%s\n' "Optional arguments:"
+        printf '%s\n' "  -h, --help        show this help message and exit"
+    fi
+}
+
+help_debug_flag() {
+    if _help_is_public "$1"; then
+        printf '%s\n' "  --debug           Show underlying command output"
+    else
+        printf '%s\n' "  --debug           show underlying command output"
+    fi
+}
+
 # Deliberately isolated so shell tests can synchronize the delayed presentation
 # without depending on wall-clock timing.
 progress_delay() {
