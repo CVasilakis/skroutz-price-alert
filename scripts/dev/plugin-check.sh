@@ -97,11 +97,21 @@ verification_failure() {
     finish_verification "$_vf_status"
 }
 
+# cd for the same sys.path reason documented at catalog_cli in lib/common.sh.
+# Invoked indirectly through run_captured.
+# shellcheck disable=SC2329
+source_contract_check() {
+    (
+        CDPATH='' cd -- "$BASE_DIR" || exit 1
+        PYTHONPATH="$BASE_DIR/src" \
+            exec "$plugin_check_python" -m core.scrapers.tooling.cli plugin-check "$target"
+    )
+}
+
 # Invoked indirectly through run_with_progress.
 # shellcheck disable=SC2329
 run_source_contract_check() {
-    run_captured env PYTHONPATH="$BASE_DIR/src" "$plugin_check_python" \
-        -m core.scrapers.tooling.cli plugin-check "$target"
+    run_captured source_contract_check
 }
 
 begin_operational_output

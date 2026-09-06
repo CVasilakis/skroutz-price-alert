@@ -65,7 +65,11 @@ fail_usage() {
 show_version() {
     _sv_version=''
     if [ ! -L "$BASE_DIR/venv" ] && [ -x "$BASE_DIR/venv/bin/python3" ]; then
+        # The cd is load-bearing for the same sys.path reason documented at
+        # catalog_cli in scripts/lib/common.sh: without it a working directory
+        # holding its own "core" package turns a known version into "unknown".
         _sv_version="$(
+            CDPATH='' cd -- "$BASE_DIR" || exit 0
             PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" \
                 -m core.tooling.version_cli 2>/dev/null || true
         )"

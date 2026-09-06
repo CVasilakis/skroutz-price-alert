@@ -214,3 +214,38 @@ def test_install_prints_configuration_commands_without_creating_files():
         assert not (checkout / "config").exists()
     finally:
         _cleanup(checkout)
+
+
+def test_install_is_independent_of_the_working_directory():
+    """Every project path install.sh reads or creates must be absolute.
+
+    A relative "venv" would make an install launched from a subdirectory create
+    the environment in the caller's directory and then fail to find
+    requirements.txt, and it would spell the venv differently from
+    reject_project_venv_symlink's "$BASE_DIR/venv" guard. The dispatcher does
+    not normalize the working directory, so nothing else pins this.
+    """
+    world = ShellWorld(config_files=("skroutz.json", "general.json"))
+    checkout = _build_sandbox(world)
+    try:
+        caller_dir = checkout / "config"
+        env = _fake_env(checkout, world)
+        env["NO_COLOR"] = "1"
+        result = subprocess.run(
+            ["/bin/sh", str(checkout / "scripts/install.sh")],
+            cwd=caller_dir,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert_task_status(result.stdout, "v", "Installation complete.")
+        assert not (caller_dir / "venv").exists()
+        assert sorted(p.name for p in caller_dir.iterdir()) == [
+            "general.json",
+            "skroutz.json",
+        ]
+    finally:
+        _cleanup(checkout)

@@ -21,7 +21,6 @@ set -eu
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
 BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 
-# Shared helpers (colors, plugin enumeration, systemd helpers)
 # shellcheck source=scripts/lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=scripts/lib/preflight.sh
@@ -31,9 +30,14 @@ BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
 # shellcheck source=scripts/lib/provisioning.sh
 . "$SCRIPT_DIR/lib/provisioning.sh"
 
-# Environment and File Configurations
-VENV_DIR="venv"
-REQUIREMENTS_FILE="requirements.txt"
+# Every project path this script reads or creates is absolute, so the command
+# behaves identically from any working directory. Do not reintroduce a cd here:
+# a relative "venv" would make an install run from a subdirectory create the
+# environment in the caller's directory, and it would spell the same path
+# differently from reject_project_venv_symlink's "$BASE_DIR/venv" guard.
+VENV_DIR="$BASE_DIR/venv"
+REQUIREMENTS_FILE="$BASE_DIR/requirements.txt"
+CONFIG_DIR="$BASE_DIR/config"
 INSTALL_OUTPUT_STARTED=0
 INSTALL_SECTION_STARTED=0
 IS_UPDATE=0
@@ -130,7 +134,6 @@ pip_install() {
     fi
 }
 
-cd "$BASE_DIR"
 CATALOG_PYTHON=python3
 # The debug state common.sh seeded from SCROOGE_INTERNAL_DEBUG, captured before
 # parse_target_flags clears it. update.sh forwards only --<target> flags and
@@ -323,7 +326,7 @@ if [ -f "$REQUIREMENTS_FILE" ]; then
             "Check requirements.txt and package-index access, then run $(command_text './scrooge-alert install --debug')."
     fi
 else
-    install_fail "$REQUIREMENTS_FILE was not found." \
+    install_fail "requirements.txt was not found." \
         "Restore requirements.txt, then run $(command_text './scrooge-alert install') again."
 fi
 
@@ -335,7 +338,7 @@ fi
 
 # Re-read the same import-light metadata through the completed venv before
 # installing plugin-private dependencies and resolving schedules.
-CATALOG_PYTHON="$BASE_DIR/venv/bin/python3"
+CATALOG_PYTHON="$VENV_DIR/bin/python3"
 reset_catalog_cache
 if ! prime_plugin_catalog; then
     run_action catalog_diagnose || true
@@ -576,13 +579,13 @@ OLD_IFS="$IFS"
 IFS='
 '
 for plugin in $PLUGINS; do
-    [ -f "config/$plugin.json" ] ||
+    [ -f "$CONFIG_DIR/$plugin.json" ] ||
         MISSING_CONFIGS="$(stream_add_unique "$MISSING_CONFIGS" "$plugin")"
 done
 IFS="$OLD_IFS"
 
 GENERAL_CONFIG_MISSING=0
-[ -f "config/general.json" ] || GENERAL_CONFIG_MISSING=1
+[ -f "$CONFIG_DIR/general.json" ] || GENERAL_CONFIG_MISSING=1
 
 if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
     install_warning_section "Configuration required"
@@ -612,7 +615,7 @@ if [ -n "$MISSING_CONFIGS" ] || [ "$GENERAL_CONFIG_MISSING" -eq 1 ]; then
     fi
 
     task_status info "From the project directory, run:"
-    [ -d config ] || install_command "mkdir -p config"
+    [ -d "$CONFIG_DIR" ] || install_command "mkdir -p config"
     OLD_IFS="$IFS"
     IFS='
 '

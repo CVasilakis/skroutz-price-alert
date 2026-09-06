@@ -110,6 +110,10 @@ if [ "$ORIGINAL_ARGUMENT_COUNT" -eq 0 ]; then
     fi
     PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
     export PYTHONPATH
+    # cd for the same sys.path reason documented at catalog_cli in lib/common.sh.
+    # Plain, not a subshell: exec must replace this shell so the interactive
+    # wizard keeps the terminal and its signals, and nothing here runs after it.
+    CDPATH='' cd -- "$PROJECT_ROOT"
     # exec replaces this shell: the argument-driven flow below never runs in wizard mode.
     exec "$wizard_python" -m core.scrapers.tooling.scaffold --interactive
 fi
@@ -167,9 +171,18 @@ if ! run_action require_python_310 python3 "./scripts/dev/setup.sh"; then
     scaffold_finish 127
 fi
 
-if PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
-    run_with_progress "Creating the target scaffold..." \
-        run_captured python3 -m core.scrapers.tooling.scaffold --shell-output "$@"; then
+# cd for the same sys.path reason documented at catalog_cli in lib/common.sh.
+# shellcheck disable=SC2329  # invoked indirectly by run_captured
+run_scaffold() {
+    (
+        CDPATH='' cd -- "$PROJECT_ROOT" || exit 1
+        PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
+            exec python3 -m core.scrapers.tooling.scaffold --shell-output "$@"
+    )
+}
+
+if run_with_progress "Creating the target scaffold..." \
+    run_captured run_scaffold "$@"; then
     scaffold_status=0
 else
     scaffold_status=$?

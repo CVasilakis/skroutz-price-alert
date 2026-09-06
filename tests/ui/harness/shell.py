@@ -553,9 +553,11 @@ case "${1:-}" in
                     printf '%s\\n' "$FAKE_MIGRATION_STDERR" >&2
                 exit "${FAKE_MIGRATION_STATUS:-0}" ;;
             "pip check")             [ "${FAKE_PIP_FAIL:-}" = "check" ] && exit 1 ;;
-            *" -r ${FAKE_BASE_DIR}/requirements.txt "*)
+            # The root requirements file must be recognized before the generic
+            # absolute-path arm below claims it as a plugin's. setup.sh passes it
+            # followed by the development requirements; install.sh passes it last.
+            *" -r ${FAKE_BASE_DIR}/requirements.txt "*|*" -r ${FAKE_BASE_DIR}/requirements.txt")
                 [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
-            *" -r requirements.txt") [ "${FAKE_PIP_FAIL:-}" = "requirements" ] && exit 1 ;;
             *" -r /"*)               [ "${FAKE_PIP_FAIL:-}" = "plugin" ] && exit 1 ;;
             *" pip")                 [ "${FAKE_PIP_FAIL:-}" = "upgrade" ] && exit 1 ;;
         esac ;;

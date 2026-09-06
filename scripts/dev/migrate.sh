@@ -117,7 +117,11 @@ fi
 run_migration_engine() {
     set -- -m core.tooling.migration_cli --root "$BASE_DIR" --machine
     [ "$CHECK_MODE" -eq 0 ] || set -- "$@" --check
-    PYTHONPATH="$BASE_DIR/src" "$BASE_DIR/venv/bin/python3" "$@"
+    # cd for the same sys.path reason documented at catalog_cli in lib/common.sh.
+    (
+        CDPATH='' cd -- "$BASE_DIR" || exit 1
+        PYTHONPATH="$BASE_DIR/src" exec "$BASE_DIR/venv/bin/python3" "$@"
+    )
 }
 
 if run_captured run_migration_engine; then

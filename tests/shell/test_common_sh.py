@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -50,7 +51,7 @@ def test_shared_shell_statuses_match_the_python_protocol():
     )
 
 
-def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None):
+def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None, cwd=None):
     """Runs `script` under `sh -eu` with common.sh sourced (the caller contract).
 
     Args:
@@ -60,6 +61,9 @@ def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None
         extra_env: Overrides applied on top of the inherited environment before
             sourcing; a value of None *removes* the variable (so the color-guard
             tests are immune to NO_COLOR/CLICOLOR_FORCE in the developer's shell).
+        cwd: The working directory to run from. The library is documented to
+            behave identically from any directory, so tests that assert that
+            need to choose one.
 
     Returns:
         subprocess.CompletedProcess: With captured text stdout/stderr.
@@ -78,8 +82,39 @@ def run_sh(script: str, base_dir=REPO_ROOT, xdg_config_home=None, extra_env=None
         capture_output=True,
         text=True,
         env=env,
+        cwd=None if cwd is None else str(cwd),
         timeout=30,
     )
+
+
+def test_catalog_cli_reads_the_catalog_from_a_shadowing_working_directory():
+    """The catalog must not depend on the directory the command was run from.
+
+    `python -m` prepends the caller's working directory to sys.path ahead of
+    PYTHONPATH, so a directory holding its own `core` package shadows this
+    project's and the module is not found. Every entry point that reads the
+    catalog is reachable from any directory, and load_plugin_catalog's callers
+    swallow the failure into an empty catalog rather than an error, so the
+    symptom is help text that lists no targets or reports live plugins as
+    orphans. This runs the real interpreter on purpose: the shell sandbox shims
+    python3 and cannot observe sys.path at all.
+    """
+    from_root = run_sh("catalog_cli catalog", extra_env={"CATALOG_PYTHON": sys.executable})
+    assert from_root.returncode == 0, from_root.stdout + from_root.stderr
+    assert from_root.stdout.strip(), "the repository's own catalog read returned nothing"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        shadow = Path(tmp)
+        (shadow / "core").mkdir()
+        (shadow / "core" / "__init__.py").touch()
+        from_shadow = run_sh(
+            "catalog_cli catalog",
+            extra_env={"CATALOG_PYTHON": sys.executable},
+            cwd=shadow,
+        )
+
+    assert from_shadow.returncode == 0, from_shadow.stdout + from_shadow.stderr
+    assert from_shadow.stdout == from_root.stdout
 
 
 class TestColorGuard(unittest.TestCase):

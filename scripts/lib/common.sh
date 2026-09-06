@@ -744,7 +744,19 @@ catalog_cli() {
         */*) [ -x "$_cc_python" ] || return 1 ;;
         *) command -v "$_cc_python" >/dev/null 2>&1 || return 1 ;;
     esac
-    PYTHONPATH="$BASE_DIR/src" "$_cc_python" -m core.scrapers.tooling.cli "$@"
+    # The cd is load-bearing, not cosmetic. "python -m" prepends the caller's
+    # working directory to sys.path ahead of PYTHONPATH, so a cwd that happens
+    # to hold a "core" package or core.py shadows this project's and the module
+    # is not found. Every entry point that reads the catalog is reachable from
+    # any directory, and load_plugin_catalog's callers swallow the failure into
+    # an empty catalog, which surfaces as help text that lists no targets or
+    # reports live plugins as orphans. Running from BASE_DIR, whose layout the
+    # project owns, removes the caller's cwd from the question. Every other
+    # "-m core.*" invocation in the project repeats this cd for the same reason.
+    (
+        CDPATH='' cd -- "$BASE_DIR" || exit 1
+        PYTHONPATH="$BASE_DIR/src" exec "$_cc_python" -m core.scrapers.tooling.cli "$@"
+    )
 }
 
 PLUGIN_CATALOG_STATE=0
