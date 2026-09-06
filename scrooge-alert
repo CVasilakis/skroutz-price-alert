@@ -116,17 +116,11 @@ fi
 
 command_name="$1"
 shift
+# Every command's owner is scripts/<command>.sh, so one arm covers all ten. The
+# pattern is the dispatch table: a name absent from it reaches fail_usage rather
+# than a derived path, so the derivation never sees an unvalidated command name.
 case "$command_name" in
-    run)
-        dispatch run "$BASE_DIR/scripts/run.sh" "$@"
-        ;;
-    ping)
-        dispatch ping "$BASE_DIR/scripts/ping.sh" "$@"
-        ;;
-    status)
-        dispatch status "$BASE_DIR/scripts/status.sh" "$@"
-        ;;
-    install|enable|disable|stop|schedule|update|uninstall)
+    run|ping|status|install|enable|disable|stop|schedule|update|uninstall)
         dispatch "$command_name" "$BASE_DIR/scripts/$command_name.sh" "$@"
         ;;
     *)
