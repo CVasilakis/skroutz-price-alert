@@ -1,4 +1,15 @@
 #!/bin/sh
+# Repository-local command dispatcher: the canonical ./scrooge-alert interface.
+#
+# Standalone by design. This is the one executable in the project that sources
+# nothing from scripts/lib, so it repeats common.sh's color detection and
+# command_text and inlines the two symlink guards noted below. Sourcing
+# common.sh would make even ./scrooge-alert --help depend on HOME (through
+# SYSTEMD_USER_DIR), export a DEBUG_MODE into every owner's environment, and
+# require the whole lib set to be intact -- in the one script whose job includes
+# reporting a missing or unsafe owner in a damaged checkout. The duplication is
+# the price of that independence; do not collapse it into a shared helper.
+
 set -eu
 
 BASE_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd)"
@@ -43,6 +54,14 @@ fail_usage() {
     exit 1
 }
 
+# --version is informational and must never fail, so every way of not knowing
+# collapses to "unknown" rather than an error. The empty case covers three of
+# them: no venv, a symlinked venv (reject_project_venv_symlink's rule, refused
+# silently here instead of diagnosed), and a checkout with no reachable v* tag,
+# such as a source download rather than a clone. The character class covers the
+# fourth: core.tooling.version_cli prints digits and dots or nothing at all, so
+# any other byte -- a warning on stdout, a second line -- is noise, not a
+# version.
 show_version() {
     _sv_version=''
     if [ ! -L "$BASE_DIR/venv" ] && [ -x "$BASE_DIR/venv/bin/python3" ]; then
@@ -61,6 +80,11 @@ dispatch() {
     _d_command="$1"
     _d_owner="$2"
     shift 2
+    # The managed-path symlink policy applied to the owner script itself: the
+    # same fail-closed test as common.sh's require_regular_owned_file, plus -x,
+    # inlined because there is no run_action here to route it through. It guards
+    # every command rather than only the mutating ones, because exec hands the
+    # process over and there is nothing left to refuse afterwards.
     if [ -L "$_d_owner" ] || [ ! -f "$_d_owner" ] || [ ! -x "$_d_owner" ]; then
         printf '\n%s\n\n' \
             "Error: Command owner is missing or unsafe: $_d_owner" >&2

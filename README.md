@@ -112,9 +112,11 @@ documented in `src/core/scrapers/plugins/<target>/README.md` beside its implemen
     Scrooge Alert creates a real root `venv/` directory and regular canonical
     systemd unit files. The enablement symlinks created by systemd below
     directories such as `timers.target.wants/` are expected and are not managed
-    unit destinations. A symlink placed at a managed destination is unsupported:
-    install, schedule, and update reject it before changing packages, units, or
-    timer state. Remove such a unit entry safely with
+    unit destinations. A symlink placed at a managed destination is unsupported,
+    and the refusal is not limited to the commands that change things: `install`,
+    `schedule`, and `update` reject it before changing packages, units, or timer
+    state, while `run`, `ping`, and `status` refuse to run against a symlinked
+    `venv/` at all. Remove such a unit entry safely with
     `./scrooge-alert uninstall --<target>`, then reinstall it.
 
 4. **Configure your settings:**

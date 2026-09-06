@@ -197,6 +197,9 @@ class ShellWorld:
     fetched_paths_valid: bool = True
     python_version: str = "3.12.0"
     python_supported: bool = True
+    #: Raw stdout of the stubbed ``core.tooling.version_cli``. Anything but
+    #: digits and dots is noise the dispatcher must report as ``unknown``.
+    local_version: str = "1.2.3"
     venv_python_version: str | None = None
     venv_python_supported: bool | None = None
     git_signal: str | None = None
@@ -532,7 +535,9 @@ case "${1:-}" in
                 [ "${FAKE_SCHEDULE_REPORT_FAILS:-0}" = "1" ] && exit 1
                 [ -n "${FAKE_SCHEDULE_REPORT:-}" ] && printf '%s\\n' "$FAKE_SCHEDULE_REPORT" ;;
             "core.scrapers.tooling.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
-            "core.tooling.version_cli") printf '%s\\n' "${FAKE_LOCAL_VERSION:-1.2.3}" ;;
+            # ``-`` not ``:-``: an empty value is the meaningful "no reachable
+            # tag" case and must reach the dispatcher as empty output.
+            "core.tooling.version_cli") printf '%s\\n' "${FAKE_LOCAL_VERSION-1.2.3}" ;;
             "core.scrapers.tooling.cli diagnose")
                 if [ -n "${FAKE_DISCOVERY_ERROR:-}" ]; then
                     printf '  %s\\n' "$FAKE_DISCOVERY_ERROR"
@@ -784,6 +789,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         "FAKE_GIT_STATE_DIR": str(sandbox / "systemd-state"),
         "FAKE_FETCHED_PATHS_VALID": "1" if world.fetched_paths_valid else "0",
         "FAKE_PYTHON_VERSION": world.python_version,
+        "FAKE_LOCAL_VERSION": world.local_version,
         "FAKE_PYTHON_SUPPORTED": "1" if world.python_supported else "0",
         "FAKE_VENV_PYTHON_VERSION": world.venv_python_version or world.python_version,
         "FAKE_VENV_PYTHON_USABLE": "1" if world.venv_python_usable else "0",

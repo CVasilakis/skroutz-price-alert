@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -223,6 +224,53 @@ def test_version_is_local_and_falls_back_when_venv_is_missing():
     assert installed.stdout == "Scrooge Alert 1.2.3\n"
     assert missing.stdout == "Scrooge Alert unknown\n"
     assert installed.returncode == missing.returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("local_version", "reason"),
+    (
+        pytest.param("", "no reachable v* tag, as in a source download", id="untagged"),
+        pytest.param("1.2.3-rc1", "a version-shaped string that is not one", id="suffixed"),
+        pytest.param(
+            "warning: stray output\n1.2.3",
+            "a real version behind noise on stdout",
+            id="noisy",
+        ),
+    ),
+)
+def test_version_reports_unknown_for_anything_but_digits_and_dots(
+    local_version: str,
+    reason: str,
+):
+    world = ShellWorld(local_version=local_version)
+    checkout = _build_sandbox(world)
+    try:
+        result = _run(checkout, world, "--version")
+    finally:
+        _cleanup(checkout)
+
+    assert result.returncode == 0, reason
+    assert result.stdout == "Scrooge Alert unknown\n", reason
+
+
+def test_version_reports_unknown_for_a_symlinked_venv(tmp_path: Path):
+    world = ShellWorld()
+    checkout = _build_sandbox(world)
+    external_venv = tmp_path / "external-venv"
+    try:
+        venv = checkout / "venv"
+        shutil.move(str(venv), str(external_venv))
+        venv.symlink_to(external_venv)
+
+        result = _run(checkout, world, "--version")
+    finally:
+        _cleanup(checkout)
+
+    # The interpreter behind the link is perfectly usable; --version refuses to
+    # run it anyway, and degrades rather than diagnosing as the wrappers do.
+    assert result.returncode == 0
+    assert result.stdout == "Scrooge Alert unknown\n"
+    assert result.stderr == ""
 
 
 @pytest.mark.parametrize("owner_kind", ("missing", "symlink", "not_executable"))

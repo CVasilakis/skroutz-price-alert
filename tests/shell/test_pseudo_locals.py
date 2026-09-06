@@ -23,9 +23,16 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 LIBRARIES = sorted((REPO_ROOT / "scripts/lib").glob("*.sh"))
+#: The root dispatcher. An entry point like the others, but the only one that
+#: sources no library: it stays standalone so it can still report a damaged
+#: checkout, and repeats the few common.sh pieces it needs. Its own file header
+#: states why. Named here so the exemption below is pinned rather than implied.
+DISPATCHER = REPO_ROOT / "scrooge-alert"
 #: Every script that is executed rather than sourced, and so owns its own process.
 ENTRY_POINTS = sorted(
-    list((REPO_ROOT / "scripts").glob("*.sh")) + list((REPO_ROOT / "scripts/dev").glob("*.sh"))
+    list((REPO_ROOT / "scripts").glob("*.sh"))
+    + list((REPO_ROOT / "scripts/dev").glob("*.sh"))
+    + [DISPATCHER]
 )
 
 # A function definition, capturing its indentation so the matching close brace can be
@@ -97,11 +104,15 @@ class TestPseudoLocals(unittest.TestCase):
     def test_the_shell_layer_was_found(self):
         # Guard against a silent-green pass if the layout or the parser drifts.
         self.assertGreaterEqual(len(LIBRARIES), 5, LIBRARIES)
-        self.assertGreaterEqual(len(ENTRY_POINTS), 15, ENTRY_POINTS)
+        self.assertGreaterEqual(len(ENTRY_POINTS), 16, ENTRY_POINTS)
         parsed = sum(len(functions_of(script)) for script in LIBRARIES + ENTRY_POINTS)
         self.assertGreaterEqual(parsed, 190, parsed)
         for script in ENTRY_POINTS:
-            self.assertTrue(libraries_sourced_by(script), script)
+            sourced = libraries_sourced_by(script)
+            if script == DISPATCHER:
+                self.assertEqual([], sourced, script)
+            else:
+                self.assertTrue(sourced, script)
 
     def test_every_function_assigns_the_pseudo_locals_it_reads(self):
         leaked = [
