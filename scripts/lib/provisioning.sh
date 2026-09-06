@@ -32,10 +32,14 @@ validate_staged_units() {
 
 # Record one target's timer/service load, enabled, and active states, rejecting
 # any value the rollback path could not reassert. A timer that is not installed
-# yet is recorded as the 'absent' sentinel, which is deliberately not a systemd
-# UnitFileState/ActiveState value: it can never compare equal to a live state,
-# so a caller that reasserts captured values cannot mistake "was not there" for
-# "was disabled". restore_timer_state treats it as "leave this target alone".
+# yet is not queried at all -- a unit that does not exist has no UnitFileState
+# the validation below would accept -- and is recorded as the 'absent' sentinel,
+# which is deliberately not a systemd UnitFileState/ActiveState value: it can
+# never compare equal to a live state. Neither reasserting caller acts on it:
+# restore_timer_state returns early on the not-found load state that produced it,
+# and replace_units_transaction's preserve branch compares it against the live
+# state and fails closed, rather than mistaking "was not there" for "was
+# disabled".
 capture_timer_state() {
     _cts_target="$1"
     _cts_path="$2"
@@ -78,6 +82,13 @@ capture_timer_state() {
     } > "$_cts_path"
 }
 
+# Load one target's capture_timer_state file into the four CAPTURED_* globals.
+# The write order above is the read order here; nothing enforces that pairing.
+# They are part of the contract, not scratch state: restore_captured_states and
+# replace_units_transaction's preserve branch read the timer fields, and update.sh
+# reads CAPTURED_SERVICE_LOAD -- its only reader, hence the disable below -- to
+# tell a service-only damaged installation, whose timer is enabled as a repair,
+# from a target that simply had no timer.
 read_captured_state() {
     {
         IFS= read -r CAPTURED_TIMER_LOAD
