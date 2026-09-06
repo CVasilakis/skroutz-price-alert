@@ -9,6 +9,10 @@ BASE_DIR="$PROJECT_ROOT"
 . "$PROJECT_ROOT/scripts/lib/preflight.sh"
 VENV_PYTHON="$PROJECT_ROOT/venv/bin/python3"
 SELECTED=""
+# Every catalog read in this file runs on the system interpreter, because all of
+# them (help text, target validation, the dependency plan) happen before the venv
+# this script is here to create necessarily exists. install.sh flips the same knob
+# back to the venv interpreter once it has one; this script never needs to.
 CATALOG_PYTHON=python3
 SETUP_OUTPUT_STARTED=0
 SETUP_SECTION_STARTED=0
@@ -62,12 +66,6 @@ setup_exit() {
     _se_status="$1"
     setup_finish
     exit "$_se_status"
-}
-
-# shellcheck disable=SC2329  # invoked indirectly through run_captured
-requirements_report() {
-    PYTHONPATH="$PROJECT_ROOT/src" \
-        python3 -m core.scrapers.tooling.cli requirements
 }
 
 HELP_REQUESTED=0
@@ -146,7 +144,7 @@ else
     task_status info "A new development venv is required."
 fi
 
-if run_captured requirements_report; then
+if run_captured catalog_cli requirements; then
     PLUGIN_REQUIREMENTS="$CAPTURED_COMMAND_OUTPUT"
 else
     requirements_status=$?

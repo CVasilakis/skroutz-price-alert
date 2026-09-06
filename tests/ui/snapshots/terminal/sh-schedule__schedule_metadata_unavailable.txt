@@ -1,0 +1,6 @@
+# border: red
+# exit: 1
+
+[+] Execution intervals
+    [x] Failed to resolve target scheduling metadata.
+    [i] Run ./scrooge-alert schedule --debug for underlying diagnostics.

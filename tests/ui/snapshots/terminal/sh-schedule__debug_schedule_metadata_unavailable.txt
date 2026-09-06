@@ -1,0 +1,7 @@
+# border: red
+# exit: 1
+
+skroutz Skroutz <BASE_DIR>/src/core/scrapers/plugins/skroutz/config.example.json
+[+] Execution intervals
+    [x] Failed to resolve target scheduling metadata.
+    [i] Run ./scrooge-alert schedule --debug for underlying diagnostics.

@@ -128,6 +128,21 @@ _case(
 _case("nothing_installed", "No installed scrapers at all.", world=WORLD_EMPTY)
 
 _case(
+    "schedule_metadata_unavailable",
+    "Selection succeeds, then the schedule report itself fails - no timer is read.",
+    world=replace(WORLD_INSTALLED, schedule_report_fails=True),
+    tags=("error",),
+)
+
+_case(
+    "debug_schedule_metadata_unavailable",
+    "Debug mode names the failing schedule command behind the same refusal.",
+    "--debug",
+    world=replace(WORLD_INSTALLED, schedule_report_fails=True),
+    tags=("error",),
+)
+
+_case(
     "no_config",
     "The scraper's config file is missing - timer left unchanged.",
     world=replace(WORLD_INSTALLED, interval_status={"skroutz": "nocfg"}),

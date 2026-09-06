@@ -734,6 +734,27 @@ class TestEagerPriming(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.stderr, "")
 
+    def test_selecting_targets_leaves_the_cache_warm_for_later_accessors(self):
+        """select_targets reads the catalog through a command substitution.
+
+        A subshell fills its own copy of the cache and discards it, so the load
+        has to be reached in the caller first or the memo never happens. The
+        caller that proves it is schedule.sh, which reads list_plugin_examples
+        after selecting and paid a second full catalog read on every non-debug
+        run -- the mode with no eager prime to hide it -- until the load moved
+        out of the substitution.
+        """
+        result = run_sh(
+            self._stub()
+            + "DEBUG_MODE=0\n"
+            + "TARGET_FLAGS=''\n"
+            + "TARGET_FLAGS_EXPLICIT=0\n"
+            + "select_targets registered\n"
+            + "list_plugin_examples >/dev/null\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.counter.read_text(), "x")
+
     def test_a_failed_prime_is_reported_and_not_retried(self):
         result = run_sh(
             self._stub(exit_status=1)

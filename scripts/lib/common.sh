@@ -952,9 +952,18 @@ select_targets() {
     # The old proxy -- units installed but nothing registered -- both missed a
     # broken catalog when nothing was installed yet and cried "catalog could not
     # be loaded" at a healthy catalog that simply has no plugins left.
+    # Load in this shell first. The read below is a command substitution, so a
+    # load reached only from inside it fills the cache in that subshell and throws
+    # it away, leaving every later accessor in the caller to re-run the catalog
+    # CLI -- which cost schedule.sh a second full catalog read on every non-debug
+    # run, it being the one caller that reads a catalog accessor after selecting.
+    # The eager primers rely on the same warm cache, so this keeps one acquisition
+    # per command whether or not the caller primed.
     SELECTED_CATALOG_LOADED=1
-    if ! SELECTED_REGISTERED="$(list_plugins 2>/dev/null)"; then
-        SELECTED_REGISTERED=''
+    SELECTED_REGISTERED=''
+    if load_plugin_catalog; then
+        SELECTED_REGISTERED="$(list_plugins 2>/dev/null)" || SELECTED_REGISTERED=''
+    else
         SELECTED_CATALOG_LOADED=0
     fi
     case "$_st_policy" in

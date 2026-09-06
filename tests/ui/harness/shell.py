@@ -106,6 +106,9 @@ class ShellWorld:
         supported_intervals: The one-line cadence vocabulary shown in help text.
         discovery_error: When set, the catalog is unavailable: list_plugins prints
             nothing and catalog_diagnose reports this one-line error.
+        schedule_report_fails: The `schedules` subcommand exits nonzero while the
+            catalog itself still loads. This is the one way a command can pass
+            target selection and then fail to resolve scheduling metadata.
 
     Venv state and failure injection:
         venv: Pre-create venv/bin/python3 (the responder) in the sandbox.
@@ -154,6 +157,7 @@ class ShellWorld:
     schedule_errors: dict[str, str] | None = None
     supported_intervals: str = "15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h"
     discovery_error: str | None = None
+    schedule_report_fails: bool = False
 
     venv: bool = True
     venv_symlink: bool = False
@@ -525,6 +529,7 @@ case "${1:-}" in
                 [ -n "${FAKE_PLUGIN_CATALOG:-}" ] && printf '%s\\n' "$FAKE_PLUGIN_CATALOG" ;;
             "core.scrapers.tooling.cli schedules --config-dir "*)
                 [ -n "${FAKE_DISCOVERY_ERROR:-}" ] && exit 1
+                [ "${FAKE_SCHEDULE_REPORT_FAILS:-0}" = "1" ] && exit 1
                 [ -n "${FAKE_SCHEDULE_REPORT:-}" ] && printf '%s\\n' "$FAKE_SCHEDULE_REPORT" ;;
             "core.scrapers.tooling.cli intervals") printf '%s\\n' "${FAKE_SUPPORTED_INTERVALS:-}" ;;
             "core.tooling.version_cli") printf '%s\\n' "${FAKE_LOCAL_VERSION:-1.2.3}" ;;
@@ -748,6 +753,7 @@ def _fake_env(sandbox: Path, world: ShellWorld) -> dict[str, str]:
         ),
         "FAKE_SUPPORTED_INTERVALS": world.supported_intervals,
         "FAKE_DISCOVERY_ERROR": world.discovery_error or "",
+        "FAKE_SCHEDULE_REPORT_FAILS": "1" if world.schedule_report_fails else "0",
         "FAKE_NO_ENSUREPIP": "1" if world.ensurepip_missing else "0",
         "FAKE_VENV_CREATE_FAILS": "1" if world.venv_create_fails else "0",
         "FAKE_VENV_TEMPLATE": str(sandbox / "bin" / "venv-python-template"),

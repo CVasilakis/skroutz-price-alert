@@ -64,6 +64,24 @@ capture_schedule_value() {
     return 1
 }
 
+# One failure policy for the metadata reads below. The shipped wording is a single
+# generic refusal pointing at --debug, identical at every site, so repeating it five
+# times bought nothing but five chances to drift apart. install.sh names its
+# equivalent reads individually and separates "fix the catalog" from "fix the
+# configuration"; adopting that here would change the transcript, which this does not.
+# shellcheck disable=SC2329  # invoked indirectly through run_action
+schedule_metadata_fail() {
+    task_status failure "Failed to resolve target scheduling metadata."
+    task_status info \
+        "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
+    schedule_finish 1
+}
+
+# shellcheck disable=SC2329  # invoked indirectly through run_action
+require_schedule_value() {
+    run_action capture_schedule_value "$@" || schedule_metadata_fail
+}
+
 HELP_REQUESTED=0
 for argument in "$@"; do
     case "$argument" in
@@ -105,41 +123,22 @@ if [ -z "$PLUGINS" ]; then
     schedule_finish 0
 fi
 
-if ! run_action prime_plugin_schedules ||
-    ! run_action capture_schedule_value list_plugin_schedules; then
-    task_status failure "Failed to resolve target scheduling metadata."
-    task_status info \
-        "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
-    schedule_finish 1
-fi
+# Two of these run a CLI and can fail: the schedule prime and `catalog_cli
+# intervals`. The other four re-filter a snapshot already warm in this shell --
+# the schedules the prime just read, and the catalog select_targets loaded above.
+# They are checked all the same, because which reads are warm follows from call
+# order a later edit can change silently, and the accessors return nonzero rather
+# than an empty success precisely so a caller can afford to check every one.
+run_action prime_plugin_schedules || schedule_metadata_fail
+require_schedule_value list_plugin_schedules
 ALL_SCHEDULES="$SCHEDULE_VALUE"
-if ! run_action capture_schedule_value list_interval_status; then
-    task_status failure "Failed to resolve target scheduling metadata."
-    task_status info \
-        "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
-    schedule_finish 1
-fi
+require_schedule_value list_interval_status
 INTERVAL_STATUS="$SCHEDULE_VALUE"
-if ! run_action capture_schedule_value list_schedule_errors; then
-    task_status failure "Failed to resolve target scheduling metadata."
-    task_status info \
-        "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
-    schedule_finish 1
-fi
+require_schedule_value list_schedule_errors
 SCHEDULE_ERRORS="$SCHEDULE_VALUE"
-if ! run_action capture_schedule_value catalog_cli intervals; then
-    task_status failure "Failed to resolve target scheduling metadata."
-    task_status info \
-        "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
-    schedule_finish 1
-fi
+require_schedule_value catalog_cli intervals
 SUPPORTED_INTERVAL_KEYS="$SCHEDULE_VALUE"
-if ! run_action capture_schedule_value list_plugin_examples; then
-    task_status failure "Failed to resolve target scheduling metadata."
-    task_status info \
-        "Run $(command_text './scrooge-alert schedule --debug') for underlying diagnostics."
-    schedule_finish 1
-fi
+require_schedule_value list_plugin_examples
 EXAMPLE_PAIRS="$SCHEDULE_VALUE"
 
 CHANGED=''

@@ -235,3 +235,22 @@ def test_each_updated_timer_receives_its_own_resolved_calendar():
             assert f"Unit={target}-scraper.service\n" in written, written
     finally:
         _cleanup(checkout)
+
+
+def test_unresolvable_schedule_metadata_refuses_before_reading_any_timer():
+    """The one reachable path to the shared metadata refusal.
+
+    Selection needs only the catalog, so it succeeds; the separate `schedules`
+    command behind prime_plugin_schedules is what fails. The refusal must land
+    before the per-target loop, so no installed timer is read or rewritten.
+    """
+    world = replace(INSTALLED, schedule_report_fails=True)
+
+    normal = _run(world)
+    debug = _run(world, "--debug")
+
+    assert normal.returncode == debug.returncode == 1
+    for result in (normal, debug):
+        assert_task_status(result.stdout, "x", "Failed to resolve target scheduling metadata.")
+        assert "[skroutz]" not in result.stdout
+        assert "Timer updates" not in result.stdout
